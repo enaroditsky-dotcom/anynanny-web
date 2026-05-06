@@ -3,14 +3,17 @@
 import Image from "next/image";
 import { useState } from "react";
 
-/** Uses `/logo_header.png`; shows a circular placeholder if the asset fails to load. */
+const logoFrame =
+  "relative mx-auto aspect-square w-[min(85vw,220px)] shrink-0 overflow-hidden rounded-full bg-brand-cream shadow-soft ring-2 ring-white sm:w-52 md:w-56";
+
+/** `/logo_header.png` inside a perfect circle; mint circle if the asset fails to load. */
 export function LandingLogoHeader() {
   const [failed, setFailed] = useState(false);
 
   if (failed) {
     return (
       <div
-        className="mx-auto flex h-36 w-36 shrink-0 items-center justify-center rounded-full bg-brand-mint shadow-soft ring-2 ring-navy-900/10 sm:h-40 sm:w-40 md:h-44 md:w-44"
+        className={`flex aspect-square w-[min(85vw,220px)] items-center justify-center rounded-full bg-brand-mint shadow-soft ring-2 ring-navy-header/15 sm:w-52 md:w-56`}
         aria-hidden
       >
         <span className="sr-only">AnyNanny</span>
@@ -19,13 +22,13 @@ export function LandingLogoHeader() {
   }
 
   return (
-    <div className="relative mx-auto h-36 w-44 shrink-0 sm:h-40 sm:w-48 md:h-44 md:w-52">
+    <div className={logoFrame}>
       <Image
         src="/logo_header.png"
         alt="AnyNanny"
         fill
-        className="object-contain object-center"
-        sizes="(max-width: 768px) 192px, 208px"
+        className="object-contain object-center p-2"
+        sizes="(max-width: 640px) 220px, 224px"
         priority
         onError={() => setFailed(true)}
       />

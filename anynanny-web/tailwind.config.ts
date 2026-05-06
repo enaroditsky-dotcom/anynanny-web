@@ -6,6 +6,8 @@ const config: Config = {
     extend: {
       colors: {
         navy: {
+          /** Matches global header wordmark / primary dark navy */
+          header: "#001F3F",
           900: "#165b73",
           800: "#1d6a82",
           700: "#2b7e96"
