@@ -18,16 +18,16 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mt-12 flex w-full max-w-md flex-col gap-4 sm:mx-auto sm:flex-row sm:justify-center">
+          <div className="mt-14 flex w-full flex-wrap justify-center gap-4 px-1">
             <Link
               href="/parent/dashboard"
-              className="inline-flex min-h-[52px] min-w-0 flex-1 items-center justify-center rounded-2xl bg-brand-salmon px-7 py-4 text-center text-base font-bold text-white shadow-soft transition hover:brightness-[1.03] active:brightness-95 sm:flex-1 sm:basis-0"
+              className="inline-flex h-[52px] min-h-[52px] min-w-[min(100%,11rem)] flex-1 basis-[11rem] items-center justify-center rounded-2xl bg-brand-salmon px-8 py-3.5 text-center text-base font-bold text-white shadow-soft ring-1 ring-brand-salmon/40 transition hover:brightness-[1.04] active:brightness-95 sm:max-w-[13rem]"
             >
               כניסת הורים
             </Link>
             <Link
               href="/sitter/personal"
-              className="inline-flex min-h-[52px] min-w-0 flex-1 items-center justify-center rounded-2xl bg-navy-header px-7 py-4 text-center text-base font-bold text-white shadow-soft transition hover:brightness-110 active:brightness-95 sm:flex-1 sm:basis-0"
+              className="inline-flex h-[52px] min-h-[52px] min-w-[min(100%,11rem)] flex-1 basis-[11rem] items-center justify-center rounded-2xl border-2 border-navy-header bg-transparent px-8 py-3.5 text-center text-base font-bold text-navy-header transition hover:bg-navy-header/[0.06] active:bg-navy-header/[0.1] sm:max-w-[13rem]"
             >
               כניסת בייביסיטר
             </Link>
