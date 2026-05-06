@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "parentName": "הורה",
+    "favoriteSitterId": "ANN-5987",
+    "reassurancePingEnabled": false,
+    "transportMode": "taxi",
+    "locationLabel": "חיפה",
+    "minRate": 39,
+    "maxRate": 120,
+    "preferredGender": "female",
+    "minAge": 18,
+    "minExperienceYears": 0,
+    "minRating": 5,
+    "calendarSyncGoogle": true,
+    "calendarSyncPhone": true
+  }
+]

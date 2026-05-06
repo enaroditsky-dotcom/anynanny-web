@@ -14,8 +14,17 @@ export default function HomePage() {
             <Link className="rounded-xl border border-navy-300 px-4 py-2 text-sm font-semibold text-navy-900" href="/sitter/personal">כניסת בייביסיטר</Link>
           </div>
         </section>
-        <section className="rounded-3xl bg-white p-4 shadow-soft">
-          <Image src="/grand-design-vision.png" alt="Grand design vision" width={700} height={900} className="mx-auto h-auto w-full max-w-sm rounded-2xl" priority />
+        <section className="flex flex-col items-center justify-center rounded-3xl bg-white p-6 shadow-soft md:p-8">
+          <div className="relative mx-auto h-44 w-44 shrink-0 overflow-hidden rounded-full shadow-soft md:h-56 md:w-56 lg:h-64 lg:w-64">
+            <Image
+              src="/logo.png"
+              alt="AnyNanny"
+              fill
+              className="object-cover object-center"
+              sizes="(max-width: 768px) 176px, (max-width: 1024px) 224px, 256px"
+              priority
+            />
+          </div>
         </section>
       </div>
     </main>
