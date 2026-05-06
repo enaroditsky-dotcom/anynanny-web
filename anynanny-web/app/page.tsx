@@ -3,29 +3,27 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-brand-cream to-brand-mint/40 p-6 md:p-10" dir="rtl">
-      <div className="mx-auto grid max-w-6xl items-center gap-6 md:grid-cols-2">
-        <section className="rounded-3xl bg-white p-7 shadow-soft">
-          <p className="mb-2 text-sm text-navy-700">ANYNANNY</p>
-          <h1 className="mb-3 text-3xl font-bold text-navy-900">אמון, רוגע ובטיחות בכל שמרטפות</h1>
-          <p className="mb-6 text-sm text-navy-800">ממשק פתיחה בסגנון Calm Sitter, ואחריו סביבת עבודה יעילה ומהירה.</p>
-          <div className="flex flex-wrap gap-3">
-            <Link className="rounded-xl bg-navy-900 px-4 py-2 text-sm font-semibold text-white" href="/parent/dashboard">כניסת הורים</Link>
-            <Link className="rounded-xl border border-navy-300 px-4 py-2 text-sm font-semibold text-navy-900" href="/sitter/personal">כניסת בייביסיטר</Link>
-          </div>
-        </section>
-        <section className="flex flex-col items-center justify-center rounded-3xl bg-white p-6 shadow-soft md:p-8">
-          <div className="relative mx-auto h-44 w-44 shrink-0 overflow-hidden rounded-full shadow-soft md:h-56 md:w-56 lg:h-64 lg:w-64">
-            <Image
-              src="/logo.png"
-              alt="AnyNanny"
-              fill
-              className="object-cover object-center"
-              sizes="(max-width: 768px) 176px, (max-width: 1024px) 224px, 256px"
-              priority
-            />
-          </div>
-        </section>
+    <main className="flex h-screen min-h-[100dvh] items-center justify-center bg-brand-cream" dir="rtl">
+      <div className="flex flex-col items-center gap-6 px-6">
+        <div className="relative h-36 w-36 shrink-0 overflow-hidden rounded-full shadow-soft ring-2 ring-white/80 sm:h-44 sm:w-44 md:h-52 md:w-52">
+          <Image
+            src="/logo_header.png"
+            alt="AnyNanny"
+            fill
+            className="object-cover object-center"
+            sizes="(max-width: 640px) 144px, (max-width: 768px) 176px, 208px"
+            priority
+          />
+        </div>
+        <h1 className="max-w-md text-center text-3xl font-semibold tracking-tight text-navy-900 md:text-4xl">
+          anynanny - למצוא זמן לחיים
+        </h1>
+        <Link
+          href="/parent/dashboard"
+          className="rounded-2xl bg-brand-salmon px-8 py-4 text-center text-lg font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95 md:px-10 md:py-5 md:text-xl"
+        >
+          מצאו את הבייביסיטר ותתחילו לחיות!
+        </Link>
       </div>
     </main>
   );
