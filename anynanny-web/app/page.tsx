@@ -1,41 +1,21 @@
+﻿import Image from "next/image";
 import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-surface p-6 md:p-10" dir="rtl">
-      <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-2">
-        <section className="rounded-2xl bg-navy-900 p-6 text-white md:p-8">
-          <p className="mb-2 text-sm text-blue-100">מסלול הורה</p>
-          <h1 className="mb-3 text-2xl font-semibold">אני הורה</h1>
-          <p className="mb-6 text-sm text-blue-100">ניהול הזמנות, יומן חכם ופילטרים מתקדמים.</p>
+    <main className="min-h-screen bg-gradient-to-b from-brand-cream to-brand-mint/40 p-6 md:p-10" dir="rtl">
+      <div className="mx-auto grid max-w-6xl items-center gap-6 md:grid-cols-2">
+        <section className="rounded-3xl bg-white p-7 shadow-soft">
+          <p className="mb-2 text-sm text-navy-700">ANYNANNY</p>
+          <h1 className="mb-3 text-3xl font-bold text-navy-900">אמון, רוגע ובטיחות בכל שמרטפות</h1>
+          <p className="mb-6 text-sm text-navy-800">ממשק פתיחה בסגנון Calm Sitter, ואחריו סביבת עבודה יעילה ומהירה.</p>
           <div className="flex flex-wrap gap-3">
-            <Link className="inline-block rounded-xl bg-white px-4 py-2 text-sm font-medium text-navy-900" href="/parent/dashboard">
-              כניסה כהורה
-            </Link>
-            <Link
-              className="inline-block rounded-xl border border-blue-200 px-4 py-2 text-sm font-medium text-blue-50 hover:bg-white/10"
-              href="/parent/sitter/demo-sitter-1/calendar"
-            >
-              צפייה ביומן סיטר
-            </Link>
+            <Link className="rounded-xl bg-navy-900 px-4 py-2 text-sm font-semibold text-white" href="/parent/dashboard">כניסת הורים</Link>
+            <Link className="rounded-xl border border-navy-300 px-4 py-2 text-sm font-semibold text-navy-900" href="/sitter/personal">כניסת בייביסיטר</Link>
           </div>
         </section>
-
-        <section className="rounded-2xl bg-white p-6 text-navy-900 shadow-sm md:p-8">
-          <p className="mb-2 text-sm text-navy-700">מסלול סיטר</p>
-          <h2 className="mb-3 text-2xl font-semibold">אני סיטר/ית</h2>
-          <p className="mb-6 text-sm text-navy-700">ניהול פרופיל, מגדר, תעריף לשעה וזמינות ביומן.</p>
-          <div className="flex flex-wrap gap-3">
-            <Link className="rounded-xl bg-navy-800 px-4 py-2 text-sm font-medium text-white" href="/auth/sign-up">
-              פתיחת פרופיל סיטר
-            </Link>
-            <Link className="rounded-xl border border-navy-700 px-4 py-2 text-sm font-medium text-navy-700" href="/verification">
-              אימות
-            </Link>
-            <Link className="rounded-xl border border-navy-700 px-4 py-2 text-sm font-medium text-navy-700" href="/sitter/calendar">
-              יומן זמינות
-            </Link>
-          </div>
+        <section className="rounded-3xl bg-white p-4 shadow-soft">
+          <Image src="/grand-design-vision.png" alt="Grand design vision" width={700} height={900} className="mx-auto h-auto w-full max-w-sm rounded-2xl" priority />
         </section>
       </div>
     </main>

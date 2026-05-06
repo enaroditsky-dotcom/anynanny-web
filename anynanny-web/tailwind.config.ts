@@ -1,4 +1,4 @@
-import type { Config } from "tailwindcss";
+﻿import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./features/**/*.{ts,tsx}"],
@@ -6,11 +6,20 @@ const config: Config = {
     extend: {
       colors: {
         navy: {
-          900: "#0D2B52",
-          800: "#123A6F",
-          700: "#2A5DBC"
+          900: "#165b73",
+          800: "#1d6a82",
+          700: "#2b7e96"
         },
-        surface: "#F4F7FC"
+        brand: {
+          mint: "#dce7cf",
+          earth: "#8f7a45",
+          peach: "#f2c7a5",
+          cream: "#f7f2ea"
+        },
+        surface: "#f7f2ea"
+      },
+      boxShadow: {
+        soft: "0 10px 28px rgba(22,91,115,0.12)"
       }
     }
   },
