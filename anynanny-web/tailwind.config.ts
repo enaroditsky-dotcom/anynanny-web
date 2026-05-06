@@ -14,7 +14,7 @@ const config: Config = {
           mint: "#dce7cf",
           earth: "#8f7a45",
           peach: "#f2c7a5",
-          salmon: "#e07c68",
+          salmon: "#FF8A8A",
           cream: "#f7f2ea"
         },
         surface: "#f7f2ea"
