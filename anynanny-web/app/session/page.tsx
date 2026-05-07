@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-const HOURLY_RATE_NIS = 50;
+const HOURLY_RATE = 50;
 
 function formatElapsed(seconds: number): string {
   const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
@@ -15,6 +15,7 @@ function formatElapsed(seconds: number): string {
 export default function SessionPage() {
   const [isStarted, setIsStarted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const seconds = elapsedSeconds;
 
   useEffect(() => {
     if (!isStarted) return;
@@ -24,8 +25,8 @@ export default function SessionPage() {
     return () => clearInterval(timer);
   }, [isStarted]);
 
-  const timerText = useMemo(() => formatElapsed(elapsedSeconds), [elapsedSeconds]);
-  const accumulatedNis = useMemo(() => ((elapsedSeconds / 3600) * HOURLY_RATE_NIS).toFixed(2), [elapsedSeconds]);
+  const timerText = useMemo(() => formatElapsed(seconds), [seconds]);
+  const earnedMoney = useMemo(() => (seconds / 3600) * HOURLY_RATE, [seconds]);
 
   return (
     <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-brand-cream px-4 text-center" dir="rtl">
@@ -33,13 +34,13 @@ export default function SessionPage() {
         href="/"
         className="absolute right-4 top-4 rounded-full border border-navy-header/25 bg-white/80 px-3 py-1.5 text-xs font-semibold text-navy-header shadow-sm backdrop-blur"
       >
-        חזרה
+        Home
       </Link>
 
       {isStarted ? (
         <>
           <p className="mb-3 text-4xl font-bold tracking-wider text-navy-header">{timerText}</p>
-          <p className="mb-8 text-xl font-semibold text-navy-800">סכום שנצבר: ₪{accumulatedNis}</p>
+          <p className="mb-8 text-xl font-semibold text-navy-800">סכום שנצבר: ₪{earnedMoney.toFixed(2)}</p>
         </>
       ) : null}
 
