@@ -40,7 +40,7 @@ export default function HomePage() {
               כניסת הורים
             </Link>
             <Link
-              href="/sitter/personal"
+              href="/session"
               className="inline-flex h-14 w-[11.5rem] items-center justify-center rounded-full bg-[#001F3F] px-6 text-center text-base font-bold text-white shadow-soft transition hover:brightness-110 active:brightness-95"
             >
               כניסת בייביסיטר
