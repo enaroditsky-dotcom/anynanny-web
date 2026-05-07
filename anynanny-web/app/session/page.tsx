@@ -10,43 +10,41 @@ function formatElapsed(seconds: number): string {
 }
 
 export default function SessionPage() {
-  const [isActive, setIsActive] = useState(false);
+  const [isStarted, setIsStarted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isStarted) return;
     const timer = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, [isActive]);
+  }, [isStarted]);
 
   const timerText = useMemo(() => formatElapsed(elapsedSeconds), [elapsedSeconds]);
 
   return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-brand-cream px-4" dir="rtl">
-      <section className="flex w-full max-w-md flex-col items-center rounded-[2rem] bg-white/80 p-10 text-center shadow-soft backdrop-blur-md">
-        {isActive ? <p className="mb-8 text-4xl font-bold tracking-wider text-navy-header">{timerText}</p> : null}
+    <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-brand-cream px-4 text-center" dir="rtl">
+      {isStarted ? <p className="mb-8 text-4xl font-bold tracking-wider text-navy-header">{timerText}</p> : null}
 
-        {isActive ? (
-          <button
-            className="flex h-[280px] w-[280px] items-center justify-center rounded-full bg-brand-salmon text-5xl font-bold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
-            onClick={() => setIsActive(false)}
-          >
-            סיום
-          </button>
-        ) : (
-          <button
-            className="flex h-[280px] w-[280px] items-center justify-center rounded-full bg-brand-mint text-5xl font-bold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
-            onClick={() => {
-              setElapsedSeconds(0);
-              setIsActive(true);
-            }}
-          >
-            להתחיל
-          </button>
-        )}
-      </section>
+      {isStarted ? (
+        <button
+          className="flex h-[280px] w-[280px] items-center justify-center rounded-full bg-[#FF8A8A] text-5xl font-bold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
+          onClick={() => setIsStarted(false)}
+        >
+          סיום
+        </button>
+      ) : (
+        <button
+          className="flex h-[280px] w-[280px] items-center justify-center rounded-full bg-[#CFE8C8] text-5xl font-bold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
+          onClick={() => {
+            setElapsedSeconds(0);
+            setIsStarted(true);
+          }}
+        >
+          להתחיל
+        </button>
+      )}
     </main>
   );
 }
