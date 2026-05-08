@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { Calendar, Settings, Wallet } from "lucide-react";
 
 const HOURLY_RATE = 50;
-const SESSION_SUMMARY_KEY = "latest_session_summary";
 
 function formatElapsed(seconds: number): string {
   const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
@@ -16,8 +16,6 @@ function formatElapsed(seconds: number): string {
 export default function SessionPage() {
   const [isStarted, setIsStarted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [summarySeconds, setSummarySeconds] = useState(0);
-  const [showSummary, setShowSummary] = useState(false);
   const seconds = elapsedSeconds;
 
   useEffect(() => {
@@ -30,76 +28,54 @@ export default function SessionPage() {
 
   const timerText = useMemo(() => formatElapsed(seconds), [seconds]);
   const earnedMoney = useMemo(() => (seconds / 3600) * HOURLY_RATE, [seconds]);
-  const summaryDuration = useMemo(() => formatElapsed(summarySeconds), [summarySeconds]);
-  const summaryEarnings = useMemo(() => ((summarySeconds / 3600) * HOURLY_RATE).toFixed(2), [summarySeconds]);
-
-  const handleFinish = () => {
-    setIsStarted(false);
-    setSummarySeconds(seconds);
-    setShowSummary(true);
-  };
-
-  const handleSendToParent = () => {
-    const payload = {
-      endedAt: new Date().toISOString(),
-      durationText: summaryDuration,
-      amountNis: Number(summaryEarnings)
-    };
-    localStorage.setItem(SESSION_SUMMARY_KEY, JSON.stringify(payload));
-    setShowSummary(false);
-  };
 
   return (
-    <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-brand-cream px-4 text-center" dir="rtl">
-      <Link
-        href="/"
-        className="absolute right-4 top-4 rounded-full border border-navy-header/25 bg-white/80 px-3 py-1.5 text-xs font-semibold text-navy-header shadow-sm backdrop-blur"
-      >
-        Home
-      </Link>
+    <main className="min-h-[100dvh] bg-[#FDFBF6] px-4 py-6" dir="rtl">
+      <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+        <section className="grid grid-cols-3 gap-3">
+          <button className="flex aspect-square flex-col items-center justify-center rounded-2xl bg-white p-3 text-navy-header shadow-soft">
+            <Calendar className="h-6 w-6" />
+            <span className="mt-2 text-sm font-semibold">יומן</span>
+          </button>
+          <button className="flex aspect-square flex-col items-center justify-center rounded-2xl bg-white p-3 text-navy-header shadow-soft">
+            <Wallet className="h-6 w-6" />
+            <span className="mt-2 text-sm font-semibold">ארנק</span>
+          </button>
+          <button className="flex aspect-square flex-col items-center justify-center rounded-2xl bg-white p-3 text-navy-header shadow-soft">
+            <Settings className="h-6 w-6" />
+            <span className="mt-2 text-sm font-semibold">הגדרות</span>
+          </button>
+        </section>
 
-      {isStarted ? (
-        <>
-          <p className="mb-3 text-4xl font-bold tracking-wider text-navy-header">{timerText}</p>
-          <p className="mb-8 text-xl font-semibold text-navy-800">סכום שנצבר: ₪{earnedMoney.toFixed(2)}</p>
-        </>
-      ) : null}
+        <section className="rounded-3xl bg-white px-5 py-8 text-center shadow-soft">
+          <p className="text-5xl font-bold tracking-wider text-navy-header">{timerText}</p>
+          <p className="mt-3 text-lg font-semibold text-navy-800">סכום שנצבר: ₪{earnedMoney.toFixed(2)}</p>
 
-      {isStarted ? (
-        <button
-          className="flex h-[280px] w-[280px] items-center justify-center rounded-full bg-[#FF8A8A] text-5xl font-bold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
-          onClick={handleFinish}
-        >
-          סיום
-        </button>
-      ) : (
-        <button
-          className="flex h-[280px] w-[280px] items-center justify-center rounded-full bg-[#CFE8C8] text-5xl font-bold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
-          onClick={() => {
-            setElapsedSeconds(0);
-            setIsStarted(true);
-          }}
-        >
-          להתחיל
-        </button>
-      )}
-
-      {showSummary ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
-          <section className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-soft" dir="rtl">
-            <p className="mb-2 text-3xl">🎉</p>
-            <h2 className="text-2xl font-bold text-navy-header">סיכום משמרת</h2>
-            <p className="mt-3 text-lg font-semibold text-navy-900">זמן עבודה כולל: {summaryDuration}</p>
-            <p className="mt-1 text-xl font-bold text-emerald-700">הרווחת: ₪{summaryEarnings}</p>
-            <button
-              className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-[#001F3F] px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 active:brightness-95"
-              onClick={handleSendToParent}
-            >
-              אישור ושליחה להורה
-            </button>
-          </section>
-        </div>
-      ) : null}
+          <div className="mt-8 flex items-center justify-center">
+            {isStarted ? (
+              <button
+                className="flex h-[280px] w-[280px] items-center justify-center rounded-full bg-[#FF8A8A] text-5xl font-bold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
+                onClick={() => setIsStarted(false)}
+              >
+                סיום
+              </button>
+            ) : (
+              <button
+                className="flex h-[280px] w-[280px] flex-col items-center justify-center gap-3 rounded-full bg-[#CFE8C8] text-white shadow-soft transition hover:brightness-105 active:brightness-95"
+                onClick={() => {
+                  setElapsedSeconds(0);
+                  setIsStarted(true);
+                }}
+              >
+                <span className="relative h-16 w-16 overflow-hidden rounded-full border border-white/70 bg-white/70">
+                  <Image src="/logo.png" alt="" fill className="object-cover object-center" />
+                </span>
+                <span className="text-5xl font-bold">להתחיל</span>
+              </button>
+            )}
+          </div>
+        </section>
+      </div>
     </main>
   );
 }
