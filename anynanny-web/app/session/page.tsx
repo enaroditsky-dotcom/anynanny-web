@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Calendar, Settings, Wallet } from "lucide-react";
 
 const HOURLY_RATE = 50;
@@ -30,22 +31,19 @@ export default function SessionPage() {
   const earnedMoney = useMemo(() => (seconds / 3600) * HOURLY_RATE, [seconds]);
 
   return (
-    <main className="min-h-[100dvh] bg-[#FDFBF6] px-4 py-6" dir="rtl">
-      <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
-        <section className="grid grid-cols-3 gap-3">
-          <button className="flex aspect-square flex-col items-center justify-center rounded-2xl bg-white p-3 text-navy-header shadow-soft">
-            <Calendar className="h-6 w-6" />
-            <span className="mt-2 text-sm font-semibold">יומן</span>
-          </button>
-          <button className="flex aspect-square flex-col items-center justify-center rounded-2xl bg-white p-3 text-navy-header shadow-soft">
-            <Wallet className="h-6 w-6" />
-            <span className="mt-2 text-sm font-semibold">ארנק</span>
-          </button>
-          <button className="flex aspect-square flex-col items-center justify-center rounded-2xl bg-white p-3 text-navy-header shadow-soft">
-            <Settings className="h-6 w-6" />
-            <span className="mt-2 text-sm font-semibold">הגדרות</span>
-          </button>
-        </section>
+    <main className="min-h-[100dvh] bg-[#FDFBF6] px-4 pb-6 pt-4" dir="rtl">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
+        <header className="safe-area-inset-top pt-2">
+          <Link
+            href="/?manual=true"
+            className="mx-auto inline-flex items-center gap-2 rounded-full border border-navy-header/20 bg-white/80 px-4 py-2 text-navy-header shadow-sm transition hover:bg-white"
+          >
+            <span className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-navy-header/20">
+              <Image src="/logo.png" alt="" fill className="object-cover object-center" />
+            </span>
+            <span className="text-xl font-bold tracking-wide">AnyNanny</span>
+          </Link>
+        </header>
 
         <section className="rounded-3xl bg-white px-5 py-8 text-center shadow-soft">
           <p className="text-5xl font-bold tracking-wider text-navy-header">{timerText}</p>
@@ -73,6 +71,23 @@ export default function SessionPage() {
                 <span className="text-5xl font-bold">להתחיל</span>
               </button>
             )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-3 shadow-soft">
+          <div className="grid grid-cols-3 gap-3">
+            <button className="flex aspect-square flex-col items-center justify-center rounded-xl bg-[#F8FAFC] p-3 text-navy-header transition hover:bg-white">
+              <Calendar className="h-6 w-6" />
+              <span className="mt-2 text-sm font-semibold">יומן</span>
+            </button>
+            <button className="flex aspect-square flex-col items-center justify-center rounded-xl bg-[#F8FAFC] p-3 text-navy-header transition hover:bg-white">
+              <Wallet className="h-6 w-6" />
+              <span className="mt-2 text-sm font-semibold">ארנק</span>
+            </button>
+            <button className="flex aspect-square flex-col items-center justify-center rounded-xl bg-[#F8FAFC] p-3 text-navy-header transition hover:bg-white">
+              <Settings className="h-6 w-6" />
+              <span className="mt-2 text-sm font-semibold">הגדרות</span>
+            </button>
           </div>
         </section>
       </div>
