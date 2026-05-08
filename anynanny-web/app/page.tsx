@@ -8,15 +8,15 @@ export default function HomePage() {
         <div className="flex flex-col items-center text-center">
           <h1 className="text-5xl font-bold tracking-tight text-navy-header">AnyNanny</h1>
           <div className="mt-2">
-            <div className="relative mx-auto h-[280px] w-[280px]">
+            <div className="relative mx-auto h-[510px] w-[510px]">
               <Image
                 src="/logo_clean.png"
                 alt="AnyNanny logo"
-                width={280}
-                height={280}
-                className="h-[280px] w-[280px] object-contain object-center"
-                style={{ borderRadius: "50%", overflow: "hidden", width: "280px", height: "280px" }}
-                sizes="280px"
+                width={510}
+                height={510}
+                className="h-[510px] w-[510px] object-contain object-center"
+                style={{ borderRadius: "50%", overflow: "hidden", width: "510px", height: "510px" }}
+                sizes="510px"
                 priority
               />
             </div>
