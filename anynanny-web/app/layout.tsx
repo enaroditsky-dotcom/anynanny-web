@@ -18,10 +18,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="he">
       <body className={assistant.className}>
         <header className="sticky top-0 z-40 border-b border-brand-mint bg-white/95 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 py-3 md:max-w-6xl md:px-6">
+          <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 py-3">
             <button
               type="button"
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-navy-header shadow-sm transition hover:bg-brand-cream"
+              className="relative ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-navy-header shadow-sm transition hover:bg-brand-cream"
               aria-label="Messages"
             >
               <Mail className="h-5 w-5" />
@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
             <Link
               href="/?manual=true"
-              className="inline-flex items-center gap-2 rounded-full bg-[#F5EEDC] px-3 py-1.5 text-navy-header shadow-sm transition hover:brightness-95"
+              className="mr-1 inline-flex items-center gap-1 rounded-full bg-[#F5EEDC] px-2.5 py-1.5 text-navy-header shadow-sm transition hover:brightness-95"
               aria-label="Home"
             >
               <Home className="h-4 w-4" />
