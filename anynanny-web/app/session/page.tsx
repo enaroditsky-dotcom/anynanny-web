@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Calendar, Settings, Wallet } from "lucide-react";
 
 const HOURLY_RATE = 50;
+const ACTIVE_SESSION_START_KEY = "active_session_start_time";
 
 function formatElapsed(seconds: number): string {
   const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
@@ -14,20 +15,49 @@ function formatElapsed(seconds: number): string {
 }
 
 export default function SessionPage() {
-  const [isStarted, setIsStarted] = useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const seconds = elapsedSeconds;
+  const [startTimeMs, setStartTimeMs] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(Date.now());
+  const isStarted = startTimeMs !== null;
+
+  useEffect(() => {
+    const raw = localStorage.getItem(ACTIVE_SESSION_START_KEY);
+    if (!raw) return;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setStartTimeMs(parsed);
+      setNowMs(Date.now());
+    }
+  }, []);
 
   useEffect(() => {
     if (!isStarted) return;
     const timer = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
+      setNowMs(Date.now());
     }, 1000);
     return () => clearInterval(timer);
   }, [isStarted]);
 
+  const seconds = useMemo(() => {
+    if (!startTimeMs) return 0;
+    return Math.max(0, Math.floor((nowMs - startTimeMs) / 1000));
+  }, [nowMs, startTimeMs]);
   const timerText = useMemo(() => formatElapsed(seconds), [seconds]);
   const earnedMoney = useMemo(() => (seconds / 3600) * HOURLY_RATE, [seconds]);
+
+  const handleStart = () => {
+    const startedAt = Date.now();
+    localStorage.setItem(ACTIVE_SESSION_START_KEY, String(startedAt));
+    setStartTimeMs(startedAt);
+    setNowMs(startedAt);
+  };
+
+  const handleEnd = () => {
+    const approved = window.confirm("לסיים את המשמרת?");
+    if (!approved) return;
+    localStorage.removeItem(ACTIVE_SESSION_START_KEY);
+    setStartTimeMs(null);
+    setNowMs(Date.now());
+  };
 
   return (
     <main className="min-h-[100dvh] bg-[#FDFBF6] px-4 pb-6 pt-4" dir="rtl">
@@ -40,17 +70,14 @@ export default function SessionPage() {
             {isStarted ? (
               <button
                 className="flex h-[280px] w-[280px] items-center justify-center rounded-full bg-[#FF8A8A] text-5xl font-bold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
-                onClick={() => setIsStarted(false)}
+                onClick={handleEnd}
               >
                 סיום
               </button>
             ) : (
               <button
                 className="flex h-[280px] w-[280px] flex-col items-center justify-center gap-3 rounded-full bg-[#CFE8C8] text-white shadow-soft transition hover:brightness-105 active:brightness-95"
-                onClick={() => {
-                  setElapsedSeconds(0);
-                  setIsStarted(true);
-                }}
+                onClick={handleStart}
               >
                 <span className="relative h-16 w-16 overflow-hidden rounded-full border border-white/70 bg-white/70">
                   <Image src="/logo.png" alt="" fill className="object-cover object-center" />
