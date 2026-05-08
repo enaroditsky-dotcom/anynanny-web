@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-40 border-b border-brand-mint bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
             <Link
-              href="/"
+              href="/?manual=true"
               className="group inline-flex cursor-pointer items-center gap-3 rounded-full px-2 py-1 transition hover:bg-brand-mint/25"
               aria-label="Home"
             >

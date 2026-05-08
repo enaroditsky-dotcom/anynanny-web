@@ -2,13 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
 export default function HomePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isManual = searchParams.get("manual") === "true";
 
   useEffect(() => {
+    if (isManual) return;
     const activeRole = localStorage.getItem("active_role");
     if (activeRole === "parent") {
       router.replace("/parent/dashboard");
@@ -17,7 +20,7 @@ export default function HomePage() {
     if (activeRole === "sitter") {
       router.replace("/session");
     }
-  }, [router]);
+  }, [isManual, router]);
 
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF7] px-4 py-10" dir="rtl">
