@@ -2,6 +2,7 @@
 
 export const HOURLY_RATE = 50;
 export const SESSION_STATE_KEY = "anynanny_payer_session_v1";
+export const SESSIONS_TABLE = "sessions";
 
 export type SessionProtocolState = {
   status: "idle" | "parent_initiated" | "active" | "ended";
@@ -46,8 +47,16 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
   if (!row) return null;
   const startedMs = row.start_time ? new Date(row.start_time).getTime() : undefined;
   const endedMs = row.end_time ? new Date(row.end_time).getTime() : undefined;
+  const mappedStatus: SessionProtocolState["status"] =
+    row.status === "pending"
+      ? "parent_initiated"
+      : row.status === "completed"
+        ? "ended"
+        : row.status === "active"
+          ? "active"
+          : "idle";
   return {
-    status: row.status === "pending" ? "parent_initiated" : (row.status as SessionProtocolState["status"]),
+    status: mappedStatus,
     parentStartedAtMs: startedMs,
     endedAtMs: endedMs,
     finalElapsedSeconds: row.final_elapsed_seconds ?? undefined,

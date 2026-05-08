@@ -3,57 +3,88 @@
 import Link from "next/link";
 import { Clock3, Search, Settings, Wallet } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-const HOURLY_RATE = 50;
-const SESSION_STATE_KEY = "anynanny_payer_session_v1";
-
-type SessionProtocolState = {
-  status: "idle" | "parent_initiated" | "active" | "ended";
-  parentStartedAtMs?: number;
-  endedAtMs?: number;
-  finalElapsedSeconds?: number;
-  finalAmountNis?: number;
-};
-
-function formatElapsed(seconds: number): string {
-  const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
-  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-  const secs = String(seconds % 60).padStart(2, "0");
-  return `${hours}:${minutes}:${secs}`;
-}
-
-function readSessionState(): SessionProtocolState {
-  const raw = localStorage.getItem(SESSION_STATE_KEY);
-  if (!raw) return { status: "idle" };
-  try {
-    return JSON.parse(raw) as SessionProtocolState;
-  } catch {
-    return { status: "idle" };
-  }
-}
-
-function persistSessionState(next: SessionProtocolState) {
-  localStorage.setItem(SESSION_STATE_KEY, JSON.stringify(next));
-}
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  HOURLY_RATE,
+  SESSIONS_TABLE,
+  type SessionProtocolState,
+  type SupabaseSessionRow,
+  formatElapsed,
+  mapSupabaseRowToProtocol,
+  persistSessionState,
+  readSessionState
+} from "@/lib/session/protocol";
 
 export default function ParentDashboardPage() {
   const [sessionState, setSessionState] = useState<SessionProtocolState>({ status: "idle" });
   const [nowMs, setNowMs] = useState(Date.now());
+  const [useSupabase, setUseSupabase] = useState(false);
+  const [parentUserId, setParentUserId] = useState<string | null>(null);
 
   const syncFromStorage = useCallback(() => {
     setSessionState(readSessionState());
   }, []);
 
   useEffect(() => {
-    syncFromStorage();
+    const supabase = getSupabaseBrowserClient();
+
+    syncFromStorage(); // fallback/initial hydration
     const ticker = setInterval(() => setNowMs(Date.now()), 1000);
     const onStorage = (event: StorageEvent) => {
-      if (event.key === SESSION_STATE_KEY) syncFromStorage();
+      if (event.key === "anynanny_payer_session_v1") syncFromStorage();
     };
     window.addEventListener("storage", onStorage);
+
+    let channelCleanup: (() => void) | null = null;
+    if (supabase) {
+      void (async () => {
+        const { data: authData, error: authErr } = await supabase.auth.getUser();
+        if (authErr || !authData.user) return;
+        const userId = authData.user.id;
+        setParentUserId(userId);
+        localStorage.setItem("active_role", "parent");
+
+        const { data: row, error: rowErr } = await supabase
+          .from(SESSIONS_TABLE)
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!rowErr && row) {
+          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+          if (mapped) {
+            persistSessionState(mapped);
+            setSessionState(mapped);
+          }
+        }
+        setUseSupabase(true);
+
+        const channel = supabase
+          .channel(`parent-sessions-${userId}`)
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: SESSIONS_TABLE, filter: `user_id=eq.${userId}` },
+            (payload) => {
+              const rowData = (payload.new || payload.old) as SupabaseSessionRow;
+              const mapped = mapSupabaseRowToProtocol(rowData);
+              if (mapped) {
+                persistSessionState(mapped);
+                setSessionState(mapped);
+              }
+            }
+          )
+          .subscribe();
+        channelCleanup = () => {
+          void supabase.removeChannel(channel);
+        };
+      })();
+    }
+
     return () => {
       clearInterval(ticker);
       window.removeEventListener("storage", onStorage);
+      if (channelCleanup) channelCleanup();
     };
   }, [syncFromStorage]);
 
@@ -69,7 +100,31 @@ export default function ParentDashboardPage() {
   const timerText = useMemo(() => formatElapsed(elapsedSeconds), [elapsedSeconds]);
   const earnedNis = useMemo(() => ((elapsedSeconds / 3600) * HOURLY_RATE).toFixed(2), [elapsedSeconds]);
 
-  const startSession = () => {
+  const startSession = async () => {
+    if (useSupabase && parentUserId) {
+      const supabase = getSupabaseBrowserClient();
+      if (supabase) {
+        const startedAtIso = new Date().toISOString();
+        const { data: row, error } = await supabase
+          .from(SESSIONS_TABLE)
+          .insert({
+            user_id: parentUserId,
+            status: "pending",
+            start_time: startedAtIso
+          })
+          .select("*")
+          .single();
+        if (!error && row) {
+          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+          if (mapped) {
+            persistSessionState(mapped);
+            setSessionState(mapped);
+            setNowMs(mapped.parentStartedAtMs ?? Date.now());
+            return;
+          }
+        }
+      }
+    }
     const startedAt = Date.now();
     const next: SessionProtocolState = {
       status: "parent_initiated",
@@ -80,11 +135,35 @@ export default function ParentDashboardPage() {
     setNowMs(startedAt);
   };
 
-  const endSession = () => {
+  const endSession = async () => {
     if (sessionState.status !== "active" || !sessionState.parentStartedAtMs) return;
     const confirmed = window.confirm("לסיים משמרת ולנעול סכום סופי?");
     if (!confirmed) return;
     const finalSeconds = Math.max(0, Math.floor((Date.now() - sessionState.parentStartedAtMs) / 1000));
+    if (useSupabase && sessionState.supabaseSessionId) {
+      const supabase = getSupabaseBrowserClient();
+      if (supabase) {
+        const { data: row, error } = await supabase
+          .from(SESSIONS_TABLE)
+          .update({
+            status: "completed",
+            end_time: new Date().toISOString(),
+            final_elapsed_seconds: finalSeconds,
+            final_amount_nis: Number(((finalSeconds / 3600) * HOURLY_RATE).toFixed(2))
+          })
+          .eq("id", sessionState.supabaseSessionId)
+          .select("*")
+          .single();
+        if (!error && row) {
+          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+          if (mapped) {
+            persistSessionState(mapped);
+            setSessionState(mapped);
+            return;
+          }
+        }
+      }
+    }
     const next: SessionProtocolState = {
       status: "ended",
       parentStartedAtMs: sessionState.parentStartedAtMs,

@@ -3,50 +3,74 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Calendar, Settings, Wallet } from "lucide-react";
-
-const HOURLY_RATE = 50;
-const SESSION_STATE_KEY = "anynanny_payer_session_v1";
-
-type SessionProtocolState = {
-  status: "idle" | "parent_initiated" | "active" | "ended";
-  parentStartedAtMs?: number;
-  endedAtMs?: number;
-  finalElapsedSeconds?: number;
-  finalAmountNis?: number;
-};
-
-function formatElapsed(seconds: number): string {
-  const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
-  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-  const secs = String(seconds % 60).padStart(2, "0");
-  return `${hours}:${minutes}:${secs}`;
-}
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  HOURLY_RATE,
+  SESSIONS_TABLE,
+  type SessionProtocolState,
+  type SupabaseSessionRow,
+  formatElapsed,
+  mapSupabaseRowToProtocol,
+  persistSessionState,
+  readSessionState
+} from "@/lib/session/protocol";
 
 export default function SessionPage() {
   const [sessionState, setSessionState] = useState<SessionProtocolState>({ status: "idle" });
   const [nowMs, setNowMs] = useState(Date.now());
-  const isStarted = sessionState.status === "active";
+  const [useSupabase, setUseSupabase] = useState(false);
 
   const syncFromStorage = () => {
-    const raw = localStorage.getItem(SESSION_STATE_KEY);
-    if (!raw) {
-      setSessionState({ status: "idle" });
-      return;
-    }
-    try {
-      setSessionState(JSON.parse(raw) as SessionProtocolState);
-    } catch {
-      setSessionState({ status: "idle" });
-    }
+    setSessionState(readSessionState());
   };
 
   useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
     syncFromStorage();
+
+    let channelCleanup: (() => void) | null = null;
+    if (supabase) {
+      void (async () => {
+        const { data: row, error } = await supabase
+          .from(SESSIONS_TABLE)
+          .select("*")
+          .in("status", ["pending", "active", "completed"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && row) {
+          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+          if (mapped) {
+            persistSessionState(mapped);
+            setSessionState(mapped);
+          }
+        }
+        setUseSupabase(true);
+
+        const channel = supabase
+          .channel("sitter-sessions")
+          .on("postgres_changes", { event: "*", schema: "public", table: SESSIONS_TABLE }, (payload) => {
+            const rowData = (payload.new || payload.old) as SupabaseSessionRow;
+            const mapped = mapSupabaseRowToProtocol(rowData);
+            if (!mapped) return;
+            persistSessionState(mapped);
+            setSessionState(mapped);
+          })
+          .subscribe();
+        channelCleanup = () => {
+          void supabase.removeChannel(channel);
+        };
+      })();
+    }
+
     const onStorage = (event: StorageEvent) => {
-      if (event.key === SESSION_STATE_KEY) syncFromStorage();
+      if (event.key === "anynanny_payer_session_v1") syncFromStorage();
     };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      if (channelCleanup) channelCleanup();
+    };
   }, []);
 
   useEffect(() => {
@@ -69,7 +93,7 @@ export default function SessionPage() {
   const earnedMoney = useMemo(() => (seconds / 3600) * HOURLY_RATE, [seconds]);
 
   const updateState = (next: SessionProtocolState) => {
-    localStorage.setItem(SESSION_STATE_KEY, JSON.stringify(next));
+    persistSessionState(next);
     setSessionState(next);
   };
 
@@ -77,8 +101,26 @@ export default function SessionPage() {
     window.alert("רק הורה יכול להתחיל משמרת. ממתינים להתחלה מצד ההורה.");
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (sessionState.status !== "parent_initiated") return;
+    if (useSupabase && sessionState.supabaseSessionId) {
+      const supabase = getSupabaseBrowserClient();
+      if (supabase) {
+        const { data: row, error } = await supabase
+          .from(SESSIONS_TABLE)
+          .update({ status: "active" })
+          .eq("id", sessionState.supabaseSessionId)
+          .select("*")
+          .single();
+        if (!error && row) {
+          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+          if (mapped) {
+            updateState(mapped);
+            return;
+          }
+        }
+      }
+    }
     const next: SessionProtocolState = {
       ...sessionState,
       status: "active"
