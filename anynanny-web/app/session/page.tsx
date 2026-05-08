@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { Calendar, Settings, Wallet } from "lucide-react";
 
 const HOURLY_RATE = 50;
@@ -33,18 +32,6 @@ export default function SessionPage() {
   return (
     <main className="min-h-[100dvh] bg-[#FDFBF6] px-4 pb-6 pt-4" dir="rtl">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-        <header className="safe-area-inset-top pt-2">
-          <Link
-            href="/?manual=true"
-            className="mx-auto inline-flex items-center gap-2 rounded-full border border-navy-header/20 bg-white/80 px-4 py-2 text-navy-header shadow-sm transition hover:bg-white"
-          >
-            <span className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-navy-header/20">
-              <Image src="/logo.png" alt="" fill className="object-cover object-center" />
-            </span>
-            <span className="text-xl font-bold tracking-wide">AnyNanny</span>
-          </Link>
-        </header>
-
         <section className="rounded-3xl bg-white px-5 py-8 text-center shadow-soft">
           <p className="text-5xl font-bold tracking-wider text-navy-header">{timerText}</p>
           <p className="mt-3 text-lg font-semibold text-navy-800">סכום שנצבר: ₪{earnedMoney.toFixed(2)}</p>
