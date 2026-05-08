@@ -1,0 +1,57 @@
+"use client";
+
+export const HOURLY_RATE = 50;
+export const SESSION_STATE_KEY = "anynanny_payer_session_v1";
+
+export type SessionProtocolState = {
+  status: "idle" | "parent_initiated" | "active" | "ended";
+  parentStartedAtMs?: number;
+  endedAtMs?: number;
+  finalElapsedSeconds?: number;
+  finalAmountNis?: number;
+  supabaseSessionId?: string;
+};
+
+export type SupabaseSessionRow = {
+  id: string | number;
+  status: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  final_elapsed_seconds?: number | null;
+  final_amount_nis?: number | null;
+};
+
+export function formatElapsed(seconds: number): string {
+  const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+  const secs = String(seconds % 60).padStart(2, "0");
+  return `${hours}:${minutes}:${secs}`;
+}
+
+export function readSessionState(): SessionProtocolState {
+  const raw = localStorage.getItem(SESSION_STATE_KEY);
+  if (!raw) return { status: "idle" };
+  try {
+    return JSON.parse(raw) as SessionProtocolState;
+  } catch {
+    return { status: "idle" };
+  }
+}
+
+export function persistSessionState(next: SessionProtocolState) {
+  localStorage.setItem(SESSION_STATE_KEY, JSON.stringify(next));
+}
+
+export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefined): SessionProtocolState | null {
+  if (!row) return null;
+  const startedMs = row.start_time ? new Date(row.start_time).getTime() : undefined;
+  const endedMs = row.end_time ? new Date(row.end_time).getTime() : undefined;
+  return {
+    status: row.status === "pending" ? "parent_initiated" : (row.status as SessionProtocolState["status"]),
+    parentStartedAtMs: startedMs,
+    endedAtMs: endedMs,
+    finalElapsedSeconds: row.final_elapsed_seconds ?? undefined,
+    finalAmountNis: row.final_amount_nis ?? undefined,
+    supabaseSessionId: String(row.id)
+  };
+}
