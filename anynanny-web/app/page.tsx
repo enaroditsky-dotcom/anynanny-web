@@ -23,19 +23,19 @@ export default function HomePage() {
   }, [isManual, router]);
 
   return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF7] px-4 py-10" dir="rtl">
-      <div className="w-full max-w-md rounded-[2rem] bg-white/80 p-10 text-center shadow-soft backdrop-blur-md ring-1 ring-white/70 md:max-w-lg md:p-12">
+    <main className="flex min-h-[calc(100dvh-88px)] items-center justify-center py-4" dir="rtl">
+      <div className="w-full text-center">
         <div className="flex flex-col items-center text-center">
           <h1 className="text-5xl font-bold tracking-tight text-navy-header">AnyNanny</h1>
           <div className="mt-2">
-            <div className="relative mx-auto h-[510px] w-[510px]">
+            <div className="relative mx-auto h-[510px] w-[510px] max-w-full">
               <Image
                 src="/logo_clean.png"
                 alt="AnyNanny logo"
                 width={510}
                 height={510}
-                className="h-[510px] w-[510px] object-contain object-center"
-                style={{ borderRadius: "50%", overflow: "hidden", width: "510px", height: "510px" }}
+                className="h-full w-full object-contain object-center"
+                style={{ borderRadius: "50%", overflow: "hidden" }}
                 sizes="510px"
                 priority
               />

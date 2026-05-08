@@ -16,32 +16,34 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="he">
-      <body className={assistant.className}>
-        <header className="sticky top-0 z-40 border-b border-brand-mint bg-white/95 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 py-3">
-            <button
-              type="button"
-              className="relative ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-navy-header shadow-sm transition hover:bg-brand-cream"
-              aria-label="Messages"
-            >
-              <Mail className="h-5 w-5" />
-              <span className="absolute right-2 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" aria-hidden />
-            </button>
+      <body className={`${assistant.className} bg-[#FDFBF6]`}>
+        <div className="mx-auto w-full max-w-md overflow-hidden bg-white shadow-soft md:my-4 md:min-h-[calc(100dvh-2rem)] md:rounded-[2rem]">
+          <header className="w-full border-b border-navy-header/10 bg-white">
+            <div className="flex w-full items-center justify-between px-4 py-3">
+              <button
+                type="button"
+                className="relative ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-navy-header shadow-sm transition hover:bg-brand-cream"
+                aria-label="Messages"
+              >
+                <Mail className="h-5 w-5" />
+                <span className="absolute right-2 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" aria-hidden />
+              </button>
 
-            <Link
-              href="/?manual=true"
-              className="mr-1 inline-flex items-center gap-1 rounded-full bg-[#F5EEDC] px-2.5 py-1.5 text-navy-header shadow-sm transition hover:brightness-95"
-              aria-label="Home"
-            >
-              <Home className="h-4 w-4" />
-              <span className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-navy-header/15">
-                <Image src="/logo.png" alt="AnyNanny" fill className="object-cover object-center" priority />
-              </span>
-              <span className="text-lg font-bold">AnyNanny</span>
-            </Link>
-          </div>
-        </header>
-        {children}
+              <Link
+                href="/?manual=true"
+                className="mr-1 inline-flex items-center gap-1 rounded-full bg-[#F5EEDC] px-2.5 py-1.5 text-navy-header shadow-sm transition hover:brightness-95"
+                aria-label="Home"
+              >
+                <Home className="h-4 w-4" />
+                <span className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-navy-header/15">
+                  <Image src="/logo.png" alt="AnyNanny" fill className="object-cover object-center" priority />
+                </span>
+                <span className="text-lg font-bold">AnyNanny</span>
+              </Link>
+            </div>
+          </header>
+          <div className="px-4 pb-6 pt-4">{children}</div>
+        </div>
       </body>
     </html>
   );
