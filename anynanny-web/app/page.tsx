@@ -7,12 +7,14 @@ export default function HomePage() {
       <div className="w-full max-w-md rounded-[2rem] bg-white/80 p-10 text-center shadow-soft backdrop-blur-md ring-1 ring-white/70 md:max-w-lg md:p-12">
         <div className="flex flex-col items-center text-center">
           <div className="mt-2">
-            <div className="relative mx-auto h-[280px] w-[280px] overflow-hidden rounded-full bg-white/70 shadow-soft ring-1 ring-navy-header/10">
+            <div className="relative mx-auto h-[280px] w-[280px] bg-white/70 shadow-soft">
               <Image
                 src="/logo_clean.png"
                 alt="AnyNanny logo"
-                fill
-                className="object-contain object-center p-3"
+                width={280}
+                height={280}
+                className="h-full w-full border-2 border-dashed border-navy-header/30 p-3 object-contain object-center"
+                style={{ borderRadius: "50%", overflow: "hidden" }}
                 sizes="280px"
                 priority
               />
