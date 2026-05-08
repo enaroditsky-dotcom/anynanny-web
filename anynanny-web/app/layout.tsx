@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { Assistant } from "next/font/google";
+import { RoleSwitcher } from "@/components/role-switcher";
 
 const assistant = Assistant({ subsets: ["hebrew", "latin"], weight: ["400", "500", "600", "700"] });
 
@@ -23,7 +24,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </div>
               <div className="text-2xl font-bold tracking-[0.2em] text-navy-header">ANYNANNY</div>
             </div>
-            <div className="rounded-full bg-brand-mint px-3 py-1 text-xs text-navy-800">ביטחון • פשטות • פרטיות</div>
+            <div className="flex items-center gap-2">
+              <RoleSwitcher />
+              <div className="rounded-full bg-brand-mint px-3 py-1 text-xs text-navy-800">ביטחון • פשטות • פרטיות</div>
+            </div>
           </div>
         </header>
         {children}

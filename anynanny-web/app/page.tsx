@@ -1,7 +1,24 @@
-﻿import Image from "next/image";
+﻿"use client";
+
+import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function HomePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const activeRole = localStorage.getItem("active_role");
+    if (activeRole === "parent") {
+      router.replace("/parent/dashboard");
+      return;
+    }
+    if (activeRole === "sitter") {
+      router.replace("/session");
+    }
+  }, [router]);
+
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF7] px-4 py-10" dir="rtl">
       <div className="w-full max-w-md rounded-[2rem] bg-white/80 p-10 text-center shadow-soft backdrop-blur-md ring-1 ring-white/70 md:max-w-lg md:p-12">
