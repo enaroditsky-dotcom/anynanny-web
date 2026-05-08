@@ -12,8 +12,15 @@ type Suggestion = {
   suggestedSitters: string[];
 };
 
+type SessionSummary = {
+  endedAt: string;
+  durationText: string;
+  amountNis: number;
+};
+
 const CALENDAR_PRIVACY_HINT =
   "אנחנו רק מחפשים חלונות זמן פנויים. שמות האירועים והפרטים האישיים שלך נשארים פרטיים ולעולם לא נשמרים אצלנו.";
+const SESSION_SUMMARY_KEY = "latest_session_summary";
 
 /** Evening suggestion dates derived locally from free/busy only — never sent to server as event metadata. */
 function extractEveningSuggestionDates(slots: ParentBusySlot[], nowMs: number): string[] {
@@ -58,6 +65,7 @@ export function ParentDashboardClient({
   /** Optional note visible only on device — never POSTed */
   const [newBusy, setNewBusy] = useState({ startsAt: "", endsAt: "", localNote: "" });
   const [searchTerm, setSearchTerm] = useState("");
+  const [endedSummary, setEndedSummary] = useState<SessionSummary | null>(null);
 
   const filteredProfiles = useMemo(
     () =>
@@ -185,6 +193,16 @@ export function ParentDashboardClient({
     return () => clearInterval(ticker);
   }, []);
 
+  useEffect(() => {
+    const raw = localStorage.getItem(SESSION_SUMMARY_KEY);
+    if (!raw) return;
+    try {
+      setEndedSummary(JSON.parse(raw) as SessionSummary);
+    } catch {
+      localStorage.removeItem(SESSION_SUMMARY_KEY);
+    }
+  }, []);
+
   const liveMinutes = computeLiveMinutes(session, nowMs);
   const liveCost = session ? (session.hourlyRateNis / 60) * liveMinutes : 0;
   const waitingText =
@@ -196,6 +214,27 @@ export function ParentDashboardClient({
         <h1 className="text-2xl font-semibold text-navy-900">דשבורד הורה</h1>
         <p className="mt-1 text-sm text-navy-700">ניהול סינונים, אישורי סשן כפולים, יומן אישי וחישוב עלות מדויק בדקות.</p>
       </header>
+
+      {endedSummary ? (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-lg font-bold text-emerald-800">🎉 המשמרת הסתיימה</p>
+              <p className="mt-1 text-sm text-emerald-900">זמן בייביסיטר: {endedSummary.durationText}</p>
+              <p className="text-base font-semibold text-emerald-900">לתשלום: ₪{endedSummary.amountNis.toFixed(2)}</p>
+            </div>
+            <button
+              className="rounded-lg border border-emerald-400 bg-white/70 px-3 py-1.5 text-xs font-medium text-emerald-900"
+              onClick={() => {
+                localStorage.removeItem(SESSION_SUMMARY_KEY);
+                setEndedSummary(null);
+              }}
+            >
+              סגירה
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid grid-cols-2 gap-3 rounded-2xl bg-white p-4 shadow-sm md:grid-cols-4">
         <div className="rounded-xl bg-navy-50 p-3 text-sm">📅 יומן אישי</div>
