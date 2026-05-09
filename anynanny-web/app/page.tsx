@@ -23,48 +23,45 @@ export default function HomePage() {
   }, [isManual, router]);
 
   return (
-    <main className="flex min-h-[calc(100dvh-88px)] items-center justify-center py-4" dir="rtl">
-      <div className="w-full text-center">
-        <div className="flex flex-col items-center text-center">
-          <h1 className="text-5xl font-bold tracking-tight text-navy-header">AnyNanny</h1>
-          <div className="mt-2">
-            <div className="relative mx-auto h-[510px] w-[510px] max-w-full">
-              <Image
-                src="/logo_clean.png"
-                alt="AnyNanny logo"
-                width={510}
-                height={510}
-                className="h-full w-full object-contain object-center"
-                style={{ borderRadius: "50%", overflow: "hidden" }}
-                sizes="510px"
-                priority
-              />
-            </div>
-          </div>
+    <main className="flex min-h-[calc(100dvh-88px)] flex-col items-center justify-center px-4 py-6" dir="rtl">
+      <div className="flex w-full max-w-md flex-col items-center gap-6 text-center">
+        <h1 className="text-4xl font-bold tracking-tight text-navy-header md:text-5xl">AnyNanny</h1>
 
-          <div className="mt-10 flex w-full flex-col items-center gap-4 px-1">
-            <h1 className="text-balance text-2xl font-bold leading-snug tracking-tight text-navy-header md:text-3xl">
-              anynanny - למצוא זמן לחיים
-            </h1>
-            <p className="max-w-sm text-pretty text-lg font-normal leading-relaxed text-navy-header md:text-xl">
-              מצאו את הבייביסיטר ותתחילו לחיות!
-            </p>
-          </div>
+        <div className="flex w-full justify-center">
+          <Image
+            src="/logo_clean.png"
+            alt="AnyNanny logo"
+            width={510}
+            height={510}
+            className="mx-auto max-h-[55vh] w-auto max-w-full object-contain object-center"
+            style={{ borderRadius: "50%", overflow: "hidden" }}
+            sizes="(max-width: 768px) 85vw, 480px"
+            priority
+          />
+        </div>
 
-          <div className="mt-12 flex w-full justify-center gap-4 px-1">
-            <Link
-              href="/parent/dashboard"
-              className="inline-flex h-14 w-[11.5rem] items-center justify-center rounded-full bg-[#FF8A8A] px-6 text-center text-base font-bold text-white shadow-soft transition hover:brightness-[1.04] active:brightness-95"
-            >
-              כניסת הורים
-            </Link>
-            <Link
-              href="/session"
-              className="inline-flex h-14 w-[11.5rem] items-center justify-center rounded-full bg-[#001F3F] px-6 text-center text-base font-bold text-white shadow-soft transition hover:brightness-110 active:brightness-95"
-            >
-              כניסת בייביסיטר
-            </Link>
-          </div>
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-center sm:gap-4">
+          <Link
+            href="/auth/login"
+            className="inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-[#001F3F] px-8 py-3.5 text-center text-base font-bold text-white shadow-soft transition hover:brightness-110 active:brightness-95 sm:w-auto sm:min-w-[12rem]"
+          >
+            התחברות
+          </Link>
+          <Link
+            href="/auth/register"
+            className="inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-[#001F3F] px-8 py-3.5 text-center text-base font-bold text-white shadow-soft transition hover:brightness-110 active:brightness-95 sm:w-auto sm:min-w-[12rem]"
+          >
+            הרשמה
+          </Link>
+        </div>
+
+        <div className="flex w-full flex-col items-center gap-3 px-1 pt-2">
+          <p className="text-balance text-2xl font-bold leading-snug tracking-tight text-navy-header md:text-3xl">
+            anynanny - למצוא זמן לחיים
+          </p>
+          <p className="max-w-sm text-pretty text-lg font-normal leading-relaxed text-navy-header md:text-xl">
+            מצאו את הבייביסיטר ותתחילו לחיות!
+          </p>
         </div>
       </div>
     </main>
