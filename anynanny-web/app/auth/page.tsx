@@ -2,11 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { readLastUsedEmail, readReturningUserFlag } from "@/lib/auth/returning-user";
+import { clearDeviceAuthHints, readLastUsedEmail, readReturningUserFlag } from "@/lib/auth/returning-user";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function AuthLandingInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const authError = searchParams.get("error");
@@ -28,6 +30,15 @@ function AuthLandingInner() {
     setReturning(readReturningUserFlag());
     setMounted(true);
   }, []);
+
+  const handleSwitchUser = async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    clearDeviceAuthHints();
+    router.replace("/?manual=true");
+  };
 
   if (!mounted) {
     return (
@@ -57,14 +68,20 @@ function AuthLandingInner() {
 
           <Link
             href={loginHref}
+            suppressHydrationWarning
             className="mt-10 block w-full rounded-2xl bg-[#001F3F] py-3.5 text-center text-base font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
           >
             התחברות
           </Link>
 
-          <Link href={`/auth/register${nextQuery}`} className="mt-8 inline-block text-xs text-slate-500 underline underline-offset-2 transition hover:text-navy-header">
-            עדיין לא רשומים? לחצו כאן להרשמה
-          </Link>
+          <button
+            type="button"
+            suppressHydrationWarning
+            onClick={() => void handleSwitchUser()}
+            className="mt-8 w-full border-0 bg-transparent text-center text-sm font-semibold text-slate-600 underline underline-offset-2 transition hover:text-navy-header"
+          >
+            זה לא אני / החלף משתמש
+          </button>
         </section>
       ) : (
         <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft">
@@ -76,12 +93,14 @@ function AuthLandingInner() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               href={`/auth/login${nextQuery}`}
+              suppressHydrationWarning
               className="flex flex-1 items-center justify-center rounded-2xl bg-[#001F3F] px-4 py-3.5 text-center text-sm font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
             >
               התחברות
             </Link>
             <Link
               href={`/auth/register${nextQuery}`}
+              suppressHydrationWarning
               className="flex flex-1 items-center justify-center rounded-2xl border border-navy-header/25 bg-white px-4 py-3.5 text-center text-sm font-semibold text-navy-header transition hover:bg-slate-50"
             >
               הרשמה
@@ -92,6 +111,7 @@ function AuthLandingInner() {
 
       <Link
         href="/?manual=true"
+        suppressHydrationWarning
         className="inline-flex w-full min-w-0 max-w-md justify-center px-1 text-sm font-semibold text-navy-header underline"
       >
         חזרה למסך הבית

@@ -5,7 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
-import { saveLastUsedEmail, setReturningUserFlag } from "@/lib/auth/returning-user";
+import {
+  clearUserRoleChoice,
+  readUserRoleChoice,
+  saveLastUsedEmail,
+  setReturningUserFlag
+} from "@/lib/auth/returning-user";
 import { ensureProfile, resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ProfileRole } from "@/lib/supabase/profiles";
@@ -31,6 +36,11 @@ function RegisterInner() {
   const showPasswordMismatch =
     !passwordsMatch && (password.length > 0 || confirmPassword.length > 0);
   const submitDisabled = busy || !passwordsMatch;
+
+  useEffect(() => {
+    const choice = readUserRoleChoice();
+    if (choice) setRole(choice);
+  }, []);
 
   useEffect(() => {
     if (!signupDone) return;
@@ -103,6 +113,7 @@ function RegisterInner() {
 
       const effective = await resolveRoleForUser(supabase, activeUser, role, trimmedName || null);
       saveLastUsedEmail(emailTrim);
+      clearUserRoleChoice();
       setSignupDone({ effective });
     } finally {
       setBusy(false);
@@ -111,8 +122,8 @@ function RegisterInner() {
 
   if (signupDone) {
     return (
-      <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl">
-        <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-8 text-center shadow-soft">
+      <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>
+        <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-8 text-center shadow-soft" suppressHydrationWarning>
           <p className="text-2xl font-bold text-navy-header">נרשמתם בהצלחה!</p>
           <p className="mt-3 text-sm text-slate-600">מעבירים אתכם לעמוד הבית תוך רגע…</p>
         </section>
@@ -121,13 +132,14 @@ function RegisterInner() {
   }
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl">
-      <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft">
+    <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>
+      <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft" suppressHydrationWarning>
         <h1 className="text-center text-2xl font-bold text-navy-header">הרשמה</h1>
         <p className="mt-1 text-center text-sm text-slate-600">צרו חשבון הורה או בייביסיטר.</p>
 
         <form
           className="mt-6 space-y-3"
+          suppressHydrationWarning
           onSubmit={(e) => {
             e.preventDefault();
             void handleSubmit();
@@ -218,17 +230,17 @@ function RegisterInner() {
 
         <p className="mt-6 text-center text-sm text-slate-600">
           כבר רשומים?{" "}
-          <Link href={`/auth/login${nextQuery}`} className="font-semibold text-navy-header underline">
+          <Link href={`/auth/login${nextQuery}`} suppressHydrationWarning className="font-semibold text-navy-header underline">
             התחברות
           </Link>
         </p>
       </section>
 
       <div className="flex w-full min-w-0 justify-center gap-4 px-1 text-sm">
-        <Link href={`/auth${nextQuery}`} className="font-semibold text-navy-header underline">
+        <Link href={`/auth${nextQuery}`} suppressHydrationWarning className="font-semibold text-navy-header underline">
           חזרה
         </Link>
-        <Link href="/?manual=true" className="text-slate-600 underline">
+        <Link href="/?manual=true" suppressHydrationWarning className="text-slate-600 underline">
           מסך הבית
         </Link>
       </div>

@@ -1,11 +1,11 @@
 ﻿"use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
+import { setUserRoleChoice } from "@/lib/auth/returning-user";
 
-export default function HomePage() {
+function HomeInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isManual = searchParams.get("manual") === "true";
@@ -21,6 +21,11 @@ export default function HomePage() {
       router.replace("/session");
     }
   }, [isManual, router]);
+
+  const goAuth = (role: "parent" | "sitter") => {
+    setUserRoleChoice(role);
+    router.push("/auth");
+  };
 
   return (
     <main className="flex min-h-[calc(100dvh-88px)] w-full min-w-0 flex-col items-center justify-center px-4 py-3 sm:py-6" dir="rtl">
@@ -41,18 +46,22 @@ export default function HomePage() {
         </div>
 
         <div className="flex w-full flex-col gap-2.5 sm:flex-row sm:justify-center sm:gap-4">
-          <Link
-            href="/auth/login"
+          <button
+            type="button"
+            suppressHydrationWarning
+            onClick={() => goAuth("parent")}
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#FF8A8A] px-6 py-3 text-center text-base font-bold text-white shadow-soft transition hover:brightness-[1.04] active:brightness-95 sm:min-h-14 sm:w-auto sm:min-w-[12rem] sm:px-8 sm:py-3.5"
+          >
+            כניסת הורים
+          </button>
+          <button
+            type="button"
+            suppressHydrationWarning
+            onClick={() => goAuth("sitter")}
             className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#001F3F] px-6 py-3 text-center text-base font-bold text-white shadow-soft transition hover:brightness-110 active:brightness-95 sm:min-h-14 sm:w-auto sm:min-w-[12rem] sm:px-8 sm:py-3.5"
           >
-            התחברות
-          </Link>
-          <Link
-            href="/auth/register"
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#001F3F] px-6 py-3 text-center text-base font-bold text-white shadow-soft transition hover:brightness-110 active:brightness-95 sm:min-h-14 sm:w-auto sm:min-w-[12rem] sm:px-8 sm:py-3.5"
-          >
-            הרשמה
-          </Link>
+            כניסת בייביסיטר
+          </button>
         </div>
 
         <div className="flex w-full flex-col items-center gap-1.5 px-1 pt-1 sm:gap-3 sm:pt-2">
@@ -65,5 +74,19 @@ export default function HomePage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-[calc(100dvh-88px)] w-full items-center justify-center py-10 text-slate-600" dir="rtl">
+          טוען...
+        </main>
+      }
+    >
+      <HomeInner />
+    </Suspense>
   );
 }

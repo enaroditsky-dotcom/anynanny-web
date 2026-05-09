@@ -32,6 +32,7 @@ export function PasswordPeekField({ id, value, onChange, autoComplete, disabled,
         type="button"
         tabIndex={-1}
         disabled={disabled}
+        suppressHydrationWarning
         aria-label="הצגת סיסמה זמנית"
         className={`absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 transition-colors ${
           peek ? "text-[#001F3F]" : "text-navy-header/35 hover:text-navy-header/55"

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Mail } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { clearDeviceAuthHints } from "@/lib/auth/returning-user";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 
@@ -24,13 +25,7 @@ export function AppShellHeader() {
     if (supabase) {
       await supabase.auth.signOut();
     }
-    try {
-      localStorage.removeItem("active_role");
-      localStorage.removeItem("anynanny_payer_session_v1");
-      localStorage.removeItem("is_returning_user");
-    } catch {
-      /* ignore */
-    }
+    clearDeviceAuthHints();
     setSignedIn(false);
     setDisplayName(null);
     router.replace("/?manual=true");
