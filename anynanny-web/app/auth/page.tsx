@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Eye } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -27,11 +28,12 @@ async function ensureProfile(
   if (error) console.warn("[auth] profiles insert:", error.message);
 }
 
-/** Prefer DB profile, then auth metadata, then signup-time role, then parent default. */
+/** Prefer DB profile, then auth metadata, then signup-time role/name, then parent default. */
 async function resolveRoleForUser(
   supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
   user: { id: string; user_metadata?: Record<string, unknown> },
-  signupRole?: ProfileRole
+  signupRole?: ProfileRole,
+  signupFullName?: string | null
 ): Promise<ProfileRole> {
   const { data: profile } = await supabase.from(PROFILES_TABLE).select("role").eq("id", user.id).maybeSingle();
   if (profile?.role && isProfileRole(profile.role)) {
@@ -40,12 +42,18 @@ async function resolveRoleForUser(
 
   const meta = user.user_metadata?.role;
   if (typeof meta === "string" && isProfileRole(meta)) {
-    await ensureProfile(supabase, { id: user.id, role: meta });
+    const fn =
+      typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() || null : undefined;
+    await ensureProfile(supabase, { id: user.id, role: meta, full_name: fn });
     return meta;
   }
 
   if (signupRole) {
-    await ensureProfile(supabase, { id: user.id, role: signupRole });
+    await ensureProfile(supabase, {
+      id: user.id,
+      role: signupRole,
+      full_name: signupFullName !== undefined ? signupFullName : undefined
+    });
     return signupRole;
   }
 
@@ -65,6 +73,7 @@ function AuthPageInner() {
   const [role, setRole] = useState<ProfileRole>("parent");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [passwordPeek, setPasswordPeek] = useState(false);
 
   const redirectAfterSignIn = (effectiveRole: ProfileRole) => {
     localStorage.setItem("active_role", effectiveRole);
@@ -108,7 +117,7 @@ function AuthPageInner() {
         }
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData.session?.user) {
-          const effective = await resolveRoleForUser(supabase, sessionData.session.user, role);
+          const effective = await resolveRoleForUser(supabase, sessionData.session.user, role, trimmedName || null);
           redirectAfterSignIn(effective);
           return;
         }
@@ -160,13 +169,37 @@ function AuthPageInner() {
           </label>
           <label className="block text-sm text-navy-900">
             סיסמה
-            <input
-              type="password"
-              autoComplete={busy ? "off" : "current-password"}
-              className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="relative mt-1">
+              <input
+                type={passwordPeek ? "text" : "password"}
+                autoComplete={busy ? "off" : "current-password"}
+                className="block w-full rounded-lg border border-navy-header/20 py-2 pl-2 pr-10"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label="הצגת סיסמה זמנית"
+                className={`absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 transition-colors ${
+                  passwordPeek ? "text-[#001F3F]" : "text-navy-header/35 hover:text-navy-header/55"
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setPasswordPeek(true);
+                }}
+                onMouseUp={() => setPasswordPeek(false)}
+                onMouseLeave={() => setPasswordPeek(false)}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  setPasswordPeek(true);
+                }}
+                onTouchEnd={() => setPasswordPeek(false)}
+                onTouchCancel={() => setPasswordPeek(false)}
+              >
+                <Eye className="h-5 w-5" strokeWidth={2} />
+              </button>
+            </div>
           </label>
           <label className="block text-sm text-navy-900">
             שם מלא (בהרשמה)
