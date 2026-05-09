@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
 import { setReturningUserFlag } from "@/lib/auth/returning-user";
@@ -24,11 +24,21 @@ function RegisterInner() {
   const [role, setRole] = useState<ProfileRole>("parent");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [signupDone, setSignupDone] = useState<{ effective: ProfileRole } | null>(null);
 
-  const passwordsMatch = password === confirmPassword;
+  /** Compare trimmed copies so accidental spaces don’t block a real match. Submit still uses the raw password fields. */
+  const passwordsMatch = password.trim() === confirmPassword.trim();
   const showPasswordMismatch =
     !passwordsMatch && (password.length > 0 || confirmPassword.length > 0);
   const submitDisabled = busy || !passwordsMatch;
+
+  useEffect(() => {
+    if (!signupDone) return;
+    const id = window.setTimeout(() => {
+      redirectAfterSignIn(router, signupDone.effective, nextPath);
+    }, 1800);
+    return () => clearTimeout(id);
+  }, [signupDone, router, nextPath]);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -36,7 +46,7 @@ function RegisterInner() {
       setMessage("Supabase לא מוגדר. יש לעדכן מפתחות סביבה.");
       return;
     }
-    if (password !== confirmPassword) {
+    if (password.trim() !== confirmPassword.trim()) {
       setMessage("הסיסמאות אינן תואמות.");
       return;
     }
@@ -45,6 +55,7 @@ function RegisterInner() {
     try {
       const trimmedName = fullName.trim();
       const emailTrim = email.trim();
+
       const { data, error } = await supabase.auth.signUp({
         email: emailTrim,
         password,
@@ -91,11 +102,22 @@ function RegisterInner() {
       }
 
       const effective = await resolveRoleForUser(supabase, activeUser, role, trimmedName || null);
-      redirectAfterSignIn(router, effective, nextPath);
+      setSignupDone({ effective });
     } finally {
       setBusy(false);
     }
   };
+
+  if (signupDone) {
+    return (
+      <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl">
+        <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-8 text-center shadow-soft">
+          <p className="text-2xl font-bold text-navy-header">נרשמתם בהצלחה!</p>
+          <p className="mt-3 text-sm text-slate-600">מעבירים אתכם לעמוד הבית תוך רגע…</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl">
