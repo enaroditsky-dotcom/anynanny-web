@@ -59,11 +59,8 @@ function RegisterInner() {
 
   useEffect(() => {
     if (!signupDone) return;
-    const id = window.setTimeout(() => {
-      router.refresh();
-      redirectAfterSignIn(router, signupDone.effective, nextPath);
-    }, 1800);
-    return () => clearTimeout(id);
+    redirectAfterSignIn(router, signupDone.effective, nextPath);
+    void router.refresh();
   }, [signupDone, router, nextPath]);
 
   useEffect(() => {
@@ -148,7 +145,7 @@ function RegisterInner() {
       <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>
         <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-8 text-center shadow-soft" suppressHydrationWarning>
           <p className="text-2xl font-bold text-navy-header">נרשמתם בהצלחה!</p>
-          <p className="mt-3 text-sm text-slate-600">מעבירים אתכם לעמוד הבית תוך רגע…</p>
+          <p className="mt-3 text-sm text-slate-600">מעבירים אתכם לדשבורד…</p>
         </section>
       </main>
     );

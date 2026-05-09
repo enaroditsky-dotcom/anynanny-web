@@ -104,8 +104,8 @@ function LoginInner() {
       setReturningUserFlag();
       saveLastUsedEmail(emailTrim);
       const effective = await resolveRoleForUser(supabase, data.user);
-      await router.refresh();
       redirectAfterSignIn(router, effective, nextPath);
+      void router.refresh();
     } finally {
       setBusy(false);
     }

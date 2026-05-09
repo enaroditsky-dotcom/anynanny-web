@@ -22,7 +22,11 @@ export default function ParentDashboardPage() {
   const [parentUserId, setParentUserId] = useState<string | null>(null);
 
   const syncFromStorage = useCallback(() => {
-    setSessionState(readSessionState());
+    try {
+      setSessionState(readSessionState());
+    } catch {
+      setSessionState({ status: "idle" });
+    }
   }, []);
 
   useEffect(() => {
@@ -44,7 +48,11 @@ export default function ParentDashboardPage() {
         const userId = authData.user.id;
         if (cancelled) return;
         setParentUserId(userId);
-        localStorage.setItem("active_role", "parent");
+        try {
+          localStorage.setItem("active_role", "parent");
+        } catch {
+          /* ignore */
+        }
 
         const { data: row, error: rowErr } = await supabase
           .from(SESSIONS_TABLE)
@@ -215,6 +223,8 @@ export default function ParentDashboardPage() {
 
   return (
     <main className="mx-auto w-full max-w-md space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
+      <h1 className="px-1 text-center text-lg font-bold tracking-tight text-navy-header">ברוך הבא לדשבורד הורים</h1>
+
       <section className="rounded-3xl bg-white p-6 text-center shadow-soft">
         {sessionState.status === "active" ? (
           <div className="mb-5 space-y-1">
