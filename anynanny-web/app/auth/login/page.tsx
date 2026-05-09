@@ -9,6 +9,12 @@ import { setReturningUserFlag } from "@/lib/auth/returning-user";
 import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
+function formatLoginError(message: string): string {
+  const m = message.trim();
+  if (!m) return "התחברות נכשלה (שגיאה לא ידועה).";
+  return `שגיאת התחברות: ${m}`;
+}
+
 function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -27,17 +33,34 @@ function LoginInner() {
       setMessage("Supabase לא מוגדר. יש לעדכן מפתחות סביבה.");
       return;
     }
+    const emailTrim = email.trim();
+    if (!emailTrim) {
+      setMessage("נא להזין כתובת אימייל.");
+      return;
+    }
+
     setBusy(true);
     setMessage("");
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: emailTrim,
+        password
+      });
       if (error) {
         console.log("[auth/login] signInWithPassword error:", error);
-        setMessage(`התחברות נכשלה: ${error.message}`);
+        setMessage(formatLoginError(error.message));
         return;
       }
-      if (!data.user) {
-        setMessage("לא התקבל משתמש מהשרת.");
+      if (!data.session?.user || !data.user) {
+        setMessage("לא נוצרה סשן לאחר ההתחברות. נסו שוב או בדקו הגדרות Supabase.");
+        return;
+      }
+
+      const {
+        data: { session: verifySession }
+      } = await supabase.auth.getSession();
+      if (!verifySession) {
+        setMessage("הסשן לא נשמר בדפדפן. נקו קוקיות / נסו חלון גלישה פרטית.");
         return;
       }
 
@@ -89,7 +112,9 @@ function LoginInner() {
           התחברות
         </button>
 
-        {message ? <p className="mt-4 text-center text-sm text-slate-700">{message}</p> : null}
+        {message ? (
+          <p className="mt-4 rounded-lg bg-rose-50 p-3 text-center text-sm text-rose-950">{message}</p>
+        ) : null}
 
         <p className="mt-6 text-center text-sm text-slate-600">
           אין חשבון?{" "}

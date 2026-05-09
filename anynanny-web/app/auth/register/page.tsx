@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
 import { setReturningUserFlag } from "@/lib/auth/returning-user";
@@ -24,6 +24,41 @@ function RegisterInner() {
   const [role, setRole] = useState<ProfileRole>("parent");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [signupComplete, setSignupComplete] = useState<{ effective: ProfileRole } | null>(null);
+
+  const autoRedirectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didRedirectRef = useRef(false);
+
+  const goToDashboard = useCallback(
+    (effective: ProfileRole) => {
+      if (didRedirectRef.current) return;
+      didRedirectRef.current = true;
+      redirectAfterSignIn(router, effective, nextPath);
+    },
+    [router, nextPath]
+  );
+
+  useEffect(() => {
+    if (!signupComplete) return;
+    autoRedirectRef.current = window.setTimeout(() => {
+      goToDashboard(signupComplete.effective);
+    }, 2500);
+    return () => {
+      if (autoRedirectRef.current) {
+        clearTimeout(autoRedirectRef.current);
+        autoRedirectRef.current = null;
+      }
+    };
+  }, [signupComplete, goToDashboard]);
+
+  const handleContinue = () => {
+    if (!signupComplete) return;
+    if (autoRedirectRef.current) {
+      clearTimeout(autoRedirectRef.current);
+      autoRedirectRef.current = null;
+    }
+    goToDashboard(signupComplete.effective);
+  };
 
   const handleRegister = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -39,8 +74,9 @@ function RegisterInner() {
     setMessage("");
     try {
       const trimmedName = fullName.trim();
+      const emailTrim = email.trim();
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: emailTrim,
         password,
         options: { data: { role, full_name: trimmedName } }
       });
@@ -66,7 +102,7 @@ function RegisterInner() {
 
       if (!activeUser) {
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
+          email: emailTrim,
           password
         });
         if (signInError) {
@@ -85,11 +121,33 @@ function RegisterInner() {
       }
 
       const effective = await resolveRoleForUser(supabase, activeUser, role, trimmedName || null);
-      redirectAfterSignIn(router, effective, nextPath);
+      didRedirectRef.current = false;
+      setSignupComplete({ effective });
     } finally {
       setBusy(false);
     }
   };
+
+  if (signupComplete) {
+    return (
+      <main className="mx-auto w-full max-w-md space-y-4 py-2" dir="rtl">
+        <section className="rounded-3xl bg-white p-8 text-center shadow-soft">
+          <p className="text-2xl font-bold text-navy-header">נרשמתם בהצלחה!</p>
+          <p className="mt-3 text-sm text-slate-600">מעבירים אתכם לעמוד הבית תוך רגע, או לחצו להמשך מיד.</p>
+          <button
+            type="button"
+            onClick={handleContinue}
+            className="mt-8 w-full rounded-2xl bg-[#001F3F] py-3.5 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
+          >
+            המשך
+          </button>
+        </section>
+        <Link href="/?manual=true" className="inline-flex w-full justify-center text-sm font-semibold text-navy-header underline">
+          חזרה למסך הבית
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 py-2" dir="rtl">

@@ -21,6 +21,7 @@ export function AppShellHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [hasMounted, setHasMounted] = useState(false);
+  const [profileEpoch, setProfileEpoch] = useState(0);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileRole, setProfileRole] = useState<ProfileRole | null>(null);
   const [fullName, setFullName] = useState<string | null>(null);
@@ -28,6 +29,10 @@ export function AppShellHeader() {
 
   useEffect(() => {
     setHasMounted(true);
+  }, []);
+
+  const refreshProfile = useCallback(() => {
+    setProfileEpoch((n) => n + 1);
   }, []);
 
   const handleSignOut = useCallback(async () => {
@@ -42,6 +47,29 @@ export function AppShellHeader() {
     setBalance(null);
     router.replace("/auth");
   }, [router]);
+
+  useEffect(() => {
+    if (!hasMounted) return;
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        refreshProfile();
+      }
+      if (event === "SIGNED_OUT") {
+        setProfileRole(null);
+        setFullName(null);
+        setBalance(null);
+        setProfileLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [hasMounted, refreshProfile]);
 
   useEffect(() => {
     if (!hasMounted) return;
@@ -71,6 +99,10 @@ export function AppShellHeader() {
       } = await supabase.auth.getUser();
       if (cancelled) return;
 
+      const metaNameRaw = user?.user_metadata?.full_name;
+      const metaName =
+        typeof metaNameRaw === "string" && metaNameRaw.trim() ? metaNameRaw.trim() : null;
+
       if (!user) {
         setProfileRole(null);
         setFullName(null);
@@ -78,6 +110,15 @@ export function AppShellHeader() {
         setProfileLoading(false);
         return;
       }
+
+      const metaRoleRaw = user.user_metadata?.role;
+      const metaRole = typeof metaRoleRaw === "string" && isProfileRole(metaRoleRaw) ? metaRoleRaw : null;
+      if (metaRole) {
+        setProfileRole(metaRole);
+        localStorage.setItem("active_role", metaRole);
+      }
+      setFullName(metaName);
+      setProfileLoading(false);
 
       const { data: profile } = await supabase
         .from(PROFILES_TABLE)
@@ -97,27 +138,25 @@ export function AppShellHeader() {
       if (isProfileRole(r)) {
         setProfileRole(r);
         localStorage.setItem("active_role", r);
-      } else {
+      } else if (!metaRole) {
         setProfileRole(null);
       }
 
-      const name =
+      const nameFromProfile =
         typeof profile?.full_name === "string" && profile.full_name.trim() ? profile.full_name.trim() : null;
-      setFullName(name);
+      setFullName(nameFromProfile ?? metaName);
 
       const bal =
         profile?.balance !== null && profile?.balance !== undefined && typeof profile.balance === "number"
           ? profile.balance
           : null;
       setBalance(bal);
-
-      setProfileLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [hasMounted, pathname]);
+  }, [hasMounted, pathname, profileEpoch]);
 
   const roleLabel = profileRole === "parent" ? "הורה" : profileRole === "sitter" ? "בייביסיטר" : "אורח";
 
