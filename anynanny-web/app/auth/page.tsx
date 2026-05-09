@@ -4,11 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
 import { clearDeviceAuthHints, readLastUsedEmail, readReturningUserFlag } from "@/lib/auth/returning-user";
+import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function AuthLandingInner() {
   const router = useRouter();
+  const { isLoading: authLoading, signedIn, effectiveRole } = useAuth();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const authError = searchParams.get("error");
@@ -31,19 +34,34 @@ function AuthLandingInner() {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (authLoading) return;
+    if (!signedIn || !effectiveRole) return;
+    redirectAfterSignIn(router, effectiveRole, nextPath);
+  }, [authLoading, signedIn, effectiveRole, router, nextPath]);
+
   const handleSwitchUser = async () => {
     const supabase = getSupabaseBrowserClient();
     if (supabase) {
       await supabase.auth.signOut();
     }
     clearDeviceAuthHints();
-    router.replace("/?manual=true");
+    router.replace("/");
+    router.refresh();
   };
 
-  if (!mounted) {
+  if (authLoading || !mounted) {
     return (
       <main className="mx-auto flex min-w-0 max-w-full justify-center py-10 text-center text-sm text-slate-600" dir="rtl">
         טוען...
+      </main>
+    );
+  }
+
+  if (signedIn && effectiveRole) {
+    return (
+      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-center text-sm text-slate-600" dir="rtl">
+        מפנים לדשבורד…
       </main>
     );
   }

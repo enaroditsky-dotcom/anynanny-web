@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
+import { useAuth } from "@/components/auth-provider";
 import {
   clearUserRoleChoice,
   readUserRoleChoice,
@@ -18,6 +19,7 @@ import type { ProfileRole } from "@/lib/supabase/profiles";
 
 function RegisterInner() {
   const router = useRouter();
+  const { isLoading: authLoading, signedIn, effectiveRole } = useAuth();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const roleFromQuery = searchParams.get("role");
@@ -58,10 +60,18 @@ function RegisterInner() {
   useEffect(() => {
     if (!signupDone) return;
     const id = window.setTimeout(() => {
+      router.refresh();
       redirectAfterSignIn(router, signupDone.effective, nextPath);
     }, 1800);
     return () => clearTimeout(id);
   }, [signupDone, router, nextPath]);
+
+  useEffect(() => {
+    if (signupDone) return;
+    if (authLoading) return;
+    if (!signedIn || !effectiveRole) return;
+    redirectAfterSignIn(router, effectiveRole, nextPath);
+  }, [signupDone, authLoading, signedIn, effectiveRole, router, nextPath]);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -140,6 +150,22 @@ function RegisterInner() {
           <p className="text-2xl font-bold text-navy-header">נרשמתם בהצלחה!</p>
           <p className="mt-3 text-sm text-slate-600">מעבירים אתכם לעמוד הבית תוך רגע…</p>
         </section>
+      </main>
+    );
+  }
+
+  if (authLoading) {
+    return (
+      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-sm text-slate-600" dir="rtl">
+        טוען…
+      </main>
+    );
+  }
+
+  if (signedIn && effectiveRole) {
+    return (
+      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-sm text-slate-600" dir="rtl">
+        מפנים לדשבורד…
       </main>
     );
   }

@@ -11,6 +11,7 @@ import {
   setReturningUserFlag,
   setUserRoleChoice
 } from "@/lib/auth/returning-user";
+import { useAuth } from "@/components/auth-provider";
 import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -22,6 +23,7 @@ function formatLoginError(message: string): string {
 
 function LoginInner() {
   const router = useRouter();
+  const { isLoading: authLoading, signedIn, effectiveRole } = useAuth();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const emailFromQuery = searchParams.get("email");
@@ -55,6 +57,12 @@ function LoginInner() {
       setUserRoleChoice(roleFromQuery);
     }
   }, [roleFromQuery]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!signedIn || !effectiveRole) return;
+    redirectAfterSignIn(router, effectiveRole, nextPath);
+  }, [authLoading, signedIn, effectiveRole, router, nextPath]);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -96,11 +104,28 @@ function LoginInner() {
       setReturningUserFlag();
       saveLastUsedEmail(emailTrim);
       const effective = await resolveRoleForUser(supabase, data.user);
+      await router.refresh();
       redirectAfterSignIn(router, effective, nextPath);
     } finally {
       setBusy(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-sm text-slate-600" dir="rtl">
+        טוען…
+      </main>
+    );
+  }
+
+  if (signedIn && effectiveRole) {
+    return (
+      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-sm text-slate-600" dir="rtl">
+        מפנים לדשבורד…
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>
