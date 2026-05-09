@@ -47,16 +47,15 @@ export default function SessionPage() {
         }
         setUseSupabase(true);
 
-        const channel = supabase
-          .channel("sitter-sessions")
-          .on("postgres_changes", { event: "*", schema: "public", table: SESSIONS_TABLE }, (payload) => {
-            const rowData = (payload.new || payload.old) as SupabaseSessionRow;
-            const mapped = mapSupabaseRowToProtocol(rowData);
-            if (!mapped) return;
-            persistSessionState(mapped);
-            setSessionState(mapped);
-          })
-          .subscribe();
+        const channel = supabase.channel("sitter-sessions");
+        channel.on("postgres_changes", { event: "*", schema: "public", table: SESSIONS_TABLE }, (payload) => {
+          const rowData = (payload.new || payload.old) as SupabaseSessionRow;
+          const mapped = mapSupabaseRowToProtocol(rowData);
+          if (!mapped) return;
+          persistSessionState(mapped);
+          setSessionState(mapped);
+        });
+        channel.subscribe();
         channelCleanup = () => {
           void supabase.removeChannel(channel);
         };
@@ -138,7 +137,11 @@ export default function SessionPage() {
           : "ממתינים שהורה יתחיל משמרת.";
 
   const circleLabel =
-    sessionState.status === "parent_initiated" ? "אישור" : sessionState.status === "active" ? "פעיל" : "להתחיל";
+    sessionState.status === "parent_initiated"
+      ? "אישור התחלה"
+      : sessionState.status === "active"
+        ? "פעיל"
+        : "להתחיל";
 
   const circleClass =
     sessionState.status === "active"

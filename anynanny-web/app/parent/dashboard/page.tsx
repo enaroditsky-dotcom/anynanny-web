@@ -47,7 +47,7 @@ export default function ParentDashboardPage() {
         const { data: row, error: rowErr } = await supabase
           .from(SESSIONS_TABLE)
           .select("*")
-          .eq("user_id", userId)
+          .eq("parent_id", userId)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -60,21 +60,20 @@ export default function ParentDashboardPage() {
         }
         setUseSupabase(true);
 
-        const channel = supabase
-          .channel(`parent-sessions-${userId}`)
-          .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: SESSIONS_TABLE, filter: `user_id=eq.${userId}` },
-            (payload) => {
-              const rowData = (payload.new || payload.old) as SupabaseSessionRow;
-              const mapped = mapSupabaseRowToProtocol(rowData);
-              if (mapped) {
-                persistSessionState(mapped);
-                setSessionState(mapped);
-              }
+        const channel = supabase.channel(`parent-sessions-${userId}`);
+        channel.on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: SESSIONS_TABLE, filter: `parent_id=eq.${userId}` },
+          (payload) => {
+            const rowData = (payload.new || payload.old) as SupabaseSessionRow;
+            const mapped = mapSupabaseRowToProtocol(rowData);
+            if (mapped) {
+              persistSessionState(mapped);
+              setSessionState(mapped);
             }
-          )
-          .subscribe();
+          }
+        );
+        channel.subscribe();
         channelCleanup = () => {
           void supabase.removeChannel(channel);
         };
@@ -108,7 +107,7 @@ export default function ParentDashboardPage() {
         const { data: row, error } = await supabase
           .from(SESSIONS_TABLE)
           .insert({
-            user_id: parentUserId,
+            parent_id: parentUserId,
             status: "pending",
             start_time: startedAtIso
           })
