@@ -26,6 +26,11 @@ function RegisterInner() {
   const [busy, setBusy] = useState(false);
   const [signupComplete, setSignupComplete] = useState<{ effective: ProfileRole } | null>(null);
 
+  const passwordsMatch = password === confirmPassword;
+  const showPasswordMismatch =
+    !passwordsMatch && (password.length > 0 || confirmPassword.length > 0);
+  const registerDisabled = busy || !passwordsMatch;
+
   const autoRedirectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didRedirectRef = useRef(false);
 
@@ -212,12 +217,17 @@ function RegisterInner() {
                 disabled={busy}
               />
             </div>
+            {showPasswordMismatch ? (
+              <p className="mt-1.5 text-xs text-red-600" role="alert">
+                הסיסמאות אינן תואמות
+              </p>
+            ) : null}
           </label>
         </div>
 
         <button
           type="button"
-          disabled={busy}
+          disabled={registerDisabled}
           onClick={() => void handleRegister()}
           className="mt-6 w-full rounded-2xl bg-[#001F3F] py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95 disabled:opacity-60"
         >
