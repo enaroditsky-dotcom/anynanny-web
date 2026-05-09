@@ -205,6 +205,7 @@ function RegisterInner() {
           <button
             type="submit"
             disabled={submitDisabled}
+            suppressHydrationWarning
             className="mt-6 w-full rounded-2xl bg-[#001F3F] py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95 disabled:opacity-60"
           >
             הרשמה

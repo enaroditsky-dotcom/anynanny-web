@@ -130,47 +130,49 @@ export function AppShellHeader() {
 
   return (
     <header className="w-full shrink-0 border-b border-navy-header/10 bg-white">
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex min-w-0 shrink-0 items-center gap-4">
+      <div className="flex h-12 items-center justify-between px-4">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             suppressHydrationWarning
-            className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-navy-header shadow-sm transition hover:bg-brand-cream"
+            className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-navy-header transition hover:bg-slate-100"
             aria-label="הודעות"
           >
-            <Mail className="h-5 w-5" />
+            <Mail className="h-5 w-5" strokeWidth={2} />
             <span
-              className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white"
+              className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white"
               aria-hidden
             />
           </button>
 
-          <div className="flex min-w-0 items-center gap-2">
-            {signedIn && displayName ? (
-              <span className="max-w-[7rem] truncate text-sm font-semibold text-navy-header sm:max-w-[10rem]" title={displayName}>
-                {displayName}
-              </span>
-            ) : null}
-            <button
-              type="button"
-              suppressHydrationWarning
-              className="shrink-0 rounded-full bg-[#001F3F] px-3 py-2 text-[11px] font-semibold text-white shadow-sm transition hover:brightness-110 active:brightness-95"
-              onClick={() => {
-                if (signedIn) void handleSignOut();
-                else router.push("/auth");
-              }}
+          {signedIn && displayName ? (
+            <span
+              className="max-w-[5.5rem] truncate text-xs font-semibold text-navy-header sm:max-w-[9rem] sm:text-sm"
+              title={displayName}
             >
-              {signedIn ? "התנתקות" : "כניסה"}
-            </button>
-          </div>
+              {displayName}
+            </span>
+          ) : null}
+
+          <button
+            type="button"
+            suppressHydrationWarning
+            className="shrink-0 rounded-full bg-[#001F3F] px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:brightness-110 active:brightness-95"
+            onClick={() => {
+              if (signedIn) void handleSignOut();
+              else router.push("/auth");
+            }}
+          >
+            {signedIn ? "התנתקות" : "כניסה"}
+          </button>
         </div>
 
         <Link
           href="/?manual=true"
-          className="relative block h-10 w-10 shrink-0 overflow-hidden rounded-full ring-1 ring-navy-header/15"
+          className="relative block h-9 w-9 shrink-0 overflow-hidden rounded-full ring-1 ring-navy-header/15"
           aria-label="מסך הבית"
         >
-          <Image src="/logo.png" alt="AnyNanny" fill className="object-cover object-center" priority sizes="40px" />
+          <Image src="/logo.png" alt="AnyNanny" fill className="object-cover object-center" priority sizes="36px" />
         </Link>
       </div>
     </header>
