@@ -3,6 +3,7 @@
 import type { User } from "@supabase/supabase-js";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { resetRedirectDedupe } from "@/lib/auth/redirect-after-sign-in";
 import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
@@ -29,8 +30,13 @@ async function loadAuthState(): Promise<{
   }
 
   const {
-    data: { user }
+    data: { user: validatedUser }
   } = await supabase.auth.getUser();
+
+  const { data: sessionWrap } = await supabase.auth.getSession();
+  const sessionUser = sessionWrap.session?.user ?? null;
+  /** Prefer validated user; fall back to session user so brief token/network gaps don’t wipe UI (header flicker). */
+  const user = validatedUser ?? sessionUser;
 
   if (!user) {
     try {
@@ -104,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEffectiveRole(next.effectiveRole);
   }, []);
 
+  /** First paint only — avoids header/name disappearing on every route change. */
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
@@ -114,7 +121,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [refresh, pathname]);
+  }, [refresh]);
+
+  /** Keep auth in sync when navigating without toggling global loading (prevents AppShell jitter). */
+  useEffect(() => {
+    void refresh();
+  }, [pathname, refresh]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -123,7 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+      if (event === "TOKEN_REFRESHED") {
+        void refresh();
+        return;
+      }
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         setIsLoading(true);
         void (async () => {
           await refresh();
@@ -131,9 +147,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })();
       }
       if (event === "SIGNED_OUT") {
+        resetRedirectDedupe();
         try {
           localStorage.removeItem("active_role");
           localStorage.removeItem("anynanny_payer_session_v1");
+          sessionStorage.removeItem("anynanny_auth_redirect_lock");
         } catch {
           /* ignore */
         }

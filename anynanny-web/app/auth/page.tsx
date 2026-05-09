@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
 import { clearDeviceAuthHints, readLastUsedEmail, readReturningUserFlag } from "@/lib/auth/returning-user";
 import { useAuth } from "@/components/auth-provider";
@@ -11,7 +11,9 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function AuthLandingInner() {
   const router = useRouter();
+  const pathname = usePathname();
   const { isLoading: authLoading, signedIn, effectiveRole } = useAuth();
+  const redirectOnceRef = useRef(false);
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const authError = searchParams.get("error");
@@ -30,15 +32,34 @@ function AuthLandingInner() {
   const [returning, setReturning] = useState(false);
 
   useEffect(() => {
+    if (!signedIn) redirectOnceRef.current = false;
+  }, [signedIn]);
+
+  useEffect(() => {
     setReturning(readReturningUserFlag());
     setMounted(true);
   }, []);
 
   useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    void supabase.auth.getSession().then(({ data }) => {
+      console.log("[auth] getSession", {
+        pathname,
+        sessionUserId: data.session?.user?.id ?? null,
+        hasSession: !!data.session
+      });
+    });
+  }, [pathname, signedIn, authLoading]);
+
+  useEffect(() => {
+    if (!pathname.startsWith("/auth")) return;
     if (authLoading) return;
     if (!signedIn || !effectiveRole) return;
+    if (redirectOnceRef.current) return;
+    redirectOnceRef.current = true;
     redirectAfterSignIn(router, effectiveRole, nextPath);
-  }, [authLoading, signedIn, effectiveRole, router, nextPath]);
+  }, [pathname, authLoading, signedIn, effectiveRole, router, nextPath]);
 
   const handleSwitchUser = async () => {
     const supabase = getSupabaseBrowserClient();

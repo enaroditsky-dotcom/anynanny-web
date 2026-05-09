@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
 import { useAuth } from "@/components/auth-provider";
@@ -19,7 +19,9 @@ import type { ProfileRole } from "@/lib/supabase/profiles";
 
 function RegisterInner() {
   const router = useRouter();
+  const pathname = usePathname();
   const { isLoading: authLoading, signedIn, effectiveRole } = useAuth();
+  const redirectOnceRef = useRef(false);
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const roleFromQuery = searchParams.get("role");
@@ -41,6 +43,10 @@ function RegisterInner() {
   const [busy, setBusy] = useState(false);
   const [signupDone, setSignupDone] = useState<{ effective: ProfileRole } | null>(null);
 
+  useEffect(() => {
+    if (!signedIn) redirectOnceRef.current = false;
+  }, [signedIn]);
+
   /** Compare trimmed copies so accidental spaces don’t block a real match. Submit still uses the raw password fields. */
   const passwordsMatch = password.trim() === confirmPassword.trim();
   const showPasswordMismatch =
@@ -58,17 +64,35 @@ function RegisterInner() {
   }, [roleFromQuery]);
 
   useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    void supabase.auth.getSession().then(({ data }) => {
+      console.log("[auth/register] getSession", {
+        pathname,
+        sessionUserId: data.session?.user?.id ?? null,
+        hasSession: !!data.session
+      });
+    });
+  }, [pathname, signedIn, authLoading]);
+
+  useEffect(() => {
     if (!signupDone) return;
+    if (!pathname.startsWith("/auth")) return;
+    if (redirectOnceRef.current) return;
+    redirectOnceRef.current = true;
     redirectAfterSignIn(router, signupDone.effective, nextPath);
     void router.refresh();
-  }, [signupDone, router, nextPath]);
+  }, [signupDone, router, nextPath, pathname]);
 
   useEffect(() => {
     if (signupDone) return;
+    if (!pathname.startsWith("/auth")) return;
     if (authLoading) return;
     if (!signedIn || !effectiveRole) return;
+    if (redirectOnceRef.current) return;
+    redirectOnceRef.current = true;
     redirectAfterSignIn(router, effectiveRole, nextPath);
-  }, [signupDone, authLoading, signedIn, effectiveRole, router, nextPath]);
+  }, [signupDone, pathname, authLoading, signedIn, effectiveRole, router, nextPath]);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();

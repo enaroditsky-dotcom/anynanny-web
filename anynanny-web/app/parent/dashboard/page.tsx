@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Clock3, Search, Settings, Wallet } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
@@ -16,6 +17,8 @@ import {
 } from "@/lib/session/protocol";
 
 export default function ParentDashboardPage() {
+  const { isLoading: authLoading } = useAuth();
+
   const [sessionState, setSessionState] = useState<SessionProtocolState>({ status: "idle" });
   const [nowMs, setNowMs] = useState(Date.now());
   const [useSupabase, setUseSupabase] = useState(false);
@@ -27,6 +30,20 @@ export default function ParentDashboardPage() {
     } catch {
       setSessionState({ status: "idle" });
     }
+  }, []);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    void (async () => {
+      const { data: sessionWrap } = await supabase.auth.getSession();
+      const { data: userWrap } = await supabase.auth.getUser();
+      console.log("[parent/dashboard] session debug", {
+        path: typeof window !== "undefined" ? window.location.pathname : "",
+        sessionUserId: sessionWrap.session?.user?.id ?? null,
+        getUserId: userWrap.user?.id ?? null
+      });
+    })();
   }, []);
 
   useEffect(() => {
@@ -220,6 +237,14 @@ export default function ParentDashboardPage() {
 
   const primaryTextClass =
     sessionState.status === "parent_initiated" ? "text-2xl leading-tight px-4" : "text-5xl";
+
+  if (authLoading) {
+    return (
+      <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
+        <p className="text-sm text-slate-600">טוען…</p>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto w-full max-w-md space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
