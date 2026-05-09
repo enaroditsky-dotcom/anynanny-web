@@ -2,40 +2,42 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Home, Mail, UserRound, Users } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { Home, Mail } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-
-type Role = "parent" | "sitter";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
 
 export function AppShellHeader() {
   const pathname = usePathname();
-  const router = useRouter();
-  const [role, setRole] = useState<Role>("sitter");
+  const [profileRole, setProfileRole] = useState<ProfileRole | null>(null);
 
   useEffect(() => {
-    if (pathname.includes("/parent")) {
-      setRole("parent");
-      localStorage.setItem("active_role", "parent");
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      const saved = localStorage.getItem("active_role");
+      if (saved === "parent" || saved === "sitter") setProfileRole(saved);
       return;
     }
-    if (pathname.includes("/session") || pathname.includes("/sitter")) {
-      setRole("sitter");
-      localStorage.setItem("active_role", "sitter");
-      return;
-    }
-    const saved = localStorage.getItem("active_role");
-    if (saved === "parent" || saved === "sitter") {
-      setRole(saved);
-    }
+
+    void (async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setProfileRole(null);
+        return;
+      }
+      const { data: profile } = await supabase.from(PROFILES_TABLE).select("role").eq("id", user.id).maybeSingle();
+      const r = profile?.role && isProfileRole(profile.role) ? profile.role : user.user_metadata?.role;
+      if (isProfileRole(r)) {
+        setProfileRole(r);
+        localStorage.setItem("active_role", r);
+      }
+    })();
   }, [pathname]);
 
-  const onToggle = () => {
-    const nextRole: Role = role === "parent" ? "sitter" : "parent";
-    setRole(nextRole);
-    localStorage.setItem("active_role", nextRole);
-    router.push(nextRole === "parent" ? "/parent/dashboard" : "/session");
-  };
+  const roleLabel = profileRole === "parent" ? "הורה" : profileRole === "sitter" ? "בייביסיטר" : "אורח";
 
   return (
     <header className="w-full border-b border-navy-header/10 bg-white">
@@ -50,25 +52,20 @@ export function AppShellHeader() {
         </button>
 
         <div className="inline-flex items-center gap-2">
-          <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1">
-            <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${role === "sitter" ? "text-navy-header" : "text-slate-500"}`}>
-              <UserRound className="h-3 w-3" />
-              בייביסיטר
-            </span>
-            <button
-              type="button"
-              onClick={onToggle}
-              className={`relative h-5 w-9 rounded-full transition ${role === "parent" ? "bg-[#E8E2D6]" : "bg-[#E8E2D6]"}`}
-              aria-label="Role switch"
-            >
-              <span
-                className={`absolute top-0.5 h-4 w-4 rounded-full bg-[#001F3F] transition-all ${role === "parent" ? "right-0.5" : "right-4.5"}`}
-              />
-            </button>
-            <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${role === "parent" ? "text-navy-header" : "text-slate-500"}`}>
-              <Users className="h-3 w-3" />
-              הורה
-            </span>
+          <div className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-navy-header">
+            {profileRole === "parent" ? (
+              <Link href="/parent/dashboard" className="underline-offset-2 hover:underline">
+                {roleLabel} · לוח בקרה
+              </Link>
+            ) : profileRole === "sitter" ? (
+              <Link href="/session" className="underline-offset-2 hover:underline">
+                {roleLabel} · משמרת
+              </Link>
+            ) : (
+              <Link href="/auth" className="underline-offset-2 hover:underline">
+                התחברות
+              </Link>
+            )}
           </div>
 
           <Link

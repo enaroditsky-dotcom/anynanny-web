@@ -1,19 +1,70 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
 
-type Role = "parent" | "sitter";
+async function ensureProfile(
+  supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
+  userId: string,
+  role: ProfileRole
+) {
+  const { error } = await supabase.from(PROFILES_TABLE).upsert({ id: userId, role }, { onConflict: "id" });
+  if (error) console.warn("[auth] profiles upsert:", error.message);
+}
 
-export default function AuthPage() {
+/** Prefer DB profile, then auth metadata, then signup-time role, then parent default. */
+async function resolveRoleForUser(
+  supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
+  user: { id: string; user_metadata?: Record<string, unknown> },
+  signupRole?: ProfileRole
+): Promise<ProfileRole> {
+  const { data: profile } = await supabase.from(PROFILES_TABLE).select("role").eq("id", user.id).maybeSingle();
+  if (profile?.role && isProfileRole(profile.role)) {
+    return profile.role;
+  }
+
+  const meta = user.user_metadata?.role;
+  if (typeof meta === "string" && isProfileRole(meta)) {
+    await ensureProfile(supabase, user.id, meta);
+    return meta;
+  }
+
+  if (signupRole) {
+    await ensureProfile(supabase, user.id, signupRole);
+    return signupRole;
+  }
+
+  await ensureProfile(supabase, user.id, "parent");
+  return "parent";
+}
+
+function AuthPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next");
+  const authError = searchParams.get("error");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("parent");
+  const [role, setRole] = useState<ProfileRole>("parent");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const redirectAfterSignIn = (effectiveRole: ProfileRole) => {
+    localStorage.setItem("active_role", effectiveRole);
+    const allowedNext =
+      nextPath &&
+      ((effectiveRole === "parent" && nextPath.startsWith("/parent")) ||
+        (effectiveRole === "sitter" && (nextPath === "/session" || nextPath.startsWith("/session/"))));
+    if (allowedNext && nextPath) {
+      router.replace(nextPath);
+      return;
+    }
+    router.replace(effectiveRole === "parent" ? "/parent/dashboard" : "/session");
+  };
 
   const handleAuth = async (mode: "signin" | "signup") => {
     const supabase = getSupabaseBrowserClient();
@@ -25,7 +76,7 @@ export default function AuthPage() {
     setMessage("");
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { data: { role } }
@@ -34,17 +85,31 @@ export default function AuthPage() {
           setMessage(`הרשמה נכשלה: ${error.message}`);
           return;
         }
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-          setMessage(`התחברות נכשלה: ${error.message}`);
+        if (data.user) {
+          await ensureProfile(supabase, data.user.id, role);
+        }
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.user) {
+          const effective = await resolveRoleForUser(supabase, sessionData.session.user, role);
+          redirectAfterSignIn(effective);
           return;
         }
-        const userRole = (data.user.user_metadata.role as Role | undefined) ?? role;
-        localStorage.setItem("active_role", userRole);
-        router.replace(userRole === "parent" ? "/parent/dashboard" : "/session");
+        setMessage("נרשמת בהצלחה. אם נדרש אימות במייל — יש להשלים ואז להתחבר.");
+        return;
       }
-      setMessage(mode === "signup" ? "נרשמת בהצלחה. כעת ניתן להתחבר." : "התחברת בהצלחה.");
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setMessage(`התחברות נכשלה: ${error.message}`);
+        return;
+      }
+      if (!data.user) {
+        setMessage("לא התקבל משתמש מהשרת.");
+        return;
+      }
+
+      const effective = await resolveRoleForUser(supabase, data.user);
+      redirectAfterSignIn(effective);
     } finally {
       setBusy(false);
     }
@@ -54,13 +119,22 @@ export default function AuthPage() {
     <main className="mx-auto w-full max-w-md space-y-4 py-2" dir="rtl">
       <section className="rounded-3xl bg-white p-5 shadow-soft">
         <h1 className="text-2xl font-bold text-navy-header">התחברות / הרשמה</h1>
-        <p className="mt-1 text-sm text-slate-600">החשבון משויך לתפקיד הורה או בייביסיטר.</p>
+        <p className="mt-1 text-sm text-slate-600">
+          תפקיד נשמר בפרופיל במערכת. הורים נכנסים ללוח ההורים, בייביסיטר למסך המשמרת.
+        </p>
+
+        {authError === "no_profile" ? (
+          <p className="mt-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+            חסר פרופיל למשתמש. נסו להתחבר שוב לאחר הרשמה, או פנו לתמיכה.
+          </p>
+        ) : null}
 
         <div className="mt-4 space-y-3">
           <label className="block text-sm text-navy-900">
             אימייל
             <input
               type="email"
+              autoComplete="email"
               className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -70,14 +144,15 @@ export default function AuthPage() {
             סיסמה
             <input
               type="password"
+              autoComplete={busy ? "off" : "current-password"}
               className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
           <label className="block text-sm text-navy-900">
-            תפקיד
-            <select className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+            תפקיד (בהרשמה)
+            <select className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2" value={role} onChange={(e) => setRole(e.target.value as ProfileRole)}>
               <option value="parent">הורה</option>
               <option value="sitter">בייביסיטר</option>
             </select>
@@ -110,5 +185,19 @@ export default function AuthPage() {
         חזרה למסך הבית
       </Link>
     </main>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-md py-8 text-center text-sm text-slate-600" dir="rtl">
+          טוען...
+        </main>
+      }
+    >
+      <AuthPageInner />
+    </Suspense>
   );
 }

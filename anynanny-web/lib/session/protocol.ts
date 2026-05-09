@@ -15,7 +15,7 @@ export type SessionProtocolState = {
 
 export type SupabaseSessionRow = {
   id: string | number;
-  /** Matches authenticated parent user id (same as sessions.parent_id in DB). */
+  /** Authenticated Supabase auth.users id for the parent who started the session (= sessions.parent_id). */
   parent_id?: string | null;
   /** @deprecated use parent_id — older rows may still use user_id */
   user_id?: string | null;
