@@ -2,15 +2,27 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Home, Mail } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Home, Mail, Settings } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
 
 export function AppShellHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const [profileRole, setProfileRole] = useState<ProfileRole | null>(null);
+
+  const handleSignOut = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    localStorage.removeItem("active_role");
+    localStorage.removeItem("anynanny_payer_session_v1");
+    setProfileRole(null);
+    router.replace("/auth");
+  }, [router]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -42,14 +54,30 @@ export function AppShellHeader() {
   return (
     <header className="w-full border-b border-navy-header/10 bg-white">
       <div className="flex w-full items-center justify-between px-4 py-3">
-        <button
-          type="button"
-          className="relative ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-navy-header shadow-sm transition hover:bg-brand-cream"
-          aria-label="Messages"
-        >
-          <Mail className="h-5 w-5" />
-          <span className="absolute right-2 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" aria-hidden />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="relative ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-navy-header shadow-sm transition hover:bg-brand-cream"
+            aria-label="Messages"
+          >
+            <Mail className="h-5 w-5" />
+            <span className="absolute right-2 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-10 max-w-[9rem] items-center gap-1 rounded-full px-2 text-navy-header transition hover:bg-slate-100"
+            aria-label={profileRole ? "התנתקות" : "התחברות"}
+            onClick={() => {
+              if (profileRole) void handleSignOut();
+              else router.push("/auth");
+            }}
+          >
+            <Settings className="h-5 w-5 shrink-0" />
+            <span className="text-[11px] font-semibold leading-tight">
+              {profileRole ? "התנתקות" : "כניסה"}
+            </span>
+          </button>
+        </div>
 
         <div className="inline-flex items-center gap-2">
           <div className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-navy-header">

@@ -8,11 +8,23 @@ import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/
 
 async function ensureProfile(
   supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
-  userId: string,
-  role: ProfileRole
+  input: { id: string; role: ProfileRole; full_name?: string | null }
 ) {
-  const { error } = await supabase.from(PROFILES_TABLE).upsert({ id: userId, role }, { onConflict: "id" });
-  if (error) console.warn("[auth] profiles upsert:", error.message);
+  const { data: existing } = await supabase.from(PROFILES_TABLE).select("id").eq("id", input.id).maybeSingle();
+  if (existing) {
+    const patch: Record<string, unknown> = { role: input.role };
+    if (input.full_name !== undefined) patch.full_name = input.full_name;
+    const { error } = await supabase.from(PROFILES_TABLE).update(patch).eq("id", input.id);
+    if (error) console.warn("[auth] profiles update:", error.message);
+    return;
+  }
+  const { error } = await supabase.from(PROFILES_TABLE).insert({
+    id: input.id,
+    role: input.role,
+    full_name: input.full_name ?? null,
+    balance: 0
+  });
+  if (error) console.warn("[auth] profiles insert:", error.message);
 }
 
 /** Prefer DB profile, then auth metadata, then signup-time role, then parent default. */
@@ -28,16 +40,16 @@ async function resolveRoleForUser(
 
   const meta = user.user_metadata?.role;
   if (typeof meta === "string" && isProfileRole(meta)) {
-    await ensureProfile(supabase, user.id, meta);
+    await ensureProfile(supabase, { id: user.id, role: meta });
     return meta;
   }
 
   if (signupRole) {
-    await ensureProfile(supabase, user.id, signupRole);
+    await ensureProfile(supabase, { id: user.id, role: signupRole });
     return signupRole;
   }
 
-  await ensureProfile(supabase, user.id, "parent");
+  await ensureProfile(supabase, { id: user.id, role: "parent" });
   return "parent";
 }
 
@@ -49,6 +61,7 @@ function AuthPageInner() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<ProfileRole>("parent");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -76,17 +89,22 @@ function AuthPageInner() {
     setMessage("");
     try {
       if (mode === "signup") {
+        const trimmedName = fullName.trim();
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { role } }
+          options: { data: { role, full_name: trimmedName } }
         });
         if (error) {
           setMessage(`הרשמה נכשלה: ${error.message}`);
           return;
         }
         if (data.user) {
-          await ensureProfile(supabase, data.user.id, role);
+          await ensureProfile(supabase, {
+            id: data.user.id,
+            role,
+            full_name: trimmedName || null
+          });
         }
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData.session?.user) {
@@ -148,6 +166,17 @@ function AuthPageInner() {
               className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          <label className="block text-sm text-navy-900">
+            שם מלא (בהרשמה)
+            <input
+              type="text"
+              autoComplete="name"
+              className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="למשל: יעל כהן"
             />
           </label>
           <label className="block text-sm text-navy-900">

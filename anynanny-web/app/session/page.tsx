@@ -115,9 +115,16 @@ export default function SessionPage() {
     if (useSupabase && sessionState.supabaseSessionId) {
       const supabase = getSupabaseBrowserClient();
       if (supabase) {
+        const {
+          data: { user }
+        } = await supabase.auth.getUser();
+        if (!user) {
+          window.alert("יש להתחבר כדי לאשר משמרת.");
+          return;
+        }
         const { data: row, error } = await supabase
           .from(SESSIONS_TABLE)
-          .update({ status: "active" })
+          .update({ status: "active", sitter_id: user.id })
           .eq("id", sessionState.supabaseSessionId)
           .select("*")
           .single();
@@ -127,6 +134,9 @@ export default function SessionPage() {
             updateState(mapped);
             return;
           }
+        }
+        if (error) {
+          console.error("[session] confirm update:", error.message);
         }
       }
     }
