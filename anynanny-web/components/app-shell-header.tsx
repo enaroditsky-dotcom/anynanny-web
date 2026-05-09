@@ -8,10 +8,27 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
 
+function UserSectionSkeleton() {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-8 w-16 animate-pulse rounded-full bg-slate-100" aria-hidden />
+      <div className="h-8 min-w-[7rem] animate-pulse rounded-full bg-slate-100" aria-hidden />
+    </div>
+  );
+}
+
 export function AppShellHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const [hasMounted, setHasMounted] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [profileRole, setProfileRole] = useState<ProfileRole | null>(null);
+  const [fullName, setFullName] = useState<string | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const handleSignOut = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -21,35 +38,90 @@ export function AppShellHeader() {
     localStorage.removeItem("active_role");
     localStorage.removeItem("anynanny_payer_session_v1");
     setProfileRole(null);
+    setFullName(null);
+    setBalance(null);
     router.replace("/auth");
   }, [router]);
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      const saved = localStorage.getItem("active_role");
-      if (saved === "parent" || saved === "sitter") setProfileRole(saved);
-      return;
-    }
+    if (!hasMounted) return;
+
+    let cancelled = false;
 
     void (async () => {
+      setProfileLoading(true);
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        const saved = localStorage.getItem("active_role");
+        if (!cancelled) {
+          if (saved === "parent" || saved === "sitter") {
+            setProfileRole(saved);
+          } else {
+            setProfileRole(null);
+          }
+          setFullName(null);
+          setBalance(null);
+          setProfileLoading(false);
+        }
+        return;
+      }
+
       const {
         data: { user }
       } = await supabase.auth.getUser();
+      if (cancelled) return;
+
       if (!user) {
         setProfileRole(null);
+        setFullName(null);
+        setBalance(null);
+        setProfileLoading(false);
         return;
       }
-      const { data: profile } = await supabase.from(PROFILES_TABLE).select("role").eq("id", user.id).maybeSingle();
-      const r = profile?.role && isProfileRole(profile.role) ? profile.role : user.user_metadata?.role;
+
+      const { data: profile } = await supabase
+        .from(PROFILES_TABLE)
+        .select("role, full_name, balance")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      const r =
+        profile?.role && isProfileRole(profile.role)
+          ? profile.role
+          : typeof user.user_metadata?.role === "string" && isProfileRole(user.user_metadata.role)
+            ? user.user_metadata.role
+            : null;
+
       if (isProfileRole(r)) {
         setProfileRole(r);
         localStorage.setItem("active_role", r);
+      } else {
+        setProfileRole(null);
       }
+
+      const name =
+        typeof profile?.full_name === "string" && profile.full_name.trim() ? profile.full_name.trim() : null;
+      setFullName(name);
+
+      const bal =
+        profile?.balance !== null && profile?.balance !== undefined && typeof profile.balance === "number"
+          ? profile.balance
+          : null;
+      setBalance(bal);
+
+      setProfileLoading(false);
     })();
-  }, [pathname]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasMounted, pathname]);
 
   const roleLabel = profileRole === "parent" ? "הורה" : profileRole === "sitter" ? "בייביסיטר" : "אורח";
+
+  const showUserChrome = hasMounted && !profileLoading;
 
   return (
     <header className="w-full border-b border-navy-header/10 bg-white">
@@ -57,44 +129,59 @@ export function AppShellHeader() {
         <div className="flex items-center gap-1">
           <button
             type="button"
+            suppressHydrationWarning
             className="relative ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-navy-header shadow-sm transition hover:bg-brand-cream"
             aria-label="Messages"
           >
             <Mail className="h-5 w-5" />
             <span className="absolute right-2 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" aria-hidden />
           </button>
-          <button
-            type="button"
-            className="inline-flex h-10 max-w-[9rem] items-center gap-1 rounded-full px-2 text-navy-header transition hover:bg-slate-100"
-            aria-label={profileRole ? "התנתקות" : "התחברות"}
-            onClick={() => {
-              if (profileRole) void handleSignOut();
-              else router.push("/auth");
-            }}
-          >
-            <Settings className="h-5 w-5 shrink-0" />
-            <span className="text-[11px] font-semibold leading-tight">
-              {profileRole ? "התנתקות" : "כניסה"}
-            </span>
-          </button>
+          {showUserChrome ? (
+            <button
+              type="button"
+              suppressHydrationWarning
+              className="inline-flex h-10 max-w-[9rem] items-center gap-1 rounded-full px-2 text-navy-header transition hover:bg-slate-100"
+              aria-label={profileRole ? "התנתקות" : "התחברות"}
+              onClick={() => {
+                if (profileRole) void handleSignOut();
+                else router.push("/auth");
+              }}
+            >
+              <Settings className="h-5 w-5 shrink-0" />
+              <span className="text-[11px] font-semibold leading-tight">
+                {profileRole ? "התנתקות" : "כניסה"}
+              </span>
+            </button>
+          ) : (
+            <div className="h-10 w-[5.5rem] animate-pulse rounded-full bg-slate-100" aria-hidden />
+          )}
         </div>
 
         <div className="inline-flex items-center gap-2">
-          <div className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-navy-header">
-            {profileRole === "parent" ? (
-              <Link href="/parent/dashboard" className="underline-offset-2 hover:underline">
-                {roleLabel} · לוח בקרה
-              </Link>
-            ) : profileRole === "sitter" ? (
-              <Link href="/session" className="underline-offset-2 hover:underline">
-                {roleLabel} · משמרת
-              </Link>
-            ) : (
-              <Link href="/auth" className="underline-offset-2 hover:underline">
-                התחברות
-              </Link>
-            )}
-          </div>
+          {showUserChrome ? (
+            <div className="flex max-w-[11rem] flex-col items-end gap-0.5 rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-navy-header">
+              {profileRole === "parent" ? (
+                <Link href="/parent/dashboard" className="underline-offset-2 hover:underline">
+                  {roleLabel} · לוח בקרה
+                </Link>
+              ) : profileRole === "sitter" ? (
+                <Link href="/session" className="underline-offset-2 hover:underline">
+                  {roleLabel} · משמרת
+                </Link>
+              ) : (
+                <Link href="/auth" className="underline-offset-2 hover:underline">
+                  התחברות
+                </Link>
+              )}
+              {profileRole && (fullName || balance !== null) ? (
+                <span className="max-w-full truncate text-[10px] font-normal text-slate-600">
+                  {[fullName?.trim() || null, balance !== null ? `₪${Number(balance).toFixed(2)}` : null].filter(Boolean).join(" · ")}
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <UserSectionSkeleton />
+          )}
 
           <Link
             href="/?manual=true"
