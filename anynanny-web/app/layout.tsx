@@ -15,9 +15,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="he">
       <body className={`${assistant.className} bg-[#FDFBF6]`}>
-        <div className="mx-auto w-full max-w-md overflow-hidden bg-white shadow-soft md:my-4 md:min-h-[calc(100dvh-2rem)] md:rounded-[2rem]">
+        <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-md flex-col overflow-x-hidden bg-white shadow-soft md:my-4 md:min-h-[calc(100dvh-2rem)] md:rounded-[2rem]">
           <AppShellHeader />
-          <div className="px-4 pb-6 pt-4">{children}</div>
+          <div className="min-w-0 px-4 pb-6 pt-4">{children}</div>
         </div>
       </body>
     </html>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
 import { setReturningUserFlag } from "@/lib/auth/returning-user";
@@ -24,48 +24,13 @@ function RegisterInner() {
   const [role, setRole] = useState<ProfileRole>("parent");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [signupComplete, setSignupComplete] = useState<{ effective: ProfileRole } | null>(null);
 
   const passwordsMatch = password === confirmPassword;
   const showPasswordMismatch =
     !passwordsMatch && (password.length > 0 || confirmPassword.length > 0);
-  const registerDisabled = busy || !passwordsMatch;
+  const submitDisabled = busy || !passwordsMatch;
 
-  const autoRedirectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const didRedirectRef = useRef(false);
-
-  const goToDashboard = useCallback(
-    (effective: ProfileRole) => {
-      if (didRedirectRef.current) return;
-      didRedirectRef.current = true;
-      redirectAfterSignIn(router, effective, nextPath);
-    },
-    [router, nextPath]
-  );
-
-  useEffect(() => {
-    if (!signupComplete) return;
-    autoRedirectRef.current = window.setTimeout(() => {
-      goToDashboard(signupComplete.effective);
-    }, 2500);
-    return () => {
-      if (autoRedirectRef.current) {
-        clearTimeout(autoRedirectRef.current);
-        autoRedirectRef.current = null;
-      }
-    };
-  }, [signupComplete, goToDashboard]);
-
-  const handleContinue = () => {
-    if (!signupComplete) return;
-    if (autoRedirectRef.current) {
-      clearTimeout(autoRedirectRef.current);
-      autoRedirectRef.current = null;
-    }
-    goToDashboard(signupComplete.effective);
-  };
-
-  const handleRegister = async () => {
+  const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
       setMessage("Supabase לא מוגדר. יש לעדכן מפתחות סביבה.");
@@ -126,68 +91,53 @@ function RegisterInner() {
       }
 
       const effective = await resolveRoleForUser(supabase, activeUser, role, trimmedName || null);
-      didRedirectRef.current = false;
-      setSignupComplete({ effective });
+      redirectAfterSignIn(router, effective, nextPath);
     } finally {
       setBusy(false);
     }
   };
 
-  if (signupComplete) {
-    return (
-      <main className="mx-auto w-full max-w-md space-y-4 py-2" dir="rtl">
-        <section className="rounded-3xl bg-white p-8 text-center shadow-soft">
-          <p className="text-2xl font-bold text-navy-header">נרשמתם בהצלחה!</p>
-          <p className="mt-3 text-sm text-slate-600">מעבירים אתכם לעמוד הבית תוך רגע, או לחצו להמשך מיד.</p>
-          <button
-            type="button"
-            onClick={handleContinue}
-            className="mt-8 w-full rounded-2xl bg-[#001F3F] py-3.5 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
-          >
-            המשך
-          </button>
-        </section>
-        <Link href="/?manual=true" className="inline-flex w-full justify-center text-sm font-semibold text-navy-header underline">
-          חזרה למסך הבית
-        </Link>
-      </main>
-    );
-  }
-
   return (
-    <main className="mx-auto w-full max-w-md space-y-4 py-2" dir="rtl">
-      <section className="rounded-3xl bg-white p-6 shadow-soft">
+    <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl">
+      <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft">
         <h1 className="text-center text-2xl font-bold text-navy-header">הרשמה</h1>
         <p className="mt-1 text-center text-sm text-slate-600">צרו חשבון הורה או בייביסיטר.</p>
 
-        <div className="mt-6 space-y-3">
-          <label className="block text-sm text-navy-900">
+        <form
+          className="mt-6 space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSubmit();
+          }}
+          noValidate
+        >
+          <label className="block min-w-0 text-sm text-navy-900">
             אימייל
             <input
               type="email"
               autoComplete="email"
-              className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
+              className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={busy}
             />
           </label>
-          <label className="block text-sm text-navy-900">
+          <label className="block min-w-0 text-sm text-navy-900">
             שם מלא
             <input
               type="text"
               autoComplete="name"
-              className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
+              className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="למשל: יעל כהן"
               disabled={busy}
             />
           </label>
-          <label className="block text-sm text-navy-900">
+          <label className="block min-w-0 text-sm text-navy-900">
             תפקיד
             <select
-              className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
+              className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={role}
               onChange={(e) => setRole(e.target.value as ProfileRole)}
               disabled={busy}
@@ -196,45 +146,47 @@ function RegisterInner() {
               <option value="sitter">בייביסיטר</option>
             </select>
           </label>
-          <label className="block text-sm text-navy-900">
+          <label className="block min-w-0 text-sm text-navy-900">
             סיסמה
             <input
               type="text"
               autoComplete="new-password"
-              className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
+              className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={busy}
             />
           </label>
-          <label className="block text-sm text-navy-900">
+          <label className="block min-w-0 text-sm text-navy-900">
             אימות סיסמה
-            <div className="mt-1">
+            <div className="mt-1 min-w-0">
               <PasswordPeekField
                 value={confirmPassword}
                 onChange={setConfirmPassword}
                 autoComplete="new-password"
                 disabled={busy}
+                className="min-w-0"
               />
             </div>
             {showPasswordMismatch ? (
-              <p className="mt-1.5 text-xs text-red-600" role="alert">
+              <p className="mt-2 text-sm font-medium text-red-600" role="alert">
                 הסיסמאות אינן תואמות
               </p>
             ) : null}
           </label>
-        </div>
 
-        <button
-          type="button"
-          disabled={registerDisabled}
-          onClick={() => void handleRegister()}
-          className="mt-6 w-full rounded-2xl bg-[#001F3F] py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95 disabled:opacity-60"
-        >
-          הרשמה
-        </button>
+          <button
+            type="submit"
+            disabled={submitDisabled}
+            className="mt-6 w-full rounded-2xl bg-[#001F3F] py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95 disabled:opacity-60"
+          >
+            הרשמה
+          </button>
+        </form>
 
-        {message ? <p className="mt-4 text-center text-sm text-slate-700">{message}</p> : null}
+        {message ? (
+          <p className="mt-4 rounded-lg bg-rose-50 p-3 text-center text-sm text-rose-950">{message}</p>
+        ) : null}
 
         <p className="mt-6 text-center text-sm text-slate-600">
           כבר רשומים?{" "}
@@ -244,7 +196,7 @@ function RegisterInner() {
         </p>
       </section>
 
-      <div className="flex justify-center gap-4 text-sm">
+      <div className="flex w-full min-w-0 justify-center gap-4 px-1 text-sm">
         <Link href={`/auth${nextQuery}`} className="font-semibold text-navy-header underline">
           חזרה
         </Link>
@@ -260,7 +212,7 @@ export default function RegisterPage() {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto max-w-md py-10 text-center text-sm text-slate-600" dir="rtl">
+        <main className="mx-auto flex min-w-0 max-w-full justify-center py-10 text-center text-sm text-slate-600" dir="rtl">
           טוען...
         </main>
       }

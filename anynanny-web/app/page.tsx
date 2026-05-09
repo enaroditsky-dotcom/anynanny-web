@@ -23,8 +23,8 @@ export default function HomePage() {
   }, [isManual, router]);
 
   return (
-    <main className="flex min-h-[calc(100dvh-88px)] flex-col items-center justify-center px-4 py-3 sm:py-6" dir="rtl">
-      <div className="flex w-full max-w-md flex-col items-center gap-3 text-center sm:gap-6">
+    <main className="flex min-h-[calc(100dvh-88px)] w-full min-w-0 flex-col items-center justify-center px-4 py-3 sm:py-6" dir="rtl">
+      <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-3 text-center sm:gap-6">
         <h1 className="text-3xl font-bold tracking-tight text-navy-header sm:text-4xl md:text-5xl">AnyNanny</h1>
 
         <div className="flex w-full justify-center">

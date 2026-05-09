@@ -27,7 +27,7 @@ function LoginInner() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const handleLogin = async () => {
+  const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
       setMessage("Supabase לא מוגדר. יש לעדכן מפתחות סביבה.");
@@ -73,44 +73,51 @@ function LoginInner() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-md space-y-4 py-2" dir="rtl">
-      <section className="rounded-3xl bg-white p-6 shadow-soft">
+    <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl">
+      <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft">
         <h1 className="text-center text-2xl font-bold text-navy-header">התחברות</h1>
         <p className="mt-1 text-center text-sm text-slate-600">הזינו אימייל וסיסמה.</p>
 
-        <div className="mt-6 space-y-3">
-          <label className="block text-sm text-navy-900">
+        <form
+          className="mt-6 space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSubmit();
+          }}
+          noValidate
+        >
+          <label className="block min-w-0 text-sm text-navy-900">
             אימייל
             <input
               type="email"
               autoComplete="email"
-              className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2"
+              className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={busy}
             />
           </label>
-          <label className="block text-sm text-navy-900">
+          <label className="block min-w-0 text-sm text-navy-900">
             סיסמה
-            <div className="mt-1">
+            <div className="mt-1 min-w-0">
               <PasswordPeekField
                 value={password}
                 onChange={setPassword}
                 autoComplete="current-password"
                 disabled={busy}
+                className="min-w-0"
               />
             </div>
           </label>
-        </div>
 
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void handleLogin()}
-          className="mt-6 w-full rounded-2xl bg-[#001F3F] py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95 disabled:opacity-60"
-        >
-          התחברות
-        </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="mt-6 w-full rounded-2xl bg-[#001F3F] py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95 disabled:opacity-60"
+          >
+            התחברות
+          </button>
+        </form>
 
         {message ? (
           <p className="mt-4 rounded-lg bg-rose-50 p-3 text-center text-sm text-rose-950">{message}</p>
@@ -124,7 +131,7 @@ function LoginInner() {
         </p>
       </section>
 
-      <div className="flex justify-center gap-4 text-sm">
+      <div className="flex w-full min-w-0 justify-center gap-4 px-1 text-sm">
         <Link href={`/auth${nextQuery}`} className="font-semibold text-navy-header underline">
           חזרה
         </Link>

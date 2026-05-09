@@ -17,13 +17,13 @@ export function PasswordPeekField({ id, value, onChange, autoComplete, disabled,
   const [peek, setPeek] = useState(false);
 
   return (
-    <div className={`relative ${className ?? ""}`}>
+    <div className={`relative min-w-0 ${className ?? ""}`}>
       <input
         id={id}
         type={peek ? "text" : "password"}
         disabled={disabled}
         autoComplete={autoComplete}
-        className="block w-full rounded-lg border border-navy-header/20 py-2 pl-2 pr-10"
+        className="block min-w-0 w-full rounded-lg border border-navy-header/20 py-2 pl-2 pr-10"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
