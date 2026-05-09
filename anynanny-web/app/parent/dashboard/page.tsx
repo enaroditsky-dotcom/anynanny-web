@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, Settings, Wallet } from "lucide-react";
+import { Calendar, History, Settings, Wallet } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -17,12 +17,18 @@ import {
 } from "@/lib/session/protocol";
 
 export default function ParentDashboardPage() {
-  const { isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading, displayName } = useAuth();
 
   const [sessionState, setSessionState] = useState<SessionProtocolState>({ status: "idle" });
   const [nowMs, setNowMs] = useState(Date.now());
   const [useSupabase, setUseSupabase] = useState(false);
   const [parentUserId, setParentUserId] = useState<string | null>(null);
+
+  const firstName = useMemo(() => {
+    const n = displayName?.trim();
+    if (!n) return "";
+    return n.split(/\s+/)[0] ?? "";
+  }, [displayName]);
 
   const syncFromStorage = useCallback(() => {
     try {
@@ -214,92 +220,100 @@ export default function ParentDashboardPage() {
     setSessionState(next);
   };
 
-  const primaryLabel =
-    sessionState.status === "active"
-      ? "סיום"
-      : sessionState.status === "parent_initiated"
-        ? "ממתין…"
-        : "להתחיל";
-
-  const primaryTextClass =
-    sessionState.status === "parent_initiated" ? "text-lg leading-tight px-2" : "text-3xl";
-
   if (authLoading) {
     return (
       <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
-        <p className="text-sm text-slate-600">טוען…</p>
+        <p className="text-right text-sm text-slate-600">טוען…</p>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-md bg-[#FDFBF6] py-2" dir="rtl">
-      <section className="rounded-3xl bg-white p-4 shadow-soft sm:p-5">
-        <h1 className="text-center text-lg font-bold tracking-tight text-navy-header">ברוך הבא לדשבורד הורים</h1>
+    <main className="mx-auto w-full max-w-md space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
+      <header className="text-right">
+        <h1 className="text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem]">
+          שלום{firstName ? `, ${firstName}` : ""}! מה תרצה לעשות היום?
+        </h1>
+      </header>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
+      <section className="rounded-3xl bg-white p-4 shadow-soft sm:p-5">
+        <div className="grid grid-cols-2 gap-3">
           <Link
             href="/parent/calendar"
-            className="group flex min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-4 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            className="group flex min-h-[7.25rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <Calendar className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="text-sm font-semibold">יומן</span>
+            <span className="text-center text-xs font-semibold leading-tight sm:text-sm">יומן מפגשים</span>
           </Link>
 
           <Link
             href="/parent/wallet"
-            className="group flex min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-4 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            className="group flex min-h-[7.25rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <Wallet className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="text-sm font-semibold">ארנק</span>
+            <span className="text-center text-xs font-semibold leading-tight sm:text-sm">ארנק ותשלומים</span>
           </Link>
 
           <Link
             href="/parent/settings"
-            className="group flex min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-4 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            className="group flex min-h-[7.25rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <Settings className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="text-sm font-semibold">הגדרות</span>
+            <span className="text-center text-xs font-semibold leading-tight sm:text-sm">הגדרות חשבון</span>
           </Link>
 
-          <div className="flex min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[#001F3F]/20 bg-gradient-to-b from-white to-[#FDFBF6] p-3 shadow-soft">
-            <span className="text-xs font-semibold text-navy-header">התחלת סשן</span>
-
-            {sessionState.status === "active" ? (
-              <div className="mb-1 w-full space-y-0.5 text-center">
-                <p className="text-lg font-bold tabular-nums text-navy-header">{timerText}</p>
-                <p className="text-[11px] font-medium text-navy-800">₪{earnedNis}</p>
-              </div>
-            ) : null}
-            {sessionState.status === "ended" ? (
-              <div className="mb-1 w-full space-y-0.5 text-center">
-                <p className="text-[11px] text-slate-600">הושלם</p>
-                <p className="text-sm font-semibold text-navy-800">{timerText}</p>
-              </div>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={sessionState.status === "active" ? endSession : startSession}
-              disabled={sessionState.status === "parent_initiated"}
-              className={`flex h-[9.5rem] w-[9.5rem] max-w-full shrink-0 items-center justify-center rounded-full font-bold text-white shadow-lg transition sm:h-[10.5rem] sm:w-[10.5rem] ${
-                sessionState.status === "active"
-                  ? "bg-[#FF8A8A] hover:brightness-105 active:brightness-95"
-                  : sessionState.status === "parent_initiated"
-                    ? "cursor-not-allowed bg-slate-400"
-                    : "bg-[#CFE8C8] hover:brightness-105 active:brightness-95"
-              } ${primaryTextClass}`}
-            >
-              {primaryLabel}
-            </button>
-          </div>
+          <Link
+            href="/parent/history"
+            className="group flex min-h-[7.25rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+              <History className="h-7 w-7 stroke-[1.75]" aria-hidden />
+            </span>
+            <span className="text-center text-xs font-semibold leading-tight sm:text-sm">היסטוריית שמרטפות</span>
+          </Link>
         </div>
+      </section>
+
+      <section className="rounded-3xl border border-[#001F3F]/15 bg-white p-4 shadow-[0_12px_40px_-12px_rgba(0,31,63,0.35)] sm:p-5">
+        {sessionState.status === "active" ? (
+          <div className="mb-4 space-y-1 text-right">
+            <p className="text-xs font-medium text-slate-600">סשן פעיל</p>
+            <p className="text-2xl font-bold tabular-nums text-[#001F3F]">{timerText}</p>
+            <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
+          </div>
+        ) : null}
+
+        {sessionState.status === "ended" ? (
+          <div className="mb-4 space-y-1 text-right">
+            <p className="text-xs text-slate-600">המשמרת האחרונה הסתיימה</p>
+            <p className="text-lg font-semibold tabular-nums text-navy-header">{timerText}</p>
+          </div>
+        ) : null}
+
+        {sessionState.status === "active" ? (
+          <button
+            type="button"
+            onClick={() => void endSession()}
+            className="w-full rounded-2xl bg-[#FF8A8A] py-4 text-base font-bold text-white shadow-lg transition hover:brightness-105 active:brightness-95"
+          >
+            סיום משמרת
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void startSession()}
+            disabled={sessionState.status === "parent_initiated"}
+            className={`relative w-full overflow-hidden rounded-2xl bg-[#001F3F] py-4 text-base font-bold text-white shadow-[0_10px_34px_-8px_rgba(0,31,63,0.55)] transition-all duration-300 hover:shadow-[0_14px_42px_-10px_rgba(0,31,63,0.6)] hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-500 disabled:opacity-75 disabled:hover:brightness-100`}
+          >
+            {sessionState.status === "parent_initiated" ? "ממתין לאישור הסשן…" : "התחלת סשן חדש"}
+          </button>
+        )}
       </section>
     </main>
   );
