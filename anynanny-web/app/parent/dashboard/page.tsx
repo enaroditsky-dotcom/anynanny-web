@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Clock3, Search, Settings, Wallet } from "lucide-react";
+import { Calendar, Settings, Wallet } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -34,22 +34,8 @@ export default function ParentDashboardPage() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    void (async () => {
-      const { data: sessionWrap } = await supabase.auth.getSession();
-      const { data: userWrap } = await supabase.auth.getUser();
-      console.log("[parent/dashboard] session debug", {
-        path: typeof window !== "undefined" ? window.location.pathname : "",
-        sessionUserId: sessionWrap.session?.user?.id ?? null,
-        getUserId: userWrap.user?.id ?? null
-      });
-    })();
-  }, []);
 
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-
-    syncFromStorage(); // fallback/initial hydration
+    syncFromStorage();
     const ticker = setInterval(() => setNowMs(Date.now()), 1000);
     const onStorage = (event: StorageEvent) => {
       if (event.key === "anynanny_payer_session_v1") syncFromStorage();
@@ -232,11 +218,11 @@ export default function ParentDashboardPage() {
     sessionState.status === "active"
       ? "סיום"
       : sessionState.status === "parent_initiated"
-        ? "ממתין לאישור..."
+        ? "ממתין…"
         : "להתחיל";
 
   const primaryTextClass =
-    sessionState.status === "parent_initiated" ? "text-2xl leading-tight px-4" : "text-5xl";
+    sessionState.status === "parent_initiated" ? "text-lg leading-tight px-2" : "text-3xl";
 
   if (authLoading) {
     return (
@@ -247,59 +233,73 @@ export default function ParentDashboardPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
-      <h1 className="px-1 text-center text-lg font-bold tracking-tight text-navy-header">ברוך הבא לדשבורד הורים</h1>
+    <main className="mx-auto w-full max-w-md bg-[#FDFBF6] py-2" dir="rtl">
+      <section className="rounded-3xl bg-white p-4 shadow-soft sm:p-5">
+        <h1 className="text-center text-lg font-bold tracking-tight text-navy-header">ברוך הבא לדשבורד הורים</h1>
 
-      <section className="rounded-3xl bg-white p-6 text-center shadow-soft">
-        {sessionState.status === "active" ? (
-          <div className="mb-5 space-y-1">
-            <p className="text-3xl font-bold tracking-wider text-navy-header">{timerText}</p>
-            <p className="text-base font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
-          </div>
-        ) : null}
-        {sessionState.status === "ended" ? (
-          <div className="mb-5 space-y-1">
-            <p className="text-sm text-slate-600">המשמרת הסתיימה</p>
-            <p className="text-base font-semibold text-navy-800">זמן בייביסיטר: {timerText}</p>
-            <p className="text-base font-semibold text-navy-800">לתשלום: ₪{(sessionState.finalAmountNis ?? 0).toFixed(2)}</p>
-          </div>
-        ) : null}
-
-        <div className="flex items-center justify-center">
-          <button
-            type="button"
-            onClick={sessionState.status === "active" ? endSession : startSession}
-            disabled={sessionState.status === "parent_initiated"}
-            className={`flex h-[280px] w-[280px] items-center justify-center rounded-full font-bold text-white shadow-soft transition ${
-              sessionState.status === "active"
-                ? "bg-[#FF8A8A] text-5xl hover:brightness-105 active:brightness-95"
-                : sessionState.status === "parent_initiated"
-                  ? "cursor-not-allowed bg-slate-300"
-                  : "bg-[#CFE8C8] text-5xl hover:brightness-105 active:brightness-95"
-            } ${primaryTextClass}`}
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <Link
+            href="/parent/calendar"
+            className="group flex min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-4 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
-            {primaryLabel}
-          </button>
-        </div>
-      </section>
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+              <Calendar className="h-7 w-7 stroke-[1.75]" aria-hidden />
+            </span>
+            <span className="text-sm font-semibold">יומן</span>
+          </Link>
 
-      <section className="grid grid-cols-2 gap-3">
-        <Link href="/parent/search" className="flex min-h-28 flex-col items-center justify-center rounded-2xl bg-white p-4 text-navy-header shadow-soft">
-          <Search className="h-7 w-7" />
-          <span className="mt-2 text-sm font-semibold">חיפוש נני</span>
-        </Link>
-        <Link href="/parent/wallet" className="flex min-h-28 flex-col items-center justify-center rounded-2xl bg-white p-4 text-navy-header shadow-soft">
-          <Wallet className="h-7 w-7" />
-          <span className="mt-2 text-sm font-semibold">ארנק דיגיטלי</span>
-        </Link>
-        <button type="button" className="flex min-h-28 flex-col items-center justify-center rounded-2xl bg-white p-4 text-navy-header shadow-soft">
-          <Clock3 className="h-7 w-7" />
-          <span className="mt-2 text-sm font-semibold">היסטוריה</span>
-        </button>
-        <button type="button" className="flex min-h-28 flex-col items-center justify-center rounded-2xl bg-white p-4 text-navy-header shadow-soft">
-          <Settings className="h-7 w-7" />
-          <span className="mt-2 text-sm font-semibold">הגדרות</span>
-        </button>
+          <Link
+            href="/parent/wallet"
+            className="group flex min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-4 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+              <Wallet className="h-7 w-7 stroke-[1.75]" aria-hidden />
+            </span>
+            <span className="text-sm font-semibold">ארנק</span>
+          </Link>
+
+          <Link
+            href="/parent/settings"
+            className="group flex min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-4 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+              <Settings className="h-7 w-7 stroke-[1.75]" aria-hidden />
+            </span>
+            <span className="text-sm font-semibold">הגדרות</span>
+          </Link>
+
+          <div className="flex min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[#001F3F]/20 bg-gradient-to-b from-white to-[#FDFBF6] p-3 shadow-soft">
+            <span className="text-xs font-semibold text-navy-header">התחלת סשן</span>
+
+            {sessionState.status === "active" ? (
+              <div className="mb-1 w-full space-y-0.5 text-center">
+                <p className="text-lg font-bold tabular-nums text-navy-header">{timerText}</p>
+                <p className="text-[11px] font-medium text-navy-800">₪{earnedNis}</p>
+              </div>
+            ) : null}
+            {sessionState.status === "ended" ? (
+              <div className="mb-1 w-full space-y-0.5 text-center">
+                <p className="text-[11px] text-slate-600">הושלם</p>
+                <p className="text-sm font-semibold text-navy-800">{timerText}</p>
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={sessionState.status === "active" ? endSession : startSession}
+              disabled={sessionState.status === "parent_initiated"}
+              className={`flex h-[9.5rem] w-[9.5rem] max-w-full shrink-0 items-center justify-center rounded-full font-bold text-white shadow-lg transition sm:h-[10.5rem] sm:w-[10.5rem] ${
+                sessionState.status === "active"
+                  ? "bg-[#FF8A8A] hover:brightness-105 active:brightness-95"
+                  : sessionState.status === "parent_initiated"
+                    ? "cursor-not-allowed bg-slate-400"
+                    : "bg-[#CFE8C8] hover:brightness-105 active:brightness-95"
+              } ${primaryTextClass}`}
+            >
+              {primaryLabel}
+            </button>
+          </div>
+        </div>
       </section>
     </main>
   );
