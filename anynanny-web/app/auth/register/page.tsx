@@ -9,7 +9,8 @@ import {
   clearUserRoleChoice,
   readUserRoleChoice,
   saveLastUsedEmail,
-  setReturningUserFlag
+  setReturningUserFlag,
+  setUserRoleChoice
 } from "@/lib/auth/returning-user";
 import { ensureProfile, resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -19,8 +20,15 @@ function RegisterInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
+  const roleFromQuery = searchParams.get("role");
 
-  const nextQuery = useMemo(() => (nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""), [nextPath]);
+  const nextQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (nextPath) params.set("next", nextPath);
+    if (roleFromQuery === "parent" || roleFromQuery === "sitter") params.set("role", roleFromQuery);
+    const s = params.toString();
+    return s ? `?${s}` : "";
+  }, [nextPath, roleFromQuery]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,9 +46,14 @@ function RegisterInner() {
   const submitDisabled = busy || !passwordsMatch;
 
   useEffect(() => {
+    if (roleFromQuery === "parent" || roleFromQuery === "sitter") {
+      setRole(roleFromQuery);
+      setUserRoleChoice(roleFromQuery);
+      return;
+    }
     const choice = readUserRoleChoice();
     if (choice) setRole(choice);
-  }, []);
+  }, [roleFromQuery]);
 
   useEffect(() => {
     if (!signupDone) return;

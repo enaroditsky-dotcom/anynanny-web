@@ -5,7 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
-import { readLastUsedEmail, saveLastUsedEmail, setReturningUserFlag } from "@/lib/auth/returning-user";
+import {
+  readLastUsedEmail,
+  saveLastUsedEmail,
+  setReturningUserFlag,
+  setUserRoleChoice
+} from "@/lib/auth/returning-user";
 import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -20,8 +25,15 @@ function LoginInner() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const emailFromQuery = searchParams.get("email");
+  const roleFromQuery = searchParams.get("role");
 
-  const nextQuery = useMemo(() => (nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""), [nextPath]);
+  const nextQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (nextPath) params.set("next", nextPath);
+    if (roleFromQuery === "parent" || roleFromQuery === "sitter") params.set("role", roleFromQuery);
+    const s = params.toString();
+    return s ? `?${s}` : "";
+  }, [nextPath, roleFromQuery]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,11 +44,17 @@ function LoginInner() {
     const q = emailFromQuery?.trim();
     if (q) {
       setEmail(q);
-      return;
+    } else {
+      const saved = readLastUsedEmail();
+      if (saved) setEmail(saved);
     }
-    const saved = readLastUsedEmail();
-    if (saved) setEmail(saved);
   }, [emailFromQuery]);
+
+  useEffect(() => {
+    if (roleFromQuery === "parent" || roleFromQuery === "sitter") {
+      setUserRoleChoice(roleFromQuery);
+    }
+  }, [roleFromQuery]);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -85,13 +103,14 @@ function LoginInner() {
   };
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl">
-      <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft">
+    <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>
+      <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft" suppressHydrationWarning>
         <h1 className="text-center text-2xl font-bold text-navy-header">התחברות</h1>
         <p className="mt-1 text-center text-sm text-slate-600">הזינו אימייל וסיסמה.</p>
 
         <form
           className="mt-6 space-y-3"
+          suppressHydrationWarning
           onSubmit={(e) => {
             e.preventDefault();
             void handleSubmit();
@@ -139,17 +158,17 @@ function LoginInner() {
 
         <p className="mt-6 text-center text-sm text-slate-600">
           אין חשבון?{" "}
-          <Link href={`/auth/register${nextQuery}`} className="font-semibold text-navy-header underline">
+          <Link href={`/auth/register${nextQuery}`} suppressHydrationWarning className="font-semibold text-navy-header underline">
             הרשמה
           </Link>
         </p>
       </section>
 
       <div className="flex w-full min-w-0 justify-center gap-4 px-1 text-sm">
-        <Link href={`/auth${nextQuery}`} className="font-semibold text-navy-header underline">
+        <Link href={`/auth${nextQuery}`} suppressHydrationWarning className="font-semibold text-navy-header underline">
           חזרה
         </Link>
-        <Link href="/?manual=true" className="text-slate-600 underline">
+        <Link href="/?manual=true" suppressHydrationWarning className="text-slate-600 underline">
           מסך הבית
         </Link>
       </div>

@@ -13,8 +13,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="he">
-      <body className={`${assistant.className} bg-[#FDFBF6]`}>
+    <html lang="he" suppressHydrationWarning>
+      <body className={`${assistant.className} bg-[#FDFBF6]`} suppressHydrationWarning>
         <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-md flex-col overflow-hidden bg-white shadow-soft md:my-4 md:min-h-[calc(100dvh-2rem)] md:rounded-[2rem]">
           <AppShellHeader />
           <div className="min-w-0 px-4 pb-6 pt-4">{children}</div>
