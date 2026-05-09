@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
@@ -17,7 +17,6 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ProfileRole } from "@/lib/supabase/profiles";
 
 function RegisterInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const roleFromQuery = searchParams.get("role");
@@ -37,7 +36,6 @@ function RegisterInner() {
   const [role, setRole] = useState<ProfileRole>("parent");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [signupDone, setSignupDone] = useState<{ effective: ProfileRole } | null>(null);
 
   /** Compare trimmed copies so accidental spaces don’t block a real match. Submit still uses the raw password fields. */
   const passwordsMatch = password.trim() === confirmPassword.trim();
@@ -54,25 +52,6 @@ function RegisterInner() {
     const choice = readUserRoleChoice();
     if (choice) setRole(choice);
   }, [roleFromQuery]);
-
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    void supabase.auth.getSession().then(({ data }) => {
-      console.log("[auth/register] getSession", {
-        pathname: typeof window !== "undefined" ? window.location.pathname : "",
-        sessionUserId: data.session?.user?.id ?? null,
-        hasSession: !!data.session
-      });
-    });
-  }, []);
-
-  /** Post-signup only — logged-in visitors are redirected by middleware before paint. */
-  useEffect(() => {
-    if (!signupDone) return;
-    redirectAfterSignIn(router, signupDone.effective, nextPath);
-    void router.refresh();
-  }, [signupDone, router, nextPath]);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -138,22 +117,11 @@ function RegisterInner() {
       const effective = await resolveRoleForUser(supabase, activeUser, role, trimmedName || null);
       saveLastUsedEmail(emailTrim);
       clearUserRoleChoice();
-      setSignupDone({ effective });
+      redirectAfterSignIn(effective, nextPath);
     } finally {
       setBusy(false);
     }
   };
-
-  if (signupDone) {
-    return (
-      <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>
-        <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-8 text-center shadow-soft" suppressHydrationWarning>
-          <p className="text-2xl font-bold text-navy-header">נרשמתם בהצלחה!</p>
-          <p className="mt-3 text-sm text-slate-600">מעבירים אתכם לדשבורד…</p>
-        </section>
-      </main>
-    );
-  }
 
   return (
     <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>

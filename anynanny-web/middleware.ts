@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ADMIN_AUTH_COOKIE } from "@/lib/admin/auth";
@@ -21,6 +22,24 @@ function destinationForRole(role: ProfileRole, nextParam: string | null): string
   return ok ? nextParam : "/session";
 }
 
+function middlewareRedirect(request: NextRequest, destination: string): NextResponse {
+  const nextUrl = new URL(destination, request.url);
+  console.log("Middleware: Redirecting to...", nextUrl.toString());
+  return NextResponse.redirect(nextUrl);
+}
+
+async function roleForUser(supabase: SupabaseClient, user: User): Promise<ProfileRole | null> {
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+
+  let role = profile?.role;
+  if (!isProfileRole(role)) {
+    const meta = user.user_metadata?.role;
+    role = typeof meta === "string" && isProfileRole(meta) ? meta : undefined;
+  }
+
+  return isProfileRole(role) ? role : null;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -33,14 +52,15 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
     const loginUrl = new URL("/admin/login", request.url);
+    console.log("Middleware: Redirecting to...", loginUrl.toString());
     return NextResponse.redirect(loginUrl);
   }
 
   const isAuthPath = pathname === "/auth" || pathname.startsWith("/auth/");
-  const isParentPath = pathname.startsWith("/parent");
-  const isSessionPath = pathname === "/session" || pathname.startsWith("/session/");
+  const isProtectedApp =
+    pathname.startsWith("/parent") || pathname === "/session" || pathname.startsWith("/session/");
 
-  if (!isAuthPath && !isParentPath && !isSessionPath) {
+  if (!isAuthPath && !isProtectedApp) {
     return NextResponse.next();
   }
 
@@ -70,25 +90,21 @@ export async function middleware(request: NextRequest) {
     }
   });
 
+  /**
+   * Prefer getUser() over getSession() — validates JWT with Supabase Auth server (recommended for middleware).
+   */
   const {
-    data: { user }
+    data: { user },
+    error: authError
   } = await supabase.auth.getUser();
+  if (authError) {
+    console.warn("[middleware] getUser:", authError.message);
+  }
 
-  /** Logged-in users must not stay on auth screens — single server redirect (no client loop). */
+  /** Signed-in user opened /auth — send them to the app (middleware owns this redirect). */
   if (isAuthPath && user) {
-    const { data: profile, error: profileErr } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-    if (profileErr) {
-      console.warn("[middleware] profiles:", profileErr.message);
-    }
-
-    let role = profile?.role;
-    if (!isProfileRole(role)) {
-      const meta = user.user_metadata?.role;
-      role = typeof meta === "string" && isProfileRole(meta) ? meta : undefined;
-    }
-
-    /** Stay on /auth and show error — redirecting to /auth again would loop. */
-    if (!isProfileRole(role)) {
+    const role = await roleForUser(supabase, user);
+    if (!role) {
       return response;
     }
 
@@ -99,36 +115,28 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
-    return NextResponse.redirect(new URL(destPath, request.url));
+    return middlewareRedirect(request, destPath);
   }
 
-  /** Auth pages for guests — no redirect. */
+  /** Guests on /auth — render login/register. */
   if (isAuthPath) {
     return response;
   }
 
-  /** Protected app routes require a session. */
+  /** Protected routes without a valid user → login. */
   if (!user) {
     const authUrl = new URL("/auth", request.url);
     authUrl.searchParams.set("next", pathname);
+    console.log("Middleware: Redirecting to...", authUrl.toString());
     return NextResponse.redirect(authUrl);
   }
 
-  const { data: profile, error: profileErr } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  const role = await roleForUser(supabase, user);
 
-  if (profileErr) {
-    console.warn("[middleware] profiles:", profileErr.message);
-  }
-
-  let role = profile?.role;
-  if (!isProfileRole(role)) {
-    const meta = user.user_metadata?.role;
-    role = typeof meta === "string" && isProfileRole(meta) ? meta : undefined;
-  }
-
-  if (!isProfileRole(role)) {
+  if (!role) {
     const authUrl = new URL("/auth", request.url);
     authUrl.searchParams.set("error", "no_profile");
+    console.log("Middleware: Redirecting to...", authUrl.toString());
     return NextResponse.redirect(authUrl);
   }
 
@@ -136,16 +144,15 @@ export async function middleware(request: NextRequest) {
   const wantsSitter = pathname === "/session" || pathname.startsWith("/session/");
 
   if (wantsParent && role !== "parent") {
-    return NextResponse.redirect(new URL("/session", request.url));
+    return middlewareRedirect(request, "/session");
   }
   if (wantsSitter && role !== "sitter") {
-    return NextResponse.redirect(new URL("/parent/dashboard", request.url));
+    return middlewareRedirect(request, "/parent/dashboard");
   }
 
   return response;
 }
 
-/** Only app routes — not `/_next/*`, `/favicon.ico`, or root assets like `/logo.png`. */
 export const config = {
   matcher: ["/admin/:path*", "/auth", "/auth/:path*", "/parent/:path*", "/session", "/session/:path*"]
 };

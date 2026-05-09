@@ -31,19 +31,6 @@ function AuthLandingInner() {
     setMounted(true);
   }, []);
 
-  /** Session exits are handled in middleware — no client redirect loop. */
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    void supabase.auth.getSession().then(({ data }) => {
-      console.log("[auth] getSession", {
-        pathname: typeof window !== "undefined" ? window.location.pathname : "",
-        sessionUserId: data.session?.user?.id ?? null,
-        hasSession: !!data.session
-      });
-    });
-  }, []);
-
   const handleSwitchUser = async () => {
     const supabase = getSupabaseBrowserClient();
     if (supabase) {

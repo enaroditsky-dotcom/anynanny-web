@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
@@ -21,7 +21,6 @@ function formatLoginError(message: string): string {
 }
 
 function LoginInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const emailFromQuery = searchParams.get("email");
@@ -55,18 +54,6 @@ function LoginInner() {
       setUserRoleChoice(roleFromQuery);
     }
   }, [roleFromQuery]);
-
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    void supabase.auth.getSession().then(({ data }) => {
-      console.log("[auth/login] getSession", {
-        pathname: typeof window !== "undefined" ? window.location.pathname : "",
-        sessionUserId: data.session?.user?.id ?? null,
-        hasSession: !!data.session
-      });
-    });
-  }, []);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -108,8 +95,7 @@ function LoginInner() {
       setReturningUserFlag();
       saveLastUsedEmail(emailTrim);
       const effective = await resolveRoleForUser(supabase, data.user);
-      redirectAfterSignIn(router, effective, nextPath);
-      void router.refresh();
+      redirectAfterSignIn(effective, nextPath);
     } finally {
       setBusy(false);
     }

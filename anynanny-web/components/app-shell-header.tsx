@@ -1,5 +1,7 @@
 "use client";
 
+/** Header reads auth only from `AuthProvider` — no separate getSession / auth fetch here. */
+
 import Image from "next/image";
 import Link from "next/link";
 import { Mail } from "lucide-react";
