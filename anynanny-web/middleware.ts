@@ -5,6 +5,33 @@ import type { NextRequest } from "next/server";
 import { ADMIN_AUTH_COOKIE } from "@/lib/admin/auth";
 import { isProfileRole, type ProfileRole } from "@/lib/supabase/profiles";
 
+function supabaseProjectRefFromUrl(supabaseUrl: string): string | null {
+  try {
+    const host = new URL(supabaseUrl).hostname;
+    const m = host.match(/^([^.]+)\.supabase\.co$/);
+    return m?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * When getUser() returns null (cookie chunking / edge timing), still detect likely auth cookies
+ * so we avoid redirect loops — the client will validate with getSession().
+ */
+function hasSupabaseAuthCookie(request: NextRequest, projectRef: string | null): boolean {
+  const cookies = request.cookies.getAll();
+  for (const c of cookies) {
+    if (!c.value) continue;
+    if (c.name === "supabase-auth-token") return true;
+    if (projectRef && (c.name === `sb-${projectRef}-auth-token` || c.name.startsWith(`sb-${projectRef}-auth-token.`))) {
+      return true;
+    }
+    if (c.name.startsWith("sb-") && c.name.includes("auth-token")) return true;
+  }
+  return false;
+}
+
 function destinationForRole(role: ProfileRole, nextParam: string | null): string {
   if (role === "parent") {
     const ok =
@@ -23,9 +50,7 @@ function destinationForRole(role: ProfileRole, nextParam: string | null): string
 }
 
 function middlewareRedirect(request: NextRequest, destination: string): NextResponse {
-  const nextUrl = new URL(destination, request.url);
-  console.log("Middleware: Redirecting to...", nextUrl.toString());
-  return NextResponse.redirect(nextUrl);
+  return NextResponse.redirect(new URL(destination, request.url));
 }
 
 async function roleForUser(supabase: SupabaseClient, user: User): Promise<ProfileRole | null> {
@@ -51,9 +76,7 @@ export async function middleware(request: NextRequest) {
     if (hasAuthCookie) {
       return NextResponse.next();
     }
-    const loginUrl = new URL("/admin/login", request.url);
-    console.log("Middleware: Redirecting to...", loginUrl.toString());
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL("/admin/login", request.url));
   }
 
   const isAuthPath = pathname === "/auth" || pathname.startsWith("/auth/");
@@ -70,6 +93,9 @@ export async function middleware(request: NextRequest) {
     console.warn("[middleware] Supabase env missing — skipping auth gate.");
     return NextResponse.next();
   }
+
+  const projectRef = supabaseProjectRefFromUrl(url);
+  const cookieLikelySession = hasSupabaseAuthCookie(request, projectRef);
 
   let response = NextResponse.next({
     request
@@ -90,9 +116,6 @@ export async function middleware(request: NextRequest) {
     }
   });
 
-  /**
-   * Prefer getUser() over getSession() — validates JWT with Supabase Auth server (recommended for middleware).
-   */
   const {
     data: { user },
     error: authError
@@ -101,7 +124,9 @@ export async function middleware(request: NextRequest) {
     console.warn("[middleware] getUser:", authError.message);
   }
 
-  /** Signed-in user opened /auth — send them to the app (middleware owns this redirect). */
+  const trustClientSession =
+    pathname === "/parent/dashboard" || (pathname.startsWith("/parent") && cookieLikelySession);
+
   if (isAuthPath && user) {
     const role = await roleForUser(supabase, user);
     if (!role) {
@@ -118,17 +143,23 @@ export async function middleware(request: NextRequest) {
     return middlewareRedirect(request, destPath);
   }
 
-  /** Guests on /auth — render login/register. */
   if (isAuthPath) {
     return response;
   }
 
-  /** Protected routes without a valid user → login. */
-  if (!user) {
+  /** Let the dashboard (and other /parent routes when auth cookies exist) load — client verifies session. */
+  if (!user && isProtectedApp && trustClientSession) {
+    return response;
+  }
+
+  if (!user && isProtectedApp) {
     const authUrl = new URL("/auth", request.url);
     authUrl.searchParams.set("next", pathname);
-    console.log("Middleware: Redirecting to...", authUrl.toString());
     return NextResponse.redirect(authUrl);
+  }
+
+  if (!user) {
+    return response;
   }
 
   const role = await roleForUser(supabase, user);
@@ -136,7 +167,6 @@ export async function middleware(request: NextRequest) {
   if (!role) {
     const authUrl = new URL("/auth", request.url);
     authUrl.searchParams.set("error", "no_profile");
-    console.log("Middleware: Redirecting to...", authUrl.toString());
     return NextResponse.redirect(authUrl);
   }
 

@@ -19,6 +19,9 @@ import {
 export default function ParentDashboardPage() {
   const { isLoading: authLoading, displayName } = useAuth();
 
+  /** getSession() can succeed when middleware getUser() misses — show grid as soon as we see a browser session. */
+  const [clientHasSessionUser, setClientHasSessionUser] = useState<boolean | null>(null);
+
   const [sessionState, setSessionState] = useState<SessionProtocolState>({ status: "idle" });
   const [nowMs, setNowMs] = useState(Date.now());
   const [useSupabase, setUseSupabase] = useState(false);
@@ -40,6 +43,17 @@ export default function ParentDashboardPage() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setClientHasSessionUser(false);
+      return;
+    }
+    void supabase.auth.getSession().then(({ data }) => {
+      setClientHasSessionUser(!!data.session?.user);
+    });
+  }, []);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
 
     syncFromStorage();
     const ticker = setInterval(() => setNowMs(Date.now()), 1000);
@@ -52,9 +66,13 @@ export default function ParentDashboardPage() {
     let channelCleanup: (() => void) | null = null;
     if (supabase) {
       void (async () => {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const fromSession = sessionData.session?.user ?? null;
         const { data: authData, error: authErr } = await supabase.auth.getUser();
-        if (authErr || !authData.user) return;
-        const userId = authData.user.id;
+        const resolvedUser = authData.user ?? fromSession;
+        if (authErr && !resolvedUser) return;
+        if (!resolvedUser) return;
+        const userId = resolvedUser.id;
         if (cancelled) return;
         setParentUserId(userId);
         try {
@@ -220,7 +238,10 @@ export default function ParentDashboardPage() {
     setSessionState(next);
   };
 
-  if (authLoading) {
+  const showLoading =
+    clientHasSessionUser !== true && (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading));
+
+  if (showLoading) {
     return (
       <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
         <p className="text-right text-sm text-slate-600">טוען…</p>
