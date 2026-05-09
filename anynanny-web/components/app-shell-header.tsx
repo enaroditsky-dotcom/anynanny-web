@@ -24,11 +24,16 @@ export function AppShellHeader() {
     if (supabase) {
       await supabase.auth.signOut();
     }
-    localStorage.removeItem("active_role");
-    localStorage.removeItem("anynanny_payer_session_v1");
+    try {
+      localStorage.removeItem("active_role");
+      localStorage.removeItem("anynanny_payer_session_v1");
+      localStorage.removeItem("is_returning_user");
+    } catch {
+      /* ignore */
+    }
     setSignedIn(false);
     setDisplayName(null);
-    router.replace("/auth");
+    router.replace("/?manual=true");
   }, [router]);
 
   useEffect(() => {
@@ -42,6 +47,12 @@ export function AppShellHeader() {
         refreshProfile();
       }
       if (event === "SIGNED_OUT") {
+        try {
+          localStorage.removeItem("active_role");
+          localStorage.removeItem("anynanny_payer_session_v1");
+        } catch {
+          /* ignore */
+        }
         setSignedIn(false);
         setDisplayName(null);
       }
@@ -120,7 +131,7 @@ export function AppShellHeader() {
   return (
     <header className="w-full shrink-0 border-b border-navy-header/10 bg-white">
       <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex min-w-0 flex-1 items-center gap-4">
+        <div className="flex min-w-0 shrink-0 items-center gap-4">
           <button
             type="button"
             suppressHydrationWarning

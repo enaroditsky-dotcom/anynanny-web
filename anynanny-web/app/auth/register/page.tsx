@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
-import { setReturningUserFlag } from "@/lib/auth/returning-user";
+import { saveLastUsedEmail, setReturningUserFlag } from "@/lib/auth/returning-user";
 import { ensureProfile, resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ProfileRole } from "@/lib/supabase/profiles";
@@ -102,6 +102,7 @@ function RegisterInner() {
       }
 
       const effective = await resolveRoleForUser(supabase, activeUser, role, trimmedName || null);
+      saveLastUsedEmail(emailTrim);
       setSignupDone({ effective });
     } finally {
       setBusy(false);
@@ -138,6 +139,7 @@ function RegisterInner() {
             <input
               type="email"
               autoComplete="email"
+              suppressHydrationWarning
               className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -149,6 +151,7 @@ function RegisterInner() {
             <input
               type="text"
               autoComplete="name"
+              suppressHydrationWarning
               className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -159,6 +162,7 @@ function RegisterInner() {
           <label className="block min-w-0 text-sm text-navy-900">
             תפקיד
             <select
+              suppressHydrationWarning
               className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={role}
               onChange={(e) => setRole(e.target.value as ProfileRole)}
@@ -173,6 +177,7 @@ function RegisterInner() {
             <input
               type="text"
               autoComplete="new-password"
+              suppressHydrationWarning
               className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

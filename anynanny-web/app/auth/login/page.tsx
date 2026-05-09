@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
-import { setReturningUserFlag } from "@/lib/auth/returning-user";
+import { readLastUsedEmail, saveLastUsedEmail, setReturningUserFlag } from "@/lib/auth/returning-user";
 import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -19,6 +19,7 @@ function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
+  const emailFromQuery = searchParams.get("email");
 
   const nextQuery = useMemo(() => (nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""), [nextPath]);
 
@@ -26,6 +27,16 @@ function LoginInner() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const q = emailFromQuery?.trim();
+    if (q) {
+      setEmail(q);
+      return;
+    }
+    const saved = readLastUsedEmail();
+    if (saved) setEmail(saved);
+  }, [emailFromQuery]);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -65,6 +76,7 @@ function LoginInner() {
       }
 
       setReturningUserFlag();
+      saveLastUsedEmail(emailTrim);
       const effective = await resolveRoleForUser(supabase, data.user);
       redirectAfterSignIn(router, effective, nextPath);
     } finally {
@@ -91,6 +103,7 @@ function LoginInner() {
             <input
               type="email"
               autoComplete="email"
+              suppressHydrationWarning
               className="mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

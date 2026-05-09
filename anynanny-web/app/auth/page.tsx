@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { readReturningUserFlag } from "@/lib/auth/returning-user";
+import { readLastUsedEmail, readReturningUserFlag } from "@/lib/auth/returning-user";
 
 function AuthLandingInner() {
   const searchParams = useSearchParams();
@@ -12,6 +12,14 @@ function AuthLandingInner() {
   const authError = searchParams.get("error");
 
   const nextQuery = useMemo(() => (nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""), [nextPath]);
+
+  const loginHref = useMemo(() => {
+    const base = `/auth/login${nextQuery}`;
+    const last = readLastUsedEmail();
+    if (!last) return base;
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}email=${encodeURIComponent(last)}`;
+  }, [nextQuery]);
 
   const [mounted, setMounted] = useState(false);
   const [returning, setReturning] = useState(false);
@@ -48,7 +56,7 @@ function AuthLandingInner() {
           <p className="mt-2 text-sm text-slate-600">שמחים לראות אתכם שוב ב־AnyNanny</p>
 
           <Link
-            href={`/auth/login${nextQuery}`}
+            href={loginHref}
             className="mt-10 block w-full rounded-2xl bg-[#001F3F] py-3.5 text-center text-base font-semibold text-white shadow-soft transition hover:brightness-105 active:brightness-95"
           >
             התחברות
