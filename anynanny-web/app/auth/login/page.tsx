@@ -32,6 +32,7 @@ function LoginInner() {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
+        console.log("[auth/login] signInWithPassword error:", error);
         setMessage(`התחברות נכשלה: ${error.message}`);
         return;
       }

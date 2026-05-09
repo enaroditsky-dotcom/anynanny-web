@@ -59,14 +59,33 @@ function RegisterInner() {
         });
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session?.user) {
-        const effective = await resolveRoleForUser(supabase, sessionData.session.user, role, trimmedName || null);
-        redirectAfterSignIn(router, effective, nextPath);
+      const {
+        data: { session: existingSession }
+      } = await supabase.auth.getSession();
+      let activeUser = existingSession?.user ?? null;
+
+      if (!activeUser) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (signInError) {
+          console.error("[auth/register] signIn after signup:", signInError);
+          setMessage(
+            `נרשמת בהצלחה, אך ההתחברות האוטומטית נכשלה: ${signInError.message}. ייתכן שנדרש אימות במייל לפני כניסה.`
+          );
+          return;
+        }
+        activeUser = signInData.user ?? null;
+      }
+
+      if (!activeUser) {
+        setMessage("נרשמת בהצלחה. אם נדרש אימות במייל — יש להשלים ואז להתחבר.");
         return;
       }
 
-      setMessage("נרשמת בהצלחה. אם נדרש אימות במייל — יש להשלים ואז להתחבר.");
+      const effective = await resolveRoleForUser(supabase, activeUser, role, trimmedName || null);
+      redirectAfterSignIn(router, effective, nextPath);
     } finally {
       setBusy(false);
     }
