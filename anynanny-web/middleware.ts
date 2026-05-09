@@ -2,7 +2,24 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ADMIN_AUTH_COOKIE } from "@/lib/admin/auth";
-import { isProfileRole } from "@/lib/supabase/profiles";
+import { isProfileRole, type ProfileRole } from "@/lib/supabase/profiles";
+
+function destinationForRole(role: ProfileRole, nextParam: string | null): string {
+  if (role === "parent") {
+    const ok =
+      nextParam &&
+      nextParam.startsWith("/parent") &&
+      !nextParam.includes("..") &&
+      !nextParam.startsWith("//");
+    return ok ? nextParam : "/parent/dashboard";
+  }
+  const ok =
+    nextParam &&
+    (nextParam === "/session" || nextParam.startsWith("/session/")) &&
+    !nextParam.includes("..") &&
+    !nextParam.startsWith("//");
+  return ok ? nextParam : "/session";
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -19,17 +36,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const needsRoleGate =
-    pathname.startsWith("/parent") || pathname === "/session" || pathname.startsWith("/session/");
+  const isAuthPath = pathname === "/auth" || pathname.startsWith("/auth/");
+  const isParentPath = pathname.startsWith("/parent");
+  const isSessionPath = pathname === "/session" || pathname.startsWith("/session/");
 
-  if (!needsRoleGate) {
+  if (!isAuthPath && !isParentPath && !isSessionPath) {
     return NextResponse.next();
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {
-    console.warn("[middleware] Supabase env missing — auth routes are not gated.");
+    console.warn("[middleware] Supabase env missing — skipping auth gate.");
     return NextResponse.next();
   }
 
@@ -56,6 +74,40 @@ export async function middleware(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
+  /** Logged-in users must not stay on auth screens — single server redirect (no client loop). */
+  if (isAuthPath && user) {
+    const { data: profile, error: profileErr } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    if (profileErr) {
+      console.warn("[middleware] profiles:", profileErr.message);
+    }
+
+    let role = profile?.role;
+    if (!isProfileRole(role)) {
+      const meta = user.user_metadata?.role;
+      role = typeof meta === "string" && isProfileRole(meta) ? meta : undefined;
+    }
+
+    /** Stay on /auth and show error — redirecting to /auth again would loop. */
+    if (!isProfileRole(role)) {
+      return response;
+    }
+
+    const nextParam = request.nextUrl.searchParams.get("next");
+    const destPath = destinationForRole(role, nextParam);
+
+    if (pathname === destPath || pathname.startsWith(`${destPath}/`)) {
+      return response;
+    }
+
+    return NextResponse.redirect(new URL(destPath, request.url));
+  }
+
+  /** Auth pages for guests — no redirect. */
+  if (isAuthPath) {
+    return response;
+  }
+
+  /** Protected app routes require a session. */
   if (!user) {
     const authUrl = new URL("/auth", request.url);
     authUrl.searchParams.set("next", pathname);
@@ -93,6 +145,7 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+/** Only app routes — not `/_next/*`, `/favicon.ico`, or root assets like `/logo.png`. */
 export const config = {
-  matcher: ["/admin/:path*", "/parent/:path*", "/session", "/session/:path*"]
+  matcher: ["/admin/:path*", "/auth", "/auth/:path*", "/parent/:path*", "/session", "/session/:path*"]
 };

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
 import {
@@ -11,7 +11,6 @@ import {
   setReturningUserFlag,
   setUserRoleChoice
 } from "@/lib/auth/returning-user";
-import { useAuth } from "@/components/auth-provider";
 import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -23,9 +22,6 @@ function formatLoginError(message: string): string {
 
 function LoginInner() {
   const router = useRouter();
-  const pathname = usePathname();
-  const { isLoading: authLoading, signedIn, effectiveRole } = useAuth();
-  const redirectOnceRef = useRef(false);
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const emailFromQuery = searchParams.get("email");
@@ -43,10 +39,6 @@ function LoginInner() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!signedIn) redirectOnceRef.current = false;
-  }, [signedIn]);
 
   useEffect(() => {
     const q = emailFromQuery?.trim();
@@ -69,21 +61,12 @@ function LoginInner() {
     if (!supabase) return;
     void supabase.auth.getSession().then(({ data }) => {
       console.log("[auth/login] getSession", {
-        pathname,
+        pathname: typeof window !== "undefined" ? window.location.pathname : "",
         sessionUserId: data.session?.user?.id ?? null,
         hasSession: !!data.session
       });
     });
-  }, [pathname, signedIn, authLoading]);
-
-  useEffect(() => {
-    if (!pathname.startsWith("/auth")) return;
-    if (authLoading) return;
-    if (!signedIn || !effectiveRole) return;
-    if (redirectOnceRef.current) return;
-    redirectOnceRef.current = true;
-    redirectAfterSignIn(router, effectiveRole, nextPath);
-  }, [pathname, authLoading, signedIn, effectiveRole, router, nextPath]);
+  }, []);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -125,29 +108,12 @@ function LoginInner() {
       setReturningUserFlag();
       saveLastUsedEmail(emailTrim);
       const effective = await resolveRoleForUser(supabase, data.user);
-      redirectOnceRef.current = true;
       redirectAfterSignIn(router, effective, nextPath);
       void router.refresh();
     } finally {
       setBusy(false);
     }
   };
-
-  if (authLoading) {
-    return (
-      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-sm text-slate-600" dir="rtl">
-        טוען…
-      </main>
-    );
-  }
-
-  if (signedIn && effectiveRole) {
-    return (
-      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-sm text-slate-600" dir="rtl">
-        מפנים לדשבורד…
-      </main>
-    );
-  }
 
   return (
     <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>

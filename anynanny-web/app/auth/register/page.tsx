@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
-import { useAuth } from "@/components/auth-provider";
 import {
   clearUserRoleChoice,
   readUserRoleChoice,
@@ -19,9 +18,6 @@ import type { ProfileRole } from "@/lib/supabase/profiles";
 
 function RegisterInner() {
   const router = useRouter();
-  const pathname = usePathname();
-  const { isLoading: authLoading, signedIn, effectiveRole } = useAuth();
-  const redirectOnceRef = useRef(false);
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const roleFromQuery = searchParams.get("role");
@@ -42,10 +38,6 @@ function RegisterInner() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [signupDone, setSignupDone] = useState<{ effective: ProfileRole } | null>(null);
-
-  useEffect(() => {
-    if (!signedIn) redirectOnceRef.current = false;
-  }, [signedIn]);
 
   /** Compare trimmed copies so accidental spaces don’t block a real match. Submit still uses the raw password fields. */
   const passwordsMatch = password.trim() === confirmPassword.trim();
@@ -68,31 +60,19 @@ function RegisterInner() {
     if (!supabase) return;
     void supabase.auth.getSession().then(({ data }) => {
       console.log("[auth/register] getSession", {
-        pathname,
+        pathname: typeof window !== "undefined" ? window.location.pathname : "",
         sessionUserId: data.session?.user?.id ?? null,
         hasSession: !!data.session
       });
     });
-  }, [pathname, signedIn, authLoading]);
+  }, []);
 
+  /** Post-signup only — logged-in visitors are redirected by middleware before paint. */
   useEffect(() => {
     if (!signupDone) return;
-    if (!pathname.startsWith("/auth")) return;
-    if (redirectOnceRef.current) return;
-    redirectOnceRef.current = true;
     redirectAfterSignIn(router, signupDone.effective, nextPath);
     void router.refresh();
-  }, [signupDone, router, nextPath, pathname]);
-
-  useEffect(() => {
-    if (signupDone) return;
-    if (!pathname.startsWith("/auth")) return;
-    if (authLoading) return;
-    if (!signedIn || !effectiveRole) return;
-    if (redirectOnceRef.current) return;
-    redirectOnceRef.current = true;
-    redirectAfterSignIn(router, effectiveRole, nextPath);
-  }, [signupDone, pathname, authLoading, signedIn, effectiveRole, router, nextPath]);
+  }, [signupDone, router, nextPath]);
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -171,22 +151,6 @@ function RegisterInner() {
           <p className="text-2xl font-bold text-navy-header">נרשמתם בהצלחה!</p>
           <p className="mt-3 text-sm text-slate-600">מעבירים אתכם לדשבורד…</p>
         </section>
-      </main>
-    );
-  }
-
-  if (authLoading) {
-    return (
-      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-sm text-slate-600" dir="rtl">
-        טוען…
-      </main>
-    );
-  }
-
-  if (signedIn && effectiveRole) {
-    return (
-      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-sm text-slate-600" dir="rtl">
-        מפנים לדשבורד…
       </main>
     );
   }

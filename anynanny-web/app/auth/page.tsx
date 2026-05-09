@@ -2,18 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { clearDeviceAuthHints, readLastUsedEmail, readReturningUserFlag } from "@/lib/auth/returning-user";
-import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function AuthLandingInner() {
   const router = useRouter();
-  const pathname = usePathname();
-  const { isLoading: authLoading, signedIn, effectiveRole } = useAuth();
-  const redirectOnceRef = useRef(false);
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const authError = searchParams.get("error");
@@ -32,34 +27,22 @@ function AuthLandingInner() {
   const [returning, setReturning] = useState(false);
 
   useEffect(() => {
-    if (!signedIn) redirectOnceRef.current = false;
-  }, [signedIn]);
-
-  useEffect(() => {
     setReturning(readReturningUserFlag());
     setMounted(true);
   }, []);
 
+  /** Session exits are handled in middleware — no client redirect loop. */
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
     void supabase.auth.getSession().then(({ data }) => {
       console.log("[auth] getSession", {
-        pathname,
+        pathname: typeof window !== "undefined" ? window.location.pathname : "",
         sessionUserId: data.session?.user?.id ?? null,
         hasSession: !!data.session
       });
     });
-  }, [pathname, signedIn, authLoading]);
-
-  useEffect(() => {
-    if (!pathname.startsWith("/auth")) return;
-    if (authLoading) return;
-    if (!signedIn || !effectiveRole) return;
-    if (redirectOnceRef.current) return;
-    redirectOnceRef.current = true;
-    redirectAfterSignIn(router, effectiveRole, nextPath);
-  }, [pathname, authLoading, signedIn, effectiveRole, router, nextPath]);
+  }, []);
 
   const handleSwitchUser = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -71,18 +54,10 @@ function AuthLandingInner() {
     router.refresh();
   };
 
-  if (authLoading || !mounted) {
+  if (!mounted) {
     return (
       <main className="mx-auto flex min-w-0 max-w-full justify-center py-10 text-center text-sm text-slate-600" dir="rtl">
         טוען...
-      </main>
-    );
-  }
-
-  if (signedIn && effectiveRole) {
-    return (
-      <main className="mx-auto flex min-w-0 max-w-full justify-center py-16 text-center text-sm text-slate-600" dir="rtl">
-        מפנים לדשבורד…
       </main>
     );
   }
