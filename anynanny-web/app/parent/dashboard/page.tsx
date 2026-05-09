@@ -16,6 +16,11 @@ import {
   readSessionState
 } from "@/lib/session/protocol";
 
+/** Placeholder — wire to Supabase (Realtime / Edge Function / push) to alert the nanny app when a shift starts. */
+async function handleStartSession(): Promise<void> {
+  await Promise.resolve();
+}
+
 export default function ParentDashboardPage() {
   const { isLoading: authLoading, displayName } = useAuth();
 
@@ -26,6 +31,7 @@ export default function ParentDashboardPage() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [useSupabase, setUseSupabase] = useState(false);
   const [parentUserId, setParentUserId] = useState<string | null>(null);
+  const [confirmStartOpen, setConfirmStartOpen] = useState(false);
 
   const firstName = useMemo(() => {
     const n = displayName?.trim();
@@ -146,6 +152,8 @@ export default function ParentDashboardPage() {
   const startSession = async () => {
     if (sessionState.status === "parent_initiated" || sessionState.status === "active") return;
 
+    await handleStartSession();
+
     const startedAt = Date.now();
     const optimistic: SessionProtocolState = {
       status: "parent_initiated",
@@ -199,7 +207,10 @@ export default function ParentDashboardPage() {
   };
 
   const endSession = async () => {
-    if (sessionState.status !== "active" || !sessionState.parentStartedAtMs) return;
+    const running =
+      sessionState.status === "active" ||
+      sessionState.status === "parent_initiated";
+    if (!running || !sessionState.parentStartedAtMs) return;
     const confirmed = window.confirm("לסיים משמרת ולנעול סכום סופי?");
     if (!confirmed) return;
     const finalSeconds = Math.max(0, Math.floor((Date.now() - sessionState.parentStartedAtMs) / 1000));
@@ -238,8 +249,16 @@ export default function ParentDashboardPage() {
     setSessionState(next);
   };
 
+  const sessionRunning =
+    sessionState.status === "active" || sessionState.status === "parent_initiated";
+
   const showLoading =
     clientHasSessionUser !== true && (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading));
+
+  const onConfirmStartShift = async () => {
+    setConfirmStartOpen(false);
+    await startSession();
+  };
 
   if (showLoading) {
     return (
@@ -261,81 +280,119 @@ export default function ParentDashboardPage() {
         <div className="grid grid-cols-2 gap-3">
           <Link
             href="/parent/calendar"
-            className="group flex min-h-[7.25rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <Calendar className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="text-center text-xs font-semibold leading-tight sm:text-sm">יומן מפגשים</span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">יומן מפגשים</span>
           </Link>
 
           <Link
             href="/parent/wallet"
-            className="group flex min-h-[7.25rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <Wallet className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="text-center text-xs font-semibold leading-tight sm:text-sm">ארנק ותשלומים</span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">ארנק ותשלומים</span>
           </Link>
 
           <Link
             href="/parent/settings"
-            className="group flex min-h-[7.25rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <Settings className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="text-center text-xs font-semibold leading-tight sm:text-sm">הגדרות חשבון</span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הגדרות חשבון</span>
           </Link>
 
           <Link
             href="/parent/history"
-            className="group flex min-h-[7.25rem] flex-col items-center justify-center gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <History className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="text-center text-xs font-semibold leading-tight sm:text-sm">היסטוריית שמרטפות</span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">היסטוריית שמרטפות</span>
           </Link>
         </div>
       </section>
 
-      <section className="rounded-3xl border border-[#001F3F]/15 bg-white p-4 shadow-[0_12px_40px_-12px_rgba(0,31,63,0.35)] sm:p-5">
-        {sessionState.status === "active" ? (
-          <div className="mb-4 space-y-1 text-right">
-            <p className="text-xs font-medium text-slate-600">סשן פעיל</p>
-            <p className="text-2xl font-bold tabular-nums text-[#001F3F]">{timerText}</p>
+      <section className="rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
+        {sessionRunning ? (
+          <div className="mb-5 space-y-2 text-right">
+            <p className="text-xs font-medium text-slate-600">
+              {sessionState.status === "parent_initiated" ? "ממתינים לאישור הנני…" : "משמרת פעילה"}
+            </p>
+            <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{timerText}</p>
             <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
           </div>
         ) : null}
 
         {sessionState.status === "ended" ? (
-          <div className="mb-4 space-y-1 text-right">
+          <div className="mb-5 space-y-1 text-right">
             <p className="text-xs text-slate-600">המשמרת האחרונה הסתיימה</p>
             <p className="text-lg font-semibold tabular-nums text-navy-header">{timerText}</p>
           </div>
         ) : null}
 
-        {sessionState.status === "active" ? (
+        {sessionRunning ? (
           <button
             type="button"
             onClick={() => void endSession()}
-            className="w-full rounded-2xl bg-[#FF8A8A] py-4 text-base font-bold text-white shadow-lg transition hover:brightness-105 active:brightness-95"
+            className="w-full rounded-2xl bg-[#FF8A8A] py-4 text-lg font-bold text-white shadow-[0_8px_28px_-6px_rgba(255,138,138,0.65)] transition hover:brightness-105 active:brightness-95"
           >
             סיום משמרת
           </button>
         ) : (
           <button
             type="button"
-            onClick={() => void startSession()}
-            disabled={sessionState.status === "parent_initiated"}
-            className={`relative w-full overflow-hidden rounded-2xl bg-[#001F3F] py-4 text-base font-bold text-white shadow-[0_10px_34px_-8px_rgba(0,31,63,0.55)] transition-all duration-300 hover:shadow-[0_14px_42px_-10px_rgba(0,31,63,0.6)] hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-500 disabled:opacity-75 disabled:hover:brightness-100`}
+            onClick={() => setConfirmStartOpen(true)}
+            className="relative w-full overflow-hidden rounded-2xl bg-[#001F3F] py-5 text-lg font-bold text-white shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-2 ring-[#001F3F]/30 transition-all duration-300 hover:shadow-[0_18px_48px_-12px_rgba(0,31,63,0.75)] hover:brightness-110 active:scale-[0.99]"
           >
-            {sessionState.status === "parent_initiated" ? "ממתין לאישור הסשן…" : "התחלת סשן חדש"}
+            התחלת משמרת (Double-Shake)
           </button>
         )}
       </section>
+
+      {confirmStartOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 sm:items-center"
+          role="presentation"
+          onClick={() => setConfirmStartOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-shift-title"
+            className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            <h2 id="confirm-shift-title" className="text-right text-lg font-bold text-[#001F3F]">
+              האם להתחיל את ספירת הזמן עכשיו?
+            </h2>
+            <div className="mt-6 flex flex-row-reverse gap-3">
+              <button
+                type="button"
+                className="flex-1 rounded-2xl bg-[#001F3F] py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105"
+                onClick={() => void onConfirmStartShift()}
+              >
+                אישור
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-2xl border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                onClick={() => setConfirmStartOpen(false)}
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
