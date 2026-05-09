@@ -28,28 +28,37 @@ export default function SessionPage() {
     const supabase = getSupabaseBrowserClient();
     syncFromStorage();
 
+    let cancelled = false;
     let channelCleanup: (() => void) | null = null;
+
     if (supabase) {
       void (async () => {
-        const { data: row, error } = await supabase
+        const { data: row, error: fetchErr } = await supabase
           .from(SESSIONS_TABLE)
           .select("*")
           .in("status", ["pending", "active", "completed"])
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (!error && row) {
+        if (fetchErr) {
+          console.warn("[session] initial sessions fetch:", fetchErr.message);
+        }
+        if (!cancelled && row && !fetchErr) {
           const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
           if (mapped) {
             persistSessionState(mapped);
             setSessionState(mapped);
           }
         }
+        if (cancelled) return;
+
         setUseSupabase(true);
 
+        // Register .on() handlers before .subscribe() (required by Supabase Realtime).
         const channel = supabase.channel("sitter-sessions");
         channel.on("postgres_changes", { event: "*", schema: "public", table: SESSIONS_TABLE }, (payload) => {
-          const rowData = (payload.new || payload.old) as SupabaseSessionRow;
+          const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
+          if (!rowData || typeof rowData !== "object") return;
           const mapped = mapSupabaseRowToProtocol(rowData);
           if (!mapped) return;
           persistSessionState(mapped);
@@ -67,6 +76,7 @@ export default function SessionPage() {
     };
     window.addEventListener("storage", onStorage);
     return () => {
+      cancelled = true;
       window.removeEventListener("storage", onStorage);
       if (channelCleanup) channelCleanup();
     };

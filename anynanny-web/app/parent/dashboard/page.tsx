@@ -35,12 +35,14 @@ export default function ParentDashboardPage() {
     };
     window.addEventListener("storage", onStorage);
 
+    let cancelled = false;
     let channelCleanup: (() => void) | null = null;
     if (supabase) {
       void (async () => {
         const { data: authData, error: authErr } = await supabase.auth.getUser();
         if (authErr || !authData.user) return;
         const userId = authData.user.id;
+        if (cancelled) return;
         setParentUserId(userId);
         localStorage.setItem("active_role", "parent");
 
@@ -51,13 +53,18 @@ export default function ParentDashboardPage() {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (!rowErr && row) {
+        if (rowErr) {
+          console.warn("[parent] initial sessions fetch:", rowErr.message);
+        }
+        if (!cancelled && !rowErr && row) {
           const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
           if (mapped) {
             persistSessionState(mapped);
             setSessionState(mapped);
           }
         }
+        if (cancelled) return;
+
         setUseSupabase(true);
 
         const channel = supabase.channel(`parent-sessions-${userId}`);
@@ -65,7 +72,8 @@ export default function ParentDashboardPage() {
           "postgres_changes",
           { event: "*", schema: "public", table: SESSIONS_TABLE, filter: `parent_id=eq.${userId}` },
           (payload) => {
-            const rowData = (payload.new || payload.old) as SupabaseSessionRow;
+            const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
+            if (!rowData || typeof rowData !== "object") return;
             const mapped = mapSupabaseRowToProtocol(rowData);
             if (mapped) {
               persistSessionState(mapped);
@@ -81,6 +89,7 @@ export default function ParentDashboardPage() {
     }
 
     return () => {
+      cancelled = true;
       clearInterval(ticker);
       window.removeEventListener("storage", onStorage);
       if (channelCleanup) channelCleanup();
@@ -100,38 +109,58 @@ export default function ParentDashboardPage() {
   const earnedNis = useMemo(() => ((elapsedSeconds / 3600) * HOURLY_RATE).toFixed(2), [elapsedSeconds]);
 
   const startSession = async () => {
-    if (useSupabase && parentUserId) {
-      const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        const startedAtIso = new Date().toISOString();
-        const { data: row, error } = await supabase
-          .from(SESSIONS_TABLE)
-          .insert({
-            parent_id: parentUserId,
-            status: "pending",
-            start_time: startedAtIso
-          })
-          .select("*")
-          .single();
-        if (!error && row) {
-          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
-          if (mapped) {
-            persistSessionState(mapped);
-            setSessionState(mapped);
-            setNowMs(mapped.parentStartedAtMs ?? Date.now());
-            return;
-          }
-        }
-      }
-    }
+    if (sessionState.status === "parent_initiated" || sessionState.status === "active") return;
+
     const startedAt = Date.now();
-    const next: SessionProtocolState = {
+    const optimistic: SessionProtocolState = {
       status: "parent_initiated",
       parentStartedAtMs: startedAt
     };
-    persistSessionState(next);
-    setSessionState(next);
+    persistSessionState(optimistic);
+    setSessionState(optimistic);
     setNowMs(startedAt);
+
+    const supabase = getSupabaseBrowserClient();
+    let uid = parentUserId;
+    if (supabase && !uid) {
+      const { data: authData } = await supabase.auth.getUser();
+      uid = authData.user?.id ?? null;
+      if (uid) setParentUserId(uid);
+    }
+
+    if (!supabase || !uid) {
+      console.warn("[parent] Start session without Supabase auth — local-only (sitter sync requires login).");
+      return;
+    }
+
+    const startedAtIso = new Date(startedAt).toISOString();
+    const { data: row, error } = await supabase
+      .from(SESSIONS_TABLE)
+      .insert({
+        parent_id: uid,
+        status: "pending",
+        start_time: startedAtIso
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[parent] Supabase insert session failed:", error.message);
+      persistSessionState({ status: "idle" });
+      setSessionState({ status: "idle" });
+      window.alert(`לא ניתן לפתוח משמרת: ${error.message}`);
+      return;
+    }
+
+    setUseSupabase(true);
+    if (row) {
+      const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+      if (mapped) {
+        persistSessionState(mapped);
+        setSessionState(mapped);
+        setNowMs(mapped.parentStartedAtMs ?? Date.now());
+      }
+    }
   };
 
   const endSession = async () => {
@@ -175,41 +204,44 @@ export default function ParentDashboardPage() {
   };
 
   const primaryLabel =
-    sessionState.status === "active" ? "סיום" : sessionState.status === "parent_initiated" ? "ממתין..." : "להתחיל";
+    sessionState.status === "active"
+      ? "סיום"
+      : sessionState.status === "parent_initiated"
+        ? "ממתין לאישור..."
+        : "להתחיל";
+
+  const primaryTextClass =
+    sessionState.status === "parent_initiated" ? "text-2xl leading-tight px-4" : "text-5xl";
 
   return (
     <main className="mx-auto w-full max-w-md space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
-      <section className="rounded-3xl bg-white p-5 text-center shadow-soft">
-        <h1 className="text-lg font-bold text-navy-header">סטטוס בייביסיטר</h1>
+      <section className="rounded-3xl bg-white p-6 text-center shadow-soft">
         {sessionState.status === "active" ? (
-          <div className="mt-3">
+          <div className="mb-5 space-y-1">
             <p className="text-3xl font-bold tracking-wider text-navy-header">{timerText}</p>
             <p className="text-base font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
           </div>
-        ) : sessionState.status === "parent_initiated" ? (
-          <p className="mt-3 text-sm text-slate-600">ממתין לאישור הבייביסיטר...</p>
-        ) : sessionState.status === "ended" ? (
-          <div className="mt-3">
+        ) : null}
+        {sessionState.status === "ended" ? (
+          <div className="mb-5 space-y-1">
             <p className="text-sm text-slate-600">המשמרת הסתיימה</p>
             <p className="text-base font-semibold text-navy-800">זמן בייביסיטר: {timerText}</p>
             <p className="text-base font-semibold text-navy-800">לתשלום: ₪{(sessionState.finalAmountNis ?? 0).toFixed(2)}</p>
           </div>
-        ) : (
-          <p className="mt-3 text-sm text-slate-600">אין משמרת פעילה כרגע</p>
-        )}
+        ) : null}
 
-        <div className="mt-6 flex items-center justify-center">
+        <div className="flex items-center justify-center">
           <button
             type="button"
             onClick={sessionState.status === "active" ? endSession : startSession}
             disabled={sessionState.status === "parent_initiated"}
-            className={`flex h-[280px] w-[280px] items-center justify-center rounded-full text-5xl font-bold text-white shadow-soft transition ${
+            className={`flex h-[280px] w-[280px] items-center justify-center rounded-full font-bold text-white shadow-soft transition ${
               sessionState.status === "active"
-                ? "bg-[#FF8A8A] hover:brightness-105 active:brightness-95"
+                ? "bg-[#FF8A8A] text-5xl hover:brightness-105 active:brightness-95"
                 : sessionState.status === "parent_initiated"
                   ? "cursor-not-allowed bg-slate-300"
-                  : "bg-[#CFE8C8] hover:brightness-105 active:brightness-95"
-            }`}
+                  : "bg-[#CFE8C8] text-5xl hover:brightness-105 active:brightness-95"
+            } ${primaryTextClass}`}
           >
             {primaryLabel}
           </button>
