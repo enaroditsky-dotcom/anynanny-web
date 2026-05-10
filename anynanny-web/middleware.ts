@@ -48,8 +48,7 @@ function destinationForRole(role: ProfileRole, nextParam: string | null): string
       nextParam.startsWith("/session/") ||
       nextParam === "/sitter" ||
       nextParam.startsWith("/sitter/") ||
-      nextParam === "/sitter/onboarding" ||
-      nextParam.startsWith("/sitter/onboarding/")) &&
+      nextParam.startsWith("/auth/register")) &&
     !nextParam.includes("..") &&
     !nextParam.startsWith("//");
   return ok ? nextParam : "/sitter/dashboard";
@@ -72,7 +71,7 @@ async function roleForUser(supabase: SupabaseClient, user: User): Promise<Profil
 }
 
 function isPublicRoute(pathname: string): boolean {
-  if (pathname === "/sitter/onboarding" || pathname.startsWith("/sitter/onboarding/")) {
+  if (pathname === "/auth/register" || pathname.startsWith("/auth/register/")) {
     return true;
   }
   if (pathname === "/api/sitter/profile") {

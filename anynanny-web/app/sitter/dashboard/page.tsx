@@ -172,11 +172,11 @@ export default function SitterDashboardPage() {
       if (cancelled) return;
       if (error) {
         console.warn("[sitter dashboard] sitter_profiles:", error.message);
-        router.replace("/sitter/onboarding");
+        router.replace("/auth/register?role=sitter");
         return;
       }
       if (!data || data.is_public !== true) {
-        router.replace("/sitter/onboarding");
+        router.replace("/auth/register?role=sitter");
         return;
       }
       setProfileGateOk(true);
@@ -409,7 +409,7 @@ export default function SitterDashboardPage() {
         </h1>
         <p className="mt-1 text-sm text-slate-600">Double-Shake — ריענון חי מהשרת.</p>
         <Link
-          href="/sitter/onboarding"
+          href="/auth/register?role=sitter"
           className="mt-2 inline-block text-xs font-semibold text-emerald-800 underline decoration-emerald-700/50"
         >
           עריכת פרופיל
