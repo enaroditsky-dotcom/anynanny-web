@@ -50,6 +50,11 @@ export async function PUT(request: Request) {
       data: { user },
       error: authErr
     } = await supabase.auth.getUser();
+    console.log("[api/sitter/profile PUT] getUser", {
+      hasUser: Boolean(user),
+      userId: user?.id ?? null,
+      authError: authErr?.message ?? null
+    });
     if (authErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

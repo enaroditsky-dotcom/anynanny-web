@@ -213,6 +213,7 @@ export default function SitterOnboardingPage() {
     try {
       const res = await fetch("/api/sitter/profile", {
         method: "PUT",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draftPayload)
       });

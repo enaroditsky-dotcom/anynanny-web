@@ -70,8 +70,46 @@ async function roleForUser(supabase: SupabaseClient, user: User): Promise<Profil
   return isProfileRole(role) ? role : null;
 }
 
+/**
+ * `/api/*` is not part of the app-path auth gate below. Without this, middleware never runs for API
+ * routes and Supabase auth cookies may stay stale — Route Handlers then return 401 from getUser().
+ */
+async function supabaseSessionRefreshResponse(request: NextRequest): Promise<NextResponse> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) {
+    return NextResponse.next();
+  }
+
+  let response = NextResponse.next({
+    request
+  });
+
+  const supabase = createServerClient(url, anon, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({
+          request
+        });
+        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+      }
+    }
+  });
+
+  await supabase.auth.getUser();
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/api")) {
+    return supabaseSessionRefreshResponse(request);
+  }
 
   if (pathname.startsWith("/admin")) {
     if (pathname === "/admin/login") {
@@ -189,5 +227,15 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/auth", "/auth/:path*", "/parent/:path*", "/session", "/session/:path*", "/sitter", "/sitter/:path*"]
+  matcher: [
+    "/admin/:path*",
+    "/auth",
+    "/auth/:path*",
+    "/parent/:path*",
+    "/session",
+    "/session/:path*",
+    "/sitter",
+    "/sitter/:path*",
+    "/api/:path*"
+  ]
 };
