@@ -9,7 +9,9 @@ create table if not exists public.sessions (
   start_time timestamptz,
   end_time timestamptz,
   final_elapsed_seconds integer,
-  final_amount_nis numeric(12, 2)
+  final_amount_nis numeric(12, 2),
+  end_requested boolean not null default false,
+  parent_end_requested_at timestamptz
 );
 
 create index if not exists sessions_parent_id_created_at_idx on public.sessions (parent_id, created_at desc);

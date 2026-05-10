@@ -19,7 +19,7 @@ function HomeInner() {
         return;
       }
       if (activeRole === "sitter") {
-        router.replace("/session");
+        router.replace("/sitter/dashboard");
       }
     } catch {
       /* ignore */

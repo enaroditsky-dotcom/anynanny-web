@@ -9,7 +9,11 @@ const STORAGE_KEY = "active_role";
 export function RoleSwitcher() {
   const pathname = usePathname();
 
-  const isSitterMode = pathname === "/session";
+  const isSitterMode =
+    pathname === "/session" ||
+    pathname.startsWith("/session/") ||
+    pathname === "/sitter" ||
+    pathname.startsWith("/sitter/");
   const isParentMode = pathname === "/parent/dashboard";
 
   useEffect(() => {
@@ -38,7 +42,7 @@ export function RoleSwitcher() {
 
   return (
     <Link
-      href="/session"
+      href="/sitter/dashboard"
       onClick={() => localStorage.setItem(STORAGE_KEY, "sitter")}
       className="inline-flex items-center rounded-full border border-navy-header/30 px-3 py-1.5 text-xs font-semibold text-navy-header transition hover:bg-navy-header/5"
     >

@@ -16,9 +16,13 @@ export function redirectAfterSignIn(effectiveRole: ProfileRole, nextPath: string
   const allowedNext =
     nextPath &&
     ((effectiveRole === "parent" && nextPath.startsWith("/parent")) ||
-      (effectiveRole === "sitter" && (nextPath === "/session" || nextPath.startsWith("/session/"))));
+      (effectiveRole === "sitter" &&
+        (nextPath === "/session" ||
+          nextPath.startsWith("/session/") ||
+          nextPath === "/sitter" ||
+          nextPath.startsWith("/sitter/"))));
   const target =
-    allowedNext && nextPath ? nextPath : effectiveRole === "parent" ? "/parent/dashboard" : "/session";
+    allowedNext && nextPath ? nextPath : effectiveRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
 
   if (typeof window === "undefined") return;
 

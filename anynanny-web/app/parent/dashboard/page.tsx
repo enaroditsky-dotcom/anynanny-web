@@ -15,11 +15,7 @@ import {
   persistSessionState,
   readSessionState
 } from "@/lib/session/protocol";
-
-/** Placeholder — wire to Supabase (Realtime / Edge Function / push) to alert the nanny app when a shift starts. */
-async function handleStartSession(): Promise<void> {
-  await Promise.resolve();
-}
+import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 
 export default function ParentDashboardPage() {
   const { isLoading: authLoading, displayName } = useAuth();
@@ -138,10 +134,15 @@ export default function ParentDashboardPage() {
   }, [syncFromStorage]);
 
   const elapsedSeconds = useMemo(() => {
+    if (sessionState.status === "parent_initiated") return 0;
     const startedAt = sessionState.parentStartedAtMs;
     if (!startedAt) return 0;
-    if (sessionState.status === "active" || sessionState.status === "parent_initiated") {
-      return Math.max(0, Math.floor((nowMs - startedAt) / 1000));
+    if (sessionState.status === "active") {
+      const endWallMs =
+        sessionState.endRequested && sessionState.parentEndRequestedAtMs
+          ? sessionState.parentEndRequestedAtMs
+          : nowMs;
+      return Math.max(0, Math.floor((endWallMs - startedAt) / 1000));
     }
     return sessionState.finalElapsedSeconds ?? 0;
   }, [nowMs, sessionState]);
@@ -152,16 +153,12 @@ export default function ParentDashboardPage() {
   const startSession = async () => {
     if (sessionState.status === "parent_initiated" || sessionState.status === "active") return;
 
-    await handleStartSession();
-
-    const startedAt = Date.now();
     const optimistic: SessionProtocolState = {
-      status: "parent_initiated",
-      parentStartedAtMs: startedAt
+      status: "parent_initiated"
     };
     persistSessionState(optimistic);
     setSessionState(optimistic);
-    setNowMs(startedAt);
+    setNowMs(Date.now());
 
     const supabase = getSupabaseBrowserClient();
     let uid = parentUserId;
@@ -173,16 +170,19 @@ export default function ParentDashboardPage() {
 
     if (!supabase || !uid) {
       console.warn("[parent] Start session without Supabase auth — local-only (sitter sync requires login).");
+      persistSessionState({ status: "idle" });
+      setSessionState({ status: "idle" });
       return;
     }
 
-    const startedAtIso = new Date(startedAt).toISOString();
+    const pairedSitterId = getPairedSitterUserId();
     const { data: row, error } = await supabase
       .from(SESSIONS_TABLE)
       .insert({
         parent_id: uid,
+        sitter_id: pairedSitterId,
         status: "pending",
-        start_time: startedAtIso
+        start_time: null
       })
       .select("*")
       .single();
@@ -201,29 +201,33 @@ export default function ParentDashboardPage() {
       if (mapped) {
         persistSessionState(mapped);
         setSessionState(mapped);
-        setNowMs(mapped.parentStartedAtMs ?? Date.now());
+        setNowMs(Date.now());
       }
     }
   };
 
   const endSession = async () => {
-    const running =
-      sessionState.status === "active" ||
-      sessionState.status === "parent_initiated";
-    if (!running || !sessionState.parentStartedAtMs) return;
-    const confirmed = window.confirm("לסיים משמרת ולנעול סכום סופי?");
+    if (sessionState.status === "parent_initiated") {
+      window.alert("ממתין לאישור הבייביסיטר להתחלת המשמרת.");
+      return;
+    }
+    if (sessionState.status !== "active" || !sessionState.parentStartedAtMs) return;
+    if (sessionState.endRequested) {
+      window.alert("כבר נשלחה בקשת סיום — ממתינים לאישור הבייביסיטר.");
+      return;
+    }
+    const confirmed = window.confirm("לבקש סיום משמרת? הבייביסיטר יצטרך לאשר כדי לנעול את הסכום.");
     if (!confirmed) return;
-    const finalSeconds = Math.max(0, Math.floor((Date.now() - sessionState.parentStartedAtMs) / 1000));
+
     if (useSupabase && sessionState.supabaseSessionId) {
       const supabase = getSupabaseBrowserClient();
       if (supabase) {
+        const reqAt = new Date().toISOString();
         const { data: row, error } = await supabase
           .from(SESSIONS_TABLE)
           .update({
-            status: "completed",
-            end_time: new Date().toISOString(),
-            final_elapsed_seconds: finalSeconds,
-            final_amount_nis: Number(((finalSeconds / 3600) * HOURLY_RATE).toFixed(2))
+            end_requested: true,
+            parent_end_requested_at: reqAt
           })
           .eq("id", sessionState.supabaseSessionId)
           .select("*")
@@ -236,21 +240,19 @@ export default function ParentDashboardPage() {
             return;
           }
         }
+        if (error) {
+          console.error("[parent] request end failed:", error.message);
+          window.alert(`לא ניתן לשלוח בקשת סיום: ${error.message}`);
+        }
       }
     }
-    const next: SessionProtocolState = {
-      status: "ended",
-      parentStartedAtMs: sessionState.parentStartedAtMs,
-      endedAtMs: Date.now(),
-      finalElapsedSeconds: finalSeconds,
-      finalAmountNis: Number(((finalSeconds / 3600) * HOURLY_RATE).toFixed(2))
-    };
-    persistSessionState(next);
-    setSessionState(next);
   };
 
   const sessionRunning =
     sessionState.status === "active" || sessionState.status === "parent_initiated";
+
+  const waitingNannyStart = sessionState.status === "parent_initiated";
+  const waitingNannyEnd = sessionState.status === "active" && sessionState.endRequested;
 
   const showLoading =
     clientHasSessionUser !== true && (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading));
@@ -324,7 +326,11 @@ export default function ParentDashboardPage() {
         {sessionRunning ? (
           <div className="mb-5 space-y-2 text-right">
             <p className="text-xs font-medium text-slate-600">
-              {sessionState.status === "parent_initiated" ? "ממתינים לאישור הנני…" : "משמרת פעילה"}
+              {waitingNannyStart
+                ? "ממתין לאישור הבייביסיטר…"
+                : waitingNannyEnd
+                  ? "ממתינים לאישור סיום מהבייביסיטר…"
+                  : "משמרת פעילה"}
             </p>
             <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{timerText}</p>
             <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
@@ -338,7 +344,7 @@ export default function ParentDashboardPage() {
           </div>
         ) : null}
 
-        {sessionRunning ? (
+        {sessionRunning && sessionState.status === "active" && !waitingNannyEnd ? (
           <button
             type="button"
             onClick={() => void endSession()}
@@ -346,7 +352,11 @@ export default function ParentDashboardPage() {
           >
             סיום משמרת
           </button>
-        ) : (
+        ) : sessionRunning && (waitingNannyStart || waitingNannyEnd) ? (
+          <p className="rounded-2xl border border-slate-200 bg-slate-50 py-4 text-center text-sm font-semibold text-slate-600">
+            {waitingNannyStart ? "ממתין לאישור הבייביסיטר…" : "ממתינים לאישור סיום מהבייביסיטר…"}
+          </p>
+        ) : !sessionRunning ? (
           <button
             type="button"
             onClick={() => setConfirmStartOpen(true)}
@@ -354,7 +364,7 @@ export default function ParentDashboardPage() {
           >
             התחלת משמרת (Double-Shake)
           </button>
-        )}
+        ) : null}
       </section>
 
       {confirmStartOpen ? (

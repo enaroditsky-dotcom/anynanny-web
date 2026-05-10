@@ -43,10 +43,13 @@ function destinationForRole(role: ProfileRole, nextParam: string | null): string
   }
   const ok =
     nextParam &&
-    (nextParam === "/session" || nextParam.startsWith("/session/")) &&
+    (nextParam === "/session" ||
+      nextParam.startsWith("/session/") ||
+      nextParam === "/sitter" ||
+      nextParam.startsWith("/sitter/")) &&
     !nextParam.includes("..") &&
     !nextParam.startsWith("//");
-  return ok ? nextParam : "/session";
+  return ok ? nextParam : "/sitter/dashboard";
 }
 
 function middlewareRedirect(request: NextRequest, destination: string): NextResponse {
@@ -81,7 +84,11 @@ export async function middleware(request: NextRequest) {
 
   const isAuthPath = pathname === "/auth" || pathname.startsWith("/auth/");
   const isProtectedApp =
-    pathname.startsWith("/parent") || pathname === "/session" || pathname.startsWith("/session/");
+    pathname.startsWith("/parent") ||
+    pathname === "/session" ||
+    pathname.startsWith("/session/") ||
+    pathname === "/sitter" ||
+    pathname.startsWith("/sitter/");
 
   if (!isAuthPath && !isProtectedApp) {
     return NextResponse.next();
@@ -171,10 +178,11 @@ export async function middleware(request: NextRequest) {
   }
 
   const wantsParent = pathname.startsWith("/parent");
-  const wantsSitter = pathname === "/session" || pathname.startsWith("/session/");
+  const wantsSitter =
+    pathname === "/session" || pathname.startsWith("/session/") || pathname === "/sitter" || pathname.startsWith("/sitter/");
 
   if (wantsParent && role !== "parent") {
-    return middlewareRedirect(request, "/session");
+    return middlewareRedirect(request, "/sitter/dashboard");
   }
   if (wantsSitter && role !== "sitter") {
     return middlewareRedirect(request, "/parent/dashboard");
@@ -184,5 +192,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/auth", "/auth/:path*", "/parent/:path*", "/session", "/session/:path*"]
+  matcher: ["/admin/:path*", "/auth", "/auth/:path*", "/parent/:path*", "/session", "/session/:path*", "/sitter", "/sitter/:path*"]
 };

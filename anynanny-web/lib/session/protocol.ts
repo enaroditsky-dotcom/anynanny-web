@@ -11,6 +11,9 @@ export type SessionProtocolState = {
   finalElapsedSeconds?: number;
   finalAmountNis?: number;
   supabaseSessionId?: string;
+  /** Parent requested end; nanny must confirm to finalize. */
+  endRequested?: boolean;
+  parentEndRequestedAtMs?: number;
 };
 
 export type SupabaseSessionRow = {
@@ -25,6 +28,8 @@ export type SupabaseSessionRow = {
   end_time?: string | null;
   final_elapsed_seconds?: number | null;
   final_amount_nis?: number | null;
+  end_requested?: boolean | null;
+  parent_end_requested_at?: string | null;
 };
 
 export function formatElapsed(seconds: number): string {
@@ -52,6 +57,9 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
   if (!row) return null;
   const startedMs = row.start_time ? new Date(row.start_time).getTime() : undefined;
   const endedMs = row.end_time ? new Date(row.end_time).getTime() : undefined;
+  const parentEndReqMs = row.parent_end_requested_at
+    ? new Date(row.parent_end_requested_at).getTime()
+    : undefined;
   const mappedStatus: SessionProtocolState["status"] =
     row.status === "pending"
       ? "parent_initiated"
@@ -66,6 +74,8 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
     endedAtMs: endedMs,
     finalElapsedSeconds: row.final_elapsed_seconds ?? undefined,
     finalAmountNis: row.final_amount_nis ?? undefined,
-    supabaseSessionId: String(row.id)
+    supabaseSessionId: String(row.id),
+    endRequested: Boolean(row.end_requested),
+    parentEndRequestedAtMs: parentEndReqMs
   };
 }

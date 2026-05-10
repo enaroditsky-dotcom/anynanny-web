@@ -91,10 +91,15 @@ export default function SessionPage() {
   }, [sessionState.status]);
 
   const seconds = useMemo(() => {
+    if (sessionState.status === "parent_initiated") return 0;
     const startedAt = sessionState.parentStartedAtMs;
     if (!startedAt) return 0;
-    if (sessionState.status === "active" || sessionState.status === "parent_initiated") {
-      return Math.max(0, Math.floor((nowMs - startedAt) / 1000));
+    if (sessionState.status === "active") {
+      const endWallMs =
+        sessionState.endRequested && sessionState.parentEndRequestedAtMs
+          ? sessionState.parentEndRequestedAtMs
+          : nowMs;
+      return Math.max(0, Math.floor((endWallMs - startedAt) / 1000));
     }
     return sessionState.finalElapsedSeconds ?? 0;
   }, [nowMs, sessionState]);
@@ -124,7 +129,11 @@ export default function SessionPage() {
         }
         const { data: row, error } = await supabase
           .from(SESSIONS_TABLE)
-          .update({ status: "active", sitter_id: user.id })
+          .update({
+            status: "active",
+            sitter_id: user.id,
+            start_time: new Date().toISOString()
+          })
           .eq("id", sessionState.supabaseSessionId)
           .select("*")
           .single();
