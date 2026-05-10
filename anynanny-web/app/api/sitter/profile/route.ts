@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
@@ -43,7 +44,7 @@ export async function GET() {
     }
 
     const { data: profile } = await supabase.from(PROFILES_TABLE).select("role").eq("id", user.id).maybeSingle();
-    if (!isProfileRole(profile?.role) || profile.role !== "sitter") {
+    if (!userIsSitter(profile, user)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -76,7 +77,7 @@ export async function PUT(request: Request) {
     }
 
     const { data: profile } = await supabase.from(PROFILES_TABLE).select("role").eq("id", user.id).maybeSingle();
-    if (!isProfileRole(profile?.role) || profile.role !== "sitter") {
+    if (!userIsSitter(profile, user)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

@@ -103,6 +103,9 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/api")) {
+    if (pathname === "/api/sitter/profile") {
+      return NextResponse.next();
+    }
     return supabaseSessionRefreshResponse(request);
   }
 
