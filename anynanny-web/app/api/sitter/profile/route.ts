@@ -47,10 +47,9 @@ export async function PUT(request: Request) {
   try {
     const supabase = await createSupabaseRouteHandlerClient();
     const {
-      data: { user },
-      error: authErr
+      data: { user }
     } = await supabase.auth.getUser();
-    if (authErr || !user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
