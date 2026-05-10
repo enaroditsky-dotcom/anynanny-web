@@ -8,6 +8,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
   SESSIONS_TABLE,
+  SESSION_STATUS_PENDING_SITTER_APPROVAL,
   type SessionProtocolState,
   type SupabaseSessionRow,
   formatElapsed,
@@ -15,11 +16,11 @@ import {
   persistSessionState,
   readSessionState
 } from "@/lib/session/protocol";
+import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 
-/** Visual contract: perfect circle + readable Hebrew labels (Double-Shake primary control). */
-const circleMain =
-  "rounded-full h-64 w-64 aspect-square flex flex-col items-center justify-center text-center p-8 text-lg font-bold leading-tight ring-2 sm:text-xl";
+const circleShell =
+  "ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
 
 export default function ParentDashboardPage() {
   const { isLoading: authLoading, displayName } = useAuth();
@@ -184,7 +185,7 @@ export default function ParentDashboardPage() {
       .insert({
         parent_id: uid,
         sitter_id: pairedSitterId,
-        status: "pending",
+        status: SESSION_STATUS_PENDING_SITTER_APPROVAL,
         start_time: null
       })
       .select("*")
@@ -317,9 +318,9 @@ export default function ParentDashboardPage() {
         </div>
       </section>
 
-      <section className="mt-1 flex min-h-0 flex-1 flex-col rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
+      <section className="mt-1 flex min-h-0 flex-1 flex-col items-center rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
         {sessionRunning ? (
-          <div className="space-y-2 text-right">
+          <div className="w-full space-y-2 text-right">
             <p className="text-xs font-medium text-slate-600">
               {waitingNannyStart
                 ? "ממתין לאישור הבייביסיטר…"
@@ -333,18 +334,19 @@ export default function ParentDashboardPage() {
         ) : null}
 
         {sessionState.status === "ended" ? (
-          <div className="space-y-1 text-right">
+          <div className="w-full space-y-1 text-right">
             <p className="text-xs text-slate-600">המשמרת האחרונה הסתיימה</p>
             <p className="text-lg font-semibold tabular-nums text-navy-header">{timerText}</p>
           </div>
         ) : null}
 
-        <div className="mt-auto flex flex-col items-center gap-3 pt-8">
+        <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
           {!sessionRunning ? (
             <button
               type="button"
+              style={SESSION_ACTION_CIRCLE_STYLE}
               onClick={() => void startSession()}
-              className={`${circleMain} gap-1 bg-[#001F3F] text-white shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
+              className={`${circleShell} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
             >
               <span className="max-w-[13rem]">התחלת משמרת</span>
               <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
@@ -352,24 +354,27 @@ export default function ParentDashboardPage() {
           ) : waitingNannyStart ? (
             <button
               type="button"
+              style={SESSION_ACTION_CIRCLE_STYLE}
               disabled
-              className={`${circleMain} cursor-wait gap-2 bg-[#001F3F] text-white opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/30 animate-session-pulse-navy`}
+              className={`${circleShell} cursor-wait gap-2 bg-[#001F3F] opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/30 animate-session-pulse-navy`}
             >
               <span className="max-w-[13rem]">ממתין לאישור…</span>
             </button>
           ) : sessionState.status === "active" && !waitingNannyEnd ? (
             <button
               type="button"
+              style={SESSION_ACTION_CIRCLE_STYLE}
               onClick={() => void endSession()}
-              className={`${circleMain} gap-1 bg-[#FF8A8A] text-white shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95`}
+              className={`${circleShell} gap-1 bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95`}
             >
               <span className="max-w-[13rem]">סיום משמרת</span>
             </button>
           ) : waitingNannyEnd ? (
             <button
               type="button"
+              style={SESSION_ACTION_CIRCLE_STYLE}
               disabled
-              className={`${circleMain} cursor-wait gap-2 animate-pulse bg-[#FF8A8A] text-white shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-[#FF8A8A]/35`}
+              className={`${circleShell} cursor-wait gap-2 animate-pulse bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-[#FF8A8A]/35`}
             >
               <span className="max-w-[13rem]">ממתין לאישור סיום…</span>
             </button>

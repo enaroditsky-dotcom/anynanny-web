@@ -4,6 +4,9 @@ export const HOURLY_RATE = 50;
 export const SESSION_STATE_KEY = "anynanny_payer_session_v1";
 export const SESSIONS_TABLE = "sessions";
 
+/** DB session lifecycle — parent opens shift awaiting sitter confirmation. */
+export const SESSION_STATUS_PENDING_SITTER_APPROVAL = "pending_sitter_approval";
+
 export type SessionProtocolState = {
   status: "idle" | "parent_initiated" | "active" | "ended";
   parentStartedAtMs?: number;
@@ -64,7 +67,7 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
     ? new Date(row.parent_end_requested_at).getTime()
     : undefined;
   const mappedStatus: SessionProtocolState["status"] =
-    row.status === "pending"
+    row.status === SESSION_STATUS_PENDING_SITTER_APPROVAL || row.status === "pending"
       ? "parent_initiated"
       : row.status === "completed"
         ? "ended"

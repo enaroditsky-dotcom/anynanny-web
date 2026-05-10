@@ -34,14 +34,14 @@ const config: Config = {
           "50%": { boxShadow: "0 0 0 14px rgba(5, 150, 105, 0)" }
         },
         "fade-route": {
-          "0%": { opacity: "0", transform: "translateY(6px) scale(0.992)" },
+          "0%": { opacity: "0", transform: "translateY(8px) scale(0.988)" },
           "100%": { opacity: "1", transform: "translateY(0) scale(1)" }
         }
       },
       animation: {
         "session-pulse-navy": "session-pulse-navy 2.2s ease-in-out infinite",
         "session-pulse-green": "session-pulse-green 2.2s ease-in-out infinite",
-        "fade-route": "fade-route 0.35s ease-out both"
+        "fade-route": "fade-route 0.48s cubic-bezier(0.22, 1, 0.36, 1) both"
       }
     }
   },

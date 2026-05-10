@@ -5,7 +5,7 @@ create table if not exists public.sessions (
   created_at timestamptz not null default now(),
   parent_id uuid not null references auth.users (id) on delete cascade,
   sitter_id uuid references auth.users (id) on delete set null,
-  status text not null check (status in ('pending', 'active', 'completed')),
+  status text not null check (status in ('pending_sitter_approval', 'active', 'completed')),
   start_time timestamptz,
   end_time timestamptz,
   final_elapsed_seconds integer,

@@ -7,6 +7,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
   SESSIONS_TABLE,
+  SESSION_STATUS_PENDING_SITTER_APPROVAL,
   type SessionProtocolState,
   type SupabaseSessionRow,
   formatElapsed,
@@ -36,7 +37,7 @@ export default function SessionPage() {
         const { data: row, error: fetchErr } = await supabase
           .from(SESSIONS_TABLE)
           .select("*")
-          .in("status", ["pending", "active", "completed"])
+          .in("status", [SESSION_STATUS_PENDING_SITTER_APPROVAL, "pending", "active", "completed"])
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
