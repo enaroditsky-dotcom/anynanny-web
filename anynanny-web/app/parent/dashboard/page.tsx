@@ -18,6 +18,7 @@ import {
 } from "@/lib/session/protocol";
 import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
+import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 
 const circleShell =
   "shrink-0 ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
@@ -32,6 +33,7 @@ export default function ParentDashboardPage() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [useSupabase, setUseSupabase] = useState(false);
   const [parentUserId, setParentUserId] = useState<string | null>(null);
+  const [dbBanner, setDbBanner] = useState<string | null>(null);
 
   const firstName = useMemo(() => {
     const n = displayName?.trim();
@@ -143,9 +145,7 @@ export default function ParentDashboardPage() {
     if (!startedAt) return 0;
     if (sessionState.status === "active") {
       const endWallMs =
-        sessionState.endRequested && sessionState.parentEndRequestedAtMs
-          ? sessionState.parentEndRequestedAtMs
-          : nowMs;
+        sessionState.parentEndRequestedAtMs != null ? sessionState.parentEndRequestedAtMs : nowMs;
       return Math.max(0, Math.floor((endWallMs - startedAt) / 1000));
     }
     return sessionState.finalElapsedSeconds ?? 0;
@@ -180,70 +180,80 @@ export default function ParentDashboardPage() {
     }
 
     const pairedSitterId = getPairedSitterUserId();
-    const { data: row, error } = await supabase
-      .from(SESSIONS_TABLE)
-      .insert({
-        parent_id: uid,
-        sitter_id: pairedSitterId,
-        status: SESSION_STATUS_PENDING_SITTER_APPROVAL,
-        start_time: null
-      })
-      .select("*")
-      .single();
+    try {
+      const { data: row, error } = await supabase
+        .from(SESSIONS_TABLE)
+        .insert({
+          parent_id: uid,
+          sitter_id: pairedSitterId,
+          status: SESSION_STATUS_PENDING_SITTER_APPROVAL,
+          start_time: null
+        })
+        .select("*")
+        .single();
 
-    if (error) {
-      console.error("[parent] Supabase insert session failed:", error.message);
+      if (error) {
+        console.error("[parent] Supabase insert session failed:", error.message);
+        persistSessionState({ status: "idle" });
+        setSessionState({ status: "idle" });
+        setDbBanner(friendlySupabaseSessionError(error));
+        return;
+      }
+
+      setUseSupabase(true);
+      if (row) {
+        const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+        if (mapped) {
+          persistSessionState(mapped);
+          setSessionState(mapped);
+          setNowMs(Date.now());
+        }
+      }
+    } catch (e) {
+      console.error("[parent] startSession:", e);
       persistSessionState({ status: "idle" });
       setSessionState({ status: "idle" });
-      window.alert(`לא ניתן לפתוח משמרת: ${error.message}`);
-      return;
-    }
-
-    setUseSupabase(true);
-    if (row) {
-      const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
-      if (mapped) {
-        persistSessionState(mapped);
-        setSessionState(mapped);
-        setNowMs(Date.now());
-      }
+      setDbBanner(friendlySupabaseSessionError(e));
     }
   };
 
   const endSession = async () => {
     if (sessionState.status === "parent_initiated") {
-      window.alert("ממתין לאישור הבייביסיטר להתחלת המשמרת.");
+      setDbBanner("ממתין לאישור הבייביסיטר להתחלת המשמרת.");
       return;
     }
     if (sessionState.status !== "active" || !sessionState.parentStartedAtMs) return;
-    if (sessionState.endRequested) {
-      window.alert("כבר נשלחה בקשת סיום — ממתינים לאישור הבייביסיטר.");
+    if (sessionState.parentEndRequestedAtMs != null) {
+      setDbBanner("כבר נשלחה בקשת סיום — ממתינים לאישור הבייביסיטר.");
       return;
     }
     if (useSupabase && sessionState.supabaseSessionId) {
       const supabase = getSupabaseBrowserClient();
       if (supabase) {
         const reqAt = new Date().toISOString();
-        const { data: row, error } = await supabase
-          .from(SESSIONS_TABLE)
-          .update({
-            end_requested: true,
-            parent_end_requested_at: reqAt
-          })
-          .eq("id", sessionState.supabaseSessionId)
-          .select("*")
-          .single();
-        if (!error && row) {
-          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
-          if (mapped) {
-            persistSessionState(mapped);
-            setSessionState(mapped);
-            return;
+        try {
+          const { data: row, error } = await supabase
+            .from(SESSIONS_TABLE)
+            .update({ parent_end_requested_at: reqAt })
+            .eq("id", sessionState.supabaseSessionId)
+            .select("*")
+            .single();
+          if (!error && row) {
+            const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+            if (mapped) {
+              persistSessionState(mapped);
+              setSessionState(mapped);
+              setDbBanner(null);
+              return;
+            }
           }
-        }
-        if (error) {
-          console.error("[parent] request end failed:", error.message);
-          window.alert(`לא ניתן לשלוח בקשת סיום: ${error.message}`);
+          if (error) {
+            console.error("[parent] request end failed:", error.message);
+            setDbBanner(friendlySupabaseSessionError(error));
+          }
+        } catch (e) {
+          console.error("[parent] endSession:", e);
+          setDbBanner(friendlySupabaseSessionError(e));
         }
       }
     }
@@ -253,7 +263,8 @@ export default function ParentDashboardPage() {
     sessionState.status === "active" || sessionState.status === "parent_initiated";
 
   const waitingNannyStart = sessionState.status === "parent_initiated";
-  const waitingNannyEnd = sessionState.status === "active" && sessionState.endRequested;
+  const waitingNannyEnd =
+    sessionState.status === "active" && sessionState.parentEndRequestedAtMs != null;
 
   const showLoading =
     clientHasSessionUser !== true && (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading));
@@ -273,6 +284,22 @@ export default function ParentDashboardPage() {
           שלום{firstName ? `, ${firstName}` : ""}! מה תרצה לעשות היום?
         </h1>
       </header>
+
+      {dbBanner ? (
+        <div
+          role="status"
+          className="flex flex-row-reverse items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-950"
+        >
+          <button
+            type="button"
+            className="shrink-0 font-semibold text-amber-900 underline decoration-amber-700/60"
+            onClick={() => setDbBanner(null)}
+          >
+            סגור
+          </button>
+          <p className="min-w-0 flex-1 leading-snug">{dbBanner}</p>
+        </div>
+      ) : null}
 
       <section className="rounded-3xl bg-white p-4 shadow-soft sm:p-5">
         <div className="grid grid-cols-2 gap-3">

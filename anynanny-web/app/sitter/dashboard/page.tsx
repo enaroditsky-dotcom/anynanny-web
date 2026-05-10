@@ -10,16 +10,21 @@ import {
   formatElapsed
 } from "@/lib/session/protocol";
 import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
+import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 
 /** DB `sitter_id` = nanny; null = open assignment. */
 const circleShell =
   "shrink-0 ring-2 font-bold leading-tight text-white [border-radius:50%!important]";
 
+function parentRequestedEndAt(row: SupabaseSessionRow): boolean {
+  return row.parent_end_requested_at != null && String(row.parent_end_requested_at).length > 0;
+}
+
 function rowMatchesEndConfirm(row: SupabaseSessionRow, sitterId: string): boolean {
   return (
     row.status === "active" &&
-    row.end_requested === true &&
-    row.end_confirmed !== true &&
+    parentRequestedEndAt(row) &&
+    row.sitter_end_confirmed_at == null &&
     row.sitter_id === sitterId
   );
 }
@@ -71,7 +76,7 @@ export default function SitterDashboardPage() {
       }
     }
     for (const row of actList) {
-      if (row.status === "active" && row.sitter_id === uid && !row.end_requested) {
+      if (row.status === "active" && row.sitter_id === uid && !parentRequestedEndAt(row)) {
         activeOnly = row;
         break;
       }
@@ -139,10 +144,9 @@ export default function SitterDashboardPage() {
     const row = endConfirmRow ?? activeShiftRow ?? pendingRow;
     if (!row?.start_time || row.status !== "active") return 0;
     const startMs = new Date(row.start_time).getTime();
-    const endWall =
-      row.end_requested && row.parent_end_requested_at
-        ? new Date(row.parent_end_requested_at).getTime()
-        : Date.now();
+    const endWall = row.parent_end_requested_at
+      ? new Date(row.parent_end_requested_at).getTime()
+      : Date.now();
     return Math.max(0, Math.floor((endWall - startMs) / 1000));
   }, [pendingRow, activeShiftRow, endConfirmRow]);
 
@@ -154,20 +158,25 @@ export default function SitterDashboardPage() {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
     const startIso = new Date().toISOString();
-    const { error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        status: "active",
-        sitter_id: sitterId,
-        start_time: startIso,
-        start_confirmed: true
-      })
-      .eq("id", pendingRow.id);
-    if (error) {
-      window.alert(`לא ניתן לאשר משמרת: ${error.message}`);
-      return;
+    try {
+      const { error } = await supabase
+        .from(SESSIONS_TABLE)
+        .update({
+          status: "active",
+          sitter_id: sitterId,
+          start_time: startIso,
+          start_confirmed: true
+        })
+        .eq("id", pendingRow.id);
+      if (error) {
+        setBanner(friendlySupabaseSessionError(error));
+        return;
+      }
+      setBanner(null);
+      await refreshForUser(supabase, sitterId);
+    } catch (e) {
+      setBanner(friendlySupabaseSessionError(e));
     }
-    await refreshForUser(supabase, sitterId);
   };
 
   const confirmEndShift = async () => {
@@ -178,23 +187,27 @@ export default function SitterDashboardPage() {
     const startMs = new Date(endConfirmRow.start_time).getTime();
     const endMs = new Date(endIso).getTime();
     const finalSeconds = Math.max(0, Math.floor((endMs - startMs) / 1000));
-    const { error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        status: "completed",
-        end_time: endIso,
-        end_requested: false,
-        end_confirmed: true,
-        parent_end_requested_at: null,
-        final_elapsed_seconds: finalSeconds,
-        final_amount_nis: Number(((finalSeconds / 3600) * HOURLY_RATE).toFixed(2))
-      })
-      .eq("id", endConfirmRow.id);
-    if (error) {
-      window.alert(`לא ניתן לאשר סיום: ${error.message}`);
-      return;
+    try {
+      const { error } = await supabase
+        .from(SESSIONS_TABLE)
+        .update({
+          status: "completed",
+          end_time: endIso,
+          sitter_end_confirmed_at: endIso,
+          parent_end_requested_at: null,
+          final_elapsed_seconds: finalSeconds,
+          final_amount_nis: Number(((finalSeconds / 3600) * HOURLY_RATE).toFixed(2))
+        })
+        .eq("id", endConfirmRow.id);
+      if (error) {
+        setBanner(friendlySupabaseSessionError(error));
+        return;
+      }
+      setBanner(null);
+      await refreshForUser(supabase, sitterId);
+    } catch (e) {
+      setBanner(friendlySupabaseSessionError(e));
     }
-    await refreshForUser(supabase, sitterId);
   };
 
   if (loading) {

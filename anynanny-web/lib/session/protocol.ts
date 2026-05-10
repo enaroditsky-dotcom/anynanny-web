@@ -14,10 +14,10 @@ export type SessionProtocolState = {
   finalElapsedSeconds?: number;
   finalAmountNis?: number;
   supabaseSessionId?: string;
-  /** Parent requested end; nanny must confirm to finalize. */
+  /** Parent requested end (`parent_end_requested_at` set); nanny must confirm to finalize. */
   endRequested?: boolean;
   parentEndRequestedAtMs?: number;
-  /** Sitter finalized end (mirrors DB end_confirmed on completed rows). */
+  /** Sitter finalized end (`sitter_end_confirmed_at` / legacy `end_confirmed`). */
   endConfirmed?: boolean;
   /** Sitter confirmed start (mirrors DB start_confirmed when active). */
   startConfirmed?: boolean;
@@ -39,6 +39,8 @@ export type SupabaseSessionRow = {
   end_confirmed?: boolean | null;
   start_confirmed?: boolean | null;
   parent_end_requested_at?: string | null;
+  /** When sitter confirms end (new column). */
+  sitter_end_confirmed_at?: string | null;
 };
 
 export function formatElapsed(seconds: number): string {
@@ -84,9 +86,9 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
     finalElapsedSeconds: row.final_elapsed_seconds ?? undefined,
     finalAmountNis: row.final_amount_nis ?? undefined,
     supabaseSessionId: String(row.id),
-    endRequested: Boolean(row.end_requested),
+    endRequested: Boolean(row.parent_end_requested_at),
     parentEndRequestedAtMs: parentEndReqMs,
-    endConfirmed: Boolean(row.end_confirmed),
+    endConfirmed: Boolean(row.sitter_end_confirmed_at) || Boolean(row.end_confirmed),
     startConfirmed: Boolean(row.start_confirmed)
   };
 }
