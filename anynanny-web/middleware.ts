@@ -132,7 +132,11 @@ export async function middleware(request: NextRequest) {
   }
 
   const trustClientSession =
-    pathname === "/parent/dashboard" || (pathname.startsWith("/parent") && cookieLikelySession);
+    pathname === "/parent/dashboard" ||
+    pathname === "/sitter/dashboard" ||
+    pathname === "/sitter/role-mismatch" ||
+    (pathname.startsWith("/parent") && cookieLikelySession) ||
+    (pathname.startsWith("/sitter") && cookieLikelySession);
 
   if (isAuthPath && user) {
     const role = await roleForUser(supabase, user);
@@ -178,13 +182,22 @@ export async function middleware(request: NextRequest) {
   }
 
   const wantsParent = pathname.startsWith("/parent");
-  const wantsSitter =
-    pathname === "/session" || pathname.startsWith("/session/") || pathname === "/sitter" || pathname.startsWith("/sitter/");
+  const wantsSessionRoute = pathname === "/session" || pathname.startsWith("/session/");
+  const wantsSitterWeb = pathname === "/sitter" || pathname.startsWith("/sitter/");
 
   if (wantsParent && role !== "parent") {
     return middlewareRedirect(request, "/sitter/dashboard");
   }
-  if (wantsSitter && role !== "sitter") {
+
+  if (wantsSitterWeb && role !== "sitter") {
+    if (role === "parent") {
+      if (pathname === "/sitter/role-mismatch") return response;
+      return middlewareRedirect(request, "/sitter/role-mismatch");
+    }
+    return middlewareRedirect(request, "/parent/dashboard");
+  }
+
+  if (wantsSessionRoute && role !== "sitter") {
     return middlewareRedirect(request, "/parent/dashboard");
   }
 

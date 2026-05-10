@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
+import { ParentSitterAccessNotice } from "@/components/sitter/parent-sitter-access-notice";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
@@ -31,6 +33,7 @@ function pickLatestMatching(rows: SupabaseSessionRow[], sitterId: string) {
 }
 
 export default function SitterDashboardPage() {
+  const { isLoading: authLoading, effectiveRole } = useAuth();
   const [sitterId, setSitterId] = useState<string | null>(null);
   const [pendingRow, setPendingRow] = useState<SupabaseSessionRow | null>(null);
   const [endConfirmRow, setEndConfirmRow] = useState<SupabaseSessionRow | null>(null);
@@ -157,6 +160,18 @@ export default function SitterDashboardPage() {
     await refreshForUser(supabase, sitterId);
   };
 
+  if (authLoading) {
+    return (
+      <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
+        <p className="text-right text-sm text-slate-600">טוען…</p>
+      </main>
+    );
+  }
+
+  if (effectiveRole === "parent") {
+    return <ParentSitterAccessNotice />;
+  }
+
   if (loading) {
     return (
       <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
@@ -177,16 +192,18 @@ export default function SitterDashboardPage() {
       ) : null}
 
       {pendingRow ? (
-        <section className="space-y-3 rounded-3xl border border-emerald-200 bg-white p-5 shadow-soft">
+        <section className="space-y-4 rounded-3xl border border-emerald-200 bg-white p-5 shadow-soft">
           <p className="text-right text-sm font-semibold text-slate-700">משמרת חדשה ממתינה לאישור</p>
           <p className="text-right text-xs text-slate-500">מזהה סשן: {String(pendingRow.id).slice(0, 8)}…</p>
-          <button
-            type="button"
-            onClick={() => void confirmStartShift()}
-            className="w-full rounded-2xl bg-emerald-600 py-5 text-lg font-bold text-white shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] transition hover:brightness-105 active:brightness-95"
-          >
-            אישור התחלת משמרת
-          </button>
+          <div className="flex w-full justify-center pt-1">
+            <button
+              type="button"
+              onClick={() => void confirmStartShift()}
+              className="relative flex aspect-square h-64 w-64 shrink-0 flex-col items-center justify-center rounded-[9999px] bg-emerald-600 px-5 text-center text-lg font-bold leading-snug text-white shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] animate-session-pulse-green transition hover:brightness-105 active:brightness-95"
+            >
+              <span className="block max-w-[12rem]">אישור התחלת משמרת</span>
+            </button>
+          </div>
         </section>
       ) : (
         <section className="rounded-3xl border border-slate-200 bg-white p-5 text-right shadow-sm">

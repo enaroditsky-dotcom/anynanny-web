@@ -353,17 +353,22 @@ export default function ParentDashboardPage() {
             סיום משמרת
           </button>
         ) : sessionRunning && (waitingNannyStart || waitingNannyEnd) ? (
-          <p className="rounded-2xl border border-slate-200 bg-slate-50 py-4 text-center text-sm font-semibold text-slate-600">
+          <p className="rounded-2xl border border-slate-200 bg-slate-50 py-4 text-right text-sm font-semibold text-slate-600">
             {waitingNannyStart ? "ממתין לאישור הבייביסיטר…" : "ממתינים לאישור סיום מהבייביסיטר…"}
           </p>
         ) : !sessionRunning ? (
-          <button
-            type="button"
-            onClick={() => setConfirmStartOpen(true)}
-            className="relative w-full overflow-hidden rounded-2xl bg-[#001F3F] py-5 text-lg font-bold text-white shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-2 ring-[#001F3F]/30 transition-all duration-300 hover:shadow-[0_18px_48px_-12px_rgba(0,31,63,0.75)] hover:brightness-110 active:scale-[0.99]"
-          >
-            התחלת משמרת (Double-Shake)
-          </button>
+          <div className="flex w-full justify-center">
+            <button
+              type="button"
+              onClick={() => setConfirmStartOpen(true)}
+              className="relative flex aspect-square h-64 w-64 shrink-0 flex-col items-center justify-center rounded-[9999px] bg-[#001F3F] px-5 text-center text-lg font-bold leading-snug text-white shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-2 ring-[#001F3F]/30 animate-session-pulse-navy transition-all duration-300 hover:brightness-110 active:scale-[0.99]"
+            >
+              <span className="block max-w-[13rem]">
+                התחלת משמרת
+                <span className="mt-1 block text-sm font-semibold opacity-90">(Double-Shake)</span>
+              </span>
+            </button>
+          </div>
         ) : null}
       </section>
 

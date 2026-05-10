@@ -23,6 +23,20 @@ const config: Config = {
       },
       boxShadow: {
         soft: "0 10px 28px rgba(22,91,115,0.12)"
+      },
+      keyframes: {
+        "session-pulse-navy": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(0, 31, 63, 0.42)" },
+          "50%": { boxShadow: "0 0 0 14px rgba(0, 31, 63, 0)" }
+        },
+        "session-pulse-green": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(5, 150, 105, 0.42)" },
+          "50%": { boxShadow: "0 0 0 14px rgba(5, 150, 105, 0)" }
+        }
+      },
+      animation: {
+        "session-pulse-navy": "session-pulse-navy 2.2s ease-in-out infinite",
+        "session-pulse-green": "session-pulse-green 2.2s ease-in-out infinite"
       }
     }
   },
