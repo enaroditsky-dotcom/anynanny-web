@@ -20,6 +20,7 @@ import {
 import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
+import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 const circleShell =
   "rounded-full shrink-0 overflow-hidden ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
@@ -178,34 +179,26 @@ export default function ParentDashboardPage() {
   const startSession = async () => {
     if (sessionState.status === "parent_initiated" || sessionState.status === "active") return;
 
+    const auth = await resolveBrowserAuth();
+    if (!auth.ok) {
+      setDbBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לפתוח משמרת.");
+      return;
+    }
+
     const optimistic: SessionProtocolState = {
       status: "parent_initiated"
     };
     persistSessionState(optimistic);
     setSessionState(optimistic);
     setNowMs(Date.now());
-
-    const supabase = getSupabaseBrowserClient();
-    let uid = parentUserId;
-    if (supabase && !uid) {
-      const { data: authData } = await supabase.auth.getUser();
-      uid = authData.user?.id ?? null;
-      if (uid) setParentUserId(uid);
-    }
-
-    if (!supabase || !uid) {
-      console.warn("[parent] Start session without Supabase auth — local-only (sitter sync requires login).");
-      persistSessionState({ status: "idle" });
-      setSessionState({ status: "idle" });
-      return;
-    }
+    setParentUserId(auth.userId);
 
     const pairedSitterId = getPairedSitterUserId();
     try {
-      const { data: row, error } = await supabase
+      const { data: row, error } = await auth.supabase
         .from(SESSIONS_TABLE)
         .insert({
-          parent_id: uid,
+          parent_id: auth.userId,
           sitter_id: pairedSitterId,
           status: SESSION_STATUS_PENDING_SITTER_APPROVAL,
           start_time: null
@@ -250,34 +243,36 @@ export default function ParentDashboardPage() {
       return;
     }
     if (useSupabase && sessionState.supabaseSessionId) {
-      const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        const reqAt = new Date().toISOString();
-        try {
-          const { data: row, error } = await supabase
-            .from(SESSIONS_TABLE)
-            .update({ parent_end_requested_at: reqAt })
-            .eq("id", sessionState.supabaseSessionId)
-            .select("*")
-            .single();
-          if (!error && row) {
-            const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
-            if (mapped) {
-              persistSessionState(mapped);
-              setSessionState(mapped);
-              setDbBanner(null);
-              setDebugToast("Request sent to Sitter");
-              return;
-            }
+      const auth = await resolveBrowserAuth();
+      if (!auth.ok) {
+        setDbBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לשלוח בקשת סיום.");
+        return;
+      }
+      const reqAt = new Date().toISOString();
+      try {
+        const { data: row, error } = await auth.supabase
+          .from(SESSIONS_TABLE)
+          .update({ parent_end_requested_at: reqAt })
+          .eq("id", sessionState.supabaseSessionId)
+          .select("*")
+          .single();
+        if (!error && row) {
+          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+          if (mapped) {
+            persistSessionState(mapped);
+            setSessionState(mapped);
+            setDbBanner(null);
+            setDebugToast("Request sent to Sitter");
+            return;
           }
-          if (error) {
-            console.error("[parent] request end failed:", error.message);
-            setDbBanner(friendlySupabaseSessionError(error));
-          }
-        } catch (e) {
-          console.error("[parent] endSession:", e);
-          setDbBanner(friendlySupabaseSessionError(e));
         }
+        if (error) {
+          console.error("[parent] request end failed:", error.message);
+          setDbBanner(friendlySupabaseSessionError(error));
+        }
+      } catch (e) {
+        console.error("[parent] endSession:", e);
+        setDbBanner(friendlySupabaseSessionError(e));
       }
     }
   };

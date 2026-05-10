@@ -1,7 +1,12 @@
 "use client";
 
+import Link from "next/link";
+import { Calendar, History, Settings, Wallet } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import {
   HOURLY_RATE,
   SESSIONS_TABLE,
@@ -31,6 +36,8 @@ function rowMatchesEndConfirm(row: SupabaseSessionRow, sitterId: string): boolea
 }
 
 export default function SitterDashboardPage() {
+  const router = useRouter();
+  const { displayName } = useAuth();
   const [sitterId, setSitterId] = useState<string | null>(null);
   const [pendingRow, setPendingRow] = useState<SupabaseSessionRow | null>(null);
   const [activeShiftRow, setActiveShiftRow] = useState<SupabaseSessionRow | null>(null);
@@ -39,6 +46,12 @@ export default function SitterDashboardPage() {
   const [banner, setBanner] = useState<string | null>(null);
   /** Wall clock for live timer — must tick every second so elapsed updates (same formula as parent). */
   const [nowMs, setNowMs] = useState(Date.now());
+
+  const firstName = useMemo(() => {
+    const n = displayName?.trim();
+    if (!n) return "";
+    return n.split(/\s+/)[0] ?? "";
+  }, [displayName]);
 
   const trackedSessionId = useMemo(() => {
     const raw = endConfirmRow?.id ?? activeShiftRow?.id ?? pendingRow?.id ?? null;
@@ -194,11 +207,18 @@ export default function SitterDashboardPage() {
 
   const confirmStartShift = async () => {
     if (!pendingRow || !sitterId) return;
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
+    const auth = await resolveBrowserAuth();
+    if (!auth.ok) {
+      setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני אישור משמרת.");
+      return;
+    }
+    if (auth.userId !== sitterId) {
+      setBanner("פג תוקף ההזדהות — רעננו את הדף והתחברו מחדש.");
+      return;
+    }
     const startIso = new Date().toISOString();
     try {
-      const { error } = await supabase
+      const { error } = await auth.supabase
         .from(SESSIONS_TABLE)
         .update({
           status: "active",
@@ -212,7 +232,8 @@ export default function SitterDashboardPage() {
         return;
       }
       setBanner(null);
-      await refreshForUser(supabase, sitterId);
+      await refreshForUser(auth.supabase, sitterId);
+      router.refresh();
     } catch (e) {
       setBanner(friendlySupabaseSessionError(e));
     }
@@ -220,14 +241,21 @@ export default function SitterDashboardPage() {
 
   const confirmEndShift = async () => {
     if (!endConfirmRow?.start_time || !sitterId) return;
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
+    const auth = await resolveBrowserAuth();
+    if (!auth.ok) {
+      setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני אישור סיום.");
+      return;
+    }
+    if (auth.userId !== sitterId) {
+      setBanner("פג תוקף ההזדהות — רעננו את הדף והתחברו מחדש.");
+      return;
+    }
     const endIso = new Date().toISOString();
     const startMs = new Date(endConfirmRow.start_time).getTime();
     const endMs = new Date(endIso).getTime();
     const finalSeconds = Math.max(0, Math.floor((endMs - startMs) / 1000));
     try {
-      const { error } = await supabase
+      const { error } = await auth.supabase
         .from(SESSIONS_TABLE)
         .update({
           status: "completed",
@@ -243,7 +271,8 @@ export default function SitterDashboardPage() {
         return;
       }
       setBanner(null);
-      await refreshForUser(supabase, sitterId);
+      await refreshForUser(auth.supabase, sitterId);
+      router.refresh();
     } catch (e) {
       setBanner(friendlySupabaseSessionError(e));
     }
@@ -257,67 +286,140 @@ export default function SitterDashboardPage() {
     );
   }
 
+  const sessionSection = (
+    <>
+      {endConfirmRow ? (
+        <>
+          <div className="w-full space-y-2 text-right">
+            <p className="text-sm font-semibold text-[#001F3F]">ההורה ביקש לסיים את המשמרת</p>
+            <p className="text-4xl font-bold tabular-nums text-navy-header">{liveTimerText}</p>
+            <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{liveEarned}</p>
+          </div>
+          <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
+            <button
+              type="button"
+              style={SESSION_ACTION_CIRCLE_STYLE}
+              onClick={() => void confirmEndShift()}
+              className={`${circleShell} gap-2 bg-emerald-600 text-lg shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 animate-session-pulse-green transition hover:brightness-105 active:brightness-95 sm:text-xl`}
+            >
+              <span className="max-w-[14rem] px-1">אישור סיום משמרת</span>
+            </button>
+          </div>
+        </>
+      ) : pendingRow ? (
+        <>
+          <div className="w-full space-y-2 text-right">
+            <p className="text-sm font-semibold text-slate-700">משמרת חדשה ממתינה לאישור</p>
+            <p className="text-xs text-slate-500">מזהה סשן: {String(pendingRow.id).slice(0, 8)}…</p>
+          </div>
+          <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
+            <button
+              type="button"
+              style={SESSION_ACTION_CIRCLE_STYLE}
+              onClick={() => void confirmStartShift()}
+              className={`${circleShell} gap-3 bg-emerald-600 text-xl shadow-[0_16px_40px_-10px_rgba(5,150,105,0.6)] ring-emerald-700/30 animate-session-pulse-green transition hover:brightness-105 active:brightness-95 sm:text-2xl`}
+            >
+              <span className="max-w-[14rem] px-1">אישור התחלת משמרת</span>
+            </button>
+            <p className="max-w-[14rem] text-center text-xs font-semibold text-[#001F3F]/90">Double-Shake</p>
+          </div>
+        </>
+      ) : activeShiftRow ? (
+        <>
+          <div className="w-full space-y-2 text-center">
+            <p className="text-sm font-semibold text-emerald-900">משמרת פעילה</p>
+            <p className="text-4xl font-bold tabular-nums text-[#001F3F]">{liveTimerText}</p>
+            <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{liveEarned}</p>
+            <p className="mx-auto mt-2 max-w-xs text-xs text-slate-500">
+              סיום המשמרת מתבצע מהצד של ההורה; כאן תופיע בקשת סיום לאישור.
+            </p>
+          </div>
+          <div className="mt-auto flex flex-col items-center pt-8">
+            <div
+              style={SESSION_ACTION_CIRCLE_STYLE}
+              className={`${circleShell} pointer-events-none gap-1 bg-[#FF8A8A] text-lg shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 sm:text-xl`}
+              role="presentation"
+            >
+              <span className="max-w-[13rem] px-2 text-center font-bold leading-tight">
+                ממתינים לסיום מההורה
+              </span>
+            </div>
+            <p className="mt-3 max-w-[14rem] text-center text-xs font-semibold text-[#001F3F]/90">Double-Shake</p>
+          </div>
+        </>
+      ) : (
+        <div className="flex w-full flex-1 flex-col items-center justify-center gap-3 py-6 text-center">
+          <p className="text-sm text-slate-600">אין משמרת פעילה כרגע.</p>
+          <p className="text-xs text-slate-500">החליפו ל&quot;הורה&quot; כדי לפתוח משמרת, ואז חזרו לכאן.</p>
+          <p className="mt-4 text-xs font-semibold text-[#001F3F]/80">Double-Shake</p>
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-6rem)] w-full max-w-md flex-col bg-[#FDFBF6] py-4" dir="rtl">
-      <header className="px-2 text-right">
-        <h1 className="text-xl font-bold text-[#001F3F]">לוח בייביסיטר</h1>
+    <main
+      className="mx-auto flex min-h-[calc(100dvh-6rem)] w-full max-w-md flex-col space-y-5 bg-[#FDFBF6] py-2"
+      dir="rtl"
+    >
+      <header className="text-right">
+        <h1 className="text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem]">
+          שלום{firstName ? `, ${firstName}` : ""}! לוח בייביסיטר
+        </h1>
         <p className="mt-1 text-sm text-slate-600">Double-Shake — ריענון חי מהשרת.</p>
       </header>
 
       {banner ? (
-        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-900">{banner}</p>
+        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-900">{banner}</p>
       ) : null}
 
-      <div className="mt-4 flex flex-1 flex-col items-center px-2">
-        {endConfirmRow ? (
-          <section className="flex w-full min-h-0 flex-1 flex-col rounded-3xl border border-[#001F3F]/20 bg-white p-5 shadow-soft">
-            <div className="text-right">
-              <p className="text-sm font-semibold text-[#001F3F]">ההורה ביקש לסיים את המשמרת</p>
-              <p className="mt-3 text-3xl font-bold tabular-nums text-navy-header">{liveTimerText}</p>
-              <p className="text-base font-bold tabular-nums text-navy-800">סכום שנצבר: ₪{liveEarned}</p>
-            </div>
-            <div className="mt-auto flex flex-1 flex-col items-center justify-center pt-10 pb-6">
-              <button
-                type="button"
-                style={SESSION_ACTION_CIRCLE_STYLE}
-                onClick={() => void confirmEndShift()}
-                className={`${circleShell} gap-2 bg-emerald-600 text-lg shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 animate-session-pulse-green transition hover:brightness-105 active:brightness-95 sm:text-xl`}
-              >
-                <span className="max-w-[14rem] px-1">אישור סיום משמרת</span>
-              </button>
-            </div>
-          </section>
-        ) : pendingRow ? (
-          <section className="flex w-full min-h-0 flex-1 flex-col rounded-3xl border border-emerald-200 bg-white p-5 shadow-soft">
-            <div className="text-right">
-              <p className="text-sm font-semibold text-slate-700">משמרת חדשה ממתינה לאישור</p>
-              <p className="mt-1 text-xs text-slate-500">מזהה סשן: {String(pendingRow.id).slice(0, 8)}…</p>
-            </div>
-            <div className="mt-auto flex flex-1 flex-col items-center justify-center pt-10 pb-6">
-              <button
-                type="button"
-                style={SESSION_ACTION_CIRCLE_STYLE}
-                onClick={() => void confirmStartShift()}
-                className={`${circleShell} gap-3 bg-emerald-600 text-xl shadow-[0_16px_40px_-10px_rgba(5,150,105,0.6)] ring-emerald-700/30 animate-session-pulse-green transition hover:brightness-105 active:brightness-95 sm:text-2xl`}
-              >
-                <span className="max-w-[14rem] px-1">אישור התחלת משמרת</span>
-              </button>
-            </div>
-          </section>
-        ) : activeShiftRow ? (
-          <section className="flex w-full min-h-0 flex-1 flex-col items-center justify-center rounded-3xl border border-emerald-200/80 bg-white p-8 text-center shadow-soft">
-            <p className="text-sm font-semibold text-emerald-900">משמרת פעילה</p>
-            <p className="mt-4 text-5xl font-bold tabular-nums text-[#001F3F]">{liveTimerText}</p>
-            <p className="mt-2 text-xl font-bold tabular-nums text-navy-800">סכום שנצבר: ₪{liveEarned}</p>
-            <p className="mt-6 max-w-xs text-xs text-slate-500">סיום המשמרת מתבצע מהצד של ההורה; כאן תופיע בקשת סיום לאישור.</p>
-          </section>
-        ) : (
-          <section className="flex flex-1 flex-col justify-center rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <p className="text-sm text-slate-600">אין בקשות פתיחה כרגע.</p>
-            <p className="mt-2 text-xs text-slate-500">החליפו ל&quot;הורה&quot; כדי לפתוח משמרת, ואז חזרו לכאן.</p>
-          </section>
-        )}
-      </div>
+      <section className="rounded-3xl bg-white p-4 shadow-soft sm:p-5">
+        <div className="grid grid-cols-2 gap-3">
+          <Link
+            href="/sitter/calendar"
+            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+              <Calendar className="h-7 w-7 stroke-[1.75]" aria-hidden />
+            </span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">יומן מפגשים</span>
+          </Link>
+
+          <Link
+            href="/sitter/personal"
+            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+              <Wallet className="h-7 w-7 stroke-[1.75]" aria-hidden />
+            </span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">ארנק ותשלומים</span>
+          </Link>
+
+          <Link
+            href="/sitter/personal"
+            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+              <Settings className="h-7 w-7 stroke-[1.75]" aria-hidden />
+            </span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הגדרות חשבון</span>
+          </Link>
+
+          <Link
+            href="/sitter/session"
+            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+              <History className="h-7 w-7 stroke-[1.75]" aria-hidden />
+            </span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">סשן ומשמרות</span>
+          </Link>
+        </div>
+      </section>
+
+      <section className="mt-1 flex min-h-[22rem] flex-1 flex-col rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
+        {sessionSection}
+      </section>
     </main>
   );
 }

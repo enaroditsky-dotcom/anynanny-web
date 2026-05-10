@@ -11,6 +11,14 @@ export function friendlySupabaseSessionError(error: unknown): string {
         : String(error);
   const check = raw.toLowerCase();
   if (
+    check.includes("row-level security") ||
+    check.includes("rls") ||
+    raw.includes("42501") ||
+    check.includes("permission denied")
+  ) {
+    return "אין הרשאה לשמירה — ודאו שמחוברים למערכת ושחוקי האבטחה (RLS) מתירים את הפעולה.";
+  }
+  if (
     check.includes("column") ||
     check.includes("does not exist") ||
     check.includes("schema cache") ||
