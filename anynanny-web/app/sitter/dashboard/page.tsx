@@ -17,6 +17,7 @@ import {
 } from "@/lib/session/protocol";
 import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
+import { isSitterProfileComplete, SITTER_PROFILES_TABLE, type SitterProfileRow } from "@/lib/sitter/sitter-profile";
 
 /** DB `sitter_id` = nanny; null = open assignment. */
 const circleShell =
@@ -38,6 +39,8 @@ function rowMatchesEndConfirm(row: SupabaseSessionRow, sitterId: string): boolea
 export default function SitterDashboardPage() {
   const router = useRouter();
   const { displayName } = useAuth();
+  /** null = still checking sitter_profiles completeness */
+  const [profileGateOk, setProfileGateOk] = useState<boolean | null>(null);
   const [sitterId, setSitterId] = useState<string | null>(null);
   const [pendingRow, setPendingRow] = useState<SupabaseSessionRow | null>(null);
   const [activeShiftRow, setActiveShiftRow] = useState<SupabaseSessionRow | null>(null);
@@ -144,6 +147,41 @@ export default function SitterDashboardPage() {
       cancelled = true;
     };
   }, [refreshForUser]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!sitterId) {
+      setProfileGateOk(true);
+      return;
+    }
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setProfileGateOk(true);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from(SITTER_PROFILES_TABLE)
+        .select("*")
+        .eq("id", sitterId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        console.warn("[sitter dashboard] sitter_profiles:", error.message);
+        setProfileGateOk(true);
+        return;
+      }
+      if (!data || !isSitterProfileComplete(data as SitterProfileRow)) {
+        router.replace("/sitter/onboarding");
+        return;
+      }
+      setProfileGateOk(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sitterId, loading, router]);
 
   /**
    * When this sitter has a known session row id, listen on `id=eq.{id}` so parent end-request UPDATE is instant.
@@ -278,7 +316,7 @@ export default function SitterDashboardPage() {
     }
   };
 
-  if (loading) {
+  if (loading || profileGateOk !== true) {
     return (
       <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
         <p className="text-right text-sm text-slate-600">טוען…</p>
@@ -367,6 +405,12 @@ export default function SitterDashboardPage() {
           שלום{firstName ? `, ${firstName}` : ""}! לוח בייביסיטר
         </h1>
         <p className="mt-1 text-sm text-slate-600">Double-Shake — ריענון חי מהשרת.</p>
+        <Link
+          href="/sitter/onboarding"
+          className="mt-2 inline-block text-xs font-semibold text-emerald-800 underline decoration-emerald-700/50"
+        >
+          עריכת פרופיל
+        </Link>
       </header>
 
       {banner ? (
