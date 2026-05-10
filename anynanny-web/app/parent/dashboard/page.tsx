@@ -325,11 +325,21 @@ export default function ParentDashboardPage() {
               {waitingNannyStart
                 ? "ממתין לאישור הבייביסיטר…"
                 : waitingNannyEnd
-                  ? "ממתינים לאישור סיום מהבייביסיטר…"
+                  ? "ממתין לאישור סיום..."
                   : "משמרת פעילה"}
             </p>
-            <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{timerText}</p>
-            <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
+            {(sessionState.status === "active" || waitingNannyEnd) && (
+              <>
+                <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{timerText}</p>
+                <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
+              </>
+            )}
+            {waitingNannyStart ? (
+              <>
+                <p className="text-4xl font-bold tabular-nums tracking-wide text-slate-400">00:00:00</p>
+                <p className="text-sm font-semibold text-slate-500">סכום שנצבר: ₪0.00</p>
+              </>
+            ) : null}
           </div>
         ) : null}
 
@@ -374,9 +384,9 @@ export default function ParentDashboardPage() {
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               disabled
-              className={`${circleShell} cursor-wait gap-2 animate-pulse bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-[#FF8A8A]/35`}
+              className={`${circleShell} cursor-wait gap-2 bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-[#FF8A8A]/35 animate-session-pulse-salmon`}
             >
-              <span className="max-w-[13rem]">ממתין לאישור סיום…</span>
+              <span className="max-w-[13rem]">ממתין לאישור סיום...</span>
             </button>
           ) : null}
         </div>

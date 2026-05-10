@@ -18,8 +18,8 @@ const circleShell =
 function rowMatchesEndConfirm(row: SupabaseSessionRow, sitterId: string): boolean {
   return (
     row.status === "active" &&
-    Boolean(row.end_requested) &&
-    !row.end_confirmed &&
+    row.end_requested === true &&
+    row.end_confirmed !== true &&
     row.sitter_id === sitterId
   );
 }
@@ -109,7 +109,8 @@ export default function SitterDashboardPage() {
       if (cancelled) return;
       setLoading(false);
 
-      const channel = supabase.channel("schema-db-changes");
+      /** Inserts/updates/deletes on `sessions` → immediate refetch (role toggle / parent sync). */
+      const channel = supabase.channel("sessions-realtime-all");
       const onSessionsChange = () => {
         void refreshForUser(supabase, uid);
       };
@@ -221,17 +222,16 @@ export default function SitterDashboardPage() {
             <div className="text-right">
               <p className="text-sm font-semibold text-[#001F3F]">ההורה ביקש לסיים את המשמרת</p>
               <p className="mt-3 text-3xl font-bold tabular-nums text-navy-header">{liveTimerText}</p>
-              <p className="text-sm font-semibold text-navy-800">סכום מצטבר (עד הבקשה): ₪{liveEarned}</p>
+              <p className="text-base font-bold tabular-nums text-navy-800">סכום שנצבר: ₪{liveEarned}</p>
             </div>
             <div className="mt-auto flex flex-1 flex-col items-center justify-center pt-10 pb-6">
               <button
                 type="button"
                 style={SESSION_ACTION_CIRCLE_STYLE}
                 onClick={() => void confirmEndShift()}
-                className={`${circleShell} gap-2 bg-emerald-600 text-lg shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 transition hover:brightness-105 active:brightness-95 sm:text-xl`}
+                className={`${circleShell} gap-2 bg-emerald-600 text-lg shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 animate-session-pulse-green transition hover:brightness-105 active:brightness-95 sm:text-xl`}
               >
-                <span className="max-w-[13rem]">אישור סיום</span>
-                <span className="max-w-[13rem] text-base font-semibold opacity-95">ונעילת תשלום</span>
+                <span className="max-w-[14rem] px-1">אישור סיום משמרת</span>
               </button>
             </div>
           </section>
@@ -256,7 +256,7 @@ export default function SitterDashboardPage() {
           <section className="flex w-full min-h-0 flex-1 flex-col items-center justify-center rounded-3xl border border-emerald-200/80 bg-white p-8 text-center shadow-soft">
             <p className="text-sm font-semibold text-emerald-900">משמרת פעילה</p>
             <p className="mt-4 text-5xl font-bold tabular-nums text-[#001F3F]">{liveTimerText}</p>
-            <p className="mt-2 text-lg font-semibold text-navy-800">סכום מצטבר: ₪{liveEarned}</p>
+            <p className="mt-2 text-xl font-bold tabular-nums text-navy-800">סכום שנצבר: ₪{liveEarned}</p>
             <p className="mt-6 max-w-xs text-xs text-slate-500">סיום המשמרת מתבצע מהצד של ההורה; כאן תופיע בקשת סיום לאישור.</p>
           </section>
         ) : (
