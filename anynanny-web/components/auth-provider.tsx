@@ -8,12 +8,16 @@ import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
 
+export type DashboardViewRole = "parent" | "sitter";
+
 export type AuthUiState = {
   isLoading: boolean;
   signedIn: boolean;
   user: User | null;
   displayName: string | null;
   effectiveRole: ProfileRole | null;
+  /** Which dashboard shell the user is viewing (from URL); drives header toggle without profile writes. */
+  currentRole: DashboardViewRole;
   refresh: () => Promise<void>;
 };
 
@@ -165,6 +169,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [refresh]);
 
+  const currentRole = useMemo((): DashboardViewRole => {
+    if (pathname.startsWith("/sitter") || pathname.startsWith("/session")) return "sitter";
+    return "parent";
+  }, [pathname]);
+
   const value = useMemo(
     (): AuthUiState => ({
       isLoading,
@@ -172,9 +181,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       displayName,
       effectiveRole,
+      currentRole,
       refresh
     }),
-    [isLoading, user, displayName, effectiveRole, refresh]
+    [isLoading, user, displayName, effectiveRole, currentRole, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

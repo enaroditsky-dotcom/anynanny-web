@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Calendar, History, Settings, Wallet } from "lucide-react";
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -17,6 +18,15 @@ import {
 } from "@/lib/session/protocol";
 import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 
+const SESSION_CIRCLE_STYLE: CSSProperties = {
+  width: 220,
+  height: 220,
+  borderRadius: "50%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center"
+};
+
 export default function ParentDashboardPage() {
   const { isLoading: authLoading, displayName } = useAuth();
 
@@ -27,7 +37,6 @@ export default function ParentDashboardPage() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [useSupabase, setUseSupabase] = useState(false);
   const [parentUserId, setParentUserId] = useState<string | null>(null);
-  const [confirmStartOpen, setConfirmStartOpen] = useState(false);
 
   const firstName = useMemo(() => {
     const n = displayName?.trim();
@@ -216,9 +225,6 @@ export default function ParentDashboardPage() {
       window.alert("כבר נשלחה בקשת סיום — ממתינים לאישור הבייביסיטר.");
       return;
     }
-    const confirmed = window.confirm("לבקש סיום משמרת? הבייביסיטר יצטרך לאשר כדי לנעול את הסכום.");
-    if (!confirmed) return;
-
     if (useSupabase && sessionState.supabaseSessionId) {
       const supabase = getSupabaseBrowserClient();
       if (supabase) {
@@ -257,11 +263,6 @@ export default function ParentDashboardPage() {
   const showLoading =
     clientHasSessionUser !== true && (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading));
 
-  const onConfirmStartShift = async () => {
-    setConfirmStartOpen(false);
-    await startSession();
-  };
-
   if (showLoading) {
     return (
       <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
@@ -271,7 +272,7 @@ export default function ParentDashboardPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
+    <main className="mx-auto flex min-h-[calc(100dvh-6rem)] w-full max-w-md flex-col space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
       <header className="text-right">
         <h1 className="text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem]">
           שלום{firstName ? `, ${firstName}` : ""}! מה תרצה לעשות היום?
@@ -322,9 +323,9 @@ export default function ParentDashboardPage() {
         </div>
       </section>
 
-      <section className="rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
+      <section className="mt-1 flex min-h-0 flex-1 flex-col rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
         {sessionRunning ? (
-          <div className="mb-5 space-y-2 text-right">
+          <div className="space-y-2 text-right">
             <p className="text-xs font-medium text-slate-600">
               {waitingNannyStart
                 ? "ממתין לאישור הבייביסיטר…"
@@ -338,76 +339,53 @@ export default function ParentDashboardPage() {
         ) : null}
 
         {sessionState.status === "ended" ? (
-          <div className="mb-5 space-y-1 text-right">
+          <div className="space-y-1 text-right">
             <p className="text-xs text-slate-600">המשמרת האחרונה הסתיימה</p>
             <p className="text-lg font-semibold tabular-nums text-navy-header">{timerText}</p>
           </div>
         ) : null}
 
-        {sessionRunning && sessionState.status === "active" && !waitingNannyEnd ? (
-          <button
-            type="button"
-            onClick={() => void endSession()}
-            className="w-full rounded-2xl bg-[#FF8A8A] py-4 text-lg font-bold text-white shadow-[0_8px_28px_-6px_rgba(255,138,138,0.65)] transition hover:brightness-105 active:brightness-95"
-          >
-            סיום משמרת
-          </button>
-        ) : sessionRunning && (waitingNannyStart || waitingNannyEnd) ? (
-          <p className="rounded-2xl border border-slate-200 bg-slate-50 py-4 text-right text-sm font-semibold text-slate-600">
-            {waitingNannyStart ? "ממתין לאישור הבייביסיטר…" : "ממתינים לאישור סיום מהבייביסיטר…"}
-          </p>
-        ) : !sessionRunning ? (
-          <div className="flex w-full justify-center">
+        <div className="mt-auto flex flex-col items-center gap-3 pt-8">
+          {!sessionRunning ? (
             <button
               type="button"
-              onClick={() => setConfirmStartOpen(true)}
-              className="relative flex aspect-square h-64 w-64 shrink-0 flex-col items-center justify-center rounded-[9999px] bg-[#001F3F] px-5 text-center text-lg font-bold leading-snug text-white shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-2 ring-[#001F3F]/30 animate-session-pulse-navy transition-all duration-300 hover:brightness-110 active:scale-[0.99]"
+              style={SESSION_CIRCLE_STYLE}
+              onClick={() => void startSession()}
+              className="flex-col gap-1 bg-[#001F3F] px-4 text-center text-[15px] font-bold leading-snug text-white shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-2 ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95"
             >
-              <span className="block max-w-[13rem]">
-                התחלת משמרת
-                <span className="mt-1 block text-sm font-semibold opacity-90">(Double-Shake)</span>
-              </span>
+              <span className="max-w-[11rem]">התחלת משמרת</span>
+              <span className="max-w-[11rem] text-xs font-semibold opacity-90">Double-Shake</span>
             </button>
-          </div>
-        ) : null}
-      </section>
-
-      {confirmStartOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 sm:items-center"
-          role="presentation"
-          onClick={() => setConfirmStartOpen(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="confirm-shift-title"
-            className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            dir="rtl"
-          >
-            <h2 id="confirm-shift-title" className="text-right text-lg font-bold text-[#001F3F]">
-              האם להתחיל את ספירת הזמן עכשיו?
-            </h2>
-            <div className="mt-6 flex flex-row-reverse gap-3">
-              <button
-                type="button"
-                className="flex-1 rounded-2xl bg-[#001F3F] py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105"
-                onClick={() => void onConfirmStartShift()}
-              >
-                אישור
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-2xl border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                onClick={() => setConfirmStartOpen(false)}
-              >
-                ביטול
-              </button>
-            </div>
-          </div>
+          ) : waitingNannyStart ? (
+            <button
+              type="button"
+              style={SESSION_CIRCLE_STYLE}
+              disabled
+              className="cursor-wait flex-col gap-2 bg-[#001F3F] px-4 text-center text-[15px] font-bold leading-snug text-white opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-2 ring-[#001F3F]/30 animate-session-pulse-navy"
+            >
+              <span className="max-w-[11rem]">ממתין לאישור…</span>
+            </button>
+          ) : sessionState.status === "active" && !waitingNannyEnd ? (
+            <button
+              type="button"
+              style={SESSION_CIRCLE_STYLE}
+              onClick={() => void endSession()}
+              className="flex-col gap-1 bg-[#FF8A8A] px-4 text-center text-[15px] font-bold leading-snug text-white shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-2 ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95"
+            >
+              <span className="max-w-[11rem]">סיום משמרת</span>
+            </button>
+          ) : waitingNannyEnd ? (
+            <button
+              type="button"
+              style={SESSION_CIRCLE_STYLE}
+              disabled
+              className="cursor-wait flex-col gap-2 animate-pulse bg-[#FF8A8A] px-4 text-center text-[15px] font-bold leading-snug text-white shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-2 ring-[#FF8A8A]/35"
+            >
+              <span className="max-w-[11rem]">ממתין לאישור סיום…</span>
+            </button>
+          ) : null}
         </div>
-      ) : null}
+      </section>
     </main>
   );
 }

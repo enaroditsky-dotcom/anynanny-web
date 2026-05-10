@@ -9,3 +9,8 @@ alter table public.sessions
 
 comment on column public.sessions.end_requested is 'Parent tapped end; nanny must confirm to finalize.';
 comment on column public.sessions.parent_end_requested_at is 'When parent requested end (timer reference until nanny confirms).';
+
+alter table public.sessions
+  add column if not exists end_confirmed boolean not null default false;
+
+comment on column public.sessions.end_confirmed is 'Sitter confirmed end when completing session.';

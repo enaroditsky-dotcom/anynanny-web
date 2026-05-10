@@ -1,19 +1,16 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useMemo } from "react";
+import { startTransition, useCallback } from "react";
 import { useAuth } from "@/components/auth-provider";
 
 const STORAGE_KEY = "active_role";
 
 export function RoleToggle() {
-  const { signedIn } = useAuth();
+  const { signedIn, currentRole } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const isParent = useMemo(() => {
-    if (pathname.startsWith("/sitter") || pathname.startsWith("/session")) return false;
-    return true;
-  }, [pathname]);
+  const isParent = currentRole === "parent";
 
   const goParent = useCallback(() => {
     if (pathname.startsWith("/parent")) return;
@@ -22,7 +19,9 @@ export function RoleToggle() {
     } catch {
       /* ignore */
     }
-    router.replace("/parent/dashboard");
+    startTransition(() => {
+      router.replace("/parent/dashboard");
+    });
   }, [router, pathname]);
 
   const goSitter = useCallback(() => {
@@ -32,7 +31,9 @@ export function RoleToggle() {
     } catch {
       /* ignore */
     }
-    router.replace("/sitter/dashboard");
+    startTransition(() => {
+      router.replace("/sitter/dashboard");
+    });
   }, [router, pathname]);
 
   const show =

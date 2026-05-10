@@ -14,6 +14,8 @@ export type SessionProtocolState = {
   /** Parent requested end; nanny must confirm to finalize. */
   endRequested?: boolean;
   parentEndRequestedAtMs?: number;
+  /** Sitter finalized end (mirrors DB end_confirmed on completed rows). */
+  endConfirmed?: boolean;
 };
 
 export type SupabaseSessionRow = {
@@ -29,6 +31,7 @@ export type SupabaseSessionRow = {
   final_elapsed_seconds?: number | null;
   final_amount_nis?: number | null;
   end_requested?: boolean | null;
+  end_confirmed?: boolean | null;
   parent_end_requested_at?: string | null;
 };
 
@@ -76,6 +79,7 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
     finalAmountNis: row.final_amount_nis ?? undefined,
     supabaseSessionId: String(row.id),
     endRequested: Boolean(row.end_requested),
-    parentEndRequestedAtMs: parentEndReqMs
+    parentEndRequestedAtMs: parentEndReqMs,
+    endConfirmed: Boolean(row.end_confirmed)
   };
 }
