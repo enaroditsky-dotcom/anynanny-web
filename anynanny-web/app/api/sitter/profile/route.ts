@@ -11,6 +11,15 @@ import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 export const dynamic = "force-dynamic";
 
+function userIsSitter(profile: { role?: string } | null | undefined, user: User): boolean {
+  let role = profile?.role;
+  if (!isProfileRole(role)) {
+    const meta = user.user_metadata?.role;
+    role = typeof meta === "string" && isProfileRole(meta) ? meta : undefined;
+  }
+  return role === "sitter";
+}
+
 async function supabaseFromCookies() {
   const cookieStore = await cookies();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

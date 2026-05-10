@@ -102,6 +102,10 @@ async function supabaseSessionRefreshResponse(request: NextRequest): Promise<Nex
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  if (pathname === "/sitter/onboarding" || pathname.startsWith("/sitter/onboarding/")) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith("/api")) {
     if (pathname === "/api/sitter/profile") {
       return NextResponse.next();
