@@ -1,14 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-/** Server Components / generic server code — uses the user JWT from cookies (respects RLS). */
-export async function createSupabaseServerClient() {
+function requireSupabaseEnv(): { url: string; anon: string } {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
+  return { url, anon };
+}
 
+/** Server Components / generic server — JWT from cookies (respects RLS). */
+export async function createSupabaseServerClient() {
+  const { url, anon } = requireSupabaseEnv();
   const cookieStore = await cookies();
 
   return createServerClient(url, anon, {
@@ -27,19 +31,9 @@ export async function createSupabaseServerClient() {
   });
 }
 
-/**
- * App Router Route Handlers (`app/api/**/route.ts`) only.
- * Supersedes the deprecated `createRouteHandlerClient` from `@supabase/auth-helpers-nextjs` — this
- * project uses `@supabase/ssr` only. Cookie `set` calls must not be swallowed so a refreshed JWT
- * can attach to the handler response (avoids "Auth session missing" after `getUser()` refresh).
- */
+/** App Router Route Handlers only — do not swallow cookie writes so JWT refresh attaches to the response. */
 export async function createSupabaseRouteHandlerClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  }
-
+  const { url, anon } = requireSupabaseEnv();
   const cookieStore = await cookies();
 
   return createServerClient(url, anon, {
