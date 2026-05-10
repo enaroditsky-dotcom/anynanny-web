@@ -71,6 +71,16 @@ async function roleForUser(supabase: SupabaseClient, user: User): Promise<Profil
   return isProfileRole(role) ? role : null;
 }
 
+function isPublicRoute(pathname: string): boolean {
+  if (pathname === "/sitter/onboarding" || pathname.startsWith("/sitter/onboarding/")) {
+    return true;
+  }
+  if (pathname === "/api/sitter/profile") {
+    return true;
+  }
+  return false;
+}
+
 async function supabaseSessionRefreshResponse(request: NextRequest): Promise<NextResponse> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -102,14 +112,11 @@ async function supabaseSessionRefreshResponse(request: NextRequest): Promise<Nex
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === "/sitter/onboarding" || pathname.startsWith("/sitter/onboarding/")) {
+  if (isPublicRoute(pathname)) {
     return NextResponse.next();
   }
 
   if (pathname.startsWith("/api")) {
-    if (pathname === "/api/sitter/profile") {
-      return NextResponse.next();
-    }
     return supabaseSessionRefreshResponse(request);
   }
 
