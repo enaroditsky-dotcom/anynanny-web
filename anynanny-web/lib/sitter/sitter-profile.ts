@@ -14,12 +14,18 @@ export type SitterProfileRow = {
   aliyah_year: number | null;
   address_full: string | null;
   military_service: string | null;
+  referee_phone_1: string | null;
+  referee_phone_2: string | null;
   years_experience: number | null;
   preferred_ages: string | null;
   has_car: boolean;
   languages: string | null;
   homework_help: boolean;
   light_cooking: boolean;
+  bio: string | null;
+  hourly_rate_nis: number | null;
+  legal_no_criminal_declaration: boolean;
+  is_public: boolean;
   onboarding_completed_at: string | null;
   updated_at: string;
 };
@@ -29,27 +35,33 @@ export type SitterProfilePublic = {
   id: string;
   display_name: string | null;
   age_years: number | null;
+  languages: string | null;
+  years_experience: number | null;
+  bio: string | null;
+  hourly_rate_nis: number | null;
   citizenship_israeli: boolean | null;
   birth_country: string | null;
   aliyah_year: number | null;
-  years_experience: number | null;
   preferred_ages: string | null;
   has_car: boolean;
-  languages: string | null;
   homework_help: boolean;
   light_cooking: boolean;
   updated_at: string;
+  is_public: boolean;
 };
 
+/** All starred mandatory fields + legal declaration — drives `is_public` on save. */
 export function isSitterProfileComplete(p: Partial<SitterProfileRow>): boolean {
-  const nameOk = !!String(p.full_name ?? "").trim();
-  const birthOk = !!p.birth_date;
-  const expOk = p.years_experience != null && p.years_experience >= 0;
-  const agesOk = !!String(p.preferred_ages ?? "").trim();
-  const langOk = !!String(p.languages ?? "").trim();
-  const citizenOk = p.citizenship_israeli === true || p.citizenship_israeli === false;
-  const adminOk =
-    !!String(p.id_number ?? "").trim() &&
-    !!String(p.address_full ?? "").trim();
-  return nameOk && birthOk && expOk && agesOk && langOk && citizenOk && adminOk;
+  if (!String(p.full_name ?? "").trim()) return false;
+  if (!p.birth_date) return false;
+  if (!String(p.languages ?? "").trim()) return false;
+  if (p.years_experience == null || Number(p.years_experience) < 0) return false;
+  if (!String(p.bio ?? "").trim()) return false;
+  if (p.hourly_rate_nis == null || Number(p.hourly_rate_nis) <= 0) return false;
+  if (!String(p.id_number ?? "").trim()) return false;
+  if (!String(p.address_full ?? "").trim()) return false;
+  if (!String(p.referee_phone_1 ?? "").trim()) return false;
+  if (!String(p.referee_phone_2 ?? "").trim()) return false;
+  if (!p.legal_no_criminal_declaration) return false;
+  return true;
 }

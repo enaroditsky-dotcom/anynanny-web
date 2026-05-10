@@ -37,6 +37,12 @@ export async function GET() {
   }
 }
 
+function numOrNull(v: unknown): number | null {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function PUT(request: Request) {
   try {
     const supabase = await createSupabaseServerClient();
@@ -55,38 +61,61 @@ export async function PUT(request: Request) {
 
     const body = (await request.json()) as Partial<SitterProfileRow>;
 
+    const { data: existing } = await supabase.from(SITTER_PROFILES_TABLE).select("*").eq("id", user.id).maybeSingle();
+
+    const prev = (existing ?? {}) as Partial<SitterProfileRow>;
+
     const citizenship =
-      body.citizenship_israeli === true ? true : body.citizenship_israeli === false ? false : null;
+      body.citizenship_israeli === undefined
+        ? prev.citizenship_israeli ?? null
+        : body.citizenship_israeli === true
+          ? true
+          : body.citizenship_israeli === false
+            ? false
+            : null;
 
     const merged: Partial<SitterProfileRow> = {
-      full_name: body.full_name ?? null,
-      show_full_name: Boolean(body.show_full_name),
-      id_number: body.id_number ?? null,
-      birth_date: body.birth_date ?? null,
-      show_age: body.show_age !== false,
+      ...prev,
+      full_name: body.full_name !== undefined ? body.full_name : prev.full_name ?? null,
+      show_full_name:
+        body.show_full_name !== undefined ? Boolean(body.show_full_name) : Boolean(prev.show_full_name),
+      id_number: body.id_number !== undefined ? body.id_number : prev.id_number ?? null,
+      birth_date: body.birth_date !== undefined ? body.birth_date : prev.birth_date ?? null,
+      show_age: body.show_age !== undefined ? body.show_age !== false : prev.show_age !== false,
       citizenship_israeli: citizenship,
-      birth_country: body.birth_country ?? null,
-      aliyah_year: body.aliyah_year ?? null,
-      address_full: body.address_full ?? null,
-      military_service: body.military_service ?? null,
+      birth_country: body.birth_country !== undefined ? body.birth_country : prev.birth_country ?? null,
+      aliyah_year:
+        body.aliyah_year !== undefined
+          ? numOrNull(body.aliyah_year)
+          : prev.aliyah_year ?? null,
+      address_full: body.address_full !== undefined ? body.address_full : prev.address_full ?? null,
+      military_service: body.military_service !== undefined ? body.military_service : prev.military_service ?? null,
+      referee_phone_1: body.referee_phone_1 !== undefined ? body.referee_phone_1 : prev.referee_phone_1 ?? null,
+      referee_phone_2: body.referee_phone_2 !== undefined ? body.referee_phone_2 : prev.referee_phone_2 ?? null,
       years_experience:
-        body.years_experience !== undefined && body.years_experience !== null
-          ? Number(body.years_experience)
-          : null,
-      preferred_ages: body.preferred_ages ?? null,
-      has_car: Boolean(body.has_car),
-      languages: body.languages ?? null,
-      homework_help: Boolean(body.homework_help),
-      light_cooking: Boolean(body.light_cooking)
+        body.years_experience !== undefined ? numOrNull(body.years_experience) : prev.years_experience ?? null,
+      preferred_ages: body.preferred_ages !== undefined ? body.preferred_ages : prev.preferred_ages ?? null,
+      has_car: body.has_car !== undefined ? Boolean(body.has_car) : Boolean(prev.has_car),
+      languages: body.languages !== undefined ? body.languages : prev.languages ?? null,
+      homework_help: body.homework_help !== undefined ? Boolean(body.homework_help) : Boolean(prev.homework_help),
+      light_cooking: body.light_cooking !== undefined ? Boolean(body.light_cooking) : Boolean(prev.light_cooking),
+      bio: body.bio !== undefined ? body.bio : prev.bio ?? null,
+      hourly_rate_nis:
+        body.hourly_rate_nis !== undefined ? numOrNull(body.hourly_rate_nis) : prev.hourly_rate_nis ?? null,
+      legal_no_criminal_declaration:
+        body.legal_no_criminal_declaration !== undefined
+          ? Boolean(body.legal_no_criminal_declaration)
+          : Boolean(prev.legal_no_criminal_declaration)
     };
+
+    const complete = isSitterProfileComplete({ ...merged, id: user.id } as SitterProfileRow);
 
     const row: Record<string, unknown> = {
       id: user.id,
       ...merged,
-      updated_at: new Date().toISOString(),
-      onboarding_completed_at: isSitterProfileComplete({ ...merged, id: user.id } as SitterProfileRow)
-        ? new Date().toISOString()
-        : null
+      is_public: complete,
+      onboarding_completed_at: complete ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString()
     };
 
     const { data, error } = await supabase

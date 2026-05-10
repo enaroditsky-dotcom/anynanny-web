@@ -17,7 +17,7 @@ import {
 } from "@/lib/session/protocol";
 import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
-import { isSitterProfileComplete, SITTER_PROFILES_TABLE, type SitterProfileRow } from "@/lib/sitter/sitter-profile";
+import { SITTER_PROFILES_TABLE } from "@/lib/sitter/sitter-profile";
 
 /** DB `sitter_id` = nanny; null = open assignment. */
 const circleShell =
@@ -163,7 +163,7 @@ export default function SitterDashboardPage() {
     void (async () => {
       const { data, error } = await supabase
         .from(SITTER_PROFILES_TABLE)
-        .select("*")
+        .select("is_public")
         .eq("id", sitterId)
         .maybeSingle();
       if (cancelled) return;
@@ -172,7 +172,7 @@ export default function SitterDashboardPage() {
         setProfileGateOk(true);
         return;
       }
-      if (!data || !isSitterProfileComplete(data as SitterProfileRow)) {
+      if (!data || data.is_public !== true) {
         router.replace("/sitter/onboarding");
         return;
       }
