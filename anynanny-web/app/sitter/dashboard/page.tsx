@@ -6,6 +6,7 @@ import {
   HOURLY_RATE,
   SESSIONS_TABLE,
   SESSION_PENDING_START_STATUSES,
+  computeLiveElapsedSecondsActive,
   type SupabaseSessionRow,
   formatElapsed
 } from "@/lib/session/protocol";
@@ -36,6 +37,13 @@ export default function SitterDashboardPage() {
   const [endConfirmRow, setEndConfirmRow] = useState<SupabaseSessionRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
+  /** Wall clock for live timer — must tick every second so elapsed updates (same formula as parent). */
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  const trackedSessionId = useMemo(() => {
+    const raw = endConfirmRow?.id ?? activeShiftRow?.id ?? pendingRow?.id ?? null;
+    return raw != null ? String(raw) : null;
+  }, [endConfirmRow?.id, activeShiftRow?.id, pendingRow?.id]);
 
   const refreshForUser = useCallback(async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
     const [pendRes, actRes] = await Promise.all([
@@ -88,6 +96,11 @@ export default function SitterDashboardPage() {
   }, []);
 
   useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
       setLoading(false);
@@ -96,7 +109,6 @@ export default function SitterDashboardPage() {
     }
 
     let cancelled = false;
-    let channelCleanup: (() => void) | null = null;
 
     void (async () => {
       const { data: authData } = await supabase.auth.getUser();
@@ -113,44 +125,69 @@ export default function SitterDashboardPage() {
       await refreshForUser(supabase, uid);
       if (cancelled) return;
       setLoading(false);
-
-      /** Pending row INSERT + active row UPDATE (`parent_end_requested_at`) both refetch so green circle shows for start & end. */
-      const channel = supabase.channel(`sessions-sitter-${uid}`);
-      const onSessionsChange = () => {
-        void refreshForUser(supabase, uid);
-      };
-      for (const ev of ["INSERT", "UPDATE", "DELETE"] as const) {
-        channel.on(
-          "postgres_changes",
-          { event: ev, schema: "public", table: SESSIONS_TABLE },
-          onSessionsChange
-        );
-      }
-      channel.subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          void refreshForUser(supabase, uid);
-        }
-      });
-      channelCleanup = () => {
-        void supabase.removeChannel(channel);
-      };
     })();
 
     return () => {
       cancelled = true;
-      if (channelCleanup) channelCleanup();
     };
   }, [refreshForUser]);
 
+  /**
+   * When this sitter has a known session row id, listen on `id=eq.{id}` so parent end-request UPDATE is instant.
+   * With no row yet, listen to the whole table so the parent’s INSERT for a new pending session is still received.
+   */
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !sitterId || loading) return;
+
+    const onSessionsChange = () => {
+      void refreshForUser(supabase, sitterId);
+    };
+
+    const channelName = trackedSessionId
+      ? `sitter-session-${sitterId}-${trackedSessionId}`
+      : `sitter-sessions-wide-${sitterId}`;
+    const channel = supabase.channel(channelName);
+
+    for (const ev of ["INSERT", "UPDATE", "DELETE"] as const) {
+      channel.on(
+        "postgres_changes",
+        trackedSessionId
+          ? {
+              event: ev,
+              schema: "public",
+              table: SESSIONS_TABLE,
+              filter: `id=eq.${trackedSessionId}`
+            }
+          : { event: ev, schema: "public", table: SESSIONS_TABLE },
+        onSessionsChange
+      );
+    }
+
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        void refreshForUser(supabase, sitterId);
+      }
+    });
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [sitterId, trackedSessionId, loading, refreshForUser]);
+
   const liveElapsed = useMemo(() => {
-    const row = endConfirmRow ?? activeShiftRow ?? pendingRow;
+    const row = endConfirmRow ?? activeShiftRow;
     if (!row?.start_time || row.status !== "active") return 0;
     const startMs = new Date(row.start_time).getTime();
-    const endWall = row.parent_end_requested_at
+    const parentEndMs = row.parent_end_requested_at
       ? new Date(row.parent_end_requested_at).getTime()
-      : Date.now();
-    return Math.max(0, Math.floor((endWall - startMs) / 1000));
-  }, [pendingRow, activeShiftRow, endConfirmRow]);
+      : null;
+    return computeLiveElapsedSecondsActive({
+      startMs,
+      parentEndRequestedAtMs: parentEndMs,
+      nowMs
+    });
+  }, [endConfirmRow, activeShiftRow, nowMs]);
 
   const liveTimerText = useMemo(() => formatElapsed(liveElapsed), [liveElapsed]);
   const liveEarned = useMemo(() => ((liveElapsed / 3600) * HOURLY_RATE).toFixed(2), [liveElapsed]);

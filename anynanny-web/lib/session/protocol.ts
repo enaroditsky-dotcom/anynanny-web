@@ -56,6 +56,21 @@ export function formatElapsed(seconds: number): string {
   return `${hours}:${minutes}:${secs}`;
 }
 
+/**
+ * Live elapsed seconds for an **active** session — identical on parent and sitter:
+ * `(now or parent_end_requested_at) - start_time` from the DB.
+ */
+export function computeLiveElapsedSecondsActive(params: {
+  startMs: number | undefined;
+  parentEndRequestedAtMs: number | null | undefined;
+  nowMs: number;
+}): number {
+  if (params.startMs == null) return 0;
+  const endWallMs =
+    params.parentEndRequestedAtMs != null ? params.parentEndRequestedAtMs : params.nowMs;
+  return Math.max(0, Math.floor((endWallMs - params.startMs) / 1000));
+}
+
 export function readSessionState(): SessionProtocolState {
   const raw = localStorage.getItem(SESSION_STATE_KEY);
   if (!raw) return { status: "idle" };

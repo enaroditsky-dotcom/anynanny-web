@@ -9,6 +9,7 @@ import {
   HOURLY_RATE,
   SESSIONS_TABLE,
   SESSION_STATUS_PENDING_SITTER_APPROVAL,
+  computeLiveElapsedSecondsActive,
   type SessionProtocolState,
   type SupabaseSessionRow,
   formatElapsed,
@@ -79,7 +80,6 @@ export default function ParentDashboardPage() {
     window.addEventListener("storage", onStorage);
 
     let cancelled = false;
-    let channelCleanup: (() => void) | null = null;
     if (supabase) {
       void (async () => {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -117,25 +117,6 @@ export default function ParentDashboardPage() {
         if (cancelled) return;
 
         setUseSupabase(true);
-
-        const channel = supabase.channel(`parent-sessions-${userId}`);
-        channel.on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: SESSIONS_TABLE, filter: `parent_id=eq.${userId}` },
-          (payload) => {
-            const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
-            if (!rowData || typeof rowData !== "object") return;
-            const mapped = mapSupabaseRowToProtocol(rowData);
-            if (mapped) {
-              persistSessionState(mapped);
-              setSessionState(mapped);
-            }
-          }
-        );
-        channel.subscribe();
-        channelCleanup = () => {
-          void supabase.removeChannel(channel);
-        };
       })();
     }
 
@@ -143,18 +124,50 @@ export default function ParentDashboardPage() {
       cancelled = true;
       clearInterval(ticker);
       window.removeEventListener("storage", onStorage);
-      if (channelCleanup) channelCleanup();
     };
   }, [syncFromStorage]);
+
+  /** Prefer row id when known so parent_end_requested_at updates arrive instantly for that session. */
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !parentUserId) return;
+
+    const sid = sessionState.supabaseSessionId;
+    const filter = sid ? `id=eq.${sid}` : `parent_id=eq.${parentUserId}`;
+    const channel = supabase.channel(`parent-session-rt-${parentUserId}-${sid ?? "none"}`);
+    const handler = (payload: {
+      new?: Record<string, unknown>;
+      old?: Record<string, unknown>;
+    }) => {
+      const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
+      if (!rowData || typeof rowData !== "object") return;
+      const mapped = mapSupabaseRowToProtocol(rowData);
+      if (mapped) {
+        persistSessionState(mapped);
+        setSessionState(mapped);
+      }
+    };
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: SESSIONS_TABLE, filter },
+      handler
+    );
+    channel.subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [parentUserId, sessionState.supabaseSessionId]);
 
   const elapsedSeconds = useMemo(() => {
     if (sessionState.status === "parent_initiated") return 0;
     const startedAt = sessionState.parentStartedAtMs;
     if (!startedAt) return 0;
     if (sessionState.status === "active") {
-      const endWallMs =
-        sessionState.parentEndRequestedAtMs != null ? sessionState.parentEndRequestedAtMs : nowMs;
-      return Math.max(0, Math.floor((endWallMs - startedAt) / 1000));
+      return computeLiveElapsedSecondsActive({
+        startMs: startedAt,
+        parentEndRequestedAtMs: sessionState.parentEndRequestedAtMs ?? null,
+        nowMs
+      });
     }
     return sessionState.finalElapsedSeconds ?? 0;
   }, [nowMs, sessionState]);
