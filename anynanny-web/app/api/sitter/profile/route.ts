@@ -4,13 +4,13 @@ import {
   SITTER_PROFILES_TABLE,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 /** Own full sitter profile (includes admin-only columns). Sitter role only. */
 export async function GET() {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await createSupabaseRouteHandlerClient();
     const {
       data: { user },
       error: authErr
@@ -45,16 +45,11 @@ function numOrNull(v: unknown): number | null {
 
 export async function PUT(request: Request) {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await createSupabaseRouteHandlerClient();
     const {
       data: { user },
       error: authErr
     } = await supabase.auth.getUser();
-    console.log("[api/sitter/profile PUT] getUser", {
-      hasUser: Boolean(user),
-      userId: user?.id ?? null,
-      authError: authErr?.message ?? null
-    });
     if (authErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

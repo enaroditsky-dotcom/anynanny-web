@@ -160,7 +160,7 @@ export default function SitterOnboardingPage() {
       setAuthResolved(true);
       setProfileHydrating(true);
       try {
-        const res = await fetch("/api/sitter/profile", { method: "GET", credentials: "same-origin" });
+        const res = await fetch("/api/sitter/profile", { method: "GET", credentials: "include" });
         const json = (await res.json()) as { profile?: SitterProfileRow | null; error?: string };
         if (cancelled) return;
         if (res.ok && json.profile) hydrate(json.profile);
@@ -208,12 +208,27 @@ export default function SitterOnboardingPage() {
       return;
     }
 
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setErrorBanner("Supabase לא מוגדר.");
+      return;
+    }
+    const {
+      data: { user },
+      error: saveAuthErr
+    } = await supabase.auth.getUser();
+    if (saveAuthErr || !user) {
+      setErrorBanner("הסשן לא זוהה — התחברו מחדש ונסו שוב.");
+      router.replace(`/auth?next=${encodeURIComponent("/sitter/onboarding")}`);
+      return;
+    }
+
     setSaving(true);
     setErrorBanner(null);
     try {
       const res = await fetch("/api/sitter/profile", {
         method: "PUT",
-        credentials: "same-origin",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draftPayload)
       });

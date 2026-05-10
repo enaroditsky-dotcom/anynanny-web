@@ -73,6 +73,7 @@ async function roleForUser(supabase: SupabaseClient, user: User): Promise<Profil
 /**
  * `/api/*` is not part of the app-path auth gate below. Without this, middleware never runs for API
  * routes and Supabase auth cookies may stay stale — Route Handlers then return 401 from getUser().
+ * We never delete or clear Supabase cookies here; we only forward refreshed tokens via `response.cookies.set`.
  */
 async function supabaseSessionRefreshResponse(request: NextRequest): Promise<NextResponse> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
