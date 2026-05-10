@@ -1,16 +1,39 @@
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   isSitterProfileComplete,
   SITTER_PROFILES_TABLE,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
-import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 
-/** Own full sitter profile (includes admin-only columns). Sitter role only. */
+export const dynamic = "force-dynamic";
+
+async function supabaseFromCookies() {
+  const cookieStore = await cookies();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+  return createServerClient(url, anon, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookieStore.set(name, value, options);
+        });
+      }
+    }
+  });
+}
+
 export async function GET() {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const supabase = await supabaseFromCookies();
     const {
       data: { user },
       error: authErr
@@ -31,8 +54,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ profile: data as SitterProfileRow | null });
-  } catch (e) {
-    console.error("[api/sitter/profile GET]", e);
+  } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
@@ -45,7 +67,7 @@ function numOrNull(v: unknown): number | null {
 
 export async function PUT(request: Request) {
   try {
-    const supabase = await createSupabaseRouteHandlerClient();
+    const supabase = await supabaseFromCookies();
     const {
       data: { user }
     } = await supabase.auth.getUser();
@@ -128,8 +150,7 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json({ profile: data as SitterProfileRow });
-  } catch (e) {
-    console.error("[api/sitter/profile PUT]", e);
+  } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

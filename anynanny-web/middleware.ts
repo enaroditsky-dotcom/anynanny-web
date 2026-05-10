@@ -15,16 +15,17 @@ function supabaseProjectRefFromUrl(supabaseUrl: string): string | null {
   }
 }
 
-/**
- * When getUser() returns null (cookie chunking / edge timing), still detect likely auth cookies
- * so we avoid redirect loops — the client will validate with getSession().
- */
 function hasSupabaseAuthCookie(request: NextRequest, projectRef: string | null): boolean {
   const cookies = request.cookies.getAll();
   for (const c of cookies) {
     if (!c.value) continue;
     if (c.name === "supabase-auth-token") return true;
-    if (projectRef && (c.name === `sb-${projectRef}-auth-token` || c.name.startsWith(`sb-${projectRef}-auth-token.`))) {
+    if (c.name === "sb-access-token") return true;
+    if (c.name.includes("access-token")) return true;
+    if (
+      projectRef &&
+      (c.name === `sb-${projectRef}-auth-token` || c.name.startsWith(`sb-${projectRef}-auth-token.`))
+    ) {
       return true;
     }
     if (c.name.startsWith("sb-") && c.name.includes("auth-token")) return true;
@@ -70,11 +71,6 @@ async function roleForUser(supabase: SupabaseClient, user: User): Promise<Profil
   return isProfileRole(role) ? role : null;
 }
 
-/**
- * `/api/*` is not part of the app-path auth gate below. Without this, middleware never runs for API
- * routes and Supabase auth cookies may stay stale — Route Handlers then return 401 from getUser().
- * We never delete or clear Supabase cookies here; we only forward refreshed tokens via `response.cookies.set`.
- */
 async function supabaseSessionRefreshResponse(request: NextRequest): Promise<NextResponse> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -92,11 +88,9 @@ async function supabaseSessionRefreshResponse(request: NextRequest): Promise<Nex
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({
-          request
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, options);
         });
-        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       }
     }
   });
@@ -139,7 +133,6 @@ export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {
-    console.warn("[middleware] Supabase env missing — skipping auth gate.");
     return NextResponse.next();
   }
 
@@ -156,24 +149,16 @@ export async function middleware(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({
-          request
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, options);
         });
-        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       }
     }
   });
 
   const {
-    data: { user },
-    error: authError
+    data: { user }
   } = await supabase.auth.getUser();
-  if (authError && !isSitterOnboarding) {
-    console.warn("[middleware] getUser:", authError.message);
-  }
-
-  /** Edge often misses JWT refresh timing — let client verify; onboarding must never bounce to /auth mid-flow. */
   const trustClientSession =
     pathname === "/parent/dashboard" ||
     pathname === "/sitter/dashboard" ||
@@ -201,7 +186,6 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  /** Let the dashboard (and other /parent routes when auth cookies exist) load — client verifies session. */
   if (!user && isProtectedApp && (trustClientSession || isSitterOnboarding)) {
     return response;
   }

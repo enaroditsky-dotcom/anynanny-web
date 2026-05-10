@@ -49,13 +49,11 @@ function ToggleSwitch({
 export default function SitterOnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  /** Client verified JWT via getSession + getUser — avoids middleware / edge mismatches. */
   const [authResolved, setAuthResolved] = useState(false);
   const [profileHydrating, setProfileHydrating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
-  /** Step 1 — public */
   const [full_name, setFullName] = useState("");
   const [show_full_name, setShowFullName] = useState(false);
   const [birth_date, setBirthDate] = useState("");
@@ -65,14 +63,12 @@ export default function SitterOnboardingPage() {
   const [bio, setBio] = useState("");
   const [hourly_rate_nis, setHourlyRateNis] = useState("");
 
-  /** Step 2 — admin only */
   const [id_number, setIdNumber] = useState("");
   const [address_full, setAddressFull] = useState("");
   const [military_service, setMilitaryService] = useState("");
   const [referee_phone_1, setRefereePhone1] = useState("");
   const [referee_phone_2, setRefereePhone2] = useState("");
 
-  /** Step 3 — legal */
   const [legal_no_criminal_declaration, setLegalNoCriminalDeclaration] = useState(false);
 
   const draftPayload = useMemo(
@@ -160,13 +156,16 @@ export default function SitterOnboardingPage() {
       setAuthResolved(true);
       setProfileHydrating(true);
       try {
-        const res = await fetch("/api/sitter/profile", { method: "GET", credentials: "include" });
+        const res = await fetch("/api/sitter/profile", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store"
+        });
         const json = (await res.json()) as { profile?: SitterProfileRow | null; error?: string };
         if (cancelled) return;
         if (res.ok && json.profile) hydrate(json.profile);
         else if (!res.ok && json.error) setErrorBanner(json.error);
       } catch {
-        /* טופס נשאר זמין — המשתמש יכולה למלא ידנית */
       } finally {
         if (!cancelled) setProfileHydrating(false);
       }
@@ -229,6 +228,7 @@ export default function SitterOnboardingPage() {
       const res = await fetch("/api/sitter/profile", {
         method: "PUT",
         credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draftPayload)
       });
