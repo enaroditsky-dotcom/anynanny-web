@@ -32,11 +32,16 @@ const config: Config = {
         "session-pulse-green": {
           "0%, 100%": { boxShadow: "0 0 0 0 rgba(5, 150, 105, 0.42)" },
           "50%": { boxShadow: "0 0 0 14px rgba(5, 150, 105, 0)" }
+        },
+        "fade-route": {
+          "0%": { opacity: "0", transform: "translateY(6px) scale(0.992)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" }
         }
       },
       animation: {
         "session-pulse-navy": "session-pulse-navy 2.2s ease-in-out infinite",
-        "session-pulse-green": "session-pulse-green 2.2s ease-in-out infinite"
+        "session-pulse-green": "session-pulse-green 2.2s ease-in-out infinite",
+        "fade-route": "fade-route 0.35s ease-out both"
       }
     }
   },

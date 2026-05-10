@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuth } from "@/components/auth-provider";
-import { ParentSitterAccessNotice } from "@/components/sitter/parent-sitter-access-notice";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
@@ -33,7 +31,6 @@ function pickLatestMatching(rows: SupabaseSessionRow[], sitterId: string) {
 }
 
 export default function SitterDashboardPage() {
-  const { isLoading: authLoading, effectiveRole } = useAuth();
   const [sitterId, setSitterId] = useState<string | null>(null);
   const [pendingRow, setPendingRow] = useState<SupabaseSessionRow | null>(null);
   const [endConfirmRow, setEndConfirmRow] = useState<SupabaseSessionRow | null>(null);
@@ -159,18 +156,6 @@ export default function SitterDashboardPage() {
     }
     await refreshForUser(supabase, sitterId);
   };
-
-  if (authLoading) {
-    return (
-      <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
-        <p className="text-right text-sm text-slate-600">טוען…</p>
-      </main>
-    );
-  }
-
-  if (effectiveRole === "parent") {
-    return <ParentSitterAccessNotice />;
-  }
 
   if (loading) {
     return (

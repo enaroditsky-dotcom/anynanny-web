@@ -134,7 +134,6 @@ export async function middleware(request: NextRequest) {
   const trustClientSession =
     pathname === "/parent/dashboard" ||
     pathname === "/sitter/dashboard" ||
-    pathname === "/sitter/role-mismatch" ||
     (pathname.startsWith("/parent") && cookieLikelySession) ||
     (pathname.startsWith("/sitter") && cookieLikelySession);
 
@@ -179,26 +178,6 @@ export async function middleware(request: NextRequest) {
     const authUrl = new URL("/auth", request.url);
     authUrl.searchParams.set("error", "no_profile");
     return NextResponse.redirect(authUrl);
-  }
-
-  const wantsParent = pathname.startsWith("/parent");
-  const wantsSessionRoute = pathname === "/session" || pathname.startsWith("/session/");
-  const wantsSitterWeb = pathname === "/sitter" || pathname.startsWith("/sitter/");
-
-  if (wantsParent && role !== "parent") {
-    return middlewareRedirect(request, "/sitter/dashboard");
-  }
-
-  if (wantsSitterWeb && role !== "sitter") {
-    if (role === "parent") {
-      if (pathname === "/sitter/role-mismatch") return response;
-      return middlewareRedirect(request, "/sitter/role-mismatch");
-    }
-    return middlewareRedirect(request, "/parent/dashboard");
-  }
-
-  if (wantsSessionRoute && role !== "sitter") {
-    return middlewareRedirect(request, "/parent/dashboard");
   }
 
   return response;
