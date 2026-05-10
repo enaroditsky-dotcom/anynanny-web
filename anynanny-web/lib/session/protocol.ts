@@ -7,6 +7,12 @@ export const SESSIONS_TABLE = "sessions";
 /** DB session lifecycle — parent opens shift awaiting sitter confirmation. */
 export const SESSION_STATUS_PENDING_SITTER_APPROVAL = "pending_sitter_approval";
 
+/** Status strings that mean “waiting for sitter to confirm start” (constraint removed — include legacy `pending`). */
+export const SESSION_PENDING_START_STATUSES: readonly string[] = [
+  SESSION_STATUS_PENDING_SITTER_APPROVAL,
+  "pending"
+];
+
 export type SessionProtocolState = {
   status: "idle" | "parent_initiated" | "active" | "ended";
   parentStartedAtMs?: number;

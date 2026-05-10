@@ -5,7 +5,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
   SESSIONS_TABLE,
-  SESSION_STATUS_PENDING_SITTER_APPROVAL,
+  SESSION_PENDING_START_STATUSES,
   type SupabaseSessionRow,
   formatElapsed
 } from "@/lib/session/protocol";
@@ -14,7 +14,7 @@ import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 
 /** DB `sitter_id` = nanny; null = open assignment. */
 const circleShell =
-  "shrink-0 ring-2 font-bold leading-tight text-white [border-radius:50%!important]";
+  "rounded-full shrink-0 overflow-hidden ring-2 font-bold leading-tight text-white [border-radius:50%!important]";
 
 function parentRequestedEndAt(row: SupabaseSessionRow): boolean {
   return row.parent_end_requested_at != null && String(row.parent_end_requested_at).length > 0;
@@ -42,7 +42,7 @@ export default function SitterDashboardPage() {
       supabase
         .from(SESSIONS_TABLE)
         .select("*")
-        .eq("status", SESSION_STATUS_PENDING_SITTER_APPROVAL)
+        .in("status", [...SESSION_PENDING_START_STATUSES])
         .or(`sitter_id.is.null,sitter_id.eq.${uid}`)
         .order("created_at", { ascending: false })
         .limit(20),
@@ -114,16 +114,18 @@ export default function SitterDashboardPage() {
       if (cancelled) return;
       setLoading(false);
 
-      /** Inserts/updates/deletes on `sessions` → immediate refetch (role toggle / parent sync). */
-      const channel = supabase.channel("sessions-realtime-all");
+      /** Pending row INSERT + active row UPDATE (`parent_end_requested_at`) both refetch so green circle shows for start & end. */
+      const channel = supabase.channel(`sessions-sitter-${uid}`);
       const onSessionsChange = () => {
         void refreshForUser(supabase, uid);
       };
-      channel.on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: SESSIONS_TABLE },
-        onSessionsChange
-      );
+      for (const ev of ["INSERT", "UPDATE", "DELETE"] as const) {
+        channel.on(
+          "postgres_changes",
+          { event: ev, schema: "public", table: SESSIONS_TABLE },
+          onSessionsChange
+        );
+      }
       channel.subscribe((status) => {
         if (status === "SUBSCRIBED") {
           void refreshForUser(supabase, uid);

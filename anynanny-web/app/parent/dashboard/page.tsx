@@ -21,7 +21,7 @@ import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 
 const circleShell =
-  "shrink-0 ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
+  "rounded-full shrink-0 overflow-hidden ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
 
 export default function ParentDashboardPage() {
   const { isLoading: authLoading, displayName } = useAuth();
@@ -34,6 +34,14 @@ export default function ParentDashboardPage() {
   const [useSupabase, setUseSupabase] = useState(false);
   const [parentUserId, setParentUserId] = useState<string | null>(null);
   const [dbBanner, setDbBanner] = useState<string | null>(null);
+  /** Debug: confirms Supabase write reached DB (start insert or end-request update). */
+  const [debugToast, setDebugToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!debugToast) return;
+    const t = window.setTimeout(() => setDebugToast(null), 3800);
+    return () => window.clearTimeout(t);
+  }, [debugToast]);
 
   const firstName = useMemo(() => {
     const n = displayName?.trim();
@@ -207,6 +215,7 @@ export default function ParentDashboardPage() {
           persistSessionState(mapped);
           setSessionState(mapped);
           setNowMs(Date.now());
+          setDebugToast("Request sent to Sitter");
         }
       }
     } catch (e) {
@@ -244,6 +253,7 @@ export default function ParentDashboardPage() {
               persistSessionState(mapped);
               setSessionState(mapped);
               setDbBanner(null);
+              setDebugToast("Request sent to Sitter");
               return;
             }
           }
@@ -418,6 +428,16 @@ export default function ParentDashboardPage() {
           ) : null}
         </div>
       </section>
+
+      {debugToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-[100] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-2xl bg-emerald-800 px-5 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-emerald-900/25"
+        >
+          {debugToast}
+        </div>
+      ) : null}
     </main>
   );
 }
