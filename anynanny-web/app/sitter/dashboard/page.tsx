@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -10,20 +9,9 @@ import {
   formatElapsed
 } from "@/lib/session/protocol";
 
-const SESSION_CIRCLE_STYLE: CSSProperties = {
-  width: 220,
-  height: 220,
-  borderRadius: "50%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center"
-};
-
-function rowMatchesPendingForSitter(row: SupabaseSessionRow, sitterId: string): boolean {
-  if (row.status !== "pending") return false;
-  if (row.sitter_id && row.sitter_id !== sitterId) return false;
-  return true;
-}
+/** DB column `sitter_id` = assigned nanny; null = any sitter may claim pending row. */
+const circleMain =
+  "rounded-full h-64 w-64 aspect-square flex flex-col items-center justify-center text-center p-8 text-lg font-bold leading-tight ring-2 sm:text-xl";
 
 function rowMatchesEndConfirm(row: SupabaseSessionRow, sitterId: string): boolean {
   return (
@@ -34,17 +22,6 @@ function rowMatchesEndConfirm(row: SupabaseSessionRow, sitterId: string): boolea
   );
 }
 
-function pickLatestMatching(rows: SupabaseSessionRow[], sitterId: string) {
-  let pending: SupabaseSessionRow | null = null;
-  let endConfirm: SupabaseSessionRow | null = null;
-  for (const row of rows) {
-    if (!pending && rowMatchesPendingForSitter(row, sitterId)) pending = row;
-    if (!endConfirm && rowMatchesEndConfirm(row, sitterId)) endConfirm = row;
-    if (pending && endConfirm) break;
-  }
-  return { pending, endConfirm };
-}
-
 export default function SitterDashboardPage() {
   const [sitterId, setSitterId] = useState<string | null>(null);
   const [pendingRow, setPendingRow] = useState<SupabaseSessionRow | null>(null);
@@ -53,18 +30,43 @@ export default function SitterDashboardPage() {
   const [banner, setBanner] = useState<string | null>(null);
 
   const refreshForUser = useCallback(async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
-    const { data: rows, error } = await supabase
-      .from(SESSIONS_TABLE)
-      .select("*")
-      .in("status", ["pending", "active"])
-      .order("created_at", { ascending: false })
-      .limit(40);
-    if (error) {
-      console.warn("[sitter dashboard] refresh:", error.message);
-      return;
+    const [pendRes, actRes] = await Promise.all([
+      supabase
+        .from(SESSIONS_TABLE)
+        .select("*")
+        .eq("status", "pending")
+        .or(`sitter_id.is.null,sitter_id.eq.${uid}`)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from(SESSIONS_TABLE)
+        .select("*")
+        .eq("status", "active")
+        .eq("sitter_id", uid)
+        .order("created_at", { ascending: false })
+        .limit(20)
+    ]);
+
+    if (pendRes.error) {
+      console.warn("[sitter dashboard] pending fetch:", pendRes.error.message);
     }
-    const list = (rows ?? []) as SupabaseSessionRow[];
-    const { pending, endConfirm } = pickLatestMatching(list, uid);
+    if (actRes.error) {
+      console.warn("[sitter dashboard] active fetch:", actRes.error.message);
+    }
+
+    const pendList = (pendRes.data ?? []) as SupabaseSessionRow[];
+    const actList = (actRes.data ?? []) as SupabaseSessionRow[];
+
+    const pending = pendList[0] ?? null;
+
+    let endConfirm: SupabaseSessionRow | null = null;
+    for (const row of actList) {
+      if (rowMatchesEndConfirm(row, uid)) {
+        endConfirm = row;
+        break;
+      }
+    }
+
     setPendingRow(pending);
     setEndConfirmRow(endConfirm);
   }, []);
@@ -96,10 +98,20 @@ export default function SitterDashboardPage() {
       if (cancelled) return;
       setLoading(false);
 
-      const channel = supabase.channel(`sitter-dashboard-${uid}`);
-      channel.on("postgres_changes", { event: "*", schema: "public", table: SESSIONS_TABLE }, () => {
+      const channel = supabase.channel("schema-db-changes");
+      const onSessionsChange = () => {
         void refreshForUser(supabase, uid);
-      });
+      };
+      channel.on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: SESSIONS_TABLE },
+        onSessionsChange
+      );
+      channel.on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: SESSIONS_TABLE },
+        onSessionsChange
+      );
       channel.subscribe();
       channelCleanup = () => {
         void supabase.removeChannel(channel);
@@ -203,12 +215,11 @@ export default function SitterDashboardPage() {
             <div className="mt-auto flex justify-center pt-10 pb-6">
               <button
                 type="button"
-                style={SESSION_CIRCLE_STYLE}
                 onClick={() => void confirmEndShift()}
-                className="flex-col gap-2 bg-emerald-600 px-4 text-center text-[15px] font-bold leading-snug text-white shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-2 ring-emerald-700/25 transition hover:brightness-105 active:brightness-95"
+                className={`${circleMain} gap-2 bg-emerald-600 text-white shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 transition hover:brightness-105 active:brightness-95`}
               >
-                <span className="max-w-[11rem]">אישור סיום</span>
-                <span className="max-w-[11rem] text-xs font-semibold opacity-95">ונעילת תשלום</span>
+                <span className="max-w-[13rem]">אישור סיום</span>
+                <span className="max-w-[13rem] text-base font-semibold opacity-95">ונעילת תשלום</span>
               </button>
             </div>
           </section>
@@ -221,11 +232,10 @@ export default function SitterDashboardPage() {
             <div className="mt-auto flex justify-center pt-10 pb-6">
               <button
                 type="button"
-                style={SESSION_CIRCLE_STYLE}
                 onClick={() => void confirmStartShift()}
-                className="flex-col gap-2 bg-emerald-600 px-4 text-center text-[15px] font-bold leading-snug text-white shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-2 ring-emerald-700/25 animate-session-pulse-green transition hover:brightness-105 active:brightness-95"
+                className={`${circleMain} gap-2 bg-emerald-600 text-white shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 animate-session-pulse-green transition hover:brightness-105 active:brightness-95`}
               >
-                <span className="max-w-[11rem]">אישור התחלת משמרת</span>
+                <span className="max-w-[13rem]">אישור התחלת משמרת</span>
               </button>
             </div>
           </section>

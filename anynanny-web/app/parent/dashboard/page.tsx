@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Calendar, History, Settings, Wallet } from "lucide-react";
-import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -18,14 +17,9 @@ import {
 } from "@/lib/session/protocol";
 import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 
-const SESSION_CIRCLE_STYLE: CSSProperties = {
-  width: 220,
-  height: 220,
-  borderRadius: "50%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center"
-};
+/** Visual contract: perfect circle + readable Hebrew labels (Double-Shake primary control). */
+const circleMain =
+  "rounded-full h-64 w-64 aspect-square flex flex-col items-center justify-center text-center p-8 text-lg font-bold leading-tight ring-2 sm:text-xl";
 
 export default function ParentDashboardPage() {
   const { isLoading: authLoading, displayName } = useAuth();
@@ -349,39 +343,35 @@ export default function ParentDashboardPage() {
           {!sessionRunning ? (
             <button
               type="button"
-              style={SESSION_CIRCLE_STYLE}
               onClick={() => void startSession()}
-              className="flex-col gap-1 bg-[#001F3F] px-4 text-center text-[15px] font-bold leading-snug text-white shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-2 ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95"
+              className={`${circleMain} gap-1 bg-[#001F3F] text-white shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
             >
-              <span className="max-w-[11rem]">התחלת משמרת</span>
-              <span className="max-w-[11rem] text-xs font-semibold opacity-90">Double-Shake</span>
+              <span className="max-w-[13rem]">התחלת משמרת</span>
+              <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
             </button>
           ) : waitingNannyStart ? (
             <button
               type="button"
-              style={SESSION_CIRCLE_STYLE}
               disabled
-              className="cursor-wait flex-col gap-2 bg-[#001F3F] px-4 text-center text-[15px] font-bold leading-snug text-white opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-2 ring-[#001F3F]/30 animate-session-pulse-navy"
+              className={`${circleMain} cursor-wait gap-2 bg-[#001F3F] text-white opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/30 animate-session-pulse-navy`}
             >
-              <span className="max-w-[11rem]">ממתין לאישור…</span>
+              <span className="max-w-[13rem]">ממתין לאישור…</span>
             </button>
           ) : sessionState.status === "active" && !waitingNannyEnd ? (
             <button
               type="button"
-              style={SESSION_CIRCLE_STYLE}
               onClick={() => void endSession()}
-              className="flex-col gap-1 bg-[#FF8A8A] px-4 text-center text-[15px] font-bold leading-snug text-white shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-2 ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95"
+              className={`${circleMain} gap-1 bg-[#FF8A8A] text-white shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95`}
             >
-              <span className="max-w-[11rem]">סיום משמרת</span>
+              <span className="max-w-[13rem]">סיום משמרת</span>
             </button>
           ) : waitingNannyEnd ? (
             <button
               type="button"
-              style={SESSION_CIRCLE_STYLE}
               disabled
-              className="cursor-wait flex-col gap-2 animate-pulse bg-[#FF8A8A] px-4 text-center text-[15px] font-bold leading-snug text-white shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-2 ring-[#FF8A8A]/35"
+              className={`${circleMain} cursor-wait gap-2 animate-pulse bg-[#FF8A8A] text-white shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-[#FF8A8A]/35`}
             >
-              <span className="max-w-[11rem]">ממתין לאישור סיום…</span>
+              <span className="max-w-[13rem]">ממתין לאישור סיום…</span>
             </button>
           ) : null}
         </div>

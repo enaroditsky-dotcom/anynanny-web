@@ -21,6 +21,7 @@ export function RoleToggle() {
     }
     startTransition(() => {
       router.replace("/parent/dashboard");
+      router.refresh();
     });
   }, [router, pathname]);
 
@@ -33,6 +34,7 @@ export function RoleToggle() {
     }
     startTransition(() => {
       router.replace("/sitter/dashboard");
+      router.refresh();
     });
   }, [router, pathname]);
 
