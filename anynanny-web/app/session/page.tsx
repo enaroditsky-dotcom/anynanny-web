@@ -133,7 +133,8 @@ export default function SessionPage() {
           .update({
             status: "active",
             sitter_id: user.id,
-            start_time: new Date().toISOString()
+            start_time: new Date().toISOString(),
+            start_confirmed: true
           })
           .eq("id", sessionState.supabaseSessionId)
           .select("*")

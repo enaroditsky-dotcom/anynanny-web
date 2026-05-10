@@ -14,3 +14,10 @@ alter table public.sessions
   add column if not exists end_confirmed boolean not null default false;
 
 comment on column public.sessions.end_confirmed is 'Sitter confirmed end when completing session.';
+
+alter table public.sessions
+  add column if not exists start_confirmed boolean not null default false;
+
+comment on column public.sessions.start_confirmed is 'Sitter confirmed start when activating shift.';
+
+notify pgrst, 'reload schema';

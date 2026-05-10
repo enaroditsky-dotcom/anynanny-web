@@ -12,6 +12,7 @@ create table if not exists public.sessions (
   final_amount_nis numeric(12, 2),
   end_requested boolean not null default false,
   end_confirmed boolean not null default false,
+  start_confirmed boolean not null default false,
   parent_end_requested_at timestamptz
 );
 

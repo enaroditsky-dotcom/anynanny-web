@@ -19,6 +19,8 @@ export type SessionProtocolState = {
   parentEndRequestedAtMs?: number;
   /** Sitter finalized end (mirrors DB end_confirmed on completed rows). */
   endConfirmed?: boolean;
+  /** Sitter confirmed start (mirrors DB start_confirmed when active). */
+  startConfirmed?: boolean;
 };
 
 export type SupabaseSessionRow = {
@@ -35,6 +37,7 @@ export type SupabaseSessionRow = {
   final_amount_nis?: number | null;
   end_requested?: boolean | null;
   end_confirmed?: boolean | null;
+  start_confirmed?: boolean | null;
   parent_end_requested_at?: string | null;
 };
 
@@ -83,6 +86,7 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
     supabaseSessionId: String(row.id),
     endRequested: Boolean(row.end_requested),
     parentEndRequestedAtMs: parentEndReqMs,
-    endConfirmed: Boolean(row.end_confirmed)
+    endConfirmed: Boolean(row.end_confirmed),
+    startConfirmed: Boolean(row.start_confirmed)
   };
 }

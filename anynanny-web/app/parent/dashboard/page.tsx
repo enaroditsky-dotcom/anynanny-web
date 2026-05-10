@@ -20,7 +20,7 @@ import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 
 const circleShell =
-  "ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
+  "shrink-0 ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
 
 export default function ParentDashboardPage() {
   const { isLoading: authLoading, displayName } = useAuth();

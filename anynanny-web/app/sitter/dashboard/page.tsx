@@ -13,7 +13,7 @@ import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 
 /** DB `sitter_id` = nanny; null = open assignment. */
 const circleShell =
-  "ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
+  "shrink-0 ring-2 font-bold leading-tight text-white [border-radius:50%!important]";
 
 function rowMatchesEndConfirm(row: SupabaseSessionRow, sitterId: string): boolean {
   return (
@@ -118,7 +118,11 @@ export default function SitterDashboardPage() {
         { event: "*", schema: "public", table: SESSIONS_TABLE },
         onSessionsChange
       );
-      channel.subscribe();
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          void refreshForUser(supabase, uid);
+        }
+      });
       channelCleanup = () => {
         void supabase.removeChannel(channel);
       };
@@ -154,7 +158,8 @@ export default function SitterDashboardPage() {
       .update({
         status: "active",
         sitter_id: sitterId,
-        start_time: startIso
+        start_time: startIso,
+        start_confirmed: true
       })
       .eq("id", pendingRow.id);
     if (error) {
@@ -223,7 +228,7 @@ export default function SitterDashboardPage() {
                 type="button"
                 style={SESSION_ACTION_CIRCLE_STYLE}
                 onClick={() => void confirmEndShift()}
-                className={`${circleShell} gap-2 bg-emerald-600 shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 transition hover:brightness-105 active:brightness-95`}
+                className={`${circleShell} gap-2 bg-emerald-600 text-lg shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 transition hover:brightness-105 active:brightness-95 sm:text-xl`}
               >
                 <span className="max-w-[13rem]">אישור סיום</span>
                 <span className="max-w-[13rem] text-base font-semibold opacity-95">ונעילת תשלום</span>
@@ -241,9 +246,9 @@ export default function SitterDashboardPage() {
                 type="button"
                 style={SESSION_ACTION_CIRCLE_STYLE}
                 onClick={() => void confirmStartShift()}
-                className={`${circleShell} gap-2 bg-emerald-600 shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 animate-session-pulse-green transition hover:brightness-105 active:brightness-95`}
+                className={`${circleShell} gap-3 bg-emerald-600 text-xl shadow-[0_16px_40px_-10px_rgba(5,150,105,0.6)] ring-emerald-700/30 animate-session-pulse-green transition hover:brightness-105 active:brightness-95 sm:text-2xl`}
               >
-                <span className="max-w-[13rem]">אישור התחלת משמרת</span>
+                <span className="max-w-[14rem] px-1">אישור התחלת משמרת</span>
               </button>
             </div>
           </section>
