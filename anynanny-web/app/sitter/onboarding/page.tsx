@@ -1,10 +1,11 @@
 "use client";
 
-import { Eye } from "lucide-react";
+import { Eye, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isSitterProfileComplete, type SitterProfileRow } from "@/lib/sitter/sitter-profile";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const inputClass =
   "w-full rounded-2xl border border-navy-header/15 bg-white px-4 py-3 text-right text-sm text-navy-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#001F3F]/40 focus:ring-2 focus:ring-[#001F3F]/15";
@@ -48,7 +49,9 @@ function ToggleSwitch({
 export default function SitterOnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(true);
+  /** Client verified JWT via getSession + getUser — avoids middleware / edge mismatches. */
+  const [authResolved, setAuthResolved] = useState(false);
+  const [profileHydrating, setProfileHydrating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
@@ -125,20 +128,54 @@ export default function SitterOnboardingPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     void (async () => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        if (!cancelled) {
+          setErrorBanner("Supabase לא מוגדר.");
+          setAuthResolved(true);
+        }
+        return;
+      }
+
+      const { data: sessionWrap } = await supabase.auth.getSession();
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      const user = authData.user ?? sessionWrap.session?.user ?? null;
+
+      if (cancelled) return;
+
+      if (authErr && !user) {
+        const authUrl = `/auth?next=${encodeURIComponent("/sitter/onboarding")}`;
+        router.replace(authUrl);
+        return;
+      }
+
+      if (!user?.id) {
+        router.replace(`/auth?next=${encodeURIComponent("/sitter/onboarding")}`);
+        return;
+      }
+
+      setAuthResolved(true);
+      setProfileHydrating(true);
       try {
-        const res = await fetch("/api/sitter/profile", { method: "GET" });
-        const json = (await res.json()) as { profile?: SitterProfileRow | null };
+        const res = await fetch("/api/sitter/profile", { method: "GET", credentials: "same-origin" });
+        const json = (await res.json()) as { profile?: SitterProfileRow | null; error?: string };
+        if (cancelled) return;
         if (res.ok && json.profile) hydrate(json.profile);
+        else if (!res.ok && json.error) setErrorBanner(json.error);
       } catch {
-        /* ignore */
+        /* טופס נשאר זמין — המשתמש יכולה למלא ידנית */
       } finally {
-        setLoading(false);
+        if (!cancelled) setProfileHydrating(false);
       }
     })();
-  }, [hydrate]);
 
-  const progressPct = useMemo(() => ((step - 1) / 2) * 100, [step]);
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrate, router]);
 
   const validateStep = (s: number): string | null => {
     if (s === 1) {
@@ -207,16 +244,25 @@ export default function SitterOnboardingPage() {
     setStep((v) => Math.min(3, v + 1));
   };
 
-  if (loading) {
+  if (!authResolved) {
     return (
-      <main className="mx-auto flex min-h-[40vh] max-w-md items-center justify-center px-4 py-10" dir="rtl">
-        <p className="text-sm text-slate-600">טוען…</p>
+      <main className="mx-auto flex min-h-[50vh] max-w-md flex-col items-center justify-center gap-3 px-4 py-16" dir="rtl">
+        <Loader2 className="h-10 w-10 animate-spin text-[#001F3F]" aria-hidden />
+        <p className="text-center text-sm font-medium text-slate-600">מזהים את החשבון…</p>
+        <p className="text-center text-xs text-slate-500">לא מועברים להתחברות עד שהדפדפן מאמת את הסשן.</p>
       </main>
     );
   }
 
   return (
     <main className="mx-auto max-w-md space-y-6 px-4 py-6 pb-28" dir="rtl">
+      {profileHydrating ? (
+        <p className="flex flex-row-reverse items-center justify-center gap-2 rounded-2xl border border-[#001F3F]/15 bg-white px-4 py-2 text-center text-xs font-medium text-slate-600 shadow-sm">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#001F3F]" aria-hidden />
+          טוען נתונים שמורים מהשרת…
+        </p>
+      ) : null}
+
       <div className="space-y-2 text-right">
         <p className="text-xs font-semibold uppercase tracking-wide text-[#001F3F]/80">השלמת פרופיל</p>
         <h1 className="text-2xl font-bold text-[#001F3F]">קצת עליך</h1>

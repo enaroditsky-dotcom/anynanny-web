@@ -127,18 +127,21 @@ export default function SitterDashboardPage() {
     let cancelled = false;
 
     void (async () => {
-      const { data: authData } = await supabase.auth.getUser();
-      const uid = authData.user?.id ?? null;
-      if (!uid) {
+      const auth = await resolveBrowserAuth();
+      if (!auth.ok) {
         if (!cancelled) {
           setLoading(false);
-          setBanner("יש להתחבר כדי לראות משמרות.");
+          setBanner(
+            auth.reason === "no_client"
+              ? "Supabase לא מוגדר."
+              : "יש להתחבר כדי לראות משמרות."
+          );
         }
         return;
       }
       if (cancelled) return;
-      setSitterId(uid);
-      await refreshForUser(supabase, uid);
+      setSitterId(auth.userId);
+      await refreshForUser(auth.supabase, auth.userId);
       if (cancelled) return;
       setLoading(false);
     })();
@@ -169,7 +172,7 @@ export default function SitterDashboardPage() {
       if (cancelled) return;
       if (error) {
         console.warn("[sitter dashboard] sitter_profiles:", error.message);
-        setProfileGateOk(true);
+        router.replace("/sitter/onboarding");
         return;
       }
       if (!data || data.is_public !== true) {

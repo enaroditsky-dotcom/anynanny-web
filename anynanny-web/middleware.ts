@@ -46,7 +46,9 @@ function destinationForRole(role: ProfileRole, nextParam: string | null): string
     (nextParam === "/session" ||
       nextParam.startsWith("/session/") ||
       nextParam === "/sitter" ||
-      nextParam.startsWith("/sitter/")) &&
+      nextParam.startsWith("/sitter/") ||
+      nextParam === "/sitter/onboarding" ||
+      nextParam.startsWith("/sitter/onboarding/")) &&
     !nextParam.includes("..") &&
     !nextParam.startsWith("//");
   return ok ? nextParam : "/sitter/dashboard";
@@ -83,6 +85,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const isAuthPath = pathname === "/auth" || pathname.startsWith("/auth/");
+  const isSitterOnboarding = pathname === "/sitter/onboarding" || pathname.startsWith("/sitter/onboarding/");
   const isProtectedApp =
     pathname.startsWith("/parent") ||
     pathname === "/session" ||
@@ -127,13 +130,15 @@ export async function middleware(request: NextRequest) {
     data: { user },
     error: authError
   } = await supabase.auth.getUser();
-  if (authError) {
+  if (authError && !isSitterOnboarding) {
     console.warn("[middleware] getUser:", authError.message);
   }
 
+  /** Edge often misses JWT refresh timing — let client verify; onboarding must never bounce to /auth mid-flow. */
   const trustClientSession =
     pathname === "/parent/dashboard" ||
     pathname === "/sitter/dashboard" ||
+    isSitterOnboarding ||
     (pathname.startsWith("/parent") && cookieLikelySession) ||
     (pathname.startsWith("/sitter") && cookieLikelySession);
 
@@ -158,7 +163,7 @@ export async function middleware(request: NextRequest) {
   }
 
   /** Let the dashboard (and other /parent routes when auth cookies exist) load — client verifies session. */
-  if (!user && isProtectedApp && trustClientSession) {
+  if (!user && isProtectedApp && (trustClientSession || isSitterOnboarding)) {
     return response;
   }
 
