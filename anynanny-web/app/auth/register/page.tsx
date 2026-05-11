@@ -66,6 +66,14 @@ function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
+/** Confirmation-email link target; add this URL (or NEXT_PUBLIC_SITE_URL origin) to Supabase Auth redirect allow list. */
+function roleSelectionEmailRedirectTo(): string {
+  const origin =
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "")) ||
+    "http://localhost:3000";
+  return `${origin}/auth/role-selection`;
+}
+
 function RegisterInner() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
@@ -233,7 +241,10 @@ function RegisterInner() {
       const { data, error } = await supabase.auth.signUp({
         email: emailTrim,
         password,
-        options: { data: { role, full_name: trimmedName || undefined } }
+        options: {
+          emailRedirectTo: roleSelectionEmailRedirectTo(),
+          data: { role, full_name: trimmedName || undefined }
+        }
       });
       if (error) {
         setMessage(`הרשמה נכשלה: ${error.message}`);
