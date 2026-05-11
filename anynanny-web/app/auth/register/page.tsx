@@ -14,7 +14,11 @@ import {
   setUserRoleChoice
 } from "@/lib/auth/returning-user";
 import { ensureProfile, resolveRoleForUser } from "@/lib/auth/supabase-profile";
-import { isSitterProfileComplete, type SitterProfileRow } from "@/lib/sitter/sitter-profile";
+import {
+  isSitterProfileComplete,
+  SITTER_PROFILES_TABLE,
+  type SitterProfileRow
+} from "@/lib/sitter/sitter-profile";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ProfileRole } from "@/lib/supabase/profiles";
@@ -270,19 +274,37 @@ function RegisterInner() {
         return;
       }
 
+      const { error: refreshErr } = await supabase.auth.refreshSession();
+      if (refreshErr) {
+        setMessage(friendlySupabaseSessionError(refreshErr));
+        return;
+      }
+
       const effective = await resolveRoleForUser(supabase, activeUser, role, trimmedName || null);
 
       if (role === "sitter") {
-        const res = await fetch("/api/sitter/profile", {
-          method: "PUT",
-          credentials: "include",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(draftPayload)
-        });
-        const json = (await res.json()) as { error?: string };
-        if (!res.ok) {
-          setMessage(json.error ?? friendlySupabaseSessionError(new Error("profile save")));
+        const merged: Partial<SitterProfileRow> = {
+          ...draftPayload,
+          citizenship_israeli: null,
+          birth_country: null,
+          aliyah_year: null,
+          preferred_ages: null,
+          has_car: false,
+          homework_help: false,
+          light_cooking: false
+        };
+        const complete = isSitterProfileComplete({ ...merged, id: activeUser.id } as SitterProfileRow);
+        const row: Record<string, unknown> = {
+          id: activeUser.id,
+          ...merged,
+          is_public: complete,
+          onboarding_completed_at: complete ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString()
+        };
+
+        const { error: profileErr } = await supabase.from(SITTER_PROFILES_TABLE).upsert(row, { onConflict: "id" });
+        if (profileErr) {
+          setMessage(profileErr.message || friendlySupabaseSessionError(new Error("profile save")));
           return;
         }
       }

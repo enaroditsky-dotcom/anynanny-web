@@ -74,7 +74,7 @@ function isPublicRoute(pathname: string): boolean {
   if (pathname === "/auth/register" || pathname.startsWith("/auth/register/")) {
     return true;
   }
-  if (pathname === "/api/sitter/profile") {
+  if (pathname === "/sitter/onboarding" || pathname.startsWith("/sitter/onboarding/")) {
     return true;
   }
   return false;
