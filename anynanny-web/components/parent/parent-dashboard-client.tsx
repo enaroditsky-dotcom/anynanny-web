@@ -12,8 +12,16 @@ type Suggestion = {
   suggestedSitters: string[];
 };
 
+type SessionSummary = {
+  endedAt: string;
+  durationText: string;
+  amountNis: number;
+};
+
 const CALENDAR_PRIVACY_HINT =
   "אנחנו רק מחפשים חלונות זמן פנויים. שמות האירועים והפרטים האישיים שלך נשארים פרטיים ולעולם לא נשמרים אצלנו.";
+const SESSION_SUMMARY_KEY = "latest_session_summary";
+const ACTIVE_SESSION_START_KEY = "active_session_start_time";
 
 /** Evening suggestion dates derived locally from free/busy only — never sent to server as event metadata. */
 function extractEveningSuggestionDates(slots: ParentBusySlot[], nowMs: number): string[] {
@@ -29,6 +37,13 @@ function extractEveningSuggestionDates(slots: ParentBusySlot[], nowMs: number): 
 
 function fmtNis(value: number) {
   return `₪${value.toFixed(2)}`;
+}
+
+function formatElapsed(seconds: number): string {
+  const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+  const secs = String(seconds % 60).padStart(2, "0");
+  return `${hours}:${minutes}:${secs}`;
 }
 
 function computeLiveMinutes(session: SessionView | null, nowMs: number): number {
@@ -58,6 +73,8 @@ export function ParentDashboardClient({
   /** Optional note visible only on device — never POSTed */
   const [newBusy, setNewBusy] = useState({ startsAt: "", endsAt: "", localNote: "" });
   const [searchTerm, setSearchTerm] = useState("");
+  const [endedSummary, setEndedSummary] = useState<SessionSummary | null>(null);
+  const [sitterStartTimeMs, setSitterStartTimeMs] = useState<number | null>(null);
 
   const filteredProfiles = useMemo(
     () =>
@@ -185,8 +202,41 @@ export function ParentDashboardClient({
     return () => clearInterval(ticker);
   }, []);
 
+  useEffect(() => {
+    const raw = localStorage.getItem(SESSION_SUMMARY_KEY);
+    if (!raw) return;
+    try {
+      setEndedSummary(JSON.parse(raw) as SessionSummary);
+    } catch {
+      localStorage.removeItem(SESSION_SUMMARY_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    const readSitterStart = () => {
+      const raw = localStorage.getItem(ACTIVE_SESSION_START_KEY);
+      if (!raw) {
+        setSitterStartTimeMs(null);
+        return;
+      }
+      const parsed = Number(raw);
+      setSitterStartTimeMs(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+    };
+    readSitterStart();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === ACTIVE_SESSION_START_KEY) readSitterStart();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const liveMinutes = computeLiveMinutes(session, nowMs);
   const liveCost = session ? (session.hourlyRateNis / 60) * liveMinutes : 0;
+  const sitterLiveSeconds = useMemo(() => {
+    if (!sitterStartTimeMs) return 0;
+    return Math.max(0, Math.floor((nowMs - sitterStartTimeMs) / 1000));
+  }, [nowMs, sitterStartTimeMs]);
+  const sitterLiveAmount = useMemo(() => (sitterLiveSeconds / 3600) * 50, [sitterLiveSeconds]);
   const waitingText =
     session?.waitingFor === "parent" ? "ממתין/ה לאישור הורה" : session?.waitingFor === "sitter" ? "ממתין/ה לאישור סיטר/ית" : "";
 
@@ -196,6 +246,35 @@ export function ParentDashboardClient({
         <h1 className="text-2xl font-semibold text-navy-900">דשבורד הורה</h1>
         <p className="mt-1 text-sm text-navy-700">ניהול סינונים, אישורי סשן כפולים, יומן אישי וחישוב עלות מדויק בדקות.</p>
       </header>
+
+      {endedSummary ? (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-lg font-bold text-emerald-800">🎉 המשמרת הסתיימה</p>
+              <p className="mt-1 text-sm text-emerald-900">זמן בייביסיטר: {endedSummary.durationText}</p>
+              <p className="text-base font-semibold text-emerald-900">לתשלום: ₪{endedSummary.amountNis.toFixed(2)}</p>
+            </div>
+            <button
+              className="rounded-lg border border-emerald-400 bg-white/70 px-3 py-1.5 text-xs font-medium text-emerald-900"
+              onClick={() => {
+                localStorage.removeItem(SESSION_SUMMARY_KEY);
+                setEndedSummary(null);
+              }}
+            >
+              סגירה
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {sitterStartTimeMs ? (
+        <section className="rounded-2xl border border-navy-200 bg-white p-4 shadow-sm">
+          <p className="text-sm text-navy-700">בייביסיטר כרגע במשמרת פעילה</p>
+          <p className="mt-1 text-lg font-bold text-navy-900">זמן בייביסיטר: {formatElapsed(sitterLiveSeconds)}</p>
+          <p className="text-base font-semibold text-navy-800">לתשלום כרגע: {fmtNis(sitterLiveAmount)}</p>
+        </section>
+      ) : null}
 
       <section className="grid grid-cols-2 gap-3 rounded-2xl bg-white p-4 shadow-sm md:grid-cols-4">
         <div className="rounded-xl bg-navy-50 p-3 text-sm">📅 יומן אישי</div>

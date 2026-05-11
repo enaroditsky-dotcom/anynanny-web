@@ -23,6 +23,31 @@ const config: Config = {
       },
       boxShadow: {
         soft: "0 10px 28px rgba(22,91,115,0.12)"
+      },
+      keyframes: {
+        "session-pulse-navy": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(0, 31, 63, 0.42)" },
+          "50%": { boxShadow: "0 0 0 14px rgba(0, 31, 63, 0)" }
+        },
+        "session-pulse-green": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(5, 150, 105, 0.42)" },
+          "50%": { boxShadow: "0 0 0 14px rgba(5, 150, 105, 0)" }
+        },
+        /** Coral/salmon — parent “waiting for sitter to confirm end”. */
+        "session-pulse-salmon": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(220, 90, 90, 0.45)" },
+          "50%": { boxShadow: "0 0 0 16px rgba(220, 90, 90, 0)" }
+        },
+        "fade-route": {
+          "0%": { opacity: "0", transform: "translateY(8px) scale(0.988)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" }
+        }
+      },
+      animation: {
+        "session-pulse-navy": "session-pulse-navy 2.2s ease-in-out infinite",
+        "session-pulse-green": "session-pulse-green 2.2s ease-in-out infinite",
+        "session-pulse-salmon": "session-pulse-salmon 2.2s ease-in-out infinite",
+        "fade-route": "fade-route 0.48s cubic-bezier(0.22, 1, 0.36, 1) both"
       }
     }
   },

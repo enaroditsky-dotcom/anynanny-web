@@ -1,8 +1,10 @@
 ﻿import "./globals.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import Image from "next/image";
 import { Assistant } from "next/font/google";
+import { AuthProvider } from "@/components/auth-provider";
+import { AppShellHeader } from "@/components/app-shell-header";
+import { RouteTransitionShell } from "@/components/route-transition-shell";
 
 const assistant = Assistant({ subsets: ["hebrew", "latin"], weight: ["400", "500", "600", "700"] });
 
@@ -13,20 +15,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="he">
-      <body className={assistant.className}>
-        <header className="sticky top-0 z-40 border-b border-brand-mint bg-white/95 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
-            <div className="flex items-center gap-3">
-              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-brand-mint/40 md:h-11 md:w-11">
-                <Image src="/logo.png" alt="AnyNanny" width={44} height={44} className="h-full w-full object-cover object-center" priority />
-              </div>
-              <div className="text-2xl font-bold tracking-[0.2em] text-navy-header">ANYNANNY</div>
+    <html lang="he" suppressHydrationWarning>
+      <body className={`${assistant.className} bg-[#FDFBF6]`} suppressHydrationWarning>
+        <AuthProvider>
+          <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-md flex-col overflow-hidden bg-white shadow-soft md:my-4 md:min-h-[calc(100dvh-2rem)] md:rounded-[2rem]">
+            <AppShellHeader />
+            <div className="min-w-0 px-4 pb-6 pt-4">
+              <RouteTransitionShell>{children}</RouteTransitionShell>
             </div>
-            <div className="rounded-full bg-brand-mint px-3 py-1 text-xs text-navy-800">ביטחון • פשטות • פרטיות</div>
           </div>
-        </header>
-        {children}
+        </AuthProvider>
       </body>
     </html>
   );
