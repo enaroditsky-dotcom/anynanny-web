@@ -107,22 +107,14 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
         rating: stars,
         comment: commentTrimmed
       };
-      const supabase = getSupabaseBrowserClient();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (supabase) {
-        const { data: sess } = await supabase.auth.getSession();
-        const token = sess.session?.access_token;
-        if (token) headers.Authorization = `Bearer ${token}`;
-      }
       const res = await fetch("/api/ratings", {
         method: "POST",
-        credentials: "include",
-        headers,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      const json = (await res.json().catch(() => ({}))) as { error?: string; details?: unknown };
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setErr(typeof json.error === "string" ? json.error : "שמירה נכשלה.");
+        setErr(json.error ?? "שמירה נכשלה.");
         return;
       }
       setRatingValue(0);

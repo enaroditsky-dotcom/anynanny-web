@@ -1,5 +1,4 @@
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
@@ -8,63 +7,37 @@ import { SESSIONS_TABLE } from "@/lib/session/protocol";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
-    return NextResponse.json({ error: "Server missing Supabase URL or anon key." }, { status: 500 });
-  }
-
   try {
     const cookieStore = await cookies();
 
-    /**
-     * `createRouteHandlerClient` (auth-helpers 0.10) calls `context.cookies()` synchronously and expects
-     * `nextCookies.get(name)`. Next.js 15 `cookies()` is async — we pass the resolved store so the session is visible.
-     */
-    const cookieClient = createRouteHandlerClient({
+    // @supabase/auth-helpers-nextjs types assume sync `cookies()`; Next 15 returns a Promise.
+    // Passing the awaited store restores correct cookie reads for this request.
+    const supabase = createRouteHandlerClient({
       cookies: () => cookieStore as unknown as ReturnType<typeof cookies>
     });
 
-    const authHeader = request.headers.get("authorization") ?? request.headers.get("Authorization");
-    const bearer =
-      authHeader && authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : null;
-
-    /** Cookie client for normal browser requests; scoped client so PostgREST sends the same JWT as `getUser` (RLS auth.uid()). */
-    const supabase: SupabaseClient = bearer
-      ? createClient(url, anon, {
-          global: { headers: { Authorization: `Bearer ${bearer}` } },
-          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-        })
-      : cookieClient;
-
-    const cookieNames = cookieStore.getAll().map((c) => c.name);
-
-    const got = bearer ? await supabase.auth.getUser(bearer) : await supabase.auth.getUser();
-    const user = got.data.user;
-    const authErr = got.error;
-
-    console.log("[api/ratings] auth check", {
-      hasUser: Boolean(user),
-      authError: authErr?.message ?? null,
-      cookieCount: cookieNames.length,
-      cookieNames: cookieNames.filter((n) => n.startsWith("sb-") || n.includes("supabase")),
-      usedBearer: Boolean(bearer)
+    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+    const session = sessionData.session;
+    console.log("[api/ratings] auth snapshot", {
+      hasSession: Boolean(session),
+      sessionUserId: session?.user?.id ?? null,
+      sessionError: sessionErr?.message ?? null,
+      cookieCount: cookieStore.getAll().length,
+      cookieNames: cookieStore.getAll().map((c) => c.name)
     });
+
+    const {
+      data: { user },
+      error: authErr
+    } = await supabase.auth.getUser();
 
     if (authErr || !user) {
       return NextResponse.json(
         {
           error:
-            "לא זוהה התחברות בשרת. התחברו מחדש, או ודאו שהדפדפן שולח עוגיות (credentials) או Authorization Bearer. " +
-            "אם בדקתם עם curl מהמסוף — העבירו Cookie או כותרת Authorization מהדפדפן.",
-          details: {
-            supabaseAuthMessage: authErr?.message ?? null,
-            hasSessionCookies: cookieNames.some(
-              (n) => n.startsWith("sb-") || n.includes("supabase") || n.includes("auth-token")
-            ),
-            hint:
-              "האפליקציה משתמשת בעוגיות סשן של Supabase. אחרי התחברות, שליחת דירוג מהדפדפן אמורה לכלול עוגיות אוטומטית."
-          }
+            "לא זוהה התחברות בשרת — בקשת הדירוג הגיעה בלי עוגיית Supabase תקינה. התחברו מחדש באותו דפדפן, או ודאו שאין חסימת עוגיות / מצב פרטי.",
+          detail: authErr?.message ?? (!session ? "אין session בשרת (getSession ריק)." : "getUser נכשל — ייתכן JWT פג תוקף."),
+          code: "AUTH_MISSING_OR_INVALID"
         },
         { status: 401 }
       );
@@ -165,7 +138,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error("[api/ratings] unexpected", e);
+    console.error("[api/ratings] unhandled", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

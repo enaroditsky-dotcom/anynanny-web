@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Props = {
   sessionId: string;
@@ -30,18 +29,9 @@ export function NannyRatingForm({ sessionId, nannyName, parentName, alreadyRated
       comment: commentTrimmed
     };
 
-    const supabase = getSupabaseBrowserClient();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (supabase) {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-      if (token) headers.Authorization = `Bearer ${token}`;
-    }
-
     const response = await fetch("/api/ratings", {
       method: "POST",
-      credentials: "include",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
 

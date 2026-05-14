@@ -17,23 +17,6 @@ export const SESSION_PENDING_START_STATUSES: readonly string[] = [
   "pending_confirmation"
 ];
 
-/**
- * Sitter dashboard “משמרת פעילה” — row assigned to this sitter and still in-flight
- * (product spec: `pending` | `started`; DB uses `active` + `pending_*` aliases).
- */
-export const SESSION_SITTER_SHIFT_ACTIVE_STATUSES: readonly string[] = [
-  "pending",
-  SESSION_STATUS_PENDING_SITTER_APPROVAL,
-  "pending_confirmation",
-  "started",
-  "active"
-];
-
-export function isSitterShiftActiveStatus(status: string | undefined): boolean {
-  if (status == null) return false;
-  return SESSION_SITTER_SHIFT_ACTIVE_STATUSES.includes(status);
-}
-
 export type SessionProtocolState = {
   status: "idle" | "parent_initiated" | "active" | "ended";
   parentStartedAtMs?: number;
