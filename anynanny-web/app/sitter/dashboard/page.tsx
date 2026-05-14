@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { Calendar, History, Settings, Wallet } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FloatingActionButton } from "@/components/floating-action-button";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { SITTER_PROFILE_SAVED_NAV_FLAG, SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -25,12 +24,6 @@ import {
 } from "@/lib/session/protocol";
 import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
-
-const SITTER_OPEN_FOR_WORK_KEY = "anynanny_sitter_open_for_work";
-
-/** Match parent search / listing rows: soft shadow, rounded panel. */
-const insightCardClass =
-  "rounded-2xl border border-navy-header/10 bg-white p-4 text-right shadow-sm shadow-[0_2px_12px_-4px_rgba(0,31,63,0.08)]";
 
 /** DB `sitter_id` = nanny; null = open assignment. */
 const circleShell =
@@ -62,9 +55,6 @@ export default function SitterDashboardPage() {
   /** Wall clock for live timer — must tick every second so elapsed updates (same formula as parent). */
   const [nowMs, setNowMs] = useState(Date.now());
   const [profileCardStatus, setProfileCardStatus] = useState<"loading" | "complete" | "incomplete">("loading");
-  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
-  const [openForWork, setOpenForWork] = useState(false);
-  const fabStackRef = useRef<HTMLDivElement>(null);
 
   const firstName = useMemo(() => {
     const n = displayName?.trim();
@@ -236,14 +226,6 @@ export default function SitterDashboardPage() {
   }, [sitterId, trackedSessionId, loading, refreshForUser]);
 
   useEffect(() => {
-    try {
-      setOpenForWork(typeof window !== "undefined" && localStorage.getItem(SITTER_OPEN_FOR_WORK_KEY) === "1");
-    } catch {
-      setOpenForWork(false);
-    }
-  }, []);
-
-  useEffect(() => {
     if (pathname !== "/sitter/dashboard" || !sitterId) return;
     let fromWizard = false;
     try {
@@ -258,35 +240,6 @@ export default function SitterDashboardPage() {
     const supabase = getSupabaseBrowserClient();
     if (supabase) void refreshSitterProfileCardStatus(supabase, sitterId);
   }, [pathname, sitterId, refreshSitterProfileCardStatus]);
-
-  useEffect(() => {
-    if (!quickMenuOpen) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (fabStackRef.current && !fabStackRef.current.contains(e.target as Node)) {
-        setQuickMenuOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [quickMenuOpen]);
-
-  const scrollToQuickShift = () => {
-    document.getElementById("sitter-shift-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setQuickMenuOpen(false);
-  };
-
-  const toggleOpenForWork = () => {
-    setOpenForWork((prev) => {
-      const next = !prev;
-      try {
-        if (next) localStorage.setItem(SITTER_OPEN_FOR_WORK_KEY, "1");
-        else localStorage.removeItem(SITTER_OPEN_FOR_WORK_KEY);
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
 
   const liveElapsed = useMemo(() => {
     const row = endConfirmRow ?? activeShiftRow;
@@ -304,27 +257,6 @@ export default function SitterDashboardPage() {
 
   const liveTimerText = useMemo(() => formatElapsed(liveElapsed), [liveElapsed]);
   const liveEarned = useMemo(() => ((liveElapsed / 3600) * HOURLY_RATE).toFixed(2), [liveElapsed]);
-
-  const upcomingInsight = useMemo(() => {
-    if (endConfirmRow || activeShiftRow) {
-      return {
-        title: "משמרת פעילה",
-        body: "יש משמרת פעילה כרגע — ניהול מלא למטה במסך המשמרת."
-      };
-    }
-    if (pendingRow) {
-      return {
-        title: "ממתין לאישור",
-        body: "הגיעה בקשה להתחלת משמרת מההורה. אשרו למטה כשאתם מוכנים."
-      };
-    }
-    return {
-      title: "אין מפגש מתוכנן",
-      body: "כשיגיעו בקשות או מועדים מהיומן, יופיעו כאן."
-    };
-  }, [endConfirmRow, activeShiftRow, pendingRow]);
-
-  const hasSessionForEarnings = Boolean(endConfirmRow ?? activeShiftRow);
 
   const confirmStartShift = async () => {
     if (!pendingRow || !sitterId) return;
@@ -421,58 +353,61 @@ export default function SitterDashboardPage() {
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               onClick={() => void confirmEndShift()}
-              className={`${circleShell} gap-2 bg-emerald-600 text-lg shadow-[0_12px_32px_-10px_rgba(5,150,105,0.55)] ring-emerald-700/25 animate-session-pulse-green transition hover:brightness-105 active:brightness-95 sm:text-xl`}
+              className={`${circleShell} gap-1 bg-[#FF8A8A] text-lg shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95 sm:text-xl`}
             >
-              <span className="max-w-[14rem] px-1">אישור סיום משמרת</span>
+              <span className="max-w-[13rem]">אישור סיום משמרת</span>
             </button>
           </div>
         </>
       ) : pendingRow ? (
         <>
           <div className="w-full space-y-2 text-right">
-            <p className="text-sm font-semibold text-slate-700">משמרת חדשה ממתינה לאישור</p>
-            <p className="text-xs text-slate-500">מזהה סשן: {String(pendingRow.id).slice(0, 8)}…</p>
+            <p className="text-xs font-medium text-slate-600">ממתין לאישור שלך</p>
+            <p className="text-sm font-semibold text-slate-700">משמרת חדשה מההורה</p>
           </div>
           <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
             <button
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               onClick={() => void confirmStartShift()}
-              className={`${circleShell} gap-3 bg-emerald-600 text-xl shadow-[0_16px_40px_-10px_rgba(5,150,105,0.6)] ring-emerald-700/30 animate-session-pulse-green transition hover:brightness-105 active:brightness-95 sm:text-2xl`}
+              className={`${circleShell} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
             >
-              <span className="max-w-[14rem] px-1">אישור התחלת משמרת</span>
+              <span className="max-w-[13rem]">אישור התחלת משמרת</span>
+              <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
             </button>
-            <p className="max-w-[14rem] text-center text-xs font-semibold text-[#001F3F]/90">Double-Shake</p>
           </div>
         </>
       ) : activeShiftRow ? (
         <>
-          <div className="w-full space-y-2 text-center">
-            <p className="text-sm font-semibold text-emerald-900">משמרת פעילה</p>
-            <p className="text-4xl font-bold tabular-nums text-[#001F3F]">{liveTimerText}</p>
+          <div className="w-full space-y-2 text-right">
+            <p className="text-xs font-medium text-slate-600">משמרת פעילה</p>
+            <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{liveTimerText}</p>
             <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{liveEarned}</p>
-            <p className="mx-auto mt-2 max-w-xs text-xs text-slate-500">
+            <p className="text-xs text-slate-500">
               סיום המשמרת מתבצע מהצד של ההורה; כאן תופיע בקשת סיום לאישור.
             </p>
           </div>
-          <div className="mt-auto flex flex-col items-center pt-8">
+          <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
             <div
               style={SESSION_ACTION_CIRCLE_STYLE}
               className={`${circleShell} pointer-events-none gap-1 bg-[#FF8A8A] text-lg shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 sm:text-xl`}
               role="presentation"
             >
-              <span className="max-w-[13rem] px-2 text-center font-bold leading-tight">
-                ממתינים לסיום מההורה
-              </span>
+              <span className="max-w-[13rem] px-2 text-center font-bold leading-tight">ממתינים לסיום מההורה</span>
             </div>
-            <p className="mt-3 max-w-[14rem] text-center text-xs font-semibold text-[#001F3F]/90">Double-Shake</p>
           </div>
         </>
       ) : (
-        <div className="flex w-full flex-1 flex-col items-center justify-center gap-3 py-6 text-center">
-          <p className="text-sm text-slate-600">אין משמרת פעילה כרגע.</p>
-          <p className="text-xs text-slate-500">החליפו ל&quot;הורה&quot; כדי לפתוח משמרת, ואז חזרו לכאן.</p>
-          <p className="mt-4 text-xs font-semibold text-[#001F3F]/80">Double-Shake</p>
+        <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
+          <button
+            type="button"
+            style={SESSION_ACTION_CIRCLE_STYLE}
+            onClick={() => router.push("/sitter/session")}
+            className={`${circleShell} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
+          >
+            <span className="max-w-[13rem]">התחלת משמרת</span>
+            <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
+          </button>
         </div>
       )}
     </>
@@ -509,31 +444,6 @@ export default function SitterDashboardPage() {
           <p className="min-w-0 flex-1 leading-snug">{banner}</p>
         </div>
       ) : null}
-
-      <section className="space-y-3" aria-label="סיכום מהיר">
-        <div className={insightCardClass}>
-          <h2 className="text-sm font-bold text-navy-header">מפגשים קרובים</h2>
-          <p className="mt-1 text-xs font-semibold text-emerald-800">{upcomingInsight.title}</p>
-          <p className="mt-1 text-sm leading-relaxed text-slate-600">{upcomingInsight.body}</p>
-        </div>
-        <div className={insightCardClass}>
-          <h2 className="text-sm font-bold text-navy-header">הכנסות</h2>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-[#001F3F]">
-            {hasSessionForEarnings ? `₪${liveEarned}` : "—"}
-          </p>
-          <p className="mt-1 text-xs text-slate-600">
-            {hasSessionForEarnings
-              ? "מצטבר במשמרת הנוכחית (לפני אישורי סיום)."
-              : "אין משמרת פעילה — סיכומי חודש וארנק מלא בהמשך."}
-          </p>
-          <Link
-            href="/sitter/personal"
-            className="mt-3 inline-block text-xs font-semibold text-emerald-800 underline decoration-emerald-700/50"
-          >
-            מעבר לארנק ותשלומים
-          </Link>
-        </div>
-      </section>
 
       <section className="rounded-3xl bg-white p-4 shadow-soft sm:p-5">
         <div className="grid grid-cols-2 gap-3">
@@ -574,7 +484,7 @@ export default function SitterDashboardPage() {
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <History className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">סשן ומשמרות</span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">היסטוריית שמרטפות</span>
           </Link>
         </div>
       </section>
@@ -582,7 +492,7 @@ export default function SitterDashboardPage() {
       {profileCardStatus === "incomplete" ? (
         <section
           id="sitter-profile-details"
-          className="rounded-3xl border border-navy-header/10 bg-white p-4 shadow-soft sm:p-5"
+          className="rounded-3xl bg-white p-4 shadow-soft sm:p-5"
         >
           <h2 className="text-right text-base font-bold text-navy-header">פרופיל מקצועי (אופציונלי)</h2>
           <p className="mt-1 text-right text-xs text-slate-600">
@@ -600,57 +510,6 @@ export default function SitterDashboardPage() {
       >
         {sessionSection}
       </section>
-
-      <div
-        ref={fabStackRef}
-        className="pointer-events-none fixed z-[60] flex flex-col items-end gap-2"
-        style={{
-          right: "max(1rem, env(safe-area-inset-right, 0px))",
-          bottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))"
-        }}
-      >
-        <div className="pointer-events-auto flex flex-col items-end gap-2">
-          {quickMenuOpen ? (
-            <div
-              role="menu"
-              className="w-[min(19rem,calc(100vw-2rem))] rounded-2xl border border-navy-header/10 bg-white p-3 text-right shadow-sm shadow-[0_8px_28px_-6px_rgba(0,31,63,0.15)]"
-            >
-              <p className="border-b border-slate-100 pb-2 text-xs font-bold text-[#001F3F]">פעולות מהירות</p>
-              <button
-                type="button"
-                role="menuitem"
-                className="mt-2 w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
-                onClick={() => {
-                  scrollToQuickShift();
-                }}
-              >
-                התחלת משמרת
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="mt-2 flex w-full flex-row-reverse items-center justify-between gap-2 rounded-xl border border-navy-header/10 bg-[#FDFBF6] px-3 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-white"
-                onClick={() => {
-                  toggleOpenForWork();
-                  setQuickMenuOpen(false);
-                }}
-              >
-                <span
-                  className={`inline-flex h-2.5 w-2.5 shrink-0 rounded-full ${openForWork ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.35)]" : "bg-slate-300"}`}
-                  aria-hidden
-                />
-                הוספת זמינות
-              </button>
-            </div>
-          ) : null}
-          <div className={openForWork ? "rounded-full p-0.5 shadow-[0_0_0_3px_rgba(52,211,153,0.45)]" : ""}>
-            <FloatingActionButton
-              label={quickMenuOpen ? "סגירת תפריט מהיר" : "התחלת משמרת או הוספת זמינות"}
-              onClick={() => setQuickMenuOpen((o) => !o)}
-            />
-          </div>
-        </div>
-      </div>
     </main>
   );
 }
