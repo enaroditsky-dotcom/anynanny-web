@@ -74,6 +74,27 @@ export type SitterProfilePublic = {
   light_cooking: boolean;
   updated_at: string;
   is_public: boolean;
+  /** From `sitter_profiles` (ratings trigger). */
+  avg_rating?: number | null;
+  rating_count?: number | null;
+};
+
+/** Row from `list_public_sitters_search` RPC (parent search cards). */
+export type PublicSitterSearchCard = {
+  id: string;
+  display_name: string | null;
+  years_experience: number | null;
+  bio: string | null;
+  hourly_rate_nis: number | null;
+  avg_rating: number | null;
+  rating_count: number;
+};
+
+/** One anonymized review from `get_sitter_public_reviews` RPC. */
+export type PublicSitterReview = {
+  rating: number;
+  comment: string;
+  created_at: string;
 };
 
 /** True when core listing fields are filled (ת.ז. / ממליצים / ארנק — בהמשך). */

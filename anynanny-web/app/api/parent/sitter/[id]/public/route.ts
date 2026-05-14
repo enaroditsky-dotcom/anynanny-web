@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
-import type { SitterProfilePublic } from "@/lib/sitter/sitter-profile";
+import type { PublicSitterReview, SitterProfilePublic } from "@/lib/sitter/sitter-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
+
+function parseReviewsPayload(raw: unknown): PublicSitterReview[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter((x): x is PublicSitterReview => x != null && typeof x === "object");
+  }
+  return [];
+}
 
 /**
  * Parent-facing sitter profile — sanitized JSON only (RPC).
  * Hidden fields (ID, address, military) are never returned.
+ * Includes last reviews (text only) via `get_sitter_public_reviews`.
  */
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -28,17 +37,29 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { data, error } = await supabase.rpc("get_sitter_profile_public", { target_id: id });
+    const [{ data: profileJson, error: profErr }, { data: reviewsRaw, error: revErr }] = await Promise.all([
+      supabase.rpc("get_sitter_profile_public", { target_id: id }),
+      supabase.rpc("get_sitter_public_reviews", { p_sitter_id: id, p_limit: 3 })
+    ]);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (profErr) {
+      return NextResponse.json({ error: profErr.message }, { status: 400 });
     }
 
-    if (data == null) {
-      return NextResponse.json({ profile: null });
+    if (revErr) {
+      console.warn("[api/parent/sitter public GET] reviews rpc:", revErr.message);
     }
 
-    return NextResponse.json({ profile: data as SitterProfilePublic });
+    if (profileJson == null) {
+      return NextResponse.json({ profile: null, reviews: [] as PublicSitterReview[] });
+    }
+
+    const reviews = parseReviewsPayload(reviewsRaw);
+
+    return NextResponse.json({
+      profile: profileJson as SitterProfilePublic,
+      reviews
+    });
   } catch (e) {
     console.error("[api/parent/sitter public GET]", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

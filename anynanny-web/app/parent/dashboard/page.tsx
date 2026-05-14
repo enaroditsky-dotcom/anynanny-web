@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, History, Settings, Wallet } from "lucide-react";
+import { Calendar, History, Search, Settings, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SessionFinalSummary } from "@/components/session/session-final-summary";
@@ -449,6 +449,16 @@ export default function ParentDashboardPage() {
             <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">היסטוריית שמרטפות</span>
           </Link>
         </div>
+
+        <Link
+          href="/parent/search"
+          className="mt-3 flex min-h-[3.5rem] flex-row-reverse items-center justify-between gap-3 rounded-2xl border border-emerald-700/20 bg-emerald-50/80 px-4 py-3 text-right text-navy-header shadow-sm transition hover:border-emerald-700/35 hover:shadow-md active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-emerald-800/15">
+            <Search className="h-5 w-5 text-emerald-800" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1 text-sm font-bold leading-snug text-emerald-950">חיפוש נני — דירוגים וביקורות</span>
+        </Link>
       </section>
 
       <section className="mt-1 flex min-h-0 flex-1 flex-col items-center rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
