@@ -8,10 +8,8 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    // Next 15: await cookies first; auth-helpers' adapter calls `cookies()` synchronously and expects `.get()`.
     const cookieStore = await cookies();
-
-    // @supabase/auth-helpers-nextjs types assume sync `cookies()`; Next 15 returns a Promise.
-    // Passing the awaited store restores correct cookie reads for this request.
     const supabase = createRouteHandlerClient({
       cookies: () => cookieStore as unknown as ReturnType<typeof cookies>
     });
@@ -32,11 +30,11 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authErr || !user) {
+      console.warn("[api/ratings] unauthenticated", authErr?.message ?? "no user");
       return NextResponse.json(
         {
-          error:
-            "לא זוהה התחברות בשרת — בקשת הדירוג הגיעה בלי עוגיית Supabase תקינה. התחברו מחדש באותו דפדפן, או ודאו שאין חסימת עוגיות / מצב פרטי.",
-          detail: authErr?.message ?? (!session ? "אין session בשרת (getSession ריק)." : "getUser נכשל — ייתכן JWT פג תוקף."),
+          error: "Unauthorized",
+          detail: authErr?.message ?? (!session ? "No Supabase session on server." : "getUser failed."),
           code: "AUTH_MISSING_OR_INVALID"
         },
         { status: 401 }

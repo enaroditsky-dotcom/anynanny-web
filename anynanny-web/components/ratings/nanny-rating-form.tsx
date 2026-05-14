@@ -13,14 +13,12 @@ export function NannyRatingForm({ sessionId, nannyName, parentName, alreadyRated
   const [ratingValue, setRatingValue] = useState(5);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
   const [locked, setLocked] = useState(alreadyRated);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setSubmitting(true);
-    setMessage("");
 
     const commentTrimmed = comment.trim() ? comment.trim().slice(0, 2000) : null;
     const payload = {
@@ -32,21 +30,20 @@ export function NannyRatingForm({ sessionId, nannyName, parentName, alreadyRated
     const response = await fetch("/api/ratings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
+      const bodyText = await response.text().catch(() => "");
+      console.error("[NannyRatingForm] submit failed", response.status, bodyText);
       if (response.status === 409) {
-        setMessage("This session was already rated.");
         setLocked(true);
-      } else {
-        setMessage("Could not submit rating. Please try again.");
       }
       setSubmitting(false);
       return;
     }
 
-    setMessage(`Thanks! Rating saved for ${nannyName}.`);
     setComment("");
     setRatingValue(5);
     setLocked(true);
@@ -99,8 +96,6 @@ export function NannyRatingForm({ sessionId, nannyName, parentName, alreadyRated
       >
         {locked ? "Already Rated" : submitting ? "Submitting..." : "Submit Rating"}
       </button>
-
-      {message ? <p className="text-sm font-medium text-navy-700">{message}</p> : null}
     </form>
   );
 }

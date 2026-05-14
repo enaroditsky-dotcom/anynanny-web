@@ -3,6 +3,7 @@
 import type { FormEvent } from "react";
 import { Star } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
 import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -27,7 +28,6 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
   const [comment, setComment] = useState("");
   const [counterpartyName, setCounterpartyName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
   const loadCounterparty = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -75,7 +75,6 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
     setRatingValue(0);
     setHover(0);
     setComment("");
-    setErr(null);
     void loadCounterparty();
   }, [open, sessionId, loadCounterparty]);
 
@@ -91,39 +90,95 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
     const commentTrimmed = comment.trim() ? comment.trim().slice(0, 2000) : null;
 
     if (!sid || !isPlausibleUuidSessionId(sid)) {
-      setErr("מזהה משמרת לא תקין — רעננו את הדף ונסו שוב.");
+      console.error("[SessionRatingModal] invalid session id", { sid });
       return;
     }
     if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
-      setErr("נא לבחור דירוג בין 1 ל־5 כוכבים.");
+      console.error("[SessionRatingModal] invalid star rating", { stars });
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      console.error("[SessionRatingModal] Supabase browser client is not configured");
       return;
     }
 
     setBusy(true);
-    setErr(null);
     try {
-      const payload = {
-        session_id: sid,
-        rating: stars,
-        comment: commentTrimmed
-      };
-      const res = await fetch("/api/ratings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setErr(json.error ?? "שמירה נכשלה.");
+      const {
+        data: { user },
+        error: userErr
+      } = await supabase.auth.getUser();
+      if (userErr || !user) {
+        console.error("[SessionRatingModal] not authenticated", userErr);
         return;
       }
+
+      const { data: sessionRow, error: sessErr } = await supabase
+        .from(SESSIONS_TABLE)
+        .select("id, parent_id, sitter_id, status")
+        .eq("id", sid)
+        .maybeSingle();
+
+      if (sessErr || !sessionRow) {
+        console.error("[SessionRatingModal] session load failed", { sessErr, sessionRow });
+        return;
+      }
+
+      const parentId = sessionRow.parent_id != null ? String(sessionRow.parent_id) : null;
+      const sitterId = sessionRow.sitter_id != null ? String(sessionRow.sitter_id) : null;
+      const uid = user.id;
+      const isParent = parentId === uid;
+      const isSitter = sitterId === uid;
+      if (!isParent && !isSitter) {
+        console.error("[SessionRatingModal] user is not a participant", { uid, parentId, sitterId });
+        return;
+      }
+      if (String(sessionRow.status) !== "completed") {
+        console.error("[SessionRatingModal] session not completed", { status: sessionRow.status });
+        return;
+      }
+
+      let toUserId: string | null = null;
+      if (isParent) {
+        if (!sitterId) {
+          console.error("[SessionRatingModal] no sitter on session");
+          return;
+        }
+        toUserId = sitterId;
+      } else {
+        if (!parentId) {
+          console.error("[SessionRatingModal] no parent on session");
+          return;
+        }
+        toUserId = parentId;
+      }
+
+      if (toUserId === uid) {
+        console.error("[SessionRatingModal] invalid rating target (self)");
+        return;
+      }
+
+      const { error: insErr } = await supabase.from(RATINGS_TABLE).insert({
+        session_id: sid,
+        from_user_id: uid,
+        to_user_id: toUserId,
+        rating: stars,
+        comment: commentTrimmed
+      });
+
+      if (insErr) {
+        console.error("[SessionRatingModal] ratings insert failed", insErr);
+        return;
+      }
+
       setRatingValue(0);
       setHover(0);
       setComment("");
-      setErr(null);
       onResolved();
-    } catch {
-      setErr("שגיאת רשת — נסו שוב.");
+    } catch (err) {
+      console.error("[SessionRatingModal] submit error", err);
     } finally {
       setBusy(false);
     }
@@ -182,8 +237,6 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
               disabled={busy}
             />
           </label>
-
-          {err ? <p className="mt-2 text-right text-sm text-rose-700">{err}</p> : null}
 
           <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:justify-start">
             <button
