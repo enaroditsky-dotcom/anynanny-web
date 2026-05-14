@@ -7,11 +7,32 @@ export const SESSIONS_TABLE = "sessions";
 /** DB session lifecycle — parent opens shift awaiting sitter confirmation. */
 export const SESSION_STATUS_PENDING_SITTER_APPROVAL = "pending_sitter_approval";
 
+/** Parent cancelled before sitter confirmed start (or withdrew a pending request). */
+export const SESSION_STATUS_CANCELLED = "cancelled";
+
 /** Status strings that mean “waiting for sitter to confirm start” (constraint removed — include legacy `pending`). */
 export const SESSION_PENDING_START_STATUSES: readonly string[] = [
   SESSION_STATUS_PENDING_SITTER_APPROVAL,
-  "pending"
+  "pending",
+  "pending_confirmation"
 ];
+
+/**
+ * Sitter dashboard “משמרת פעילה” — row assigned to this sitter and still in-flight
+ * (product spec: `pending` | `started`; DB uses `active` + `pending_*` aliases).
+ */
+export const SESSION_SITTER_SHIFT_ACTIVE_STATUSES: readonly string[] = [
+  "pending",
+  SESSION_STATUS_PENDING_SITTER_APPROVAL,
+  "pending_confirmation",
+  "started",
+  "active"
+];
+
+export function isSitterShiftActiveStatus(status: string | undefined): boolean {
+  if (status == null) return false;
+  return SESSION_SITTER_SHIFT_ACTIVE_STATUSES.includes(status);
+}
 
 export type SessionProtocolState = {
   status: "idle" | "parent_initiated" | "active" | "ended";
@@ -92,14 +113,19 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
   const parentEndReqMs = row.parent_end_requested_at
     ? new Date(row.parent_end_requested_at).getTime()
     : undefined;
-  const mappedStatus: SessionProtocolState["status"] =
-    row.status === SESSION_STATUS_PENDING_SITTER_APPROVAL || row.status === "pending"
-      ? "parent_initiated"
-      : row.status === "completed"
-        ? "ended"
-        : row.status === "active"
-          ? "active"
-          : "idle";
+  if (row.status === SESSION_STATUS_CANCELLED) {
+    return { status: "idle" };
+  }
+
+  const isPendingStart = SESSION_PENDING_START_STATUSES.includes(row.status);
+
+  const mappedStatus: SessionProtocolState["status"] = isPendingStart
+    ? "parent_initiated"
+    : row.status === "completed"
+      ? "ended"
+      : row.status === "active"
+        ? "active"
+        : "idle";
   return {
     status: mappedStatus,
     parentStartedAtMs: startedMs,

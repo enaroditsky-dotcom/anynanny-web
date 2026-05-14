@@ -8,6 +8,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
   SESSIONS_TABLE,
+  SESSION_STATUS_CANCELLED,
   SESSION_STATUS_PENDING_SITTER_APPROVAL,
   computeLiveElapsedSecondsActive,
   type SessionProtocolState,
@@ -38,6 +39,7 @@ export default function ParentDashboardPage() {
   const [dbBanner, setDbBanner] = useState<string | null>(null);
   /** Debug: confirms Supabase write reached DB (start insert or end-request update). */
   const [debugToast, setDebugToast] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
 
   useEffect(() => {
     if (!debugToast) return;
@@ -232,6 +234,42 @@ export default function ParentDashboardPage() {
     }
   };
 
+  const cancelSession = async () => {
+    if (sessionState.status !== "parent_initiated" || !sessionState.supabaseSessionId) return;
+
+    const auth = await resolveBrowserAuth();
+    if (!auth.ok) {
+      setDbBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לבטל את הבקשה.");
+      return;
+    }
+
+    setCancelBusy(true);
+    setDbBanner(null);
+    try {
+      const { error } = await auth.supabase
+        .from(SESSIONS_TABLE)
+        .update({ status: SESSION_STATUS_CANCELLED })
+        .eq("id", sessionState.supabaseSessionId)
+        .eq("parent_id", auth.userId);
+
+      if (error) {
+        console.error("[parent] cancel session failed:", error.message);
+        setDbBanner(friendlySupabaseSessionError(error));
+        return;
+      }
+
+      const idle: SessionProtocolState = { status: "idle" };
+      persistSessionState(idle);
+      setSessionState(idle);
+      setNowMs(Date.now());
+    } catch (e) {
+      console.error("[parent] cancelSession:", e);
+      setDbBanner(friendlySupabaseSessionError(e));
+    } finally {
+      setCancelBusy(false);
+    }
+  };
+
   const endSession = async () => {
     if (sessionState.status === "parent_initiated") {
       setDbBanner("ממתין לאישור הבייביסיטר להתחלת המשמרת.");
@@ -407,14 +445,24 @@ export default function ParentDashboardPage() {
               <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
             </button>
           ) : waitingNannyStart ? (
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
-              disabled
-              className={`${circleShell} cursor-wait gap-2 bg-[#001F3F] opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/30 animate-session-pulse-navy`}
-            >
-              <span className="max-w-[13rem]">ממתין לאישור…</span>
-            </button>
+            <>
+              <button
+                type="button"
+                style={SESSION_ACTION_CIRCLE_STYLE}
+                disabled={cancelBusy}
+                className={`${circleShell} cursor-wait gap-2 bg-[#001F3F] opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/30 animate-session-pulse-navy transition disabled:cursor-not-allowed disabled:opacity-70`}
+              >
+                <span className="max-w-[13rem]">ממתין לאישור…</span>
+              </button>
+              <button
+                type="button"
+                disabled={cancelBusy}
+                onClick={() => void cancelSession()}
+                className="rounded-xl border border-rose-300/90 bg-rose-50/50 px-4 py-2.5 text-sm font-semibold text-rose-800 shadow-sm transition hover:border-rose-400 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {cancelBusy ? "מבטלים…" : "ביטול הבקשה"}
+              </button>
+            </>
           ) : sessionState.status === "active" && !waitingNannyEnd ? (
             <button
               type="button"

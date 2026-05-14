@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import {
   isSitterProfileComplete,
   SITTER_PROFILES_TABLE,
+  SITTER_PROFILES_USER_COLUMN,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
@@ -57,7 +58,8 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { data, error } = await supabase.from(SITTER_PROFILES_TABLE).select("*").eq("id", user.id).maybeSingle();
+    const fk = SITTER_PROFILES_USER_COLUMN;
+    const { data, error } = await supabase.from(SITTER_PROFILES_TABLE).select("*").eq(fk, user.id).maybeSingle();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
@@ -92,7 +94,8 @@ export async function PUT(request: Request) {
 
     const body = (await request.json()) as Partial<SitterProfileRow>;
 
-    const { data: existing } = await supabase.from(SITTER_PROFILES_TABLE).select("*").eq("id", user.id).maybeSingle();
+    const fk = SITTER_PROFILES_USER_COLUMN;
+    const { data: existing } = await supabase.from(SITTER_PROFILES_TABLE).select("*").eq(fk, user.id).maybeSingle();
 
     const prev = (existing ?? {}) as Partial<SitterProfileRow>;
 
@@ -142,16 +145,18 @@ export async function PUT(request: Request) {
     const complete = isSitterProfileComplete({ ...merged, id: user.id } as SitterProfileRow);
 
     const row: Record<string, unknown> = {
-      id: user.id,
       ...merged,
+      [fk]: user.id,
       is_public: complete,
       onboarding_completed_at: complete ? new Date().toISOString() : null,
       updated_at: new Date().toISOString()
     };
+    if (fk === "user_id") delete row.id;
+    if (fk === "id") delete row.user_id;
 
     const { data, error } = await supabase
       .from(SITTER_PROFILES_TABLE)
-      .upsert(row, { onConflict: "id" })
+      .upsert(row, { onConflict: fk })
       .select("*")
       .single();
 

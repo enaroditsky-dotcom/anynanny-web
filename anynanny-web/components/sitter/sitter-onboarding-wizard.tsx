@@ -1,369 +1,274 @@
 "use client";
 
-import { Eye, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
-  isSitterProfileComplete,
+  ensureSitterProfileRowForUser,
   SITTER_PROFILES_TABLE,
-  type SitterProfileRow
+  SITTER_PROFILES_USER_COLUMN
 } from "@/lib/sitter/sitter-profile";
-import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+export const SITTER_PROFILE_SAVED_NAV_FLAG = "anynanny_sitter_profile_saved_nav";
 
 const inputClass =
   "mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2 text-right text-sm";
 
-function PrivacyMark() {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
-      <Eye className="h-3 w-3 shrink-0" aria-hidden />
-      פרטיות
-    </span>
-  );
-}
-
-function ToggleSwitch({
-  checked,
-  onChange,
-  label
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  label: string;
-}) {
-  return (
-    <div className="flex flex-row-reverse items-center justify-between gap-3 rounded-xl border border-navy-header/12 bg-[#FDFBF6]/90 px-3 py-2">
-      <span className="text-right text-xs font-medium text-navy-header">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${checked ? "bg-emerald-600" : "bg-slate-300"}`}
-      >
-        <span
-          className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${checked ? "end-0.5" : "start-0.5"}`}
-        />
-      </button>
-    </div>
-  );
-}
-
+/** DB columns: full_name, bio, years_experience, hourly_rate_nis (+ updated_at). */
 export function SitterOnboardingWizard() {
-  const [message, setMessage] = useState("");
+  const router = useRouter();
+  const postSaveNavTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ready, setReady] = useState(false);
+  const [loadHint, setLoadHint] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sitterStep, setSitterStep] = useState(1);
-  const [show_full_name, setShowFullName] = useState(false);
-  const [birth_date, setBirthDate] = useState("");
-  const [show_age, setShowAge] = useState(true);
-  const [languages, setLanguages] = useState("");
-  const [years_experience, setYearsExperience] = useState("");
-  const [bio, setBio] = useState("");
-  const [hourly_rate_nis, setHourlyRateNis] = useState("");
-  const [id_number, setIdNumber] = useState("");
-  const [address_full, setAddressFull] = useState("");
-  const [military_service, setMilitaryService] = useState("");
-  const [referee_phone_1, setRefereePhone1] = useState("");
-  const [referee_phone_2, setRefereePhone2] = useState("");
-  const [legal_no_criminal_declaration, setLegalNoCriminalDeclaration] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+
   const [fullName, setFullName] = useState("");
+  const [bio, setBio] = useState("");
+  const [yearsExperience, setYearsExperience] = useState("");
+  const [hourlyRateNis, setHourlyRateNis] = useState("");
 
-  const draftPayload = useMemo(
-    (): Partial<SitterProfileRow> => ({
-      full_name: fullName.trim() || null,
-      show_full_name,
-      birth_date: birth_date || null,
-      show_age,
-      languages: languages.trim() || null,
-      years_experience: years_experience.trim() !== "" ? Number(years_experience) : null,
-      bio: bio.trim() || null,
-      hourly_rate_nis: hourly_rate_nis.trim() !== "" ? Number(hourly_rate_nis) : null,
-      id_number: id_number.trim() || null,
-      address_full: address_full.trim() || null,
-      military_service: military_service.trim() || null,
-      referee_phone_1: referee_phone_1.trim() || null,
-      referee_phone_2: referee_phone_2.trim() || null,
-      legal_no_criminal_declaration
-    }),
-    [
-      fullName,
-      show_full_name,
-      birth_date,
-      show_age,
-      languages,
-      years_experience,
-      bio,
-      hourly_rate_nis,
-      id_number,
-      address_full,
-      military_service,
-      referee_phone_1,
-      referee_phone_2,
-      legal_no_criminal_declaration
-    ]
-  );
+  useEffect(() => {
+    let cancelled = false;
 
-  const validateSitterStep = (s: number): string | null => {
-    if (s === 1) {
-      if (!fullName.trim()) return "יש למלא שם מלא.";
-      if (!birth_date) return "יש לבחור תאריך לידה.";
-      if (!languages.trim()) return "יש למלא שפות.";
-      if (years_experience.trim() === "" || Number(years_experience) < 0) return "יש למלא שנות ניסיון.";
-      if (!bio.trim()) return "יש למלא ביוגרפיה.";
-      if (hourly_rate_nis.trim() === "" || Number(hourly_rate_nis) <= 0) return "יש להזין תעריף שעתי חוקי.";
-      return null;
-    }
-    if (s === 2) {
-      if (!id_number.trim()) return "יש למלא תעודת זהות.";
-      if (!address_full.trim()) return "יש למלא כתובת מלאה.";
-      if (!referee_phone_1.trim()) return "יש למלא טלפון ממליץ/ה ראשון.";
-      if (!referee_phone_2.trim()) return "יש למלא טלפון ממליץ/ה שני.";
-      return null;
-    }
-    return null;
-  };
+    async function load() {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        if (!cancelled) {
+          setLoadHint("לא ניתן להתחבר למסד הנתונים מהדפדפן.");
+          setReady(true);
+        }
+        return;
+      }
 
-  const nextSitterStep = () => {
-    const err = validateSitterStep(sitterStep);
-    if (err) {
-      setMessage(err);
-      return;
-    }
-    setMessage("");
-    setSitterStep((v) => Math.min(3, v + 1));
-  };
+      try {
+        const {
+          data: { user },
+          error: userErr
+        } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (userErr || !user) {
+          setReady(true);
+          return;
+        }
 
-  const handleFinish = async () => {
-    if (!isSitterProfileComplete({ ...draftPayload, id: "" } as SitterProfileRow)) {
-      setMessage("חסרים שדות חובה בפרופיל המקצועי.");
-      return;
-    }
-    if (!legal_no_criminal_declaration) {
-      setMessage("יש לאשר את ההצהרה המשפטית.");
-      return;
+        const fk = SITTER_PROFILES_USER_COLUMN;
+        const { data: row, error: fetchErr } = await supabase
+          .from(SITTER_PROFILES_TABLE)
+          .select(`full_name, bio, years_experience, hourly_rate_nis, ${fk}`)
+          .eq(fk, user.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (fetchErr) {
+          const msg = fetchErr.message?.toLowerCase() ?? "";
+          if (msg.includes("failed to fetch") || msg.includes("network")) {
+            setLoadHint("אין חיבור רשת — אפשר לערוך ולשמור כשהחיבור יחזור.");
+          }
+          setReady(true);
+          return;
+        }
+
+        if (row && typeof row === "object") {
+          const r = row as Record<string, unknown>;
+          if (typeof r.full_name === "string") setFullName(r.full_name);
+          if (typeof r.bio === "string") setBio(r.bio);
+          if (r.years_experience != null && r.years_experience !== "") {
+            setYearsExperience(String(r.years_experience));
+          }
+          if (r.hourly_rate_nis != null && r.hourly_rate_nis !== "") {
+            setHourlyRateNis(String(r.hourly_rate_nis));
+          }
+        }
+      } catch {
+        if (!cancelled) setLoadHint("טעינת הפרופיל נכשלה; אפשר לנסות שמירה בכל זאת.");
+      } finally {
+        if (!cancelled) setReady(true);
+      }
     }
 
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (postSaveNavTimer.current != null) {
+        clearTimeout(postSaveNavTimer.current);
+      }
+    };
+  }, []);
+
+  const handleSubmit = async () => {
+    setSaveWarning(null);
+    setSavedOk(false);
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setMessage("Supabase לא מוגדר.");
+      setSaveWarning("Supabase לא מוגדר.");
       return;
     }
 
     setBusy(true);
-    setMessage("");
     try {
       const {
         data: { user }
       } = await supabase.auth.getUser();
       if (!user) {
-        setMessage("יש להתחבר מחדש כדי לשמור את הפרופיל.");
+        setSaveWarning("יש להתחבר כדי לשמור.");
         return;
       }
 
-      const { error: refreshErr } = await supabase.auth.refreshSession();
-      if (refreshErr) {
-        setMessage(friendlySupabaseSessionError(refreshErr));
+      const stub = await ensureSitterProfileRowForUser(supabase, user.id);
+      if (stub.error) {
+        setSaveWarning(stub.error);
         return;
       }
 
-      const merged: Partial<SitterProfileRow> = {
-        ...draftPayload,
-        citizenship_israeli: null,
-        birth_country: null,
-        aliyah_year: null,
-        preferred_ages: null,
-        has_car: false,
-        homework_help: false,
-        light_cooking: false
-      };
-      const complete = isSitterProfileComplete({ ...merged, id: user.id } as SitterProfileRow);
-      const row: Record<string, unknown> = {
-        id: user.id,
-        ...merged,
-        is_public: complete,
-        onboarding_completed_at: complete ? new Date().toISOString() : null,
+      const years =
+        yearsExperience.trim() === "" ? null : Math.max(0, parseInt(yearsExperience.replace(/\D/g, ""), 10) || 0);
+      const rate =
+        hourlyRateNis.trim() === "" ? null : Math.max(0, Number(hourlyRateNis.replace(/[^\d.]/g, "")) || 0);
+
+      const patch = {
+        full_name: fullName.trim() || null,
+        bio: bio.trim() || null,
+        years_experience: years,
+        hourly_rate_nis: rate,
         updated_at: new Date().toISOString()
       };
 
-      const { error: profileErr } = await supabase.from(SITTER_PROFILES_TABLE).upsert(row, { onConflict: "id" });
-      if (profileErr) {
-        setMessage(profileErr.message || friendlySupabaseSessionError(new Error("profile save")));
+      const fk = SITTER_PROFILES_USER_COLUMN;
+      const { error } = await supabase.from(SITTER_PROFILES_TABLE).update(patch).eq(fk, user.id);
+
+      if (error) {
+        setSaveWarning(error.message || "שמירת הפרופיל נכשלה — הדשבורד זמין.");
         return;
       }
 
+      setSavedOk(true);
       if (typeof window !== "undefined") {
-        window.location.assign("/sitter/dashboard");
+        try {
+          sessionStorage.setItem(SITTER_PROFILE_SAVED_NAV_FLAG, "1");
+        } catch {
+          /* ignore */
+        }
       }
+      if (postSaveNavTimer.current != null) {
+        clearTimeout(postSaveNavTimer.current);
+      }
+      postSaveNavTimer.current = setTimeout(() => {
+        postSaveNavTimer.current = null;
+        router.push("/sitter/dashboard");
+        router.refresh();
+      }, 1500);
     } finally {
       setBusy(false);
     }
   };
 
+  if (!ready) {
+    return (
+      <div className="min-h-[8rem] space-y-2 animate-pulse rounded-xl border border-navy-header/10 bg-slate-50/80 p-4" aria-busy="true">
+        <div className="h-3 w-1/3 rounded bg-slate-200" />
+        <div className="h-10 w-full rounded-lg bg-slate-200" />
+        <p className="text-center text-xs text-slate-500">טוען…</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3" dir="rtl">
-      <div className="flex justify-between text-xs font-medium text-slate-500">
-        <span>
-          שלב {sitterStep} מתוך 3
-          {sitterStep === 1 ? " — מה שהורים רואים" : sitterStep === 2 ? " — למנהלים" : " — סיום"}
-        </span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-        <div
-          className="h-full rounded-full bg-gradient-to-l from-[#001F3F] to-emerald-600 transition-all duration-300"
-          style={{ width: `${(sitterStep / 3) * 100}%` }}
-        />
-      </div>
+    <div className="space-y-3" dir="rtl" suppressHydrationWarning>
+      {loadHint ? (
+        <p className="rounded-lg bg-amber-50 p-2 text-center text-xs text-amber-950">{loadHint}</p>
+      ) : null}
+      {saveWarning ? (
+        <p className="rounded-lg border border-amber-200/80 bg-amber-50/90 p-2 text-center text-xs text-amber-950">
+          {saveWarning}
+        </p>
+      ) : null}
+      {savedOk ? (
+        <div className="space-y-1 rounded-lg bg-emerald-50 p-2 text-center">
+          <p className="text-xs font-medium text-emerald-900">נשמר.</p>
+          <p className="text-[0.7rem] text-emerald-800/90">מעבירים לדשבורד בעוד רגע…</p>
+        </div>
+      ) : null}
 
-      {sitterStep === 1 ? (
-        <div className="space-y-3 pt-1">
-          <label className="block text-sm text-navy-900">
-            שם מלא <span className="text-rose-600">*</span>
-            <input className={inputClass} value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={busy} />
-          </label>
-          <div className="space-y-2">
-            <div className="flex flex-row-reverse justify-end">
-              <PrivacyMark />
-            </div>
-            <ToggleSwitch checked={show_full_name} onChange={setShowFullName} label="הצג שם מלא להורים" />
-            <ToggleSwitch checked={show_age} onChange={setShowAge} label="הצג גיל להורים" />
-          </div>
-          <label className="block text-sm text-navy-900">
-            תאריך לידה <span className="text-rose-600">*</span>
-            <input
-              className={inputClass}
-              type="date"
-              value={birth_date}
-              onChange={(e) => setBirthDate(e.target.value)}
-              disabled={busy}
-            />
-          </label>
-          <label className="block text-sm text-navy-900">
-            שפות <span className="text-rose-600">*</span>
-            <input className={inputClass} value={languages} onChange={(e) => setLanguages(e.target.value)} disabled={busy} />
-          </label>
-          <label className="block text-sm text-navy-900">
-            שנות ניסיון <span className="text-rose-600">*</span>
-            <input
-              className={inputClass}
-              inputMode="numeric"
-              value={years_experience}
-              onChange={(e) => setYearsExperience(e.target.value.replace(/\D/g, "").slice(0, 2))}
-              disabled={busy}
-            />
-          </label>
-          <label className="block text-sm text-navy-900">
-            ביוגרפיה <span className="text-rose-600">*</span>
-            <textarea className={`${inputClass} min-h-[5rem]`} value={bio} onChange={(e) => setBio(e.target.value)} disabled={busy} />
-          </label>
-          <label className="block text-sm text-navy-900">
-            תעריף שעתי (₪) <span className="text-rose-600">*</span>
-            <input
-              className={inputClass}
-              inputMode="decimal"
-              dir="ltr"
-              value={hourly_rate_nis}
-              onChange={(e) => setHourlyRateNis(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-              disabled={busy}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={nextSitterStep}
+      <form
+        className="space-y-3"
+        autoComplete="off"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSubmit();
+        }}
+        suppressHydrationWarning
+      >
+        <label className="block text-sm text-navy-900">
+          שם מלא
+          <input
+            name="full_name"
+            className={inputClass}
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
             disabled={busy}
-            className="mt-2 w-full rounded-2xl bg-[#001F3F] py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105 disabled:opacity-60"
-          >
-            המשך
-          </button>
-        </div>
-      ) : null}
-
-      {sitterStep === 2 ? (
-        <div className="space-y-3 pt-1">
-          <p className="text-xs text-slate-600">שדות אלו למנהלים בלבד ולא יוצגו להורים.</p>
-          <label className="block text-sm text-navy-900">
-            תעודת זהות <span className="text-rose-600">*</span>
-            <input className={inputClass} dir="ltr" value={id_number} onChange={(e) => setIdNumber(e.target.value)} disabled={busy} />
-          </label>
-          <label className="block text-sm text-navy-900">
-            כתובת מלאה <span className="text-rose-600">*</span>
-            <textarea className={`${inputClass} min-h-[4rem]`} value={address_full} onChange={(e) => setAddressFull(e.target.value)} disabled={busy} />
-          </label>
-          <label className="block text-sm text-navy-900">
-            שירות צבאי / לאומי
-            <textarea className={`${inputClass} min-h-[3rem]`} value={military_service} onChange={(e) => setMilitaryService(e.target.value)} disabled={busy} />
-          </label>
-          <label className="block text-sm text-navy-900">
-            טלפון ממליץ/ה 1 <span className="text-rose-600">*</span>
-            <input className={inputClass} dir="ltr" inputMode="tel" value={referee_phone_1} onChange={(e) => setRefereePhone1(e.target.value)} disabled={busy} />
-          </label>
-          <label className="block text-sm text-navy-900">
-            טלפון ממליץ/ה 2 <span className="text-rose-600">*</span>
-            <input className={inputClass} dir="ltr" inputMode="tel" value={referee_phone_2} onChange={(e) => setRefereePhone2(e.target.value)} disabled={busy} />
-          </label>
-          <div className="flex flex-row-reverse gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setSitterStep(1)}
-              disabled={busy}
-              className="rounded-2xl border border-navy-header/20 bg-white px-4 py-2 text-sm font-semibold text-navy-header"
-            >
-              חזרה
-            </button>
-            <button
-              type="button"
-              onClick={nextSitterStep}
-              disabled={busy}
-              className="rounded-2xl bg-[#001F3F] px-6 py-2 text-sm font-semibold text-white"
-            >
-              המשך
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {sitterStep === 3 ? (
-        <div className="space-y-3 pt-1">
-          <label className="flex cursor-pointer flex-row-reverse items-start gap-2 rounded-xl border border-navy-header/15 bg-[#FDFBF6] p-3 text-sm">
-            <input
-              type="checkbox"
-              checked={legal_no_criminal_declaration}
-              onChange={(e) => setLegalNoCriminalDeclaration(e.target.checked)}
-              disabled={busy}
-              className="mt-1 accent-emerald-600"
-            />
-            <span>
-              <span className="text-rose-600">*</span> אני מצהירה כי אין לי עבר פלילי (חובה לאישור הפרופיל)
-            </span>
-          </label>
-          <div className="flex flex-row-reverse gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setSitterStep(2)}
-              disabled={busy}
-              className="rounded-2xl border border-navy-header/20 bg-white px-4 py-2 text-sm font-semibold text-navy-header"
-            >
-              חזרה
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleFinish()}
-              disabled={busy}
-              className="inline-flex flex-row-reverse items-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {busy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  שומרים…
-                </>
-              ) : (
-                "שמירה ומעבר לדשבורד"
-              )}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {message ? <p className="rounded-lg bg-rose-50 p-3 text-center text-sm text-rose-950">{message}</p> : null}
+            suppressHydrationWarning
+          />
+        </label>
+        <label className="block text-sm text-navy-900">
+          שנות ניסיון
+          <input
+            name="years_experience"
+            className={inputClass}
+            inputMode="numeric"
+            value={yearsExperience}
+            onChange={(e) => setYearsExperience(e.target.value.replace(/\D/g, "").slice(0, 2))}
+            disabled={busy}
+            suppressHydrationWarning
+          />
+        </label>
+        <label className="block text-sm text-navy-900">
+          ביוגרפיה קצרה
+          <textarea
+            name="bio"
+            className={`${inputClass} min-h-[5rem]`}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            disabled={busy}
+            suppressHydrationWarning
+          />
+        </label>
+        <label className="block text-sm text-navy-900">
+          תעריף שעתי (₪)
+          <input
+            name="hourly_rate_nis"
+            className={inputClass}
+            inputMode="decimal"
+            dir="ltr"
+            value={hourlyRateNis}
+            onChange={(e) => setHourlyRateNis(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+            disabled={busy}
+            suppressHydrationWarning
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={busy}
+          className="inline-flex w-full flex-row-reverse items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {busy ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              שומרים…
+            </>
+          ) : (
+            "שמירה"
+          )}
+        </button>
+      </form>
     </div>
   );
 }
