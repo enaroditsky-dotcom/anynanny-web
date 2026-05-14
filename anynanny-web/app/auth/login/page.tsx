@@ -4,14 +4,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
-import { redirectAfterSignIn } from "@/lib/auth/redirect-after-sign-in";
+import { navigateAfterAuth } from "@/lib/auth/redirect-after-sign-in";
 import {
   readLastUsedEmail,
   saveLastUsedEmail,
   setReturningUserFlag,
   setUserRoleChoice
 } from "@/lib/auth/returning-user";
-import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function formatLoginError(message: string): string {
@@ -92,10 +91,11 @@ function LoginInner() {
         return;
       }
 
+      await supabase.auth.refreshSession();
+
       setReturningUserFlag();
       saveLastUsedEmail(emailTrim);
-      const effective = await resolveRoleForUser(supabase, data.user);
-      redirectAfterSignIn(effective, nextPath);
+      await navigateAfterAuth(supabase, data.user.id, nextPath, data.user.email);
     } finally {
       setBusy(false);
     }

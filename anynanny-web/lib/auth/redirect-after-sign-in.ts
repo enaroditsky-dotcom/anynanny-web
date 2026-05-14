@@ -1,4 +1,5 @@
-import type { ProfileRole } from "@/lib/supabase/profiles";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolvePostAuthPath } from "@/lib/auth/post-auth-destination";
 
 let lastRedirectTarget: string | null = null;
 let lastRedirectAt = 0;
@@ -8,44 +9,34 @@ export function resetRedirectDedupe() {
   lastRedirectAt = 0;
 }
 
-/**
- * Full-page navigation only — no Next router.push (avoids fighting middleware).
- * Middleware runs again on the new document request with cookies applied.
- */
-export function redirectAfterSignIn(effectiveRole: ProfileRole, nextPath: string | null): void {
-  const allowedNext =
-    nextPath &&
-    ((effectiveRole === "parent" && nextPath.startsWith("/parent")) ||
-      (effectiveRole === "sitter" &&
-        (nextPath === "/session" ||
-          nextPath.startsWith("/session/") ||
-          nextPath === "/sitter" ||
-          nextPath.startsWith("/sitter/"))));
-  const target =
-    allowedNext && nextPath ? nextPath : effectiveRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
-
-  if (typeof window === "undefined") return;
-
-  try {
-    localStorage.setItem("active_role", effectiveRole);
-  } catch {
-    /* ignore */
-  }
-
+function shouldAssignWindow(next: string): boolean {
+  if (typeof window === "undefined") return false;
   const path = window.location.pathname;
-  if (path === target || path.startsWith(`${target}/`)) {
-    return;
-  }
-  if (!path.startsWith("/auth")) {
-    return;
-  }
-
+  if (!path.startsWith("/auth")) return false;
+  if (path === next || path.startsWith(`${next}/`)) return false;
   const now = Date.now();
-  if (lastRedirectTarget === target && now - lastRedirectAt < 2500) {
-    return;
-  }
-  lastRedirectTarget = target;
+  if (lastRedirectTarget === next && now - lastRedirectAt < 2500) return false;
+  lastRedirectTarget = next;
   lastRedirectAt = now;
+  return true;
+}
 
+/**
+ * After login or registration: session is ready — compute destination (role selection,
+ * onboarding, or dashboard) and hard-navigate so middleware sees cookies.
+ */
+export async function navigateAfterAuth(
+  supabase: SupabaseClient,
+  userId: string,
+  nextPath: string | null,
+  userEmail?: string | null
+): Promise<void> {
+  const target = await resolvePostAuthPath(
+    supabase,
+    userId,
+    nextPath,
+    userEmail !== undefined ? { userEmail } : undefined
+  );
+  if (!shouldAssignWindow(target)) return;
   window.location.assign(target);
 }

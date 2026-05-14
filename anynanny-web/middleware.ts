@@ -1,9 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { ADMIN_AUTH_COOKIE } from "@/lib/admin/auth";
-import { isProfileRole, type ProfileRole } from "@/lib/supabase/profiles";
 
 function supabaseProjectRefFromUrl(supabaseUrl: string): string | null {
   try {
@@ -33,48 +31,30 @@ function hasSupabaseAuthCookie(request: NextRequest, projectRef: string | null):
   return false;
 }
 
-function destinationForRole(role: ProfileRole, nextParam: string | null): string {
-  if (role === "parent") {
-    const ok =
-      nextParam &&
-      nextParam.startsWith("/parent") &&
-      !nextParam.includes("..") &&
-      !nextParam.startsWith("//");
-    return ok ? nextParam : "/parent/dashboard";
-  }
-  const ok =
-    nextParam &&
-    (nextParam === "/session" ||
-      nextParam.startsWith("/session/") ||
-      nextParam === "/sitter" ||
-      nextParam.startsWith("/sitter/") ||
-      nextParam.startsWith("/auth/register")) &&
-    !nextParam.includes("..") &&
-    !nextParam.startsWith("//");
-  return ok ? nextParam : "/sitter/dashboard";
-}
-
 function middlewareRedirect(request: NextRequest, destination: string): NextResponse {
   return NextResponse.redirect(new URL(destination, request.url));
 }
 
-async function roleForUser(supabase: SupabaseClient, user: User): Promise<ProfileRole | null> {
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-
-  let role = profile?.role;
-  if (!isProfileRole(role)) {
-    const meta = user.user_metadata?.role;
-    role = typeof meta === "string" && isProfileRole(meta) ? meta : undefined;
-  }
-
-  return isProfileRole(role) ? role : null;
-}
+// TEMP disabled with post-auth redirect block — restore when re-enabling `resolvePostAuthPath` in middleware.
+// /** Current URL is allowed for the computed post-auth destination (avoids redirect loops). */
+// function pathAllowedForPostAuthDest(pathname: string, dest: string): boolean {
+//   const d = dest.split("?")[0];
+//   if (d === "/auth/role-selection") return pathname === d || pathname.startsWith(`${d}/`);
+//   if (d === "/parent/onboarding") return pathname === d || pathname.startsWith(`${d}/`);
+//   if (d === "/sitter/onboarding") return pathname === d || pathname.startsWith(`${d}/`);
+//   if (d === "/parent/dashboard") return pathname.startsWith("/parent");
+//   if (d === "/sitter/dashboard") return pathname.startsWith("/sitter") || pathname.startsWith("/session");
+//   if (d === "/auth") return pathname === "/auth";
+//   if (d.startsWith("/auth")) return pathname === d || pathname.startsWith(`${d}/`);
+//   return pathname === d || pathname.startsWith(`${d}/`);
+// }
 
 function isPublicRoute(pathname: string): boolean {
   if (pathname === "/auth/register" || pathname.startsWith("/auth/register/")) {
     return true;
   }
-  if (pathname === "/sitter/onboarding" || pathname.startsWith("/sitter/onboarding/")) {
+  /** Avoid post-login flicker: server `getUser()` can lag cookies for one request; page confirms session on client. */
+  if (pathname === "/auth/role-selection" || pathname.startsWith("/auth/role-selection/")) {
     return true;
   }
   return false;
@@ -131,7 +111,6 @@ export async function middleware(request: NextRequest) {
   }
 
   const isAuthPath = pathname === "/auth" || pathname.startsWith("/auth/");
-  const isSitterOnboarding = pathname === "/sitter/onboarding" || pathname.startsWith("/sitter/onboarding/");
   const isProtectedApp =
     pathname.startsWith("/parent") ||
     pathname === "/session" ||
@@ -172,34 +151,55 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user }
   } = await supabase.auth.getUser();
+
+  /**
+   * Authenticated users on `/sitter/*` must never be redirected to `/auth/role-selection` (sitter loop break).
+   * When post-auth redirects are re-enabled below, this early return still applies first.
+   */
+  if (user && pathname.startsWith("/sitter")) {
+    return response;
+  }
+
+  /**
+   * Trust `/sitter/dashboard` (and legacy `/sitter/onboarding` URL) during cookie lag so SSR does not bounce to `/auth`.
+   */
   const trustClientSession =
     pathname === "/parent/dashboard" ||
+    pathname === "/parent/onboarding" ||
     pathname === "/sitter/dashboard" ||
-    isSitterOnboarding ||
+    pathname.startsWith("/sitter/onboarding") ||
     (pathname.startsWith("/parent") && cookieLikelySession) ||
     (pathname.startsWith("/sitter") && cookieLikelySession);
 
-  if (isAuthPath && user) {
-    const role = await roleForUser(supabase, user);
-    if (!role) {
-      return response;
-    }
-
-    const nextParam = request.nextUrl.searchParams.get("next");
-    const destPath = destinationForRole(role, nextParam);
-
-    if (pathname === destPath || pathname.startsWith(`${destPath}/`)) {
-      return response;
-    }
-
-    return middlewareRedirect(request, destPath);
+  /**
+   * TEMP (בטל): post-auth / `/auth/role-selection` redirects — was causing sitter redirect loops.
+   * Re-enable by restoring `resolvePostAuthPath` + `pathAllowedForPostAuthDest` block below.
+   */
+  if (user && (isAuthPath || isProtectedApp)) {
+    return response;
   }
+  // if (user && (isAuthPath || isProtectedApp)) {
+  //   const dest = await resolvePostAuthPath(supabase, user.id, request.nextUrl.searchParams.get("next"), {
+  //     userEmail: user.email
+  //   });
+  //   const destBase = dest.split("?")[0];
+  //   if (
+  //     pathname.startsWith("/sitter") &&
+  //     (destBase === "/auth/role-selection" || destBase.startsWith("/auth/role-selection/"))
+  //   ) {
+  //     return response;
+  //   }
+  //   if (!pathAllowedForPostAuthDest(pathname, dest)) {
+  //     return middlewareRedirect(request, dest);
+  //   }
+  //   return response;
+  // }
 
   if (isAuthPath) {
     return response;
   }
 
-  if (!user && isProtectedApp && (trustClientSession || isSitterOnboarding)) {
+  if (!user && isProtectedApp && trustClientSession) {
     return response;
   }
 
@@ -211,14 +211,6 @@ export async function middleware(request: NextRequest) {
 
   if (!user) {
     return response;
-  }
-
-  const role = await roleForUser(supabase, user);
-
-  if (!role) {
-    const authUrl = new URL("/auth", request.url);
-    authUrl.searchParams.set("error", "no_profile");
-    return NextResponse.redirect(authUrl);
   }
 
   return response;
