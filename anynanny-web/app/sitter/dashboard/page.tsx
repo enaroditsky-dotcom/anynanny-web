@@ -133,7 +133,7 @@ export default function SitterDashboardPage() {
     setPendingRow(pending);
     setEndConfirmRow(endConfirm);
 
-    const dismissed = readDismissedCompletedSessionId();
+    const dismissed = readDismissedCompletedSessionId("sitter");
     const blockCompletedSummary =
       endConfirm != null ||
       pending != null ||
@@ -269,7 +269,7 @@ export default function SitterDashboardPage() {
   const dismissCompletedSummary = useCallback(async () => {
     if (!completedSummaryRow || !sitterId) return;
     const supabase = getSupabaseBrowserClient();
-    dismissCompletedSession(String(completedSummaryRow.id));
+    dismissCompletedSession(String(completedSummaryRow.id), "sitter");
     setCompletedSummaryRow(null);
     if (supabase) {
       await refreshForUser(supabase, sitterId);
@@ -447,62 +447,64 @@ export default function SitterDashboardPage() {
 
       {/* Fixed 240×240 slot — only one branch mounts so nothing stacks */}
       <div className="flex w-full flex-1 flex-col items-center justify-center py-2">
-        <div className="flex h-[240px] w-[240px] shrink-0 items-center justify-center">
-          {completedSummaryRow ? (
-            <SessionFinalSummary
-              {...completedSummaryFromSessionRow(completedSummaryRow, sitterHourlyRateNis)}
-              onDismiss={() => void dismissCompletedSummary()}
-            />
-          ) : mainCircleMode === "end_confirm" ? (
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
-              onClick={() => void confirmEndShift()}
-              className={`${SESSION_CIRCLE_SHELL_CLASS} gap-1 bg-[#FF8A8A] text-lg shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95 sm:text-xl`}
-            >
-              <span className="max-w-[13rem]">אישור סיום משמרת</span>
-            </button>
-          ) : null}
+        {completedSummaryRow ? (
+          <SessionFinalSummary
+            {...completedSummaryFromSessionRow(completedSummaryRow, sitterHourlyRateNis)}
+            onDismiss={() => void dismissCompletedSummary()}
+          />
+        ) : (
+          <div className="flex h-[240px] w-[240px] shrink-0 items-center justify-center">
+            {mainCircleMode === "end_confirm" ? (
+              <button
+                type="button"
+                style={SESSION_ACTION_CIRCLE_STYLE}
+                onClick={() => void confirmEndShift()}
+                className={`${SESSION_CIRCLE_SHELL_CLASS} gap-1 bg-[#FF8A8A] text-lg shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95 sm:text-xl`}
+              >
+                <span className="max-w-[13rem]">אישור סיום משמרת</span>
+              </button>
+            ) : null}
 
-          {mainCircleMode === "start_confirm" ? (
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
-              onClick={() => void confirmStartShift()}
-              className={`${SESSION_CIRCLE_SHELL_CLASS} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
-            >
-              <span className="max-w-[13rem]">אישור התחלת משמרת</span>
-              <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
-            </button>
-          ) : null}
+            {mainCircleMode === "start_confirm" ? (
+              <button
+                type="button"
+                style={SESSION_ACTION_CIRCLE_STYLE}
+                onClick={() => void confirmStartShift()}
+                className={`${SESSION_CIRCLE_SHELL_CLASS} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
+              >
+                <span className="max-w-[13rem]">אישור התחלת משמרת</span>
+                <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
+              </button>
+            ) : null}
 
-          {mainCircleMode === "active_timer" && sitterMainShiftRow ? (
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
-              aria-live="polite"
-              className={`${SESSION_CIRCLE_SHELL_CLASS} cursor-default select-none gap-1 bg-emerald-600 text-lg shadow-[0_12px_40px_-10px_rgba(22,163,74,0.5)] ring-emerald-500/35 active:bg-emerald-600 sm:text-xl`}
-            >
-              <span className="max-w-[13rem] leading-tight">משמרת פעילה</span>
-              <span className="max-w-[13rem] text-2xl font-bold tabular-nums tracking-wide sm:text-3xl">{mainShiftTimerText}</span>
-            </button>
-          ) : null}
+            {mainCircleMode === "active_timer" && sitterMainShiftRow ? (
+              <button
+                type="button"
+                style={SESSION_ACTION_CIRCLE_STYLE}
+                aria-live="polite"
+                className={`${SESSION_CIRCLE_SHELL_CLASS} cursor-default select-none gap-1 bg-emerald-600 text-lg shadow-[0_12px_40px_-10px_rgba(22,163,74,0.5)] ring-emerald-500/35 active:bg-emerald-600 sm:text-xl`}
+              >
+                <span className="max-w-[13rem] leading-tight">משמרת פעילה</span>
+                <span className="max-w-[13rem] text-2xl font-bold tabular-nums tracking-wide sm:text-3xl">{mainShiftTimerText}</span>
+              </button>
+            ) : null}
 
-          {mainCircleMode === "idle" ? (
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
-              aria-disabled={true}
-              tabIndex={0}
-              className={`${SESSION_CIRCLE_SHELL_CLASS} cursor-not-allowed gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 active:bg-[#dc2626] active:shadow-[0_12px_40px_-10px_rgba(220,38,38,0.45)] active:ring-red-500/40 sm:text-xl`}
-              onClick={(e) => {
-                e.preventDefault();
-              }}
-            >
-              <span className="max-w-[13rem] leading-tight">אין משמרת פעילה</span>
-            </button>
-          ) : null}
-        </div>
+            {mainCircleMode === "idle" ? (
+              <button
+                type="button"
+                style={SESSION_ACTION_CIRCLE_STYLE}
+                aria-disabled={true}
+                tabIndex={0}
+                className={`${SESSION_CIRCLE_SHELL_CLASS} cursor-not-allowed gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 active:bg-[#dc2626] active:shadow-[0_12px_40px_-10px_rgba(220,38,38,0.45)] active:ring-red-500/40 sm:text-xl`}
+                onClick={(e) => {
+                  e.preventDefault();
+                }}
+              >
+                <span className="max-w-[13rem] leading-tight">אין משמרת פעילה</span>
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );

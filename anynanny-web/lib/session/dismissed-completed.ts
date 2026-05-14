@@ -2,19 +2,26 @@
 
 import { mapSupabaseRowToProtocol, type SessionProtocolState, type SupabaseSessionRow } from "@/lib/session/protocol";
 
-const DISMISSED_COMPLETED_SESSION_KEY = "anynanny_dismissed_completed_session_id";
-export function readDismissedCompletedSessionId(): string | null {
+export type CompletedSessionDismissRole = "parent" | "sitter";
+
+function storageKey(role: CompletedSessionDismissRole) {
+  return role === "parent"
+    ? "anynanny_dismissed_completed_session_id_parent"
+    : "anynanny_dismissed_completed_session_id_sitter";
+}
+
+export function readDismissedCompletedSessionId(role: CompletedSessionDismissRole): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return localStorage.getItem(DISMISSED_COMPLETED_SESSION_KEY);
+    return localStorage.getItem(storageKey(role));
   } catch {
     return null;
   }
 }
 
-export function dismissCompletedSession(sessionId: string) {
+export function dismissCompletedSession(sessionId: string, role: CompletedSessionDismissRole) {
   try {
-    localStorage.setItem(DISMISSED_COMPLETED_SESSION_KEY, String(sessionId));
+    localStorage.setItem(storageKey(role), String(sessionId));
   } catch {
     /* ignore */
   }
