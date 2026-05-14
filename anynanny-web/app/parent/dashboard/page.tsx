@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { Calendar, History, Settings, Wallet } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SessionFinalSummary } from "@/components/session/session-final-summary";
+import { SessionRatingModal } from "@/components/session/session-rating-modal";
 import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -14,22 +17,26 @@ import {
   type SessionProtocolState,
   type SupabaseSessionRow,
   formatElapsed,
+  mapSupabaseRowToProtocol,
   persistSessionState,
   readSessionState
 } from "@/lib/session/protocol";
-import { SESSION_ACTION_CIRCLE_STYLE, SESSION_CIRCLE_SHELL_CLASS } from "@/lib/session/session-circle";
+import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { completedSummaryFromEndedState } from "@/lib/session/completed-summary";
+import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import {
   dismissCompletedSession,
   parentSessionStateFromSupabaseRow,
   readDismissedCompletedSessionId
 } from "@/lib/session/dismissed-completed";
-import { SessionFinalSummary } from "@/components/session/session-final-summary";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+
+const circleShell =
+  "rounded-full shrink-0 overflow-hidden ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
 
 export default function ParentDashboardPage() {
+  const router = useRouter();
   const { isLoading: authLoading, displayName } = useAuth();
 
   /** getSession() can succeed when middleware getUser() misses — show grid as soon as we see a browser session. */
@@ -43,6 +50,9 @@ export default function ParentDashboardPage() {
   /** Debug: confirms Supabase write reached DB (start insert or end-request update). */
   const [debugToast, setDebugToast] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [ratingOpen, setRatingOpen] = useState(false);
+  /** Session id for rating after summary — kept out of `sessionState` so the dashboard can return to idle under the modal. */
+  const [ratingTargetSessionId, setRatingTargetSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!debugToast) return;
@@ -114,7 +124,8 @@ export default function ParentDashboardPage() {
           console.warn("[parent] initial sessions fetch:", rowErr.message);
         }
         if (!cancelled && !rowErr && row) {
-          const mapped = parentSessionStateFromSupabaseRow(row as SupabaseSessionRow, readDismissedCompletedSessionId("parent"));
+          const dismissedId = readDismissedCompletedSessionId("parent");
+          const mapped = parentSessionStateFromSupabaseRow(row as SupabaseSessionRow, dismissedId);
           if (mapped) {
             persistSessionState(mapped);
             setSessionState(mapped);
@@ -147,7 +158,8 @@ export default function ParentDashboardPage() {
     }) => {
       const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
       if (!rowData || typeof rowData !== "object") return;
-      const mapped = parentSessionStateFromSupabaseRow(rowData, readDismissedCompletedSessionId("parent"));
+      const dismissedId = readDismissedCompletedSessionId("parent");
+      const mapped = parentSessionStateFromSupabaseRow(rowData as SupabaseSessionRow, dismissedId);
       if (mapped) {
         persistSessionState(mapped);
         setSessionState(mapped);
@@ -181,20 +193,40 @@ export default function ParentDashboardPage() {
   const timerText = useMemo(() => formatElapsed(elapsedSeconds), [elapsedSeconds]);
   const earnedNis = useMemo(() => ((elapsedSeconds / 3600) * HOURLY_RATE).toFixed(2), [elapsedSeconds]);
 
-  const finalSummaryTotals = useMemo(
+  const completedSummary = useMemo(
     () => completedSummaryFromEndedState(sessionState, HOURLY_RATE),
     [sessionState]
   );
 
-  const dismissFinalSessionSummary = useCallback(() => {
+  const handleSummaryCloseRequestRating = useCallback(() => {
     const sid = sessionState.supabaseSessionId;
-    if (!sid) return;
-    dismissCompletedSession(sid, "parent");
-    const idle: SessionProtocolState = { status: "idle" };
-    persistSessionState(idle);
-    setSessionState(idle);
+    if (!sid) {
+      persistSessionState({ status: "idle" });
+      setSessionState({ status: "idle" });
+      setNowMs(Date.now());
+      return;
+    }
+    setRatingTargetSessionId(sid);
+    persistSessionState({ status: "idle" });
+    setSessionState({ status: "idle" });
     setNowMs(Date.now());
+    setRatingOpen(true);
   }, [sessionState.supabaseSessionId]);
+
+  const handleRatingResolved = useCallback(() => {
+    const sid = ratingTargetSessionId;
+    if (sid) {
+      dismissCompletedSession(sid, "parent");
+    }
+    setRatingTargetSessionId(null);
+    persistSessionState({ status: "idle" });
+    setSessionState({ status: "idle" });
+    setRatingOpen(false);
+    setDbBanner(null);
+    setNowMs(Date.now());
+    router.push("/parent/dashboard");
+    router.refresh();
+  }, [router, ratingTargetSessionId]);
 
   const startSession = async () => {
     if (sessionState.status === "parent_initiated" || sessionState.status === "active") return;
@@ -236,7 +268,7 @@ export default function ParentDashboardPage() {
 
       setUseSupabase(true);
       if (row) {
-        const mapped = parentSessionStateFromSupabaseRow(row as SupabaseSessionRow, readDismissedCompletedSessionId("parent"));
+        const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
         if (mapped) {
           persistSessionState(mapped);
           setSessionState(mapped);
@@ -313,7 +345,7 @@ export default function ParentDashboardPage() {
           .select("*")
           .single();
         if (!error && row) {
-          const mapped = parentSessionStateFromSupabaseRow(row as SupabaseSessionRow, readDismissedCompletedSessionId("parent"));
+          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
           if (mapped) {
             persistSessionState(mapped);
             setSessionState(mapped);
@@ -445,18 +477,18 @@ export default function ParentDashboardPage() {
         ) : null}
 
         <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
-          {sessionState.status === "ended" && finalSummaryTotals ? (
+          {sessionState.status === "ended" && completedSummary ? (
             <SessionFinalSummary
-              elapsedSeconds={finalSummaryTotals.elapsedSeconds}
-              amountNis={finalSummaryTotals.amountNis}
-              onDismiss={dismissFinalSessionSummary}
+              elapsedSeconds={completedSummary.elapsedSeconds}
+              amountNis={completedSummary.amountNis}
+              onDismiss={handleSummaryCloseRequestRating}
             />
-          ) : !sessionRunning ? (
+          ) : !sessionRunning && sessionState.status !== "ended" ? (
             <button
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               onClick={() => void startSession()}
-              className={`${SESSION_CIRCLE_SHELL_CLASS} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
+              className={`${circleShell} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
             >
               <span className="max-w-[13rem]">התחלת משמרת</span>
               <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
@@ -467,7 +499,7 @@ export default function ParentDashboardPage() {
                 type="button"
                 style={SESSION_ACTION_CIRCLE_STYLE}
                 disabled={cancelBusy}
-                className={`${SESSION_CIRCLE_SHELL_CLASS} cursor-wait gap-2 bg-[#001F3F] opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/30 animate-session-pulse-navy transition disabled:cursor-not-allowed disabled:opacity-70`}
+                className={`${circleShell} cursor-wait gap-2 bg-[#001F3F] opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/30 animate-session-pulse-navy transition disabled:cursor-not-allowed disabled:opacity-70`}
               >
                 <span className="max-w-[13rem]">ממתין לאישור…</span>
               </button>
@@ -485,7 +517,7 @@ export default function ParentDashboardPage() {
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               onClick={() => void endSession()}
-              className={`${SESSION_CIRCLE_SHELL_CLASS} gap-1 bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95`}
+              className={`${circleShell} gap-1 bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95`}
             >
               <span className="max-w-[13rem]">סיום משמרת</span>
             </button>
@@ -494,7 +526,7 @@ export default function ParentDashboardPage() {
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               disabled
-              className={`${SESSION_CIRCLE_SHELL_CLASS} cursor-wait gap-2 bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-[#FF8A8A]/35 animate-session-pulse-salmon`}
+              className={`${circleShell} cursor-wait gap-2 bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-[#FF8A8A]/35 animate-session-pulse-salmon`}
             >
               <span className="max-w-[13rem]">ממתין לאישור סיום...</span>
             </button>
@@ -511,6 +543,13 @@ export default function ParentDashboardPage() {
           {debugToast}
         </div>
       ) : null}
+
+      <SessionRatingModal
+        open={ratingOpen}
+        role="parent"
+        sessionId={ratingTargetSessionId}
+        onResolved={handleRatingResolved}
+      />
     </main>
   );
 }

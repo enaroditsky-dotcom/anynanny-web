@@ -51,6 +51,9 @@ export type SitterProfileRow = {
   is_public: boolean;
   onboarding_completed_at: string | null;
   updated_at: string;
+  /** Average rating from `public.ratings` (maintained by DB trigger). */
+  avg_rating?: number | null;
+  rating_count?: number | null;
 };
 
 /** Payload from `get_sitter_profile_public` RPC — never includes hidden admin fields. */

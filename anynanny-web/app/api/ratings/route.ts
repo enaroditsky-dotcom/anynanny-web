@@ -1,45 +1,138 @@
-import { DuplicateSessionRatingError, getNannyProfiles, submitNannyRating } from "@/lib/ratings/service";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { RATINGS_TABLE } from "@/lib/ratings/constants";
+import { SESSIONS_TABLE } from "@/lib/session/protocol";
 
-export async function GET() {
-  const profiles = await getNannyProfiles();
-  return NextResponse.json({ profiles });
+export const dynamic = "force-dynamic";
+
+async function supabaseFromCookies() {
+  const cookieStore = await cookies();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+  return createServerClient(url, anon, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookieStore.set(name, value, options);
+        });
+      }
+    }
+  });
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as {
-    sessionId?: string;
-    nannyName?: string;
-    parentName?: string;
-    stars?: number;
-    comment?: string;
-  };
-
-  const sessionId = String(body.sessionId ?? "").trim();
-  const nannyName = String(body.nannyName ?? "").trim();
-  const parentName = String(body.parentName ?? "").trim();
-  const stars = Number(body.stars ?? 0);
-  const comment = String(body.comment ?? "").trim();
-
-  if (!sessionId || !nannyName || !parentName || !comment || !Number.isInteger(stars) || stars < 1 || stars > 5) {
-    return NextResponse.json({ error: "Invalid rating payload." }, { status: 400 });
-  }
-
   try {
-    const result = await submitNannyRating({
-      sessionId,
-      nannyName,
-      parentName,
-      stars,
+    const supabase = await supabaseFromCookies();
+    const {
+      data: { user },
+      error: authErr
+    } = await supabase.auth.getUser();
+    if (authErr || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = (await request.json()) as {
+      session_id?: unknown;
+      rating?: unknown;
+      comment?: string | null;
+    };
+    const sessionId =
+      typeof body.session_id === "string"
+        ? body.session_id.trim()
+        : body.session_id != null && typeof body.session_id !== "object"
+          ? String(body.session_id).trim()
+          : "";
+    const ratingRaw = body.rating;
+    const rating =
+      typeof ratingRaw === "number" && Number.isFinite(ratingRaw)
+        ? ratingRaw
+        : typeof ratingRaw === "string" && ratingRaw.trim() !== ""
+          ? Number(ratingRaw.trim())
+          : NaN;
+    const commentRaw = body.comment;
+    const comment =
+      commentRaw === undefined || commentRaw === null
+        ? null
+        : typeof commentRaw === "string"
+          ? commentRaw.trim().slice(0, 2000) || null
+          : null;
+
+    const uuidOk = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
+    if (!sessionId || !uuidOk) {
+      return NextResponse.json({ error: "session_id must be a valid UUID" }, { status: 400 });
+    }
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return NextResponse.json({ error: "rating must be an integer 1–5" }, { status: 400 });
+    }
+
+    const { data: sessionRow, error: sessErr } = await supabase
+      .from(SESSIONS_TABLE)
+      .select("id, parent_id, sitter_id, status")
+      .eq("id", sessionId)
+      .maybeSingle();
+
+    if (sessErr || !sessionRow) {
+      return NextResponse.json({ error: sessErr?.message ?? "Session not found" }, { status: 400 });
+    }
+
+    const parentId = sessionRow.parent_id != null ? String(sessionRow.parent_id) : null;
+    const sitterId = sessionRow.sitter_id != null ? String(sessionRow.sitter_id) : null;
+    const uid = user.id;
+
+    const isParent = parentId === uid;
+    const isSitter = sitterId === uid;
+    if (!isParent && !isSitter) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (String(sessionRow.status) !== "completed") {
+      return NextResponse.json({ error: "Session must be completed before rating" }, { status: 400 });
+    }
+
+    let toUserId: string | null = null;
+    if (isParent) {
+      if (!sitterId) {
+        return NextResponse.json({ error: "No sitter assigned to this session" }, { status: 400 });
+      }
+      toUserId = sitterId;
+    } else {
+      if (!parentId) {
+        return NextResponse.json({ error: "Session has no parent" }, { status: 400 });
+      }
+      toUserId = parentId;
+    }
+
+    if (toUserId === uid) {
+      return NextResponse.json({ error: "Invalid rating target" }, { status: 400 });
+    }
+
+    const ratingStars = rating;
+
+    const { error: insErr } = await supabase.from(RATINGS_TABLE).insert({
+      session_id: sessionId,
+      from_user_id: uid,
+      to_user_id: toUserId,
+      rating: ratingStars,
       comment
     });
 
-    return NextResponse.json({ ok: true, rating: result.rating, profile: result.profile });
-  } catch (error) {
-    if (error instanceof DuplicateSessionRatingError) {
-      return NextResponse.json({ error: "This session has already been rated." }, { status: 409 });
+    if (insErr) {
+      const msg = insErr.message ?? "Insert failed";
+      if (msg.includes("duplicate") || msg.includes("unique")) {
+        return NextResponse.json({ error: "Already rated this session" }, { status: 409 });
+      }
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
 
-    return NextResponse.json({ error: "Could not submit rating." }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
