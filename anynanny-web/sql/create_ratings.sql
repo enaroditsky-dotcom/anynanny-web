@@ -72,13 +72,16 @@ create trigger ratings_after_insert_refresh_sitter_avg
 alter table public.ratings enable row level security;
 
 drop policy if exists "ratings_select_own" on public.ratings;
-create policy "ratings_select_own"
+drop policy if exists "ratings_insert_participant" on public.ratings;
+drop policy if exists "ratings_select_participant" on public.ratings;
+drop policy if exists "ratings_insert_session_participant" on public.ratings;
+
+create policy "ratings_select_participant"
   on public.ratings for select
   to authenticated
   using (from_user_id = auth.uid() or to_user_id = auth.uid());
 
-drop policy if exists "ratings_insert_participant" on public.ratings;
-create policy "ratings_insert_participant"
+create policy "ratings_insert_session_participant"
   on public.ratings for insert
   to authenticated
   with check (
@@ -87,7 +90,20 @@ create policy "ratings_insert_participant"
       select 1
       from public.sessions s
       where s.id = session_id
+        and s.status::text = 'completed'
         and (s.parent_id = auth.uid() or s.sitter_id = auth.uid())
+        and (
+          (
+            s.parent_id = auth.uid()
+            and s.sitter_id is not null
+            and to_user_id = s.sitter_id
+          )
+          or (
+            s.sitter_id = auth.uid()
+            and s.parent_id is not null
+            and to_user_id = s.parent_id
+          )
+        )
     )
   );
 
