@@ -14,6 +14,9 @@ import {
 } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { SessionFinalSummary } from "@/components/session/session-final-summary";
+import { completedSummaryFromSessionRow } from "@/lib/session/completed-summary";
+import { dismissCompletedSession, readDismissedCompletedSessionId } from "@/lib/session/dismissed-completed";
 import {
   HOURLY_RATE,
   SESSIONS_TABLE,
@@ -24,13 +27,10 @@ import {
   formatElapsed,
   isSitterShiftActiveStatus
 } from "@/lib/session/protocol";
-import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
+import { SESSION_ACTION_CIRCLE_STYLE, SESSION_CIRCLE_SHELL_CLASS } from "@/lib/session/session-circle";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 
 /** DB `sitter_id` = nanny; null = open assignment. */
-const circleShell =
-  "rounded-full shrink-0 overflow-hidden ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
-
 function parentRequestedEndAt(row: SupabaseSessionRow): boolean {
   return row.parent_end_requested_at != null && String(row.parent_end_requested_at).length > 0;
 }
@@ -53,6 +53,9 @@ export default function SitterDashboardPage() {
   const [endConfirmRow, setEndConfirmRow] = useState<SupabaseSessionRow | null>(null);
   /** Assigned to this sitter with status pending | started | active (see protocol). Drives main circle + timer. */
   const [sitterMainShiftRow, setSitterMainShiftRow] = useState<SupabaseSessionRow | null>(null);
+  /** Latest completed session for this sitter — final summary until dismissed. */
+  const [completedSummaryRow, setCompletedSummaryRow] = useState<SupabaseSessionRow | null>(null);
+  const [sitterHourlyRateNis, setSitterHourlyRateNis] = useState(HOURLY_RATE);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   /** Wall clock for live timer — must tick every second so elapsed updates (same formula as parent). */
@@ -66,7 +69,7 @@ export default function SitterDashboardPage() {
   }, [displayName]);
 
   const refreshForUser = useCallback(async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
-    const [pendRes, actRes, sitterMainRes] = await Promise.all([
+    const [pendRes, actRes, sitterMainRes, completedRes] = await Promise.all([
       supabase
         .from(SESSIONS_TABLE)
         .select("*")
@@ -88,6 +91,14 @@ export default function SitterDashboardPage() {
         .in("status", [...SESSION_SITTER_SHIFT_ACTIVE_STATUSES])
         .order("created_at", { ascending: false })
         .limit(1)
+        .maybeSingle(),
+      supabase
+        .from(SESSIONS_TABLE)
+        .select("*")
+        .eq("sitter_id", uid)
+        .eq("status", "completed")
+        .order("end_time", { ascending: false })
+        .limit(1)
         .maybeSingle()
     ]);
 
@@ -100,10 +111,14 @@ export default function SitterDashboardPage() {
     if (sitterMainRes.error) {
       console.warn("[sitter dashboard] sitter main shift fetch:", sitterMainRes.error.message);
     }
+    if (completedRes.error) {
+      console.warn("[sitter dashboard] completed session fetch:", completedRes.error.message);
+    }
 
     const pendList = (pendRes.data ?? []) as SupabaseSessionRow[];
     const actList = (actRes.data ?? []) as SupabaseSessionRow[];
-    setSitterMainShiftRow((sitterMainRes.data ?? null) as SupabaseSessionRow | null);
+    const nextMainShift = (sitterMainRes.data ?? null) as SupabaseSessionRow | null;
+    setSitterMainShiftRow(nextMainShift);
 
     const pending = pendList[0] ?? null;
 
@@ -117,6 +132,21 @@ export default function SitterDashboardPage() {
 
     setPendingRow(pending);
     setEndConfirmRow(endConfirm);
+
+    const dismissed = readDismissedCompletedSessionId();
+    const blockCompletedSummary =
+      endConfirm != null ||
+      pending != null ||
+      (nextMainShift != null && isSitterShiftActiveStatus(nextMainShift.status));
+
+    let completedForSummary: SupabaseSessionRow | null = null;
+    if (!blockCompletedSummary && !completedRes.error && completedRes.data) {
+      const c = completedRes.data as SupabaseSessionRow;
+      if (dismissed == null || String(c.id) !== dismissed) {
+        completedForSummary = c;
+      }
+    }
+    setCompletedSummaryRow(completedForSummary);
   }, []);
 
   const refreshSitterProfileCardStatus = useCallback(
@@ -137,6 +167,8 @@ export default function SitterDashboardPage() {
       } else {
         setProfileCardStatus("incomplete");
       }
+      const rateRaw = data != null ? Number((data as { hourly_rate_nis?: unknown }).hourly_rate_nis) : NaN;
+      setSitterHourlyRateNis(Number.isFinite(rateRaw) && rateRaw > 0 ? rateRaw : HOURLY_RATE);
     },
     []
   );
@@ -234,6 +266,17 @@ export default function SitterDashboardPage() {
     if (supabase) void refreshSitterProfileCardStatus(supabase, sitterId);
   }, [pathname, sitterId, refreshSitterProfileCardStatus]);
 
+  const dismissCompletedSummary = useCallback(async () => {
+    if (!completedSummaryRow || !sitterId) return;
+    const supabase = getSupabaseBrowserClient();
+    dismissCompletedSession(String(completedSummaryRow.id));
+    setCompletedSummaryRow(null);
+    if (supabase) {
+      await refreshForUser(supabase, sitterId);
+    }
+    router.refresh();
+  }, [completedSummaryRow, sitterId, refreshForUser, router]);
+
   /** Elapsed for the main shift button — same freeze rules as parent end-request on active rows. */
   const mainShiftElapsed = useMemo(() => {
     const row = sitterMainShiftRow;
@@ -276,6 +319,9 @@ export default function SitterDashboardPage() {
   }, [endConfirmRow, pendingRow, sitterMainShiftRow]);
 
   const sessionCaption = useMemo(() => {
+    if (completedSummaryRow) {
+      return <p className="text-xs text-slate-500">&nbsp;</p>;
+    }
     if (mainCircleMode === "end_confirm") {
       return (
         <>
@@ -303,7 +349,7 @@ export default function SitterDashboardPage() {
       );
     }
     return <p className="text-xs text-slate-500">&nbsp;</p>;
-  }, [mainCircleMode, mainShiftEarned]);
+  }, [completedSummaryRow, mainCircleMode, mainShiftEarned]);
 
   const confirmStartShift = async () => {
     if (!pendingRow || !sitterId) return;
@@ -354,6 +400,15 @@ export default function SitterDashboardPage() {
     const startMs = new Date(endConfirmRow.start_time).getTime();
     const endMs = new Date(endIso).getTime();
     const finalSeconds = Math.max(0, Math.floor((endMs - startMs) / 1000));
+    const exactMinutes = Math.max(0, Math.floor((endMs - startMs) / 60000));
+    const { data: prof, error: profErr } = await auth.supabase
+      .from(SITTER_PROFILES_TABLE)
+      .select("hourly_rate_nis")
+      .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
+      .maybeSingle();
+    const rateRaw = Number(prof?.hourly_rate_nis);
+    const hourly = !profErr && Number.isFinite(rateRaw) && rateRaw > 0 ? rateRaw : HOURLY_RATE;
+    const finalAmount = Math.round((hourly / 60) * exactMinutes * 100) / 100;
     try {
       const { error } = await auth.supabase
         .from(SESSIONS_TABLE)
@@ -363,7 +418,7 @@ export default function SitterDashboardPage() {
           sitter_end_confirmed_at: endIso,
           parent_end_requested_at: null,
           final_elapsed_seconds: finalSeconds,
-          final_amount_nis: Number(((finalSeconds / 3600) * HOURLY_RATE).toFixed(2))
+          final_amount_nis: finalAmount
         })
         .eq("id", endConfirmRow.id);
       if (error) {
@@ -393,12 +448,17 @@ export default function SitterDashboardPage() {
       {/* Fixed 240×240 slot — only one branch mounts so nothing stacks */}
       <div className="flex w-full flex-1 flex-col items-center justify-center py-2">
         <div className="flex h-[240px] w-[240px] shrink-0 items-center justify-center">
-          {mainCircleMode === "end_confirm" ? (
+          {completedSummaryRow ? (
+            <SessionFinalSummary
+              {...completedSummaryFromSessionRow(completedSummaryRow, sitterHourlyRateNis)}
+              onDismiss={() => void dismissCompletedSummary()}
+            />
+          ) : mainCircleMode === "end_confirm" ? (
             <button
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               onClick={() => void confirmEndShift()}
-              className={`${circleShell} gap-1 bg-[#FF8A8A] text-lg shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95 sm:text-xl`}
+              className={`${SESSION_CIRCLE_SHELL_CLASS} gap-1 bg-[#FF8A8A] text-lg shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95 sm:text-xl`}
             >
               <span className="max-w-[13rem]">אישור סיום משמרת</span>
             </button>
@@ -409,7 +469,7 @@ export default function SitterDashboardPage() {
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               onClick={() => void confirmStartShift()}
-              className={`${circleShell} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
+              className={`${SESSION_CIRCLE_SHELL_CLASS} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
             >
               <span className="max-w-[13rem]">אישור התחלת משמרת</span>
               <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
@@ -421,7 +481,7 @@ export default function SitterDashboardPage() {
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               aria-live="polite"
-              className={`${circleShell} cursor-default select-none gap-1 bg-emerald-600 text-lg shadow-[0_12px_40px_-10px_rgba(22,163,74,0.5)] ring-emerald-500/35 active:bg-emerald-600 sm:text-xl`}
+              className={`${SESSION_CIRCLE_SHELL_CLASS} cursor-default select-none gap-1 bg-emerald-600 text-lg shadow-[0_12px_40px_-10px_rgba(22,163,74,0.5)] ring-emerald-500/35 active:bg-emerald-600 sm:text-xl`}
             >
               <span className="max-w-[13rem] leading-tight">משמרת פעילה</span>
               <span className="max-w-[13rem] text-2xl font-bold tabular-nums tracking-wide sm:text-3xl">{mainShiftTimerText}</span>
@@ -434,7 +494,7 @@ export default function SitterDashboardPage() {
               style={SESSION_ACTION_CIRCLE_STYLE}
               aria-disabled={true}
               tabIndex={0}
-              className={`${circleShell} cursor-not-allowed gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 active:bg-[#dc2626] active:shadow-[0_12px_40px_-10px_rgba(220,38,38,0.45)] active:ring-red-500/40 sm:text-xl`}
+              className={`${SESSION_CIRCLE_SHELL_CLASS} cursor-not-allowed gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 active:bg-[#dc2626] active:shadow-[0_12px_40px_-10px_rgba(220,38,38,0.45)] active:ring-red-500/40 sm:text-xl`}
               onClick={(e) => {
                 e.preventDefault();
               }}
