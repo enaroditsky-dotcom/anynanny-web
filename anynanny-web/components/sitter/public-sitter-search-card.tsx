@@ -14,14 +14,21 @@ function formatAvgLine(avg: number | null, count: number): string {
   return `${Number(avg).toFixed(1)} ★ (${count})`;
 }
 
+export function parentSitterProfilePath(sitterId: string): string {
+  const id = sitterId.trim();
+  if (!id || id === "undefined" || id === "null") return "/parent/search";
+  return `/parent/sitter/${encodeURIComponent(id)}`;
+}
+
 export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSearchCard }) {
   const title = resolveSitterCardTitle(sitter);
   const rate = sitter.hourly_rate_nis;
   const rateLabel = formatHourlyRateNis(rate);
+  const profileHref = parentSitterProfilePath(sitter.id);
 
   return (
     <Link
-      href={`/parent/sitter/${encodeURIComponent(sitter.id)}`}
+      href={profileHref}
       className="block rounded-3xl border border-navy-header/12 bg-white p-4 shadow-soft transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.99]"
     >
       <div className="flex flex-row-reverse items-start justify-between gap-3">

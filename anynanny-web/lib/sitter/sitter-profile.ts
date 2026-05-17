@@ -59,6 +59,8 @@ export type SitterProfileRow = {
 /** Payload from `get_sitter_profile_public` RPC — never includes hidden admin fields. */
 export type SitterProfilePublic = {
   id: string;
+  full_name?: string | null;
+  nanny_serial?: string | null;
   display_name: string | null;
   age_years: number | null;
   languages: string | null;
