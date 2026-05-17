@@ -9,6 +9,7 @@ import { SessionFinalSummary } from "@/components/session/session-final-summary"
 import { SessionRatingModal } from "@/components/session/session-rating-modal";
 import { SITTER_PROFILE_SAVED_NAV_FLAG, SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
+import { SitterPendingBookings } from "@/components/sitter/sitter-pending-bookings";
 import {
   hasSitterCompletedOnboarding,
   SITTER_PROFILES_TABLE,
@@ -596,6 +597,8 @@ export default function SitterDashboardPage() {
           </Link>
         </div>
       </section>
+
+      <SitterPendingBookings sitterId={sitterId} disabled={onboardingPending} />
 
       <section
         id="sitter-shift-panel"

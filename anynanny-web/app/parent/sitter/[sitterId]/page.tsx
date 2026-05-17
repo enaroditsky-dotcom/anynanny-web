@@ -47,6 +47,7 @@ export default function ParentSitterProfilePage() {
   const [pageState, setPageState] = useState<"loading" | "missing" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bookModalOpen, setBookModalOpen] = useState(false);
+  const [bookingToast, setBookingToast] = useState<string | null>(null);
   const [messageBusy, setMessageBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -190,6 +191,15 @@ export default function ParentSitterProfilePage() {
 
   return (
     <main className="mx-auto min-h-[calc(100dvh-6rem)] w-full max-w-md space-y-5 bg-[#FDFBF6] py-3 pb-24" dir="rtl">
+      {bookingToast ? (
+        <div
+          className="fixed bottom-24 left-1/2 z-[140] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-950 shadow-lg"
+          role="status"
+          aria-live="polite"
+        >
+          {bookingToast}
+        </div>
+      ) : null}
       <div className="flex items-center justify-between px-1">
         <Link
           href="/parent/search"
@@ -278,6 +288,10 @@ export default function ParentSitterProfilePage() {
                 sitterId={profileId}
                 sitterName={profile.full_name || "בייביסיטר"}
                 onClose={() => setBookModalOpen(false)}
+                onSuccess={() => {
+                  setBookingToast("הבקשה נשלחה בהצלחה לבייביסיטר!");
+                  window.setTimeout(() => setBookingToast(null), 4000);
+                }}
               />
             ) : null}
           </section>
