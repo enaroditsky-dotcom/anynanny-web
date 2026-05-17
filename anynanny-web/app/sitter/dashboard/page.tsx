@@ -556,14 +556,14 @@ export default function SitterDashboardPage() {
         >
         <div className="grid grid-cols-2 gap-3">
           <Link
-            href="/sitter/calendar"
+            href="/sitter/availability"
             tabIndex={onboardingPending ? -1 : undefined}
             className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <Calendar className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">יומן מפגשים</span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">סידור עבודה</span>
           </Link>
 
           <Link
@@ -587,18 +587,22 @@ export default function SitterDashboardPage() {
           </Link>
 
           <Link
-            href="/sitter/session"
+            href="/sitter/shifts"
             className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <History className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">היסטוריית שמרטפות</span>
+            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">המשמרות שלי</span>
           </Link>
         </div>
       </section>
 
-      <SitterPendingBookings sitterId={sitterId} disabled={onboardingPending} />
+      <SitterPendingBookings
+        sitterId={sitterId}
+        disabled={onboardingPending}
+        onResponded={() => setDashboardStatsRefreshKey((k) => k + 1)}
+      />
 
       <section
         id="sitter-shift-panel"

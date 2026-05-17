@@ -19,10 +19,16 @@ export default function SitterPersonalPage() {
             דשבורד
           </Link>
           <Link
-            href="/sitter/calendar"
+            href="/sitter/availability"
             className="rounded-lg border border-navy-header/15 bg-[#FDFBF6] px-3 py-1.5 font-semibold text-navy-header transition hover:bg-white"
           >
-            יומן
+            סידור עבודה
+          </Link>
+          <Link
+            href="/sitter/shifts"
+            className="rounded-lg border border-navy-header/15 bg-[#FDFBF6] px-3 py-1.5 font-semibold text-navy-header transition hover:bg-white"
+          >
+            המשמרות שלי
           </Link>
         </div>
       </section>

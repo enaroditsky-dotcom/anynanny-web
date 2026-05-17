@@ -14,6 +14,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 type Props = {
   sitterId: string | null;
   disabled?: boolean;
+  /** Fired after approve/reject succeeds — use to refresh confirmed shifts list. */
+  onResponded?: (status: "approved" | "rejected") => void;
 };
 
 export function SitterPendingBookings({ sitterId, disabled = false }: Props) {
@@ -102,6 +104,7 @@ export function SitterPendingBookings({ sitterId, disabled = false }: Props) {
       return;
     }
 
+    onResponded?.(status);
     void load();
   };
 
