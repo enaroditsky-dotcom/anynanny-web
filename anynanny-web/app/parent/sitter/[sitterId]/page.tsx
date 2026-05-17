@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Calendar, Star } from "lucide-react";
+import { ArrowRight, Calendar, CalendarPlus, MessageCircle, Star } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import {
-  fetchParentSitterProfile,
+  formatTransportationMode,
+  normalizeSitterProfilePublic,
   parseRouteSitterId,
-  resolveParentSitterDisplayName
+  unwrapRpcProfilePayload
 } from "@/lib/sitter/fetch-parent-sitter-profile";
 import type { PublicSitterReview, SitterProfilePublic } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -19,12 +20,26 @@ function formatAvg(avg: number | null | undefined, count: number | null | undefi
   return `${Number(avg).toFixed(1)} ★ (${c} ביקורות)`;
 }
 
+function parseReviews(raw: unknown): PublicSitterReview[] {
+  if (raw == null) return [];
+  let list: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      list = JSON.parse(raw) as unknown;
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(list)) return [];
+  return list.filter((x): x is PublicSitterReview => x != null && typeof x === "object");
+}
+
 export default function ParentSitterProfilePage() {
   const params = useParams();
-  const router = useRouter();
   const sitterId = parseRouteSitterId(params?.sitterId);
 
-  const { isLoading, signedIn, effectiveRole } = useAuth();
+  const router = useRouter();
+  const { isLoading, signedIn, effectiveRole, displayName: parentDisplayName } = useAuth();
   const [profile, setProfile] = useState<SitterProfilePublic | null>(null);
   const [reviews, setReviews] = useState<PublicSitterReview[]>([]);
   const [pageState, setPageState] = useState<"loading" | "missing" | "ready" | "error">("loading");
@@ -56,25 +71,46 @@ export default function ParentSitterProfilePage() {
     setPageState("loading");
     setLoadError(null);
 
-    const { profile: loaded, reviews: loadedReviews, error } = await fetchParentSitterProfile(
-      supabase,
-      sitterId
-    );
+    const { data, error: profErr } = await supabase.rpc("get_sitter_profile_public", {
+      target_id: sitterId
+    });
 
-    if (error) {
-      console.warn("[parent/sitter profile] load error:", error);
-      setLoadError(error);
-    }
+    console.log("Fetched profile data:", data);
 
-    if (!loaded) {
+    if (profErr) {
+      console.warn("[parent/sitter profile] RPC Error details:", profErr.message, profErr.details, profErr.hint);
+      setLoadError(profErr.message || "שגיאה בביצוע החיפוש");
       setProfile(null);
       setReviews([]);
       setPageState("missing");
       return;
     }
 
-    setProfile(loaded);
-    setReviews(loadedReviews);
+    const rawRow = Array.isArray(data) ? data[0] : data;
+    const payload = unwrapRpcProfilePayload(rawRow) ?? unwrapRpcProfilePayload(data);
+
+    if (!payload) {
+      setProfile(null);
+      setReviews([]);
+      setPageState("missing");
+      return;
+    }
+
+    const normalized = normalizeSitterProfilePublic(payload, sitterId);
+    setProfile(normalized);
+
+    const { data: reviewsRaw, error: revErr } = await supabase.rpc("get_sitter_public_reviews", {
+      p_sitter_id: sitterId,
+      p_limit: 10
+    });
+
+    if (revErr) {
+      console.warn("[parent/sitter profile] reviews:", revErr.message);
+      setReviews([]);
+    } else {
+      setReviews(parseReviews(reviewsRaw));
+    }
+
     setPageState("ready");
   }, [sitterId]);
 
@@ -85,6 +121,23 @@ export default function ParentSitterProfilePage() {
 
   const showWait = isLoading || (signedIn && effectiveRole === null);
   const showContent = !isLoading && signedIn && effectiveRole === "parent";
+  const isReady = showContent && pageState === "ready" && profile != null;
+  const profileId = profile?.id ?? sitterId ?? "";
+
+  const goToBookShift = useCallback(() => {
+    const id = profile?.id ?? sitterId;
+    if (!id) return;
+    const q = new URLSearchParams();
+    if (parentDisplayName) q.set("parentName", parentDisplayName);
+    const qs = q.toString();
+    router.push(`/parent/sitter/${encodeURIComponent(id)}/calendar${qs ? `?${qs}` : ""}`);
+  }, [profile?.id, sitterId, parentDisplayName, router]);
+
+  const goToMessages = useCallback(() => {
+    const id = profile?.id ?? sitterId;
+    if (!id) return;
+    router.push(`/parent/messages?sitter_id=${encodeURIComponent(id)}`);
+  }, [profile?.id, sitterId, router]);
 
   if (showContent && pageState === "missing") {
     return (
@@ -108,7 +161,10 @@ export default function ParentSitterProfilePage() {
     );
   }
 
-  const displayName = profile ? resolveParentSitterDisplayName(profile) : "בייביסיטר";
+  const years = profile?.years_of_experience ?? profile?.years_experience;
+  const transportLabel = profile
+    ? formatTransportationMode(profile.transportation_mode, profile.has_car)
+    : null;
 
   return (
     <main className="mx-auto min-h-[calc(100dvh-6rem)] w-full max-w-md space-y-5 bg-[#FDFBF6] py-3 pb-24" dir="rtl">
@@ -127,25 +183,28 @@ export default function ParentSitterProfilePage() {
         <p className="px-1 text-right text-sm text-slate-600">טוען…</p>
       ) : pageState === "loading" ? (
         <p className="px-1 text-right text-sm text-slate-600">טוען פרופיל…</p>
-      ) : pageState === "ready" && profile ? (
+      ) : isReady ? (
         <>
           <section className="mx-1 rounded-3xl border border-navy-header/12 bg-white p-5 shadow-soft">
             <div className="flex flex-row-reverse items-start justify-between gap-3">
               <div className="min-w-0 flex-1 text-right">
-                <h2 className="text-xl font-bold text-[#001F3F]">{displayName}</h2>
+                <h2 className="text-xl font-bold text-[#001F3F]">
+                  {profile.full_name || "בייביסיטר"}
+                </h2>
                 {profile.nanny_serial ? (
                   <p className="mt-0.5 text-xs font-medium text-slate-500">{profile.nanny_serial}</p>
                 ) : null}
-                {profile.years_experience != null ? (
-                  <p className="mt-1 text-sm text-slate-600">{profile.years_experience} שנות ניסיון</p>
+                {years != null ? (
+                  <p className="mt-1 text-sm text-slate-600">{years} שנות ניסיון</p>
                 ) : null}
-                {profile.hourly_rate_nis != null && profile.hourly_rate_nis > 0 ? (
-                  <p className="mt-2 text-base font-semibold text-navy-800">
-                    ₪{Number(profile.hourly_rate_nis).toFixed(0)} לשעה
-                  </p>
-                ) : (
-                  <p className="mt-2 text-sm text-slate-500">מחיר לא צוין</p>
-                )}
+                {transportLabel ? (
+                  <p className="mt-1 text-sm text-violet-800">דרך הגעה: {transportLabel}</p>
+                ) : null}
+                <p className="mt-2 text-base font-semibold text-navy-800">
+                  {profile.hourly_rate_nis
+                    ? `${profile.hourly_rate_nis} ₪ / שעה`
+                    : "מחיר לא צוין"}
+                </p>
               </div>
               <div className="flex shrink-0 flex-col items-center gap-1 rounded-2xl bg-amber-50 px-3 py-2 ring-1 ring-amber-200/80">
                 <Star className="h-6 w-6 fill-amber-400 text-amber-500" aria-hidden />
@@ -155,20 +214,34 @@ export default function ParentSitterProfilePage() {
               </div>
             </div>
 
-            {profile.bio ? (
-              <div className="mt-4 border-t border-navy-header/10 pt-4">
-                <p className="text-right text-sm font-semibold text-navy-header">אודות</p>
-                <p className="mt-2 whitespace-pre-wrap text-right text-sm leading-relaxed text-slate-700">
-                  {profile.bio}
-                </p>
-              </div>
-            ) : null}
+            <div className="mt-4 border-t border-navy-header/10 pt-4">
+              <p className="text-right text-sm font-semibold text-navy-header">אודות</p>
+              <p className="mt-2 whitespace-pre-wrap text-right text-sm leading-relaxed text-slate-700">
+                {profile.bio || "אין פירוט זמין"}
+              </p>
+            </div>
 
-            {sitterId ? (
+            {profileId ? (
               <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
+                <button
+                  type="button"
+                  onClick={goToBookShift}
+                  className="inline-flex flex-1 flex-row-reverse items-center justify-center gap-2 rounded-2xl bg-[#001F3F] px-4 py-3.5 text-sm font-bold text-white shadow-soft transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#001F3F] active:scale-[0.99]"
+                >
+                  <CalendarPlus className="h-5 w-5 shrink-0" aria-hidden />
+                  לתאם משמרת
+                </button>
+                <button
+                  type="button"
+                  onClick={goToMessages}
+                  className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-2xl border-2 border-[#001F3F]/25 bg-white px-4 py-3 text-sm font-semibold text-[#001F3F] shadow-sm transition hover:bg-brand-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#001F3F] active:scale-[0.99] sm:flex-1"
+                >
+                  <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
+                  שליחת הודעה
+                </button>
                 <Link
-                  href={`/parent/sitter/${encodeURIComponent(sitterId)}/calendar`}
-                  className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-2xl bg-[#001F3F] px-4 py-3 text-sm font-semibold text-white shadow-md transition hover:brightness-110"
+                  href={`/parent/sitter/${encodeURIComponent(profileId)}/calendar${parentDisplayName ? `?parentName=${encodeURIComponent(parentDisplayName)}` : ""}`}
+                  className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-4 py-2.5 text-xs font-semibold text-navy-header transition hover:bg-white sm:w-full"
                 >
                   <Calendar className="h-4 w-4" aria-hidden />
                   זמינות ויומן

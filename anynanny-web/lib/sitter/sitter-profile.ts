@@ -65,6 +65,9 @@ export type SitterProfilePublic = {
   age_years: number | null;
   languages: string | null;
   years_experience: number | null;
+  /** Some RPC/DB variants expose this alias. */
+  years_of_experience?: number | null;
+  transportation_mode?: string | null;
   bio: string | null;
   hourly_rate_nis: number | null;
   citizenship_israeli: boolean | null;
