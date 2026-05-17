@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { deleteCurrentUserAccount } from "@/lib/account/delete-current-user";
 import { clearDeviceAuthHints } from "@/lib/auth/returning-user";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -15,6 +15,15 @@ export function DeleteAccountSection() {
     setDialogOpen(false);
     setError(null);
   }, [busy]);
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) closeDialog();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dialogOpen, busy, closeDialog]);
 
   const handleConfirmDelete = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -73,11 +82,11 @@ export function DeleteAccountSection() {
             className="w-full max-w-md rounded-2xl border border-navy-header/15 bg-white p-5 shadow-xl shadow-[#001F3F]/15"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="delete-account-title" className="text-right text-lg font-bold text-[#001F3F]">
-              האם אתה בטוח שברצונך למחוק את החשבון?
+            <h2 id="delete-account-title" className="text-right text-lg font-bold text-rose-700">
+              אזהרה!
             </h2>
-            <p className="mt-2 text-right text-sm leading-relaxed text-slate-600">
-              פעולה זו היא בלתי הפיכה וכל הנתונים שלך, המשמרות וההיסטוריה יימחקו לצמיתות.
+            <p className="mt-2 text-right text-sm leading-relaxed text-slate-700">
+              אתה הולך למחוק את החשבון לצמיתות! אתה רוצה להמשיך?
             </p>
 
             {error ? (
@@ -93,15 +102,15 @@ export function DeleteAccountSection() {
                 onClick={() => void handleConfirmDelete()}
                 className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
               >
-                {busy ? "מוחקים…" : "כן, מחק את החשבון שלי"}
+                {busy ? "מוחקים…" : "כן"}
               </button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={closeDialog}
-                className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200/80 disabled:opacity-60"
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
               >
-                ביטול
+                לא
               </button>
             </div>
           </div>
