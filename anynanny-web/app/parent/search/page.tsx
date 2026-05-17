@@ -75,8 +75,8 @@ export default function ParentSearchPage() {
       });
 
       if (error) {
-        console.error("[parent/search] list_public_sitters_search", error);
-        setSearchError(error.message);
+        console.warn("[parent/search] RPC Error details:", error.message, error.details, error.hint);
+        setSearchError(error.message || "שגיאה בביצוע החיפוש");
         setSitters([]);
         return;
       }
