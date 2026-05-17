@@ -76,6 +76,7 @@ export default function ParentSearchPage() {
     setListLoading(true);
     setListErr(null);
     setHasSearched(true);
+    /** RPC only — no direct queries on tables; DB function reads public.sitter_profiles. */
     const { data, error } = await supabase.rpc("list_public_sitters_search", rpcParams);
     setListLoading(false);
     if (error) {
@@ -136,7 +137,10 @@ export default function ParentSearchPage() {
 
       {showContent && listErr ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-950">
-          לא ניתן לטעון רשימה ({listErr}). ודאו שהמיגרציה `20260516150000_list_public_sitters_time_range` הורצה ב-Supabase.
+          לא ניתן לטעון רשימה ({listErr}). הריצו ב-Supabase את{" "}
+          <code className="text-xs">sql/fix_list_public_sitters_search_sitter_profiles.sql</code> (או מיגרציה{" "}
+          <code className="text-xs">20260516180000_repair_list_public_sitters_search</code>), ואז{" "}
+          <code className="text-xs">NOTIFY pgrst, &apos;reload schema&apos;;</code>
         </p>
       ) : null}
 

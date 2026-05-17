@@ -1,5 +1,7 @@
--- Parent search: p_start_time / p_end_time window (replaces p_search_date).
--- Data source: public.sitter_profiles only — there is no public.nanny table.
+-- Run in Supabase SQL Editor if parent search errors mention public.nanny.
+-- Same as: supabase/migrations/20260516180000_repair_list_public_sitters_search.sql
+
+-- Repair: ensure list_public_sitters_search uses public.sitter_profiles only (never public.nanny).
 
 do $$
 declare

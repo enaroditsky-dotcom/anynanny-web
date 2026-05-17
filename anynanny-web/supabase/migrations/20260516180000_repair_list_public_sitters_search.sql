@@ -1,5 +1,5 @@
--- Parent search: p_start_time / p_end_time window (replaces p_search_date).
--- Data source: public.sitter_profiles only — there is no public.nanny table.
+-- Repair: ensure list_public_sitters_search uses public.sitter_profiles only (never public.nanny).
+-- Safe to re-run if a broken overload was deployed.
 
 do $$
 declare
