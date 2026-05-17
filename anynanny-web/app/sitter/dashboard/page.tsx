@@ -4,16 +4,18 @@ import Link from "next/link";
 import { Calendar, History, Settings, Wallet } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name";
 import { SessionFinalSummary } from "@/components/session/session-final-summary";
 import { SessionRatingModal } from "@/components/session/session-rating-modal";
 import { SITTER_PROFILE_SAVED_NAV_FLAG, SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
-import { useAuth } from "@/components/auth-provider";
+import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
 import {
-  isSitterProfileComplete,
+  hasSitterCompletedOnboarding,
   SITTER_PROFILES_TABLE,
   SITTER_PROFILES_USER_COLUMN,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import {
@@ -49,7 +51,6 @@ function rowMatchesEndConfirm(row: SupabaseSessionRow, sitterId: string): boolea
 export default function SitterDashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const { displayName } = useAuth();
   const [sitterId, setSitterId] = useState<string | null>(null);
   const [pendingRow, setPendingRow] = useState<SupabaseSessionRow | null>(null);
   const [activeShiftRow, setActiveShiftRow] = useState<SupabaseSessionRow | null>(null);
@@ -64,12 +65,13 @@ export default function SitterDashboardPage() {
   /** Wall clock for live timer — must tick every second so elapsed updates (same formula as parent). */
   const [nowMs, setNowMs] = useState(Date.now());
   const [profileCardStatus, setProfileCardStatus] = useState<"loading" | "complete" | "incomplete">("loading");
+  const [dashboardStatsRefreshKey, setDashboardStatsRefreshKey] = useState(0);
 
-  const firstName = useMemo(() => {
-    const n = displayName?.trim();
-    if (!n) return "";
-    return n.split(/\s+/)[0] ?? "";
-  }, [displayName]);
+  const { fullName, nameLoading: greetingNameLoading } = useDashboardGreetingName(
+    "sitter",
+    sitterId,
+    dashboardStatsRefreshKey
+  );
 
   const trackedSessionId = useMemo(() => {
     const raw =
@@ -156,15 +158,23 @@ export default function SitterDashboardPage() {
       const fk = SITTER_PROFILES_USER_COLUMN;
       const { data, error } = await supabase
         .from(SITTER_PROFILES_TABLE)
-        .select("full_name, bio, years_experience, hourly_rate_nis")
+        .select("onboarding_completed_at")
         .eq(fk, uid)
         .maybeSingle();
+
       if (error) {
-        console.warn("[sitter dashboard] profile card fetch:", error.message);
+        if (isPostgrestMissingColumnError(error.message, "onboarding_completed_at")) {
+          console.warn(
+            "[sitter dashboard] onboarding_completed_at missing — run Supabase migration and NOTIFY pgrst reload."
+          );
+        } else {
+          console.warn("[sitter dashboard] profile card fetch:", error.message);
+        }
         setProfileCardStatus("incomplete");
         return;
       }
-      if (data != null && isSitterProfileComplete(data as Partial<SitterProfileRow>)) {
+
+      if (data != null && hasSitterCompletedOnboarding(data as Partial<SitterProfileRow>)) {
         setProfileCardStatus("complete");
       } else {
         setProfileCardStatus("incomplete");
@@ -273,6 +283,7 @@ export default function SitterDashboardPage() {
     if (!fromWizard) return;
     const supabase = getSupabaseBrowserClient();
     if (supabase) void refreshSitterProfileCardStatus(supabase, sitterId);
+    setDashboardStatsRefreshKey((k) => k + 1);
   }, [pathname, sitterId, refreshSitterProfileCardStatus]);
 
   const handleSitterRatingResolved = useCallback(() => {
@@ -395,6 +406,16 @@ export default function SitterDashboardPage() {
     setRatingOpen(true);
   }, [completedSummaryRow]);
 
+  const onboardingPending = profileCardStatus === "incomplete";
+
+  const handleOnboardingSaved = useCallback(() => {
+    setDashboardStatsRefreshKey((k) => k + 1);
+    const supabase = getSupabaseBrowserClient();
+    if (supabase && sitterId) {
+      void refreshSitterProfileCardStatus(supabase, sitterId);
+    }
+  }, [sitterId, refreshSitterProfileCardStatus]);
+
   if (loading) {
     return (
       <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
@@ -481,19 +502,28 @@ export default function SitterDashboardPage() {
 
   return (
     <main className="mx-auto flex min-h-[calc(100dvh-6rem)] w-full max-w-md flex-col space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
-      <header className="text-right">
-        <h1 className="text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem]">
-          שלום{firstName ? `, ${firstName}` : ""}! מה תרצה לעשות היום?
-        </h1>
-        {profileCardStatus === "incomplete" ? (
-          <a
-            href="#sitter-profile-details"
-            className="mt-2 inline-block text-xs font-semibold text-emerald-800 underline decoration-emerald-700/50"
-          >
-            השלמת פרופיל מקצועי (אופציונלי)
-          </a>
-        ) : null}
-      </header>
+      <SitterDashboardHeader
+        fullName={fullName}
+        nameLoading={greetingNameLoading}
+        sitterId={sitterId}
+        refreshKey={dashboardStatsRefreshKey}
+        showNannyId={profileCardStatus === "complete"}
+      />
+
+      {onboardingPending ? (
+        <section
+          id="sitter-profile-details"
+          className="rounded-3xl border-2 border-amber-300/80 bg-white p-4 shadow-soft ring-1 ring-amber-200/60 sm:p-5"
+        >
+          <h2 className="text-right text-base font-bold text-navy-header">השלמת פרופיל מקצועי (חובה)</h2>
+          <p className="mt-1 text-right text-xs leading-relaxed text-slate-600">
+            יש להשלים את הטופס לפני שימוש ביומן, ארנק ומשמרות. מספר הנני האישי יופיע בראש המסך לאחר השמירה.
+          </p>
+          <div className="mt-4">
+            <SitterOnboardingWizard onSaved={handleOnboardingSaved} />
+          </div>
+        </section>
+      ) : null}
 
       {banner ? (
         <div
@@ -511,10 +541,22 @@ export default function SitterDashboardPage() {
         </div>
       ) : null}
 
-      <section className="rounded-3xl bg-white p-4 shadow-soft sm:p-5">
+      <div className={`relative space-y-5 ${onboardingPending ? "min-h-[12rem]" : ""}`}>
+        {onboardingPending ? (
+          <div
+            className="pointer-events-none absolute inset-0 z-10 rounded-3xl bg-[#FDFBF6]/55 backdrop-blur-[2px]"
+            aria-hidden
+          />
+        ) : null}
+
+        <section
+          className={`rounded-3xl bg-white p-4 shadow-soft sm:p-5 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
+          aria-hidden={onboardingPending}
+        >
         <div className="grid grid-cols-2 gap-3">
           <Link
             href="/sitter/calendar"
+            tabIndex={onboardingPending ? -1 : undefined}
             className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
@@ -555,27 +597,14 @@ export default function SitterDashboardPage() {
         </div>
       </section>
 
-      {profileCardStatus === "incomplete" ? (
-        <section
-          id="sitter-profile-details"
-          className="rounded-3xl bg-white p-4 shadow-soft sm:p-5"
-        >
-          <h2 className="text-right text-base font-bold text-navy-header">פרופיל מקצועי (אופציונלי)</h2>
-          <p className="mt-1 text-right text-xs text-slate-600">
-            השלימו פרטים כדי להופיע בחיפוש; אפשר לחזור בכל עת.
-          </p>
-          <div className="mt-4">
-            <SitterOnboardingWizard />
-          </div>
-        </section>
-      ) : null}
-
       <section
         id="sitter-shift-panel"
-        className="mt-1 flex min-h-0 flex-1 flex-col items-center rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6"
+        className={`flex min-h-0 flex-1 flex-col items-center rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
+        aria-hidden={onboardingPending}
       >
         {sessionSection}
       </section>
+      </div>
 
       <SessionRatingModal
         open={ratingOpen}
