@@ -25,6 +25,9 @@ function LoginInner() {
   const emailFromQuery = searchParams.get("email");
   const roleFromQuery = searchParams.get("role");
 
+  /** When true, user is already signed in — hide form and leave login immediately. */
+  const [bypassLogin, setBypassLogin] = useState(false);
+
   const nextQuery = useMemo(() => {
     const params = new URLSearchParams();
     if (nextPath) params.set("next", nextPath);
@@ -53,6 +56,48 @@ function LoginInner() {
       setUserRoleChoice(roleFromQuery);
     }
   }, [roleFromQuery]);
+
+  /** Already signed in — redirect before showing the login form (stops login loops). */
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    let cancelled = false;
+
+    const redirectIfSignedIn = async () => {
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (cancelled || !user) return;
+      setBypassLogin(true);
+      await navigateAfterAuth(supabase, user.id, nextPath, user.email ?? null);
+    };
+
+    void redirectIfSignedIn();
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if (event === "SIGNED_IN" && session?.user) {
+        setBypassLogin(true);
+        void navigateAfterAuth(supabase, session.user.id, nextPath, session.user.email ?? null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [nextPath]);
+
+  if (bypassLogin) {
+    return (
+      <main className="mx-auto max-w-md py-10 text-center text-sm text-slate-600" dir="rtl">
+        כבר מחוברים — מעבירים לדשבורד…
+      </main>
+    );
+  }
 
   const handleSubmit = async () => {
     const supabase = getSupabaseBrowserClient();

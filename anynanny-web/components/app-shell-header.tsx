@@ -1,6 +1,6 @@
 "use client";
 
-/** Header reads auth only from `AuthProvider` — no separate getSession / auth fetch here. */
+/** Header reads auth only from `AuthProvider` — session UI is gated until after mount to avoid hydration mismatch. */
 
 import Image from "next/image";
 import Link from "next/link";
@@ -15,7 +15,12 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 export function AppShellHeader() {
   const router = useRouter();
   const { signedIn, displayName, isLoading, user, currentRole } = useAuth();
+  const [mounted, setMounted] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setAvatarBroken(false);
@@ -44,6 +49,9 @@ export function AppShellHeader() {
     return ch ? ch.toUpperCase() : "?";
   }, [displayName, user?.email]);
 
+  /** After mount + auth settled — avoids server HTML vs client session mismatch. */
+  const showSessionUi = mounted && !isLoading;
+
   return (
     <header className="w-full shrink-0 border-b border-navy-header/10 bg-white/80 backdrop-blur-md supports-[backdrop-filter]:bg-white/80">
       <div className="flex min-h-12 items-center gap-2 px-4 py-1.5" dir="rtl">
@@ -52,7 +60,9 @@ export function AppShellHeader() {
           className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#001F3F]/10 text-sm font-bold text-[#001F3F] ring-2 ring-navy-header/10 transition hover:ring-emerald-500/40"
           aria-label="פרופיל"
         >
-          {avatarUrl && !avatarBroken ? (
+          {!showSessionUi ? (
+            <span className="h-full w-full animate-pulse rounded-full bg-slate-200/80" aria-hidden />
+          ) : avatarUrl && !avatarBroken ? (
             // eslint-disable-next-line @next/next/no-img-element -- user avatars from arbitrary OAuth URLs
             <img
               src={avatarUrl}
@@ -66,8 +76,8 @@ export function AppShellHeader() {
         </Link>
 
         <div className="flex min-w-0 flex-1 flex-wrap items-center justify-center gap-2 sm:justify-end">
-          {isLoading ? (
-            <div className="flex flex-wrap items-center gap-2">
+          {!showSessionUi ? (
+            <div className="flex flex-wrap items-center gap-2" aria-busy="true">
               <div className="h-4 w-16 animate-pulse rounded bg-slate-100" aria-hidden />
               <div className="h-10 w-[10.5rem] animate-pulse rounded-full bg-slate-100" aria-hidden />
             </div>
@@ -102,7 +112,11 @@ export function AppShellHeader() {
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
-          {signedIn ? (
+          {!showSessionUi ? (
+            <div className="flex items-center gap-1.5">
+              <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-slate-100" aria-hidden />
+            </div>
+          ) : signedIn ? (
             <Link
               href={currentRole === "sitter" ? "/sitter/messages" : "/parent/messages"}
               className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-navy-header transition hover:bg-slate-100"

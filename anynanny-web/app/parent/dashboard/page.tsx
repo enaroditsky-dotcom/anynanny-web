@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { SessionFinalSummary } from "@/components/session/session-final-summary";
 import { SessionRatingModal } from "@/components/session/session-rating-modal";
 import { useAuth } from "@/components/auth-provider";
+import { DashboardWelcomeHeader } from "@/components/dashboard/dashboard-welcome-header";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
@@ -26,6 +27,7 @@ import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { completedSummaryFromEndedState } from "@/lib/session/completed-summary";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name";
 import {
   dismissCompletedSession,
   parentSessionStateFromSupabaseRow,
@@ -37,7 +39,7 @@ const circleShell =
 
 export default function ParentDashboardPage() {
   const router = useRouter();
-  const { isLoading: authLoading, displayName } = useAuth();
+  const { isLoading: authLoading } = useAuth();
 
   /** getSession() can succeed when middleware getUser() misses — show grid as soon as we see a browser session. */
   const [clientHasSessionUser, setClientHasSessionUser] = useState<boolean | null>(null);
@@ -60,11 +62,10 @@ export default function ParentDashboardPage() {
     return () => window.clearTimeout(t);
   }, [debugToast]);
 
-  const firstName = useMemo(() => {
-    const n = displayName?.trim();
-    if (!n) return "";
-    return n.split(/\s+/)[0] ?? "";
-  }, [displayName]);
+  const { fullName, nameLoading: greetingNameLoading } = useDashboardGreetingName(
+    "parent",
+    parentUserId
+  );
 
   const syncFromStorage = useCallback(() => {
     try {
@@ -385,11 +386,7 @@ export default function ParentDashboardPage() {
 
   return (
     <main className="mx-auto flex min-h-[calc(100dvh-6rem)] w-full max-w-md flex-col space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
-      <header className="text-right">
-        <h1 className="text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem]">
-          שלום{firstName ? `, ${firstName}` : ""}! מה תרצה לעשות היום?
-        </h1>
-      </header>
+      <DashboardWelcomeHeader fullName={fullName} nameLoading={greetingNameLoading} />
 
       {dbBanner ? (
         <div

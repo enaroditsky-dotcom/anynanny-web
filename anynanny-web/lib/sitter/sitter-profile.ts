@@ -77,17 +77,27 @@ export type SitterProfilePublic = {
   /** From `sitter_profiles` (ratings trigger). */
   avg_rating?: number | null;
   rating_count?: number | null;
+  /** From `auth.users` metadata via RPC — not a sitter_profiles column. */
+  avatar_url?: string | null;
 };
 
 /** Row from `list_public_sitters_search` RPC (parent search cards). */
 export type PublicSitterSearchCard = {
   id: string;
+  /** Raw `sitter_profiles.full_name` — preferred for card title. */
+  full_name?: string | null;
   display_name: string | null;
+  /** From `auth.users.email` via RPC — fallback when name missing. */
+  email?: string | null;
+  nanny_serial?: string | null;
   years_experience: number | null;
+  has_car: boolean;
   bio: string | null;
   hourly_rate_nis: number | null;
   avg_rating: number | null;
   rating_count: number;
+  /** From `auth.users` metadata via RPC — not a sitter_profiles column. */
+  avatar_url?: string | null;
 };
 
 /** One anonymized review from `get_sitter_public_reviews` RPC. */
@@ -104,6 +114,12 @@ export function isSitterProfileComplete(p: Partial<SitterProfileRow>): boolean {
   if (p.years_experience == null || Number(p.years_experience) < 0) return false;
   if (p.hourly_rate_nis == null || Number(p.hourly_rate_nis) <= 0) return false;
   return true;
+}
+
+/** Sitter finished mandatory dashboard questionnaire (`sitter_profiles.onboarding_completed_at`). */
+export function hasSitterCompletedOnboarding(p: Partial<SitterProfileRow>): boolean {
+  const at = p.onboarding_completed_at;
+  return at != null && String(at).trim().length > 0;
 }
 
 /**

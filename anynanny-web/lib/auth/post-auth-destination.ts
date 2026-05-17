@@ -158,12 +158,12 @@ export async function resolvePostAuthPath(
 
     const profile = await loadProfileAuthRow(supabase, userId);
     if (!profile) {
-      return AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT;
+      return "/auth/role-selection";
     }
 
     const role = isProfileRole(profile.role) ? profile.role : null;
     if (!role) {
-      return AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT;
+      return "/auth/role-selection";
     }
 
     /** Same trust as legacy parents: a real `sitter_profiles` row means role choice is done. */
@@ -177,7 +177,7 @@ export async function resolvePostAuthPath(
     if (needsRoleSelection) {
       if (role === "parent" && row.parent_onboarding_completed_at) {
         const nextOk = allowedNextPath("parent", nextParam);
-        return nextOk ?? "/parent/dashboard";
+        return nextOk ?? "/parent/search";
       }
       return "/auth/role-selection";
     }
@@ -187,7 +187,7 @@ export async function resolvePostAuthPath(
         return "/parent/onboarding";
       }
       const nextOk = allowedNextPath("parent", nextParam);
-      return nextOk ?? "/parent/dashboard";
+      return nextOk ?? "/parent/search";
     }
 
     /** Sitter: dashboard first; optional questionnaire on dashboard. */
@@ -195,4 +195,33 @@ export async function resolvePostAuthPath(
   } catch {
     return AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT;
   }
+}
+
+/** True when authenticated user must complete /auth/role-selection before app routes. */
+export async function userNeedsRoleSelection(
+  supabase: SupabaseClient,
+  userId: string,
+  options?: ResolvePostAuthOptions
+): Promise<boolean> {
+  const dest = await resolvePostAuthPath(supabase, userId, null, options);
+  const base = dest.split("?")[0];
+  return base === "/auth/role-selection";
+}
+
+/** Redirect URL if `currentPath` is blocked for this user; otherwise null. */
+export async function getRoleGateRedirect(
+  supabase: SupabaseClient,
+  userId: string,
+  currentPath: string,
+  userEmail?: string | null
+): Promise<string | null> {
+  if (currentPath === "/auth/role-selection" || currentPath.startsWith("/auth/role-selection/")) {
+    return null;
+  }
+  const needs = await userNeedsRoleSelection(supabase, userId, { userEmail });
+  if (!needs) return null;
+  const url = new URL("/auth/role-selection", "http://local");
+  const safeNext = sanitizeNextParam(currentPath);
+  if (safeNext) url.searchParams.set("next", safeNext);
+  return `${url.pathname}${url.search}`;
 }

@@ -2,9 +2,9 @@
 
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  ensureSitterProfileRowForUser,
+  isSitterProfileComplete,
   SITTER_PROFILES_TABLE,
   SITTER_PROFILES_USER_COLUMN
 } from "@/lib/sitter/sitter-profile";
@@ -15,10 +15,14 @@ export const SITTER_PROFILE_SAVED_NAV_FLAG = "anynanny_sitter_profile_saved_nav"
 const inputClass =
   "mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2 text-right text-sm";
 
-/** DB columns: full_name, bio, years_experience, hourly_rate_nis (+ updated_at). */
-export function SitterOnboardingWizard() {
+/** DB columns: full_name, bio, years_experience, hourly_rate_nis (+ updated_at). nanny_id_number is DB-trigger only. */
+type SitterOnboardingWizardProps = {
+  /** Fires after a successful upsert (before redirect) so dashboard can refresh nanny ID badge. */
+  onSaved?: () => void;
+};
+
+export function SitterOnboardingWizard({ onSaved }: SitterOnboardingWizardProps = {}) {
   const router = useRouter();
-  const postSaveNavTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ready, setReady] = useState(false);
   const [loadHint, setLoadHint] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
@@ -96,14 +100,6 @@ export function SitterOnboardingWizard() {
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (postSaveNavTimer.current != null) {
-        clearTimeout(postSaveNavTimer.current);
-      }
-    };
-  }, []);
-
   const handleSubmit = async () => {
     setSaveWarning(null);
     setSavedOk(false);
@@ -123,27 +119,35 @@ export function SitterOnboardingWizard() {
         return;
       }
 
-      const stub = await ensureSitterProfileRowForUser(supabase, user.id);
-      if (stub.error) {
-        setSaveWarning(stub.error);
-        return;
-      }
-
       const years =
         yearsExperience.trim() === "" ? null : Math.max(0, parseInt(yearsExperience.replace(/\D/g, ""), 10) || 0);
       const rate =
         hourlyRateNis.trim() === "" ? null : Math.max(0, Number(hourlyRateNis.replace(/[^\d.]/g, "")) || 0);
 
-      const patch = {
+      const profileFields = {
         full_name: fullName.trim() || null,
         bio: bio.trim() || null,
         years_experience: years,
-        hourly_rate_nis: rate,
-        updated_at: new Date().toISOString()
+        hourly_rate_nis: rate
       };
 
+      const complete = isSitterProfileComplete({ ...profileFields, id: user.id });
+      if (!complete) {
+        setSaveWarning("יש למלא את כל השדות לפני סיום ההרשמה.");
+        return;
+      }
+
+      const now = new Date().toISOString();
       const fk = SITTER_PROFILES_USER_COLUMN;
-      const { error } = await supabase.from(SITTER_PROFILES_TABLE).update(patch).eq(fk, user.id);
+      const row: Record<string, unknown> = {
+        [fk]: user.id,
+        ...profileFields,
+        updated_at: now,
+        onboarding_completed_at: now,
+        is_public: true
+      };
+
+      const { error } = await supabase.from(SITTER_PROFILES_TABLE).upsert(row, { onConflict: fk });
 
       if (error) {
         setSaveWarning(error.message || "שמירת הפרופיל נכשלה — הדשבורד זמין.");
@@ -158,14 +162,16 @@ export function SitterOnboardingWizard() {
           /* ignore */
         }
       }
-      if (postSaveNavTimer.current != null) {
-        clearTimeout(postSaveNavTimer.current);
-      }
-      postSaveNavTimer.current = setTimeout(() => {
-        postSaveNavTimer.current = null;
+      onSaved?.();
+      const onDashboard =
+        typeof window !== "undefined" && window.location.pathname.startsWith("/sitter/dashboard");
+      if (onDashboard) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        router.refresh();
+      } else {
         router.push("/sitter/dashboard");
         router.refresh();
-      }, 1500);
+      }
     } finally {
       setBusy(false);
     }
@@ -194,7 +200,7 @@ export function SitterOnboardingWizard() {
       {savedOk ? (
         <div className="space-y-1 rounded-lg bg-emerald-50 p-2 text-center">
           <p className="text-xs font-medium text-emerald-900">נשמר.</p>
-          <p className="text-[0.7rem] text-emerald-800/90">מעבירים לדשבורד בעוד רגע…</p>
+          <p className="text-[0.7rem] text-emerald-800/90">המזהה האישי יופיע בראש הדשבורד.</p>
         </div>
       ) : null}
 
@@ -265,7 +271,7 @@ export function SitterOnboardingWizard() {
               שומרים…
             </>
           ) : (
-            "שמירה"
+            "סיום והמשך לדשבורד"
           )}
         </button>
       </form>
