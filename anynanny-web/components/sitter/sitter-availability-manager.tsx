@@ -343,6 +343,17 @@ export function SitterAvailabilityManager() {
         </button>
       </div>
 
+      <div className="mb-2 flex flex-wrap flex-row-reverse justify-end gap-3 text-[10px] text-slate-600">
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded border border-emerald-300 bg-emerald-50" aria-hidden />
+          יום עם שעות פנויות
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded border border-red-300 bg-red-50" aria-hidden />
+          יום חסום לחלוטין
+        </span>
+      </div>
+
       <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-slate-600">
         {HEBREW_WEEKDAYS.map((d) => (
           <div key={d}>{d}</div>
