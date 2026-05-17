@@ -25,7 +25,8 @@ export const PARENT_SEARCH_MINUTE_OPTIONS = ["00", "15", "30", "45"] as const;
 export type ParentSearchMinute = (typeof PARENT_SEARCH_MINUTE_OPTIONS)[number];
 
 export type ParentSearchFilters = {
-  searchNannyId: string;
+  /** Public serial on `sitter_profiles.nanny_serial` (e.g. AN-1001). */
+  searchSitterSerial: string;
   /** `YYYY-MM-DD` from `<input type="date">` */
   searchDate: string;
   /** `00`–`23` (24-hour) — required window start */
@@ -41,7 +42,7 @@ export type ParentSearchFilters = {
 };
 
 export const defaultParentSearchFilters = (): ParentSearchFilters => ({
-  searchNannyId: "",
+  searchSitterSerial: "",
   searchDate: "",
   searchStartHour: "",
   searchStartMinute: "",
@@ -56,6 +57,7 @@ export const defaultParentSearchFilters = (): ParentSearchFilters => ({
 /** Merge partial / legacy filter state (e.g. old single `searchHour` field). */
 export function normalizeParentSearchFilters(
   partial?: Partial<ParentSearchFilters> & {
+    searchNannyId?: string;
     searchHour?: string;
     searchMinute?: ParentSearchMinute | "";
   } | null
@@ -69,7 +71,8 @@ export function normalizeParentSearchFilters(
   return {
     ...base,
     ...partial,
-    searchNannyId: partial.searchNannyId ?? base.searchNannyId,
+    searchSitterSerial:
+      partial.searchSitterSerial ?? partial.searchNannyId ?? base.searchSitterSerial,
     searchDate: partial.searchDate ?? base.searchDate,
     searchStartHour: partial.searchStartHour ?? legacyHour ?? base.searchStartHour,
     searchStartMinute: partial.searchStartMinute ?? legacyMinute ?? base.searchStartMinute,
@@ -88,13 +91,16 @@ export function minRatingToRpcValue(minRating: ParentSearchMinRating): number | 
 }
 
 /**
- * Maps nanny serial input to `p_search_nanny_id` for `list_public_sitters_search`.
- * Blank / whitespace → `null` (Postgres treats `null` and `''` as no nanny filter).
+ * Maps sitter serial input to `p_search_nanny_id` for `list_public_sitters_search`
+ * (filters `sitter_profiles.nanny_serial` inside the RPC).
  */
-export function searchNannyIdToRpcParam(raw: string | null | undefined): string | null {
+export function sitterSerialToRpcParam(raw: string | null | undefined): string | null {
   const trimmed = String(raw ?? "").trim();
   return trimmed.length === 0 ? null : trimmed;
 }
+
+/** @deprecated Use sitterSerialToRpcParam */
+export const searchNannyIdToRpcParam = sitterSerialToRpcParam;
 
 function buildLocalDateTimeIso(
   day: string,
@@ -135,12 +141,6 @@ export function buildSearchEndTimeIso(filters: ParentSearchFilters): string | nu
   return buildLocalDateTimeIso(day, safe.searchEndHour, safe.searchEndMinute, { hour: "23", minute: "45" });
 }
 
-/** True when both timestamps exist and end is not after start. */
-export function isInvalidParentSearchTimeRange(startIso: string | null, endIso: string | null): boolean {
-  if (!startIso || !endIso) return false;
-  return new Date(endIso).getTime() <= new Date(startIso).getTime();
-}
-
 /** Exact PostgREST payload for `list_public_sitters_search` (no `p_search_date`). */
 export type ListPublicSittersSearchRpcParams = {
   p_search_nanny_id: string | null;
@@ -157,7 +157,7 @@ export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): 
   const safe = normalizeParentSearchFilters(filters);
 
   return {
-    p_search_nanny_id: searchNannyIdToRpcParam(safe.searchNannyId),
+    p_search_nanny_id: sitterSerialToRpcParam(safe.searchSitterSerial),
     p_start_time: buildSearchStartTimeIso(safe),
     p_end_time: buildSearchEndTimeIso(safe),
     p_min_years_experience: safe.minYearsExperience,

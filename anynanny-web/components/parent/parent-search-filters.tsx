@@ -126,8 +126,8 @@ export function ParentSearchFiltersBar({
           autoComplete="off"
           placeholder="לדוגמה AN-1001"
           className="mt-1 block min-h-11 w-full rounded-xl border border-navy-header/20 bg-[#FDFBF6] px-3 py-2 text-sm"
-          value={filters.searchNannyId}
-          onChange={(e) => patch({ searchNannyId: e.target.value })}
+          value={filters.searchSitterSerial}
+          onChange={(e) => patch({ searchSitterSerial: e.target.value })}
         />
       </label>
 

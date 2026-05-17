@@ -9,28 +9,21 @@ import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filter
 import { PublicSitterSearchCardLink } from "@/components/sitter/public-sitter-search-card";
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
-  buildSearchEndTimeIso,
-  buildSearchStartTimeIso,
   defaultParentSearchFilters,
-  isInvalidParentSearchTimeRange,
-  minRatingToRpcValue,
   normalizeParentSearchFilters,
-  searchNannyIdToRpcParam,
-  type ListPublicSittersSearchRpcParams,
   type ParentSearchFilters
 } from "@/lib/sitter/parent-search-filters";
-import { parsePublicSearchCards } from "@/lib/sitter/public-search-card";
+import { runParentSitterSearch } from "@/lib/sitter/parent-sitter-search";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function ParentSearchPage() {
   const router = useRouter();
   const { isLoading, signedIn, effectiveRole } = useAuth();
-  /** Form state — changes do not hit the database until search is clicked. */
   const [draftFilters, setDraftFilters] = useState<ParentSearchFilters>(() => defaultParentSearchFilters());
-  const [listErr, setListErr] = useState<string | null>(null);
   const [sitters, setSitters] = useState<PublicSitterSearchCard[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -44,47 +37,29 @@ export default function ParentSearchPage() {
   }, [isLoading, signedIn, effectiveRole, router]);
 
   const runSearch = useCallback(async () => {
-    const activeFilters = normalizeParentSearchFilters(draftFilters);
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setListErr("Supabase לא מוגדר.");
+      setSearchError("Supabase לא מוגדר.");
       setSitters([]);
       setHasSearched(true);
       return;
     }
-    const filters = activeFilters;
-    const p_start_time = buildSearchStartTimeIso(filters);
-    const p_end_time = buildSearchEndTimeIso(filters);
-
-    if (isInvalidParentSearchTimeRange(p_start_time, p_end_time)) {
-      setListErr("שעת הסיום חייבת להיות אחרי שעת ההתחלה.");
-      setSitters([]);
-      setHasSearched(true);
-      return;
-    }
-
-    const rpcParams: ListPublicSittersSearchRpcParams = {
-      p_search_nanny_id: searchNannyIdToRpcParam(filters.searchNannyId),
-      p_start_time,
-      p_end_time,
-      p_min_years_experience: filters.minYearsExperience,
-      p_min_rating: minRatingToRpcValue(filters.minRating),
-      p_transport: filters.transport,
-      p_max_hourly_rate: filters.maxHourlyRate
-    };
 
     setListLoading(true);
-    setListErr(null);
+    setSearchError(null);
     setHasSearched(true);
-    /** RPC only — no direct queries on tables; DB function reads public.sitter_profiles. */
-    const { data, error } = await supabase.rpc("list_public_sitters_search", rpcParams);
+
+    const { sitters: results, error } = await runParentSitterSearch(
+      supabase,
+      normalizeParentSearchFilters(draftFilters)
+    );
+
     setListLoading(false);
+    setSitters(results);
     if (error) {
-      setListErr(error.message);
-      setSitters([]);
-      return;
+      console.error("[parent/search] list_public_sitters_search", error);
+      setSearchError(error);
     }
-    setSitters(parsePublicSearchCards(data));
   }, [draftFilters]);
 
   const authSettled = !isLoading;
@@ -135,16 +110,7 @@ export default function ParentSearchPage() {
         <p className="px-1 text-right text-sm text-slate-600">טוען תוצאות…</p>
       ) : null}
 
-      {showContent && listErr ? (
-        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-950">
-          לא ניתן לטעון רשימה ({listErr}). הריצו ב-Supabase את{" "}
-          <code className="text-xs">sql/fix_list_public_sitters_search_sitter_profiles.sql</code> (או מיגרציה{" "}
-          <code className="text-xs">20260516180000_repair_list_public_sitters_search</code>), ואז{" "}
-          <code className="text-xs">NOTIFY pgrst, &apos;reload schema&apos;;</code>
-        </p>
-      ) : null}
-
-      {showContent && hasSearched && !listLoading && !listErr ? (
+      {showContent && hasSearched && !listLoading && !searchError ? (
         <p className="px-1 text-right text-xs text-slate-600">ממוינים לפי דירוג ממוצע (גבוה קודם).</p>
       ) : null}
 
@@ -156,7 +122,11 @@ export default function ParentSearchPage() {
 
       {showContent && hasSearched && !listLoading ? (
         <section className="space-y-3 px-1">
-          {sitters.length === 0 && !listErr ? (
+          {searchError ? (
+            <p className="text-right text-xs text-rose-700">{searchError}</p>
+          ) : null}
+
+          {sitters.length === 0 && !searchError ? (
             <p className="rounded-3xl border border-navy-header/10 bg-white p-6 text-center text-sm text-slate-600 shadow-soft">
               לא נמצאו בייביסיטרים התואמים לסינון. נסו להרחיב את החיפוש.
             </p>
