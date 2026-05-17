@@ -141,8 +141,8 @@ export function isInvalidParentSearchTimeRange(startIso: string | null, endIso: 
   return new Date(endIso).getTime() <= new Date(startIso).getTime();
 }
 
-/** RPC args for `list_public_sitters_search`. */
-export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): {
+/** Exact PostgREST payload for `list_public_sitters_search` (no `p_search_date`). */
+export type ListPublicSittersSearchRpcParams = {
   p_search_nanny_id: string | null;
   p_start_time: string | null;
   p_end_time: string | null;
@@ -150,7 +150,10 @@ export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): 
   p_min_rating: number | null;
   p_transport: string;
   p_max_hourly_rate: number;
-} {
+};
+
+/** RPC args for `list_public_sitters_search`. */
+export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): ListPublicSittersSearchRpcParams {
   const safe = normalizeParentSearchFilters(filters);
 
   return {

@@ -9,11 +9,14 @@ import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filter
 import { PublicSitterSearchCardLink } from "@/components/sitter/public-sitter-search-card";
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
+  buildSearchEndTimeIso,
+  buildSearchStartTimeIso,
   defaultParentSearchFilters,
   isInvalidParentSearchTimeRange,
+  minRatingToRpcValue,
   normalizeParentSearchFilters,
   searchNannyIdToRpcParam,
-  toListPublicSittersSearchRpcArgs,
+  type ListPublicSittersSearchRpcParams,
   type ParentSearchFilters
 } from "@/lib/sitter/parent-search-filters";
 import { parsePublicSearchCards } from "@/lib/sitter/public-search-card";
@@ -49,22 +52,31 @@ export default function ParentSearchPage() {
       setHasSearched(true);
       return;
     }
-    const rpcArgs = toListPublicSittersSearchRpcArgs(activeFilters);
-    if (isInvalidParentSearchTimeRange(rpcArgs.p_start_time, rpcArgs.p_end_time)) {
+    const filters = activeFilters;
+    const p_start_time = buildSearchStartTimeIso(filters);
+    const p_end_time = buildSearchEndTimeIso(filters);
+
+    if (isInvalidParentSearchTimeRange(p_start_time, p_end_time)) {
       setListErr("שעת הסיום חייבת להיות אחרי שעת ההתחלה.");
       setSitters([]);
       setHasSearched(true);
       return;
     }
 
+    const rpcParams: ListPublicSittersSearchRpcParams = {
+      p_search_nanny_id: searchNannyIdToRpcParam(filters.searchNannyId),
+      p_start_time,
+      p_end_time,
+      p_min_years_experience: filters.minYearsExperience,
+      p_min_rating: minRatingToRpcValue(filters.minRating),
+      p_transport: filters.transport,
+      p_max_hourly_rate: filters.maxHourlyRate
+    };
+
     setListLoading(true);
     setListErr(null);
     setHasSearched(true);
-    const { data, error } = await supabase.rpc("list_public_sitters_search", {
-      ...rpcArgs,
-      /** Empty nanny ID field → null so RPC skips serial filter (blank search). */
-      p_search_nanny_id: searchNannyIdToRpcParam(activeFilters.searchNannyId)
-    });
+    const { data, error } = await supabase.rpc("list_public_sitters_search", rpcParams);
     setListLoading(false);
     if (error) {
       setListErr(error.message);
