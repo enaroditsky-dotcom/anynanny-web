@@ -9,11 +9,15 @@ import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filter
 import { PublicSitterSearchCardLink } from "@/components/sitter/public-sitter-search-card";
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
+  buildSearchEndTimeIso,
+  buildSearchStartTimeIso,
   defaultParentSearchFilters,
+  minRatingToRpcValue,
   normalizeParentSearchFilters,
+  sitterSerialToRpcParam,
   type ParentSearchFilters
 } from "@/lib/sitter/parent-search-filters";
-import { runParentSitterSearch } from "@/lib/sitter/parent-sitter-search";
+import { parsePublicSearchCards } from "@/lib/sitter/public-search-card";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function ParentSearchPage() {
@@ -45,20 +49,41 @@ export default function ParentSearchPage() {
       return;
     }
 
+    const filters = normalizeParentSearchFilters(draftFilters);
+    const startTimeIso = buildSearchStartTimeIso(filters);
+    const endTimeIso = buildSearchEndTimeIso(filters);
+
+    const maxPrice = filters.maxHourlyRate;
+    const minExperience = filters.minYearsExperience;
+    const searchNannyId = sitterSerialToRpcParam(filters.searchSitterSerial);
+    const transportMode = filters.transport;
+    const minRating = minRatingToRpcValue(filters.minRating);
+
     setListLoading(true);
     setSearchError(null);
     setHasSearched(true);
 
-    const { sitters: results, error } = await runParentSitterSearch(
-      supabase,
-      normalizeParentSearchFilters(draftFilters)
-    );
+    try {
+      const { data: results, error } = await supabase.rpc("list_public_sitters_search", {
+        p_max_hourly_rate: maxPrice || null,
+        p_min_years_experience: parseInt(String(minExperience), 10) || 0,
+        p_search_nanny_id: searchNannyId || null,
+        p_transport: transportMode || "all",
+        p_min_rating: minRating || null,
+        p_start_time: startTimeIso,
+        p_end_time: endTimeIso
+      });
 
-    setListLoading(false);
-    setSitters(results);
-    if (error) {
-      console.error("[parent/search] list_public_sitters_search", error);
-      setSearchError(error);
+      if (error) {
+        console.error("[parent/search] list_public_sitters_search", error);
+        setSearchError(error.message);
+        setSitters([]);
+        return;
+      }
+
+      setSitters(parsePublicSearchCards(results));
+    } finally {
+      setListLoading(false);
     }
   }, [draftFilters]);
 
