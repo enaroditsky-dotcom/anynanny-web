@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Calendar, CalendarPlus, MessageCircle, Star } from "lucide-react";
+import { ArrowRight, Calendar, MessageCircle, Star } from "lucide-react";
+import { BookShiftModal } from "@/components/parent/book-shift-modal";
+import { getOrCreateChatRoom } from "@/lib/chat/parent-chat";
 import { useAuth } from "@/components/auth-provider";
 import {
   formatTransportationMode,
@@ -39,11 +41,14 @@ export default function ParentSitterProfilePage() {
   const sitterId = parseRouteSitterId(params?.sitterId);
 
   const router = useRouter();
-  const { isLoading, signedIn, effectiveRole, displayName: parentDisplayName } = useAuth();
+  const { isLoading, signedIn, effectiveRole } = useAuth();
   const [profile, setProfile] = useState<SitterProfilePublic | null>(null);
   const [reviews, setReviews] = useState<PublicSitterReview[]>([]);
   const [pageState, setPageState] = useState<"loading" | "missing" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [bookModalOpen, setBookModalOpen] = useState(false);
+  const [messageBusy, setMessageBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -124,20 +129,37 @@ export default function ParentSitterProfilePage() {
   const isReady = showContent && pageState === "ready" && profile != null;
   const profileId = profile?.id ?? sitterId ?? "";
 
-  const goToBookShift = useCallback(() => {
-    const id = profile?.id ?? sitterId;
-    if (!id) return;
-    const q = new URLSearchParams();
-    if (parentDisplayName) q.set("parentName", parentDisplayName);
-    const qs = q.toString();
-    router.push(`/parent/sitter/${encodeURIComponent(id)}/calendar${qs ? `?${qs}` : ""}`);
-  }, [profile?.id, sitterId, parentDisplayName, router]);
+  const resolveSitterId = useCallback(() => profile?.id ?? sitterId ?? null, [profile?.id, sitterId]);
 
-  const goToMessages = useCallback(() => {
-    const id = profile?.id ?? sitterId;
+  const handleSendMessage = useCallback(async () => {
+    const id = resolveSitterId();
     if (!id) return;
-    router.push(`/parent/messages?sitter_id=${encodeURIComponent(id)}`);
-  }, [profile?.id, sitterId, router]);
+
+    setActionError(null);
+    setMessageBusy(true);
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setActionError("Supabase לא זמין");
+      setMessageBusy(false);
+      return;
+    }
+
+    const { roomId, error } = await getOrCreateChatRoom(supabase, id);
+    setMessageBusy(false);
+
+    if (error || !roomId) {
+      setActionError(error ?? "לא ניתן לפתוח שיחה");
+      return;
+    }
+
+    router.push(`/parent/chat/${encodeURIComponent(roomId)}`);
+  }, [resolveSitterId, router]);
+
+  const handleBookShift = useCallback(() => {
+    setActionError(null);
+    setBookModalOpen(true);
+  }, []);
 
   if (showContent && pageState === "missing") {
     return (
@@ -222,31 +244,41 @@ export default function ParentSitterProfilePage() {
             </div>
 
             {profileId ? (
-              <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={goToBookShift}
-                  className="inline-flex flex-1 flex-row-reverse items-center justify-center gap-2 rounded-2xl bg-[#001F3F] px-4 py-3.5 text-sm font-bold text-white shadow-soft transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#001F3F] active:scale-[0.99]"
-                >
-                  <CalendarPlus className="h-5 w-5 shrink-0" aria-hidden />
-                  לתאם משמרת
-                </button>
-                <button
-                  type="button"
-                  onClick={goToMessages}
-                  className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-2xl border-2 border-[#001F3F]/25 bg-white px-4 py-3 text-sm font-semibold text-[#001F3F] shadow-sm transition hover:bg-brand-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#001F3F] active:scale-[0.99] sm:flex-1"
-                >
-                  <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
-                  שליחת הודעה
-                </button>
-                <Link
-                  href={`/parent/sitter/${encodeURIComponent(profileId)}/calendar${parentDisplayName ? `?parentName=${encodeURIComponent(parentDisplayName)}` : ""}`}
-                  className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-4 py-2.5 text-xs font-semibold text-navy-header transition hover:bg-white sm:w-full"
-                >
-                  <Calendar className="h-4 w-4" aria-hidden />
-                  זמינות ויומן
-                </Link>
+              <div className="mt-6 space-y-2">
+                {actionError ? (
+                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-right text-xs text-rose-900">
+                    {actionError}
+                  </p>
+                ) : null}
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleSendMessage()}
+                    disabled={messageBusy}
+                    className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-2xl border-2 border-[#001F3F]/20 bg-white px-4 py-3.5 text-sm font-semibold text-[#001F3F] shadow-sm transition hover:bg-brand-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#001F3F] disabled:opacity-60 active:scale-[0.99]"
+                  >
+                    <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
+                    {messageBusy ? "פותחים שיחה…" : "שלח הודעה"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBookShift}
+                    className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-2xl bg-[#001F3F] px-4 py-3.5 text-sm font-bold text-white shadow-soft transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#001F3F] active:scale-[0.99]"
+                  >
+                    <Calendar className="h-5 w-5 shrink-0" aria-hidden />
+                    תיאום משמרת
+                  </button>
+                </div>
               </div>
+            ) : null}
+
+            {profile && profileId ? (
+              <BookShiftModal
+                open={bookModalOpen}
+                sitterId={profileId}
+                sitterName={profile.full_name || "בייביסיטר"}
+                onClose={() => setBookModalOpen(false)}
+              />
             ) : null}
           </section>
 
