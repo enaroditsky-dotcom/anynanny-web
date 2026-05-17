@@ -66,7 +66,13 @@ export default function ParentSearchPage() {
     try {
       const { data: results, error } = await supabase.rpc("list_public_sitters_search", {
         p_max_hourly_rate: maxPrice || null,
-        p_min_years_experience: parseInt(String(minExperience), 10) || 0,
+        p_min_years_experience: (() => {
+          if (!minExperience || minExperience === "all" || String(minExperience).includes("הכל")) {
+            return 0;
+          }
+          const match = String(minExperience).match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        })(),
         p_search_nanny_id: searchNannyId || null,
         p_transport: transportMode || "all",
         p_min_rating: minRating || null,

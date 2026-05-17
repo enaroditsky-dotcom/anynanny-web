@@ -90,6 +90,15 @@ export function minRatingToRpcValue(minRating: ParentSearchMinRating): number | 
   return Number(minRating);
 }
 
+/** RPC `p_min_years_experience` — accepts numeric state or Hebrew labels like `3+ שנים`. */
+export function minYearsExperienceToRpcValue(raw: unknown): number {
+  if (raw === null || raw === undefined || raw === "") return 0;
+  const text = String(raw).trim();
+  if (!text || text === "all" || text.includes("הכל")) return 0;
+  const match = text.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
 /**
  * Maps sitter serial input to `p_search_nanny_id` for `list_public_sitters_search`
  * (filters `sitter_profiles.nanny_serial` inside the RPC).
@@ -160,7 +169,7 @@ export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): 
     p_search_nanny_id: sitterSerialToRpcParam(safe.searchSitterSerial),
     p_start_time: buildSearchStartTimeIso(safe),
     p_end_time: buildSearchEndTimeIso(safe),
-    p_min_years_experience: safe.minYearsExperience,
+    p_min_years_experience: minYearsExperienceToRpcValue(safe.minYearsExperience),
     p_min_rating: minRatingToRpcValue(safe.minRating),
     p_transport: safe.transport,
     p_max_hourly_rate: safe.maxHourlyRate
