@@ -1,18 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { SLOTS_PER_DAY } from "@/lib/calendar/constants";
 import { isSlotPast, slotIndexToLabel } from "@/lib/calendar/slot-utils";
 import type { CalendarMode } from "@/lib/availability/constants";
 import {
-  countOpenSlotsFromPaint,
+  blockEntireDaySlotIndices,
+  countOpenSlotsInIndices,
   fetchAvailabilityForDate,
   fetchAvailabilityMonthSummary,
   fetchSitterCalendarMode,
-  isDateFullyBlocked,
-  paintSetFromAvailabilityRow,
-  paintSetToSlotIndices,
+  isDateFullyBlockedFromIndices,
+  isSlotOpenInIndices,
+  normalizeSlotIndices,
   saveAvailabilityForDate,
+  setSlotOpenInIndices,
+  toggleSlotInIndices,
+  unblockEntireDaySlotIndices,
   updateSitterCalendarMode
 } from "@/lib/availability/sitter-availability";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -24,6 +28,16 @@ function formatDateISO(year: number, month: number, day: number): string {
 
 const HEBREW_WEEKDAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 
+function applyIndicesState(
+  indices: number[],
+  setSlotIndices: (v: number[]) => void,
+  indicesRef: MutableRefObject<number[]>
+) {
+  const safe = normalizeSlotIndices(indices);
+  setSlotIndices(safe);
+  indicesRef.current = safe;
+}
+
 export function SitterAvailabilityManager() {
   const today = new Date();
   const [sitterId, setSitterId] = useState<string | null>(null);
@@ -32,7 +46,7 @@ export function SitterAvailabilityManager() {
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [monthSummary, setMonthSummary] = useState<Record<string, { marked: number }>>({});
-  const [localPaint, setLocalPaint] = useState<Set<number>>(new Set());
+  const [slotIndices, setSlotIndices] = useState<number[]>([]);
   const [brush, setBrush] = useState<"fill" | "erase">("fill");
   const [loading, setLoading] = useState(true);
   const [loadingDay, setLoadingDay] = useState(false);
@@ -42,12 +56,12 @@ export function SitterAvailabilityManager() {
   const dragging = useRef(false);
   const draggedDuringGesture = useRef(false);
   const suppressClickRef = useRef(false);
-  const paintRef = useRef<Set<number>>(new Set());
+  const slotIndicesRef = useRef<number[]>([]);
   const calendarModeRef = useRef<CalendarMode>("only_selected");
 
   useEffect(() => {
-    paintRef.current = localPaint;
-  }, [localPaint]);
+    slotIndicesRef.current = slotIndices;
+  }, [slotIndices]);
 
   useEffect(() => {
     calendarModeRef.current = calendarMode;
@@ -55,17 +69,26 @@ export function SitterAvailabilityManager() {
 
   useEffect(() => {
     void (async () => {
-      const auth = await resolveBrowserAuth();
-      if (!auth.ok) {
-        setMessage("יש להתחבר כדי לנהל זמינות.");
+      try {
+        const auth = await resolveBrowserAuth();
+        if (!auth.ok) {
+          setMessage("יש להתחבר כדי לנהל זמינות.");
+          return;
+        }
+        setSitterId(auth.userId);
+        if (!auth.supabase) {
+          setMessage("Supabase לא זמין");
+          return;
+        }
+        const { mode } = await fetchSitterCalendarMode(auth.supabase, auth.userId);
+        setCalendarMode(mode);
+        calendarModeRef.current = mode;
+      } catch (err) {
+        console.warn("[sitter_availability] init failed:", err);
+        setMessage("שגיאה בטעינת הזמינות — רעננו את הדף.");
+      } finally {
         setLoading(false);
-        return;
       }
-      setSitterId(auth.userId);
-      const { mode } = await fetchSitterCalendarMode(auth.supabase, auth.userId);
-      setCalendarMode(mode);
-      calendarModeRef.current = mode;
-      setLoading(false);
     })();
   }, []);
 
@@ -73,18 +96,23 @@ export function SitterAvailabilityManager() {
     if (!sitterId) return;
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
-    const { days, error } = await fetchAvailabilityMonthSummary(
-      supabase,
-      sitterId,
-      year,
-      month,
-      calendarModeRef.current
-    );
-    if (error) {
-      console.warn("[sitter_availability] month summary:", error);
-      setMessage(error);
+    try {
+      const { days, error } = await fetchAvailabilityMonthSummary(
+        supabase,
+        sitterId,
+        year,
+        month,
+        calendarModeRef.current
+      );
+      if (error) {
+        console.warn("[sitter_availability] month summary:", error);
+        setMessage(error);
+      }
+      setMonthSummary(days && typeof days === "object" ? days : {});
+    } catch (err) {
+      console.warn("[sitter_availability] month summary failed:", err);
+      setMonthSummary({});
     }
-    setMonthSummary(days);
   }, [sitterId, year, month]);
 
   const loadDay = useCallback(async () => {
@@ -95,16 +123,20 @@ export function SitterAvailabilityManager() {
       setLoadingDay(false);
       return;
     }
-    const { row, error } = await fetchAvailabilityForDate(supabase, sitterId, selectedDate);
-    if (error) {
-      console.warn("[sitter_availability] load day:", error);
-      setMessage(error);
-      setLocalPaint(new Set());
-      paintRef.current = new Set();
-    } else {
-      const paint = paintSetFromAvailabilityRow(calendarModeRef.current, selectedDate, row);
-      setLocalPaint(paint);
-      paintRef.current = paint;
+    try {
+      const { row, error } = await fetchAvailabilityForDate(supabase, sitterId, selectedDate);
+      if (error) {
+        console.warn("[sitter_availability] load day:", error);
+        setMessage(error);
+        applyIndicesState([], setSlotIndices, slotIndicesRef);
+      } else {
+        const indices = row?.slot_indices ?? [];
+        applyIndicesState(indices, setSlotIndices, slotIndicesRef);
+      }
+    } catch (err) {
+      console.warn("[sitter_availability] load day failed:", err);
+      setMessage("שגיאה בטעינת היום — נסו שוב.");
+      applyIndicesState([], setSlotIndices, slotIndicesRef);
     }
     setLoadingDay(false);
   }, [sitterId, selectedDate]);
@@ -122,15 +154,19 @@ export function SitterAvailabilityManager() {
   /** Keep month tile colors in sync while editing the selected day. */
   useEffect(() => {
     if (!selectedDate) return;
-    const open = countOpenSlotsFromPaint(selectedDate, localPaint);
-    setMonthSummary((prev) => ({
-      ...prev,
-      [selectedDate]: { marked: open }
-    }));
-  }, [localPaint, selectedDate]);
+    try {
+      const open = countOpenSlotsInIndices(selectedDate, calendarModeRef.current, slotIndices);
+      setMonthSummary((prev) => ({
+        ...(prev ?? {}),
+        [selectedDate]: { marked: open }
+      }));
+    } catch (err) {
+      console.warn("[sitter_availability] month tile sync:", err);
+    }
+  }, [slotIndices, selectedDate]);
 
-  const persistPaint = useCallback(
-    async (paint: Set<number>, options?: { silent?: boolean }) => {
+  const persistSlotIndices = useCallback(
+    async (indices: number[], options?: { silent?: boolean }) => {
       if (!sitterId || !selectedDate) return false;
 
       const supabase = getSupabaseBrowserClient();
@@ -139,60 +175,80 @@ export function SitterAvailabilityManager() {
         return false;
       }
 
+      const normalized = normalizeSlotIndices(indices);
+      applyIndicesState(normalized, setSlotIndices, slotIndicesRef);
       setSaving(true);
       if (!options?.silent) setMessage(null);
 
-      const indices = paintSetToSlotIndices(calendarModeRef.current, paint);
-      const { row, error } = await saveAvailabilityForDate(supabase, sitterId, selectedDate, indices);
+      try {
+        const { row, error } = await saveAvailabilityForDate(supabase, sitterId, selectedDate, normalized);
 
-      setSaving(false);
+        if (error) {
+          console.warn("[sitter_availability] save:", error);
+          setMessage(error);
+          await loadDay();
+          return false;
+        }
 
-      if (error) {
-        console.warn("[sitter_availability] save:", error);
-        setMessage(error);
+        const synced = normalizeSlotIndices(row?.slot_indices ?? normalized);
+        applyIndicesState(synced, setSlotIndices, slotIndicesRef);
+
+        if (!options?.silent) {
+          setMessage("נשמר — השעות עודכנו.");
+        }
+        void loadMonth();
+        return true;
+      } catch (err) {
+        console.warn("[sitter_availability] save failed:", err);
+        setMessage("שגיאה בשמירה — נסו שוב.");
         await loadDay();
         return false;
+      } finally {
+        setSaving(false);
       }
-
-      const synced = paintSetFromAvailabilityRow(calendarModeRef.current, selectedDate, row);
-      setLocalPaint(synced);
-      paintRef.current = synced;
-
-      if (!options?.silent) {
-        setMessage("נשמר — השעות עודכנו.");
-      }
-      void loadMonth();
-      return true;
     },
     [sitterId, selectedDate, loadDay, loadMonth]
   );
 
   const applyBrushToSlot = useCallback((slotIndex: number, mode: "fill" | "erase") => {
-    if (!selectedDate || isSlotPast(selectedDate, slotIndex)) return null;
+    if (!selectedDate || loadingDay || saving) return null;
+    if (isSlotPast(selectedDate, slotIndex)) return null;
 
-    const next = new Set(paintRef.current);
-    if (mode === "fill") next.add(slotIndex);
-    else next.delete(slotIndex);
-
-    setLocalPaint(next);
-    paintRef.current = next;
+    const open = mode === "fill";
+    const next = setSlotOpenInIndices(
+      calendarModeRef.current,
+      slotIndex,
+      slotIndicesRef.current,
+      open
+    );
+    applyIndicesState(next, setSlotIndices, slotIndicesRef);
     return next;
-  }, [selectedDate]);
+  }, [selectedDate, loadingDay, saving]);
 
   const toggleSlotAt = useCallback(
     async (slotIndex: number) => {
-      if (!selectedDate || isSlotPast(selectedDate, slotIndex)) return;
+      if (!selectedDate || loadingDay || saving || isSlotPast(selectedDate, slotIndex)) return;
 
-      const next = new Set(paintRef.current);
-      if (next.has(slotIndex)) next.delete(slotIndex);
-      else next.add(slotIndex);
-
-      setLocalPaint(next);
-      paintRef.current = next;
-      await persistPaint(next, { silent: true });
+      const next = toggleSlotInIndices(calendarModeRef.current, slotIndex, slotIndicesRef.current);
+      applyIndicesState(next, setSlotIndices, slotIndicesRef);
+      await persistSlotIndices(next, { silent: true });
     },
-    [selectedDate, persistPaint]
+    [selectedDate, loadingDay, saving, persistSlotIndices]
   );
+
+  const handleBlockEntireDay = useCallback(async () => {
+    if (!selectedDate || loadingDay || saving) return;
+    const next = blockEntireDaySlotIndices(calendarModeRef.current);
+    applyIndicesState(next, setSlotIndices, slotIndicesRef);
+    await persistSlotIndices(next, { silent: true });
+  }, [selectedDate, loadingDay, saving, persistSlotIndices]);
+
+  const handleUnblockEntireDay = useCallback(async () => {
+    if (!selectedDate || loadingDay || saving) return;
+    const next = unblockEntireDaySlotIndices(calendarModeRef.current);
+    applyIndicesState(next, setSlotIndices, slotIndicesRef);
+    await persistSlotIndices(next, { silent: true });
+  }, [selectedDate, loadingDay, saving, persistSlotIndices]);
 
   const handleSlotPointerDown = (slotIndex: number) => {
     if (!selectedDate || isSlotPast(selectedDate, slotIndex)) return;
@@ -213,9 +269,9 @@ export function SitterAvailabilityManager() {
     draggedDuringGesture.current = false;
     if (wasDrag) {
       suppressClickRef.current = true;
-      void persistPaint(paintRef.current, { silent: true });
+      void persistSlotIndices(slotIndicesRef.current, { silent: true });
     }
-  }, [persistPaint]);
+  }, [persistSlotIndices]);
 
   useEffect(() => {
     const stop = () => {
@@ -246,7 +302,7 @@ export function SitterAvailabilityManager() {
   }, [year, month]);
 
   const handleModeChange = async (mode: CalendarMode) => {
-    if (!sitterId || mode === calendarMode) return;
+    if (!sitterId || mode === calendarMode || modeSaving) return;
     setModeSaving(true);
     setMessage(null);
     const supabase = getSupabaseBrowserClient();
@@ -254,18 +310,32 @@ export function SitterAvailabilityManager() {
       setModeSaving(false);
       return;
     }
-    const { error } = await updateSitterCalendarMode(supabase, sitterId, mode);
-    setModeSaving(false);
-    if (error) {
-      console.warn("[sitter_availability] calendar_mode:", error);
-      setMessage(error);
-      return;
+    try {
+      const { error } = await updateSitterCalendarMode(supabase, sitterId, mode);
+      if (error) {
+        console.warn("[sitter_availability] calendar_mode:", error);
+        setMessage(error);
+        return;
+      }
+      setCalendarMode(mode);
+      calendarModeRef.current = mode;
+      setMessage(
+        mode === "only_selected"
+          ? "מצב: פתוח רק בשעות שתסמנו"
+          : "מצב: פתוח כברירת מחדל — חסמו שעות שלא פנויות"
+      );
+      if (selectedDate) {
+        await loadDay();
+      } else {
+        applyIndicesState([], setSlotIndices, slotIndicesRef);
+      }
+      void loadMonth();
+    } catch (err) {
+      console.warn("[sitter_availability] calendar_mode failed:", err);
+      setMessage("שגיאה בעדכון מצב היומן — נסו שוב.");
+    } finally {
+      setModeSaving(false);
     }
-    setCalendarMode(mode);
-    calendarModeRef.current = mode;
-    setMessage(mode === "only_selected" ? "מצב: פתוח רק בשעות שתסמנו" : "מצב: פתוח כברירת מחדל — חסמו שעות שלא פנויות");
-    if (selectedDate) await loadDay();
-    void loadMonth();
   };
 
   const shiftMonth = (delta: number) => {
@@ -276,8 +346,12 @@ export function SitterAvailabilityManager() {
   };
 
   const handleSaveDay = async () => {
-    await persistPaint(paintRef.current);
+    if (!selectedDate || loadingDay) return;
+    await persistSlotIndices(slotIndicesRef.current);
   };
+
+  const safeMonthSummary = monthSummary ?? {};
+  const activeIndices = normalizeSlotIndices(slotIndices);
 
   if (loading) {
     return <p className="text-right text-sm text-slate-600">טוען ניהול זמינות…</p>;
@@ -366,12 +440,16 @@ export function SitterAvailabilityManager() {
             return <div key={`e-${idx}`} className="aspect-square rounded-lg bg-slate-50/80" />;
           }
           const iso = formatDateISO(year, month, cell.day);
-          const summary = monthSummary[iso];
+          const summary = safeMonthSummary[iso];
           const isSelected = selectedDate === iso;
-          const livePaint = isSelected ? localPaint : undefined;
+          const liveIndices = isSelected ? activeIndices : undefined;
           const openCount =
-            livePaint != null ? countOpenSlotsFromPaint(iso, livePaint) : (summary?.marked ?? 0);
-          const fullyBlocked = isDateFullyBlocked(iso, calendarMode, summary?.marked, { livePaint });
+            liveIndices != null
+              ? countOpenSlotsInIndices(iso, calendarMode, liveIndices)
+              : (summary?.marked ?? 0);
+          const fullyBlocked = isDateFullyBlockedFromIndices(iso, calendarMode, summary?.marked, {
+            liveIndices
+          });
 
           let tileClass =
             "flex aspect-square flex-col items-center justify-center rounded-lg border text-sm transition ";
@@ -433,6 +511,22 @@ export function SitterAvailabilityManager() {
               </button>
               <button
                 type="button"
+                disabled={saving || loadingDay}
+                onClick={() => void handleBlockEntireDay()}
+                className="rounded-lg border border-red-300 bg-red-100 px-2 py-1 text-xs font-semibold text-red-800 disabled:opacity-50"
+              >
+                חסימת יום
+              </button>
+              <button
+                type="button"
+                disabled={saving || loadingDay}
+                onClick={() => void handleUnblockEntireDay()}
+                className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800 disabled:opacity-50"
+              >
+                ביטול חסימה
+              </button>
+              <button
+                type="button"
                 disabled={saving}
                 onClick={() => void handleSaveDay()}
                 className="rounded-lg bg-[#001F3F] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
@@ -456,7 +550,7 @@ export function SitterAvailabilityManager() {
             >
               {Array.from({ length: SLOTS_PER_DAY }, (_, index) => {
                 const past = isSlotPast(selectedDate, index);
-                const open = localPaint.has(index);
+                const open = isSlotOpenInIndices(calendarMode, index, activeIndices);
                 return (
                   <button
                     key={index}
