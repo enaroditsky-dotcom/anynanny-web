@@ -6,7 +6,12 @@ import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 /** Statuses that keep parent/sitter linked for today's Double-Shake flow. */
-export const TODAYS_LINKED_BOOKING_STATUSES: BookingStatus[] = ["approved", "sitter_started"];
+export const TODAYS_LINKED_BOOKING_STATUSES: BookingStatus[] = [
+  "approved",
+  "sitter_started",
+  "parent_started",
+  "sitter_ended"
+];
 
 export type TodaysLinkedBookingView = BookingRow & {
   schedule_label: string;

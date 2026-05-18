@@ -40,6 +40,22 @@ export function ParentDoubleShakeIdleCircle({ booking, ready, onStartShift }: Pr
     );
   }
 
+  if (booking.status === "parent_started") {
+    return (
+      <DoubleShakeCircleButton label="משמרת פעילה" variant="navy" presentational />
+    );
+  }
+
+  if (booking.status === "sitter_ended") {
+    return (
+      <DoubleShakeCircleButton
+        label="הבייביסיטר ביקש לסיים — אשר סיום"
+        variant="salmon"
+        presentational
+      />
+    );
+  }
+
   return (
     <DoubleShakeCircleButton
       label={formatParentShiftStartButtonLabel(booking.partner_full_name, booking.partner_sitter_code)}

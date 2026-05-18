@@ -18,7 +18,7 @@ export async function fetchConfirmedShiftsForSitter(
       "id, parent_id, sitter_id, booking_date, start_time, end_time, status, actual_start_time, created_at, updated_at"
     )
     .eq("sitter_id", sitterId)
-    .in("status", ["approved", "sitter_started"])
+    .in("status", ["approved", "sitter_started", "parent_started", "sitter_ended"])
     .order("start_time", { ascending: true });
 
   if (error) {

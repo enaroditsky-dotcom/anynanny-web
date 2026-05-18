@@ -14,6 +14,7 @@ import {
   DoubleShakeShiftPanel
 } from "@/components/session/double-shake-circle-button";
 import { ParentDoubleShakeIdleCircle } from "@/components/session/parent-double-shake-idle-circle";
+import { parentApproveSitterStart } from "@/lib/bookings/parent-approve-sitter-start";
 import { useTodaysLinkedBooking } from "@/lib/bookings/use-todays-linked-booking";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -60,6 +61,7 @@ export default function ParentDashboardPage() {
   const {
     booking: todaysBooking,
     ready: bookingGuardReady,
+    reload: reloadTodaysBooking
   } = useTodaysLinkedBooking("parent", parentUserId);
 
   useEffect(() => {
@@ -292,6 +294,21 @@ export default function ParentDashboardPage() {
     setParentUserId(auth.userId);
 
     try {
+      if (todaysBooking.status === "sitter_started") {
+        const { error: bookingErr } = await parentApproveSitterStart(
+          auth.supabase,
+          auth.userId,
+          todaysBooking.id
+        );
+        if (bookingErr) {
+          setDbBanner(bookingErr);
+          persistSessionState({ status: "idle" });
+          setSessionState({ status: "idle" });
+          return;
+        }
+        void reloadTodaysBooking();
+      }
+
       const { data: row, error } = await auth.supabase
         .from(SESSIONS_TABLE)
         .insert({

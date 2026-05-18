@@ -15,6 +15,8 @@ function ShiftCard({ shift }: { shift: ConfirmedShiftView }) {
   const isPast = new Date(shift.end_time).getTime() < Date.now();
   const isToday = isBookingDateToday(shift.booking_date);
   const isSitterStarted = shift.status === "sitter_started";
+  const isParentStarted = shift.status === "parent_started";
+  const isSitterEnded = shift.status === "sitter_ended";
 
   return (
     <li
@@ -25,14 +27,26 @@ function ShiftCard({ shift }: { shift: ConfirmedShiftView }) {
       <div className="flex flex-row-reverse items-start justify-between gap-2">
         <span
           className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-            isSitterStarted
-              ? "bg-amber-100 text-amber-900"
-              : isPast
-                ? "bg-slate-200 text-slate-700"
-                : "bg-emerald-100 text-emerald-900"
+            isSitterEnded
+              ? "bg-rose-100 text-rose-900"
+              : isSitterStarted
+                ? "bg-amber-100 text-amber-900"
+                : isParentStarted
+                  ? "bg-sky-100 text-sky-900"
+                  : isPast
+                    ? "bg-slate-200 text-slate-700"
+                    : "bg-emerald-100 text-emerald-900"
           }`}
         >
-          {isSitterStarted ? "ממתין לאישור הורה" : isPast ? "הסתיימה" : "קרובה"}
+          {isSitterEnded
+            ? "ממתין לאישור סיום"
+            : isSitterStarted
+              ? "ממתין לאישור הורה"
+              : isParentStarted
+                ? "משמרת פעילה"
+                : isPast
+                  ? "הסתיימה"
+                  : "קרובה"}
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-[#001F3F]">{shift.parent_full_name ?? "הורה"}</p>
