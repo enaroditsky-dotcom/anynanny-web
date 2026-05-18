@@ -14,9 +14,11 @@ export async function fetchConfirmedShiftsForSitter(
 ): Promise<{ shifts: ConfirmedShiftView[]; error: string | null }> {
   const { data: rows, error } = await supabase
     .from(BOOKINGS_TABLE)
-    .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status, created_at, updated_at")
+    .select(
+      "id, parent_id, sitter_id, booking_date, start_time, end_time, status, actual_start_time, created_at, updated_at"
+    )
     .eq("sitter_id", sitterId)
-    .eq("status", "approved")
+    .in("status", ["approved", "sitter_started"])
     .order("start_time", { ascending: true });
 
   if (error) {
