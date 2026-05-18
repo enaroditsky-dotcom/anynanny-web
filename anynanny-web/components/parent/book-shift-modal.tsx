@@ -260,7 +260,7 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
                 disabled={busy}
                 className="inline-flex w-full flex-row-reverse items-center justify-center gap-2 rounded-2xl bg-[#001F3F] px-4 py-3.5 text-sm font-bold text-white shadow-soft transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#001F3F] disabled:opacity-60"
               >
-                {busy ? "שולחים…" : "שלח בקשת תיאום"}
+                {busy ? "שולחים…" : "שלח בקשה"}
               </button>
               <button
                 type="button"

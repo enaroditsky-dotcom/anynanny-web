@@ -111,10 +111,20 @@ export function normalizeSitterSerialForLookup(raw: string | null | undefined): 
   return compact;
 }
 
-/** True when input is a complete public serial (triggers direct profile fetch). */
+/** True when input is a complete public serial (e.g. AN-1004). */
 export function isExactSitterSerialQuery(raw: string | null | undefined): boolean {
   const norm = normalizeSitterSerialForLookup(raw);
   return norm != null && /^AN-\d+$/.test(norm);
+}
+
+/** Direct serial lookup — bypass calendar / availability RPC filters. */
+export function shouldUseDirectSerialLookup(raw: string | null | undefined): boolean {
+  return isExactSitterSerialQuery(raw);
+}
+
+/** @alias shouldUseDirectSerialLookup — used when building RPC args from full filter state. */
+export function isSerialTargetedSearch(filters: ParentSearchFilters): boolean {
+  return shouldUseDirectSerialLookup(filters.searchSitterSerial);
 }
 
 /**
@@ -181,14 +191,15 @@ export type ListPublicSittersSearchRpcParams = {
 /** RPC args for `list_public_sitters_search`. */
 export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): ListPublicSittersSearchRpcParams {
   const safe = normalizeParentSearchFilters(filters);
+  const serialOnly = shouldUseDirectSerialLookup(safe.searchSitterSerial);
 
   return {
     p_search_nanny_id: sitterSerialToRpcParam(safe.searchSitterSerial),
-    p_start_time: buildSearchStartTimeIso(safe),
-    p_end_time: buildSearchEndTimeIso(safe),
-    p_min_years_experience: minYearsExperienceToRpcValue(safe.minYearsExperience),
-    p_min_rating: minRatingToRpcValue(safe.minRating),
-    p_transport: safe.transport,
-    p_max_hourly_rate: safe.maxHourlyRate
+    p_start_time: serialOnly ? null : buildSearchStartTimeIso(safe),
+    p_end_time: serialOnly ? null : buildSearchEndTimeIso(safe),
+    p_min_years_experience: serialOnly ? 0 : minYearsExperienceToRpcValue(safe.minYearsExperience),
+    p_min_rating: serialOnly ? null : minRatingToRpcValue(safe.minRating),
+    p_transport: serialOnly ? "all" : safe.transport,
+    p_max_hourly_rate: serialOnly ? PARENT_SEARCH_MAX_HOURLY_SLIDER : safe.maxHourlyRate
   };
 }

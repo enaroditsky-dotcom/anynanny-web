@@ -11,6 +11,7 @@ import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
   defaultParentSearchFilters,
   isExactSitterSerialQuery,
+  isSerialTargetedSearch,
   normalizeParentSearchFilters,
   type ParentSearchFilters
 } from "@/lib/sitter/parent-search-filters";
@@ -63,6 +64,7 @@ export default function ParentSearchPage() {
         return;
       }
 
+      setSearchError(null);
       setSitters(cards);
     } finally {
       setListLoading(false);
@@ -96,6 +98,7 @@ export default function ParentSearchPage() {
           setSearchError(error);
           setSitters([]);
         } else {
+          setSearchError(null);
           setSitters(cards);
         }
         setListLoading(false);
@@ -107,6 +110,7 @@ export default function ParentSearchPage() {
 
   const showWait = !authSettled || (signedIn && effectiveRole === null);
   const redirectingToLogin = authSettled && !signedIn;
+  const serialLookupActive = isSerialTargetedSearch(normalizeParentSearchFilters(draftFilters));
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
@@ -151,7 +155,7 @@ export default function ParentSearchPage() {
         <p className="px-1 text-right text-sm text-slate-600">טוען תוצאות…</p>
       ) : null}
 
-      {showContent && hasSearched && !listLoading && !searchError ? (
+      {showContent && hasSearched && !listLoading && !searchError && !serialLookupActive ? (
         <p className="px-1 text-right text-xs text-slate-600">ממוינים לפי דירוג ממוצע (גבוה קודם).</p>
       ) : null}
 
@@ -169,7 +173,9 @@ export default function ParentSearchPage() {
 
           {sitters.length === 0 && !searchError ? (
             <p className="rounded-3xl border border-navy-header/10 bg-white p-6 text-center text-sm text-slate-600 shadow-soft">
-              לא נמצאו בייביסיטרים התואמים לסינון. נסו להרחיב את החיפוש.
+              {serialLookupActive
+                ? "לא נמצאה נני עם מספר אישי זה. בדקו את הקוד (למשל AN-1004) או שהפרופיל מפורסם."
+                : "לא נמצאו בייביסיטרים התואמים לסינון. נסו להרחיב את החיפוש."}
             </p>
           ) : null}
 

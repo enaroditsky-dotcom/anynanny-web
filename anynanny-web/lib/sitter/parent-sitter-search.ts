@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  isExactSitterSerialQuery,
+  isSerialTargetedSearch,
   normalizeSitterSerialForLookup,
   toListPublicSittersSearchRpcArgs,
   type ParentSearchFilters
@@ -14,6 +14,9 @@ export type ParentSitterSearchResult = {
   error: string | null;
 };
 
+const SERIAL_SELECT =
+  "id, full_name, show_full_name, nanny_serial, years_experience, has_car, bio, hourly_rate_nis, avg_rating, rating_count";
+
 function profileRowToSearchCard(row: Record<string, unknown>): PublicSitterSearchCard | null {
   const id = typeof row.id === "string" ? row.id : null;
   if (!id) return null;
@@ -24,14 +27,14 @@ function profileRowToSearchCard(row: Record<string, unknown>): PublicSitterSearc
     ? fullName
     : fullName.split(/\s+/)[0]?.trim() ?? "";
 
+  const nannySerial =
+    typeof row.nanny_serial === "string" ? row.nanny_serial.trim() : "";
+
   return {
     id,
     full_name: fullName || null,
     display_name: displayFromName || null,
-    nanny_serial:
-      (typeof row.nanny_serial === "string" && row.nanny_serial.trim()) ||
-      (typeof row.nanny_id_number === "string" && row.nanny_id_number.trim()) ||
-      null,
+    nanny_serial: nannySerial || null,
     years_experience:
       typeof row.years_experience === "number" && Number.isFinite(row.years_experience)
         ? row.years_experience
@@ -50,7 +53,17 @@ function profileRowToSearchCard(row: Record<string, unknown>): PublicSitterSearc
   };
 }
 
-/** Direct lookup by public serial — no RPC, no availability boolean, no session window. */
+function rowMatchesSerial(row: Record<string, unknown>, serial: string): boolean {
+  const stored = String(row.nanny_serial ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  return stored === serial;
+}
+
+/**
+ * Direct lookup on `sitter_profiles.nanny_serial` — no RPC, no calendar/session filters.
+ */
 export async function fetchPublicSitterSearchBySerial(
   supabase: SupabaseClient,
   serialInput: string
@@ -60,20 +73,25 @@ export async function fetchPublicSitterSearchBySerial(
     return { cards: [], error: null };
   }
 
-  const quoted = `"${serial.replace(/"/g, "")}"`;
   const { data, error } = await supabase
     .from(SITTER_PROFILES_TABLE)
-    .select(
-      "id, full_name, show_full_name, nanny_serial, nanny_id_number, years_experience, has_car, bio, hourly_rate_nis, avg_rating, rating_count"
-    )
+    .select(SERIAL_SELECT)
     .eq("is_public", true)
-    .or(`nanny_serial.eq.${quoted},nanny_id_number.eq.${quoted}`);
+    .ilike("nanny_serial", serial);
 
   if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("nanny_serial")) {
+      return {
+        cards: [],
+        error: "עמודת nanny_serial לא נמצאה — ודאו שהעמודה קיימת ב-sitter_profiles."
+      };
+    }
     return { cards: [], error: error.message };
   }
 
   const cards = (data ?? [])
+    .filter((row) => rowMatchesSerial(row as Record<string, unknown>, serial))
     .map((row) => profileRowToSearchCard(row as Record<string, unknown>))
     .filter((c): c is PublicSitterSearchCard => c != null);
 
@@ -103,14 +121,19 @@ export async function runListPublicSittersSearchRpc(
   return { cards: parsePublicSearchCards(results), error: null };
 }
 
-/** Serial code → direct profile fetch; otherwise filtered RPC (no is_available). */
+/** Serial (AN-####) → direct `nanny_serial` fetch; browse → filtered RPC. */
 export async function runParentSitterSearch(
   supabase: SupabaseClient,
   filters: ParentSearchFilters
 ): Promise<ParentSitterSearchResult> {
-  const serial = filters.searchSitterSerial.trim();
-  if (serial && isExactSitterSerialQuery(serial)) {
-    return fetchPublicSitterSearchBySerial(supabase, serial);
+  if (isSerialTargetedSearch(filters)) {
+    const direct = await fetchPublicSitterSearchBySerial(supabase, filters.searchSitterSerial);
+    if (direct.error) return direct;
+    if (direct.cards.length > 0) return direct;
+
+    const rpcFallback = await runListPublicSittersSearchRpc(supabase, filters);
+    if (rpcFallback.error) return rpcFallback;
+    return rpcFallback;
   }
 
   return runListPublicSittersSearchRpc(supabase, filters);

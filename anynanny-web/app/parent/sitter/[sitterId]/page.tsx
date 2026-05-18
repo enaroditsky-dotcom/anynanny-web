@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Calendar, MessageCircle, Star } from "lucide-react";
-import { BookShiftModal } from "@/components/parent/book-shift-modal";
-import { getOrCreateChatRoom } from "@/lib/chat/parent-chat";
+import { ArrowRight, Star } from "lucide-react";
+import { SitterProfileActions } from "@/components/parent/sitter-profile-actions";
 import { useAuth } from "@/components/auth-provider";
 import {
   formatTransportationMode,
@@ -46,10 +45,7 @@ export default function ParentSitterProfilePage() {
   const [reviews, setReviews] = useState<PublicSitterReview[]>([]);
   const [pageState, setPageState] = useState<"loading" | "missing" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [bookModalOpen, setBookModalOpen] = useState(false);
   const [bookingToast, setBookingToast] = useState<string | null>(null);
-  const [messageBusy, setMessageBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -80,8 +76,6 @@ export default function ParentSitterProfilePage() {
     const { data, error: profErr } = await supabase.rpc("get_sitter_profile_public", {
       target_id: sitterId
     });
-
-    console.log("Fetched profile data:", data);
 
     if (profErr) {
       console.warn("[parent/sitter profile] RPC Error details:", profErr.message, profErr.details, profErr.hint);
@@ -129,38 +123,6 @@ export default function ParentSitterProfilePage() {
   const showContent = !isLoading && signedIn && effectiveRole === "parent";
   const isReady = showContent && pageState === "ready" && profile != null;
   const profileId = profile?.id ?? sitterId ?? "";
-
-  const resolveSitterId = useCallback(() => profile?.id ?? sitterId ?? null, [profile?.id, sitterId]);
-
-  const handleSendMessage = useCallback(async () => {
-    const id = resolveSitterId();
-    if (!id) return;
-
-    setActionError(null);
-    setMessageBusy(true);
-
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setActionError("Supabase לא זמין");
-      setMessageBusy(false);
-      return;
-    }
-
-    const { roomId, error } = await getOrCreateChatRoom(supabase, id);
-    setMessageBusy(false);
-
-    if (error || !roomId) {
-      setActionError(error ?? "לא ניתן לפתוח שיחה");
-      return;
-    }
-
-    router.push(`/parent/chat/${encodeURIComponent(roomId)}`);
-  }, [resolveSitterId, router]);
-
-  const handleBookShift = useCallback(() => {
-    setActionError(null);
-    setBookModalOpen(true);
-  }, []);
 
   if (showContent && pageState === "missing") {
     return (
@@ -254,45 +216,17 @@ export default function ParentSitterProfilePage() {
             </div>
 
             {profileId ? (
-              <div className="mt-6 space-y-2">
-                {actionError ? (
-                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-right text-xs text-rose-900">
-                    {actionError}
-                  </p>
-                ) : null}
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleSendMessage()}
-                    disabled={messageBusy}
-                    className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-2xl border-2 border-[#001F3F]/20 bg-white px-4 py-3.5 text-sm font-semibold text-[#001F3F] shadow-sm transition hover:bg-brand-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#001F3F] disabled:opacity-60 active:scale-[0.99]"
-                  >
-                    <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
-                    {messageBusy ? "פותחים שיחה…" : "שלח הודעה"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleBookShift}
-                    className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-2xl bg-[#001F3F] px-4 py-3.5 text-sm font-bold text-white shadow-soft transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#001F3F] active:scale-[0.99]"
-                  >
-                    <Calendar className="h-5 w-5 shrink-0" aria-hidden />
-                    תיאום משמרת
-                  </button>
-                </div>
+              <div className="mt-6 border-t border-navy-header/10 pt-5">
+                <p className="mb-3 text-right text-sm font-semibold text-navy-header">פעולות</p>
+                <SitterProfileActions
+                  sitterId={profileId}
+                  sitterName={profile.full_name || "בייביסיטר"}
+                  onBookingSuccess={() => {
+                    setBookingToast("הבקשה נשלחה בהצלחה לבייביסיטר!");
+                    window.setTimeout(() => setBookingToast(null), 4000);
+                  }}
+                />
               </div>
-            ) : null}
-
-            {profile && profileId ? (
-              <BookShiftModal
-                open={bookModalOpen}
-                sitterId={profileId}
-                sitterName={profile.full_name || "בייביסיטר"}
-                onClose={() => setBookModalOpen(false)}
-                onSuccess={() => {
-                  setBookingToast("הבקשה נשלחה בהצלחה לבייביסיטר!");
-                  window.setTimeout(() => setBookingToast(null), 4000);
-                }}
-              />
             ) : null}
           </section>
 
