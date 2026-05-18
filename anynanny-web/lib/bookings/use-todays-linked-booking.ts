@@ -11,48 +11,58 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 export function useTodaysLinkedBooking(
   role: "parent" | "sitter",
   userId: string | null
-) {
+): {
+  booking: TodaysLinkedBookingView | null;
+  ready: boolean;
+  reload: () => Promise<TodaysLinkedBookingView | null>;
+} {
   const [booking, setBooking] = useState<TodaysLinkedBookingView | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
-  const refresh = useCallback(async () => {
+  const reload = useCallback(async () => {
     if (!userId) {
       setBooking(null);
-      setLoading(false);
-      return;
+      setReady(true);
+      return null;
     }
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setError("Supabase לא זמין");
       setBooking(null);
-      setLoading(false);
-      return;
+      setReady(true);
+      return null;
     }
-    const { booking: row, error: fetchError } = await fetchTodaysLinkedBooking(supabase, userId, role);
+    const { booking: row, error } = await fetchTodaysLinkedBooking(supabase, userId, role);
     setBooking(row);
-    setError(fetchError);
-    setLoading(false);
+    if (error) {
+      console.warn(`[${role}] today's booking:`, error);
+    }
+    setReady(true);
+    return row;
   }, [role, userId]);
 
   useEffect(() => {
-    setLoading(true);
-    void refresh();
-  }, [refresh]);
+    setReady(false);
+    void reload();
+  }, [reload]);
 
   useEffect(() => {
     if (!userId) return;
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
 
-    const filterColumn = role === "parent" ? `parent_id=eq.${userId}` : `sitter_id=eq.${userId}`;
+    const column = role === "parent" ? "parent_id" : "sitter_id";
     const channel = supabase
-      .channel(`todays-linked-booking-${role}-${userId}`)
+      .channel(`todays-booking-${role}-${userId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: BOOKINGS_TABLE, filter: filterColumn },
+        {
+          event: "*",
+          schema: "public",
+          table: BOOKINGS_TABLE,
+          filter: `${column}=eq.${userId}`
+        },
         () => {
-          void refresh();
+          void reload();
         }
       )
       .subscribe();
@@ -60,18 +70,7 @@ export function useTodaysLinkedBooking(
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [role, userId, refresh]);
+  }, [role, userId, reload]);
 
-  const patchBooking = useCallback((patch: Partial<TodaysLinkedBookingView>) => {
-    setBooking((prev) => (prev ? { ...prev, ...patch } : prev));
-  }, []);
-
-  return {
-    booking,
-    loading,
-    error,
-    refresh,
-    patchBooking,
-    hasLinkedShift: booking != null
-  };
+  return { booking, ready, reload };
 }
