@@ -4,10 +4,18 @@ import Link from "next/link";
 import { Calendar, History, Search, Settings, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ParentLinkedShiftCard } from "@/components/bookings/parent-linked-shift-card";
 import { SessionFinalSummary } from "@/components/session/session-final-summary";
 import { SessionRatingModal } from "@/components/session/session-rating-modal";
 import { useAuth } from "@/components/auth-provider";
 import { DashboardWelcomeHeader } from "@/components/dashboard/dashboard-welcome-header";
+import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
+import {
+  fetchTodaysLinkedBooking,
+  formatParentShiftApproveButtonLabel,
+  formatParentShiftStartButtonLabel,
+  type TodaysLinkedBookingView
+} from "@/lib/bookings/todays-linked-booking";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
@@ -23,7 +31,6 @@ import {
   readSessionState
 } from "@/lib/session/protocol";
 import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
-import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { completedSummaryFromEndedState } from "@/lib/session/completed-summary";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
@@ -55,6 +62,8 @@ export default function ParentDashboardPage() {
   const [ratingOpen, setRatingOpen] = useState(false);
   /** Session id for rating after summary — kept out of `sessionState` so the dashboard can return to idle under the modal. */
   const [ratingTargetSessionId, setRatingTargetSessionId] = useState<string | null>(null);
+  const [todaysBooking, setTodaysBooking] = useState<TodaysLinkedBookingView | null>(null);
+  const [bookingGuardReady, setBookingGuardReady] = useState(false);
 
   useEffect(() => {
     if (!debugToast) return;
@@ -73,6 +82,21 @@ export default function ParentDashboardPage() {
     } catch {
       setSessionState({ status: "idle" });
     }
+  }, []);
+
+  const loadTodaysBooking = useCallback(async (parentId: string) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setTodaysBooking(null);
+      setBookingGuardReady(true);
+      return;
+    }
+    const { booking, error } = await fetchTodaysLinkedBooking(supabase, parentId, "parent");
+    setTodaysBooking(booking);
+    if (error) {
+      console.warn("[parent] today's booking:", error);
+    }
+    setBookingGuardReady(true);
   }, []);
 
   useEffect(() => {
@@ -134,6 +158,9 @@ export default function ParentDashboardPage() {
         }
         if (cancelled) return;
 
+        await loadTodaysBooking(userId);
+        if (cancelled) return;
+
         setUseSupabase(true);
       })();
     }
@@ -143,7 +170,33 @@ export default function ParentDashboardPage() {
       clearInterval(ticker);
       window.removeEventListener("storage", onStorage);
     };
-  }, [syncFromStorage]);
+  }, [syncFromStorage, loadTodaysBooking]);
+
+  useEffect(() => {
+    if (!parentUserId) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel(`parent-todays-booking-${parentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: BOOKINGS_TABLE,
+          filter: `parent_id=eq.${parentUserId}`
+        },
+        () => {
+          void loadTodaysBooking(parentUserId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [parentUserId, loadTodaysBooking]);
 
   /** Prefer row id when known so parent_end_requested_at updates arrive instantly for that session. */
   useEffect(() => {
@@ -232,9 +285,20 @@ export default function ParentDashboardPage() {
   const startSession = async () => {
     if (sessionState.status === "parent_initiated" || sessionState.status === "active") return;
 
+    if (!todaysBooking) {
+      setDbBanner("אין משמרת מאושרת להיום עם בייביסיטר מקושר — לא ניתן לפתוח משמרת.");
+      return;
+    }
+
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
       setDbBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לפתוח משמרת.");
+      return;
+    }
+
+    const linkedSitterId = todaysBooking.sitter_id;
+    if (!linkedSitterId) {
+      setDbBanner("לא נמצא בייביסיטר מקושר למשמרת של היום.");
       return;
     }
 
@@ -246,13 +310,12 @@ export default function ParentDashboardPage() {
     setNowMs(Date.now());
     setParentUserId(auth.userId);
 
-    const pairedSitterId = getPairedSitterUserId();
     try {
       const { data: row, error } = await auth.supabase
         .from(SESSIONS_TABLE)
         .insert({
           parent_id: auth.userId,
-          sitter_id: pairedSitterId,
+          sitter_id: linkedSitterId,
           status: SESSION_STATUS_PENDING_SITTER_APPROVAL,
           start_time: null
         })
@@ -373,6 +436,23 @@ export default function ParentDashboardPage() {
   const waitingNannyEnd =
     sessionState.status === "active" && sessionState.parentEndRequestedAtMs != null;
 
+  const hasLinkedBookingToday = bookingGuardReady && todaysBooking != null;
+  const sitterAwaitingParentApprove = todaysBooking?.status === "sitter_started";
+
+  const circlePrimaryLabel = useMemo(() => {
+    if (!todaysBooking) return "התחלת משמרת";
+    if (sitterAwaitingParentApprove) {
+      return formatParentShiftApproveButtonLabel(
+        todaysBooking.partner_full_name,
+        todaysBooking.partner_sitter_code
+      );
+    }
+    return formatParentShiftStartButtonLabel(
+      todaysBooking.partner_full_name,
+      todaysBooking.partner_sitter_code
+    );
+  }, [todaysBooking, sitterAwaitingParentApprove]);
+
   const showLoading =
     clientHasSessionUser !== true && (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading));
 
@@ -458,7 +538,10 @@ export default function ParentDashboardPage() {
         </Link>
       </section>
 
-      <section className="mt-1 flex min-h-0 flex-1 flex-col items-center rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
+      {hasLinkedBookingToday && todaysBooking ? (
+        <section className="mt-1 flex min-h-0 flex-1 flex-col items-center rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
+          <ParentLinkedShiftCard booking={todaysBooking} />
+
         {sessionRunning ? (
           <div className="w-full space-y-2 text-right">
             <p className="text-xs font-medium text-slate-600">
@@ -495,10 +578,11 @@ export default function ParentDashboardPage() {
               type="button"
               style={SESSION_ACTION_CIRCLE_STYLE}
               onClick={() => void startSession()}
-              className={`${circleShell} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
+              className={`${circleShell} gap-1 bg-[#001F3F] px-2 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95 ${
+                sitterAwaitingParentApprove ? "animate-session-pulse-navy ring-4 ring-emerald-400/70" : ""
+              }`}
             >
-              <span className="max-w-[13rem]">התחלת משמרת</span>
-              <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
+              <span className="max-w-[14rem] text-center leading-snug">{circlePrimaryLabel}</span>
             </button>
           ) : waitingNannyStart ? (
             <>
@@ -539,7 +623,8 @@ export default function ParentDashboardPage() {
             </button>
           ) : null}
         </div>
-      </section>
+        </section>
+      ) : null}
 
       {debugToast ? (
         <div
