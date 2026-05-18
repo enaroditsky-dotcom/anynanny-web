@@ -2,22 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Search } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filters";
 import { PublicSitterSearchCardLink } from "@/components/sitter/public-sitter-search-card";
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
-  buildSearchEndTimeIso,
-  buildSearchStartTimeIso,
   defaultParentSearchFilters,
-  minRatingToRpcValue,
+  isExactSitterSerialQuery,
   normalizeParentSearchFilters,
-  sitterSerialToRpcParam,
   type ParentSearchFilters
 } from "@/lib/sitter/parent-search-filters";
-import { parsePublicSearchCards } from "@/lib/sitter/public-search-card";
+import { fetchPublicSitterSearchBySerial, runParentSitterSearch } from "@/lib/sitter/parent-sitter-search";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function ParentSearchPage() {
@@ -28,6 +25,7 @@ export default function ParentSearchPage() {
   const [listLoading, setListLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const serialFetchGen = useRef(0);
 
   useEffect(() => {
     if (isLoading) return;
@@ -50,44 +48,22 @@ export default function ParentSearchPage() {
     }
 
     const filters = normalizeParentSearchFilters(draftFilters);
-    const startTimeIso = buildSearchStartTimeIso(filters);
-    const endTimeIso = buildSearchEndTimeIso(filters);
-
-    const maxPrice = filters.maxHourlyRate;
-    const minExperience = filters.minYearsExperience;
-    const searchNannyId = sitterSerialToRpcParam(filters.searchSitterSerial);
-    const transportMode = filters.transport;
-    const minRating = minRatingToRpcValue(filters.minRating);
 
     setListLoading(true);
     setSearchError(null);
     setHasSearched(true);
 
     try {
-      const { data: results, error } = await supabase.rpc("list_public_sitters_search", {
-        p_max_hourly_rate: maxPrice || null,
-        p_min_years_experience: (() => {
-          if (!minExperience || minExperience === "all" || String(minExperience).includes("הכל")) {
-            return 0;
-          }
-          const match = String(minExperience).match(/\d+/);
-          return match ? parseInt(match[0], 10) : 0;
-        })(),
-        p_search_nanny_id: searchNannyId || null,
-        p_transport: transportMode || "all",
-        p_min_rating: minRating || null,
-        p_start_time: startTimeIso,
-        p_end_time: endTimeIso
-      });
+      const { cards, error } = await runParentSitterSearch(supabase, filters);
 
       if (error) {
-        console.warn("[parent/search] RPC Error details:", error.message, error.details, error.hint);
-        setSearchError(error.message || "שגיאה בביצוע החיפוש");
+        console.warn("[parent/search] search error:", error);
+        setSearchError(error);
         setSitters([]);
         return;
       }
 
-      setSitters(parsePublicSearchCards(results));
+      setSitters(cards);
     } finally {
       setListLoading(false);
     }
@@ -95,6 +71,40 @@ export default function ParentSearchPage() {
 
   const authSettled = !isLoading;
   const showContent = authSettled && signedIn && effectiveRole === "parent";
+
+  useEffect(() => {
+    if (!showContent) return;
+
+    const serial = draftFilters.searchSitterSerial.trim();
+    if (!isExactSitterSerialQuery(serial)) return;
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    const gen = ++serialFetchGen.current;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        setListLoading(true);
+        setSearchError(null);
+        setHasSearched(true);
+
+        const { cards, error } = await fetchPublicSitterSearchBySerial(supabase, serial);
+
+        if (serialFetchGen.current !== gen) return;
+
+        if (error) {
+          setSearchError(error);
+          setSitters([]);
+        } else {
+          setSitters(cards);
+        }
+        setListLoading(false);
+      })();
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [draftFilters.searchSitterSerial, showContent]);
+
   const showWait = !authSettled || (signedIn && effectiveRole === null);
   const redirectingToLogin = authSettled && !signedIn;
 

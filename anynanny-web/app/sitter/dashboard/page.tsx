@@ -29,12 +29,15 @@ import {
 } from "@/lib/session/protocol";
 import { completedSummaryFromSessionRow } from "@/lib/session/completed-summary";
 import { dismissCompletedSession, readDismissedCompletedSessionId } from "@/lib/session/dismissed-completed";
-import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
+import {
+  DoubleShakeCircleButton,
+  DoubleShakeCircleSlot,
+  DoubleShakeShiftPanel
+} from "@/components/session/double-shake-circle-button";
+import { SITTER_FORCE_END_SUCCESS_MESSAGE } from "@/lib/bookings/constants";
+import { SitterDoubleShakeIdleCircle } from "@/components/session/sitter-double-shake-idle-circle";
+import { useTodaysLinkedBooking } from "@/lib/bookings/use-todays-linked-booking";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
-
-/** DB `sitter_id` = nanny; null = open assignment. */
-const circleShell =
-  "rounded-full shrink-0 overflow-hidden ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
 
 function parentRequestedEndAt(row: SupabaseSessionRow): boolean {
   return row.parent_end_requested_at != null && String(row.parent_end_requested_at).length > 0;
@@ -63,6 +66,7 @@ export default function SitterDashboardPage() {
   const suppressCompletedSummaryIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
+  const [forceEndToast, setForceEndToast] = useState<string | null>(null);
   /** Wall clock for live timer — must tick every second so elapsed updates (same formula as parent). */
   const [nowMs, setNowMs] = useState(Date.now());
   const [profileCardStatus, setProfileCardStatus] = useState<"loading" | "complete" | "incomplete">("loading");
@@ -73,6 +77,25 @@ export default function SitterDashboardPage() {
     sitterId,
     dashboardStatsRefreshKey
   );
+
+  const {
+    booking: todaysBooking,
+    ready: bookingGuardReady,
+    reload: reloadTodaysBooking
+  } = useTodaysLinkedBooking("sitter", sitterId);
+
+  useEffect(() => {
+    if (!forceEndToast) return;
+    const t = window.setTimeout(() => setForceEndToast(null), 4500);
+    return () => window.clearTimeout(t);
+  }, [forceEndToast]);
+
+  const handleForceEndSuccess = useCallback(async () => {
+    setBanner(null);
+    setForceEndToast(SITTER_FORCE_END_SUCCESS_MESSAGE);
+    await reloadTodaysBooking();
+    setDashboardStatsRefreshKey((k) => k + 1);
+  }, [reloadTodaysBooking]);
 
   const trackedSessionId = useMemo(() => {
     const raw =
@@ -442,14 +465,11 @@ export default function SitterDashboardPage() {
             <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{liveEarned}</p>
           </div>
           <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
+            <DoubleShakeCircleButton
+              label="אישור סיום משמרת"
+              variant="salmon"
               onClick={() => void confirmEndShift()}
-              className={`${circleShell} gap-1 bg-[#FF8A8A] text-lg shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95 sm:text-xl`}
-            >
-              <span className="max-w-[13rem]">אישור סיום משמרת</span>
-            </button>
+            />
           </div>
         </>
       ) : pendingRow ? (
@@ -459,15 +479,11 @@ export default function SitterDashboardPage() {
             <p className="text-sm font-semibold text-slate-700">משמרת חדשה מההורה</p>
           </div>
           <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
+            <DoubleShakeCircleButton
+              label="אישור התחלת משמרת"
+              variant="navy"
               onClick={() => void confirmStartShift()}
-              className={`${circleShell} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
-            >
-              <span className="max-w-[13rem]">אישור התחלת משמרת</span>
-              <span className="max-w-[13rem] text-base font-semibold opacity-90">Double-Shake</span>
-            </button>
+            />
           </div>
         </>
       ) : activeShiftRow ? (
@@ -481,22 +497,23 @@ export default function SitterDashboardPage() {
             </p>
           </div>
           <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
-            <div
-              style={SESSION_ACTION_CIRCLE_STYLE}
-              className={`${circleShell} pointer-events-none gap-1 bg-[#FF8A8A] text-lg shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 sm:text-xl`}
-              role="presentation"
-            >
-              <span className="max-w-[13rem] px-2 text-center font-bold leading-tight">ממתינים לסיום מההורה</span>
-            </div>
+            <DoubleShakeCircleButton
+              label="ממתינים לסיום מההורה"
+              variant="waiting-salmon"
+              presentational
+            />
           </div>
         </>
       ) : (
-        <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center px-2 py-10">
-          <div className="w-full max-w-[17rem] rounded-3xl border border-navy-header/12 bg-[#FDFBF6]/90 px-6 py-10 text-center shadow-sm">
-            <p className="text-lg font-bold leading-snug text-[#001F3F]">אין משמרת פעילה</p>
-            <p className="mt-2 text-xs leading-relaxed text-slate-500">מוכנים למשמרת הבאה — בקשות יופיעו כאן אוטומטית.</p>
-          </div>
-        </div>
+        <DoubleShakeCircleSlot>
+          <SitterDoubleShakeIdleCircle
+            booking={todaysBooking}
+            ready={bookingGuardReady}
+            onBookingUpdated={reloadTodaysBooking}
+            onError={(msg) => setBanner(msg)}
+            onForceEndSuccess={() => void handleForceEndSuccess()}
+          />
+        </DoubleShakeCircleSlot>
       )}
     </>
   );
@@ -524,6 +541,16 @@ export default function SitterDashboardPage() {
             <SitterOnboardingWizard onSaved={handleOnboardingSaved} />
           </div>
         </section>
+      ) : null}
+
+      {forceEndToast ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-right text-sm font-semibold text-emerald-900"
+        >
+          {forceEndToast}
+        </p>
       ) : null}
 
       {banner ? (
@@ -604,13 +631,13 @@ export default function SitterDashboardPage() {
         onResponded={() => setDashboardStatsRefreshKey((k) => k + 1)}
       />
 
-      <section
-        id="sitter-shift-panel"
-        className={`flex min-h-0 flex-1 flex-col items-center rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
-        aria-hidden={onboardingPending}
+      <DoubleShakeShiftPanel
+        className={`${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
       >
-        {sessionSection}
-      </section>
+        <div id="sitter-shift-panel" aria-hidden={onboardingPending}>
+          {sessionSection}
+        </div>
+      </DoubleShakeShiftPanel>
       </div>
 
       <SessionRatingModal

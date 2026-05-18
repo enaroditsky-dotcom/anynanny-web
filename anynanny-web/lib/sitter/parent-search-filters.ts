@@ -99,13 +99,30 @@ export function minYearsExperienceToRpcValue(raw: unknown): number {
   return match ? parseInt(match[0], 10) : 0;
 }
 
+/** Normalize parent input to canonical serial form (e.g. `1004` → `AN-1004`). */
+export function normalizeSitterSerialForLookup(raw: string | null | undefined): string | null {
+  const compact = String(raw ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  if (!compact) return null;
+  if (/^AN-\d+$/.test(compact)) return compact;
+  if (/^\d+$/.test(compact)) return `AN-${compact}`;
+  return compact;
+}
+
+/** True when input is a complete public serial (triggers direct profile fetch). */
+export function isExactSitterSerialQuery(raw: string | null | undefined): boolean {
+  const norm = normalizeSitterSerialForLookup(raw);
+  return norm != null && /^AN-\d+$/.test(norm);
+}
+
 /**
  * Maps sitter serial input to `p_search_nanny_id` for `list_public_sitters_search`
  * (filters `sitter_profiles.nanny_serial` inside the RPC).
  */
 export function sitterSerialToRpcParam(raw: string | null | undefined): string | null {
-  const trimmed = String(raw ?? "").trim();
-  return trimmed.length === 0 ? null : trimmed;
+  return normalizeSitterSerialForLookup(raw);
 }
 
 /** @deprecated Use sitterSerialToRpcParam */

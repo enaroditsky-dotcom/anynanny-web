@@ -8,12 +8,13 @@ import { SessionFinalSummary } from "@/components/session/session-final-summary"
 import { SessionRatingModal } from "@/components/session/session-rating-modal";
 import { useAuth } from "@/components/auth-provider";
 import { DashboardWelcomeHeader } from "@/components/dashboard/dashboard-welcome-header";
-import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import {
-  fetchTodaysLinkedBooking,
-  formatParentShiftStartButtonLabel,
-  type TodaysLinkedBookingView
-} from "@/lib/bookings/todays-linked-booking";
+  DoubleShakeCircleButton,
+  DoubleShakeCircleSlot,
+  DoubleShakeShiftPanel
+} from "@/components/session/double-shake-circle-button";
+import { ParentDoubleShakeIdleCircle } from "@/components/session/parent-double-shake-idle-circle";
+import { useTodaysLinkedBooking } from "@/lib/bookings/use-todays-linked-booking";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   HOURLY_RATE,
@@ -28,7 +29,6 @@ import {
   persistSessionState,
   readSessionState
 } from "@/lib/session/protocol";
-import { SESSION_ACTION_CIRCLE_STYLE } from "@/lib/session/session-circle";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { completedSummaryFromEndedState } from "@/lib/session/completed-summary";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
@@ -38,9 +38,6 @@ import {
   parentSessionStateFromSupabaseRow,
   readDismissedCompletedSessionId
 } from "@/lib/session/dismissed-completed";
-
-const circleShell =
-  "rounded-full shrink-0 overflow-hidden ring-2 text-lg font-bold leading-tight text-white sm:text-xl [border-radius:50%!important]";
 
 export default function ParentDashboardPage() {
   const router = useRouter();
@@ -60,8 +57,10 @@ export default function ParentDashboardPage() {
   const [ratingOpen, setRatingOpen] = useState(false);
   /** Session id for rating after summary — kept out of `sessionState` so the dashboard can return to idle under the modal. */
   const [ratingTargetSessionId, setRatingTargetSessionId] = useState<string | null>(null);
-  const [todaysBooking, setTodaysBooking] = useState<TodaysLinkedBookingView | null>(null);
-  const [bookingGuardReady, setBookingGuardReady] = useState(false);
+  const {
+    booking: todaysBooking,
+    ready: bookingGuardReady,
+  } = useTodaysLinkedBooking("parent", parentUserId);
 
   useEffect(() => {
     if (!debugToast) return;
@@ -82,23 +81,7 @@ export default function ParentDashboardPage() {
     }
   }, []);
 
-  const loadTodaysBooking = useCallback(async (parentId: string): Promise<TodaysLinkedBookingView | null> => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setTodaysBooking(null);
-      setBookingGuardReady(true);
-      return null;
-    }
-    const { booking, error } = await fetchTodaysLinkedBooking(supabase, parentId, "parent");
-    setTodaysBooking(booking);
-    if (error) {
-      console.warn("[parent] today's booking:", error);
-    }
-    setBookingGuardReady(true);
-    return booking;
-  }, []);
-
-  /** No booking today → hide Double-Shake UI and clear stale local session placeholder. */
+  /** No booking today → clear stale session placeholder. */
   useEffect(() => {
     if (!bookingGuardReady || todaysBooking) return;
     if (sessionState.status === "idle") return;
@@ -146,41 +129,6 @@ export default function ParentDashboardPage() {
           /* ignore */
         }
 
-        const booking = await loadTodaysBooking(userId);
-        if (cancelled) return;
-
-        if (booking) {
-          try {
-            syncFromStorage();
-          } catch {
-            /* ignore */
-          }
-          const { data: row, error: rowErr } = await supabase
-            .from(SESSIONS_TABLE)
-            .select("*")
-            .eq("parent_id", userId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (rowErr) {
-            console.warn("[parent] initial sessions fetch:", rowErr.message);
-          }
-          if (!cancelled && !rowErr && row) {
-            const dismissedId = readDismissedCompletedSessionId("parent");
-            const mapped = parentSessionStateFromSupabaseRow(row as SupabaseSessionRow, dismissedId);
-            if (mapped) {
-              persistSessionState(mapped);
-              setSessionState(mapped);
-            }
-          }
-        } else {
-          const idle: SessionProtocolState = { status: "idle" };
-          persistSessionState(idle);
-          if (!cancelled) setSessionState(idle);
-        }
-
-        if (cancelled) return;
-
         setUseSupabase(true);
       })();
     }
@@ -190,33 +138,46 @@ export default function ParentDashboardPage() {
       clearInterval(ticker);
       window.removeEventListener("storage", onStorage);
     };
-  }, [syncFromStorage, loadTodaysBooking]);
+  }, [syncFromStorage]);
 
   useEffect(() => {
-    if (!parentUserId) return;
+    if (!parentUserId || !bookingGuardReady) return;
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
 
-    const channel = supabase
-      .channel(`parent-todays-booking-${parentUserId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `parent_id=eq.${parentUserId}`
-        },
-        () => {
-          void loadTodaysBooking(parentUserId);
+    void (async () => {
+      if (!todaysBooking) {
+        const idle: SessionProtocolState = { status: "idle" };
+        persistSessionState(idle);
+        setSessionState(idle);
+        return;
+      }
+      try {
+        syncFromStorage();
+      } catch {
+        /* ignore */
+      }
+      const { data: row, error: rowErr } = await supabase
+        .from(SESSIONS_TABLE)
+        .select("*")
+        .eq("parent_id", parentUserId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (rowErr) {
+        console.warn("[parent] initial sessions fetch:", rowErr.message);
+        return;
+      }
+      if (row) {
+        const dismissedId = readDismissedCompletedSessionId("parent");
+        const mapped = parentSessionStateFromSupabaseRow(row as SupabaseSessionRow, dismissedId);
+        if (mapped) {
+          persistSessionState(mapped);
+          setSessionState(mapped);
         }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [parentUserId, loadTodaysBooking]);
+      }
+    })();
+  }, [parentUserId, bookingGuardReady, todaysBooking, syncFromStorage]);
 
   /** Prefer row id when known so parent_end_requested_at updates arrive instantly for that session. */
   useEffect(() => {
@@ -456,16 +417,6 @@ export default function ParentDashboardPage() {
   const waitingNannyEnd =
     sessionState.status === "active" && sessionState.parentEndRequestedAtMs != null;
 
-  const hasTodaysBooking = bookingGuardReady && todaysBooking != null;
-
-  const circlePrimaryLabel = useMemo(() => {
-    if (!todaysBooking) return "";
-    return formatParentShiftStartButtonLabel(
-      todaysBooking.partner_full_name,
-      todaysBooking.partner_sitter_code
-    );
-  }, [todaysBooking]);
-
   const showLoading =
     clientHasSessionUser !== true && (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading));
 
@@ -551,8 +502,7 @@ export default function ParentDashboardPage() {
         </Link>
       </section>
 
-      {hasTodaysBooking ? (
-        <section className="mt-1 flex min-h-0 flex-1 flex-col items-center rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6">
+      <DoubleShakeShiftPanel>
         {sessionRunning ? (
           <div className="w-full space-y-2 text-right">
             <p className="text-xs font-medium text-slate-600">
@@ -577,7 +527,7 @@ export default function ParentDashboardPage() {
           </div>
         ) : null}
 
-        <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
+        <DoubleShakeCircleSlot>
           {sessionState.status === "ended" && completedSummary ? (
             <SessionFinalSummary
               elapsedSeconds={completedSummary.elapsedSeconds}
@@ -585,26 +535,18 @@ export default function ParentDashboardPage() {
               onDismiss={handleSummaryCloseRequestRating}
             />
           ) : !sessionRunning && sessionState.status !== "ended" ? (
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
-              onClick={() => void startSession()}
-              className={`${circleShell} gap-1 bg-[#001F3F] px-2 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25 transition hover:brightness-110 active:brightness-95`}
-            >
-              <span className="max-w-[14rem] text-center text-sm leading-snug sm:text-base">
-                {circlePrimaryLabel}
-              </span>
-            </button>
+            <ParentDoubleShakeIdleCircle
+              booking={todaysBooking}
+              ready={bookingGuardReady}
+              onStartShift={() => void startSession()}
+            />
           ) : waitingNannyStart ? (
             <>
-              <button
-                type="button"
-                style={SESSION_ACTION_CIRCLE_STYLE}
-                disabled={cancelBusy}
-                className={`${circleShell} cursor-wait gap-2 bg-[#001F3F] opacity-95 shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/30 animate-session-pulse-navy transition disabled:cursor-not-allowed disabled:opacity-70`}
-              >
-                <span className="max-w-[13rem]">ממתין לאישור…</span>
-              </button>
+              <DoubleShakeCircleButton
+                label="ממתין לאישור…"
+                variant="waiting-navy"
+                presentational
+              />
               <button
                 type="button"
                 disabled={cancelBusy}
@@ -615,27 +557,16 @@ export default function ParentDashboardPage() {
               </button>
             </>
           ) : sessionState.status === "active" && !waitingNannyEnd ? (
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
-              onClick={() => void endSession()}
-              className={`${circleShell} gap-1 bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.75)] ring-[#FF8A8A]/40 transition hover:brightness-105 active:brightness-95`}
-            >
-              <span className="max-w-[13rem]">סיום משמרת</span>
-            </button>
+            <DoubleShakeCircleButton label="סיום משמרת" variant="salmon" onClick={() => void endSession()} />
           ) : waitingNannyEnd ? (
-            <button
-              type="button"
-              style={SESSION_ACTION_CIRCLE_STYLE}
-              disabled
-              className={`${circleShell} cursor-wait gap-2 bg-[#FF8A8A] shadow-[0_10px_36px_-8px_rgba(255,138,138,0.65)] ring-[#FF8A8A]/35 animate-session-pulse-salmon`}
-            >
-              <span className="max-w-[13rem]">ממתין לאישור סיום...</span>
-            </button>
+            <DoubleShakeCircleButton
+              label="ממתין לאישור סיום..."
+              variant="waiting-salmon"
+              presentational
+            />
           ) : null}
-        </div>
-        </section>
-      ) : null}
+        </DoubleShakeCircleSlot>
+      </DoubleShakeShiftPanel>
 
       {debugToast ? (
         <div

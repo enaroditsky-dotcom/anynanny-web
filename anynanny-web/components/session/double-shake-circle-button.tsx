@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { SESSION_ACTION_CIRCLE_STYLE, SESSION_CIRCLE_SHELL_CLASS } from "@/lib/session/session-circle";
 
@@ -75,12 +76,21 @@ export function DoubleShakeCircleButton({
   );
 }
 
+/** Centers the primary circle inside {@link DoubleShakeShiftPanel}. */
+export function DoubleShakeCircleSlot({ children }: { children: ReactNode }) {
+  return (
+    <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 px-2 pt-8">
+      {children}
+    </div>
+  );
+}
+
 /** Shared outer panel for parent + sitter Double-Shake blocks. */
 export function DoubleShakeShiftPanel({
   children,
   className = ""
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (

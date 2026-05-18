@@ -1,6 +1,3 @@
--- Run in Supabase SQL Editor if parent search errors mention is_available or public.nanny.
--- Same as: supabase/migrations/20260516250000_list_public_sitters_no_is_available.sql
-
 -- Parent search: drop any RPC body referencing sitter_availability.is_available (column does not exist).
 -- Serial lookup (AN-1004) bypasses session/time-window filters; availability uses slot_indices elsewhere.
 
