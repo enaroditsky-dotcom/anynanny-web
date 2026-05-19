@@ -172,7 +172,7 @@ export async function fetchParentSitterProfile(
     const { data: row, error: rowErr } = await supabase
       .from(SITTER_PROFILES_TABLE)
       .select(
-        "id, full_name, show_full_name, bio, hourly_rate_nis, years_experience, avg_rating, rating_count, nanny_serial, is_public, updated_at, has_car, languages"
+        "id, full_name, show_full_name, bio, hourly_rate_nis, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages"
       )
       .eq("id", sitterId)
       .eq("is_public", true)

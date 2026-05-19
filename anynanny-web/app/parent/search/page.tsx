@@ -55,7 +55,9 @@ export default function ParentSearchPage() {
     setHasSearched(true);
 
     try {
-      const { cards, error } = await runParentSitterSearch(supabase, filters);
+      const { cards, error } = isSerialTargetedSearch(filters)
+        ? await fetchPublicSitterSearchBySerial(supabase, filters.searchSitterSerial)
+        : await runParentSitterSearch(supabase, filters);
 
       if (error) {
         console.warn("[parent/search] search error:", error);

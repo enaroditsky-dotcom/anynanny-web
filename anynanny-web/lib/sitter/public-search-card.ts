@@ -1,4 +1,5 @@
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
+import { getSitterProfilesUserColumn } from "@/lib/sitter/sitter-profile";
 
 /** Canonical column: `public.sitter_profiles.hourly_rate_nis` (app + RPC). */
 export const SITTER_PROFILES_HOURLY_RATE_COLUMN = "hourly_rate_nis" as const;
@@ -30,7 +31,8 @@ function pickNumber(row: Record<string, unknown>, ...keys: string[]): number | n
 export function normalizePublicSearchCard(raw: unknown): PublicSitterSearchCard | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
-  const id = pickString(row, "id");
+  const fk = getSitterProfilesUserColumn();
+  const id = pickString(row, fk, "id", "user_id", "userId");
   if (!id) return null;
 
   return {

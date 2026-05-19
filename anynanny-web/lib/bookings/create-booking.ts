@@ -14,7 +14,10 @@ export async function createBooking(
   parentId: string,
   input: {
     sitterId: string;
+    /** Calendar start day of the shift (`bookings.booking_date`). */
     bookingDate: string;
+    /** Calendar end day (stored on `end_time` timestamptz; same column when same day). */
+    endBookingDate: string;
     startIso: string;
     endIso: string;
   }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DoubleShakeBookingCircle } from "@/components/session/double-shake-booking-circle";
 import { SitterConfirmedShifts } from "@/components/sitter/sitter-confirmed-shifts";
 import { SitterPendingBookings } from "@/components/sitter/sitter-pending-bookings";
+import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import { SITTER_FORCE_END_SUCCESS_MESSAGE } from "@/lib/bookings/constants";
 import { useTodaysLinkedBooking } from "@/lib/bookings/use-todays-linked-booking";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
@@ -50,6 +51,12 @@ export function SitterShiftsPageContent() {
     setConfirmedRefreshNonce((n) => n + 1);
   }, [reloadTodaysBooking]);
 
+  const handleDevReset = useCallback(async () => {
+    setShiftActionError(null);
+    await reloadTodaysBooking();
+    setConfirmedRefreshNonce((n) => n + 1);
+  }, [reloadTodaysBooking]);
+
   if (authState === "loading") {
     return <p className="text-right text-sm text-slate-600">טוען משמרות…</p>;
   }
@@ -88,6 +95,8 @@ export function SitterShiftsPageContent() {
         onError={setShiftActionError}
         onForceEndSuccess={() => void handleForceEndSuccess()}
       />
+
+      <StuckShiftDevResetButton onReset={() => void handleDevReset()} />
 
       <SitterPendingBookings sitterId={sitterId} onResponded={handleBookingResponded} />
       <SitterConfirmedShifts sitterId={sitterId} refreshNonce={confirmedRefreshNonce} />

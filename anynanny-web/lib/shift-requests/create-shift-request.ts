@@ -25,16 +25,24 @@ function buildLocalDateTimeIso(day: string, hour: string, minute: string): strin
 }
 
 export function validateShiftWindow(input: {
+  /** Start date (`YYYY-MM-DD`). */
   shiftDate: string;
+  /** End date (`YYYY-MM-DD`) — may be after start date for overnight shifts. */
+  shiftEndDate: string;
   startHour: string;
   startMinute: string;
   endHour: string;
   endMinute: string;
-}): { startIso: string; endIso: string } | { error: string } {
-  const { shiftDate, startHour, startMinute, endHour, endMinute } = input;
+}):
+  | { startIso: string; endIso: string; startDate: string; endDate: string }
+  | { error: string } {
+  const { shiftDate, shiftEndDate, startHour, startMinute, endHour, endMinute } = input;
 
   if (!shiftDate.trim()) {
-    return { error: "נא לבחור תאריך" };
+    return { error: "נא לבחור תאריך התחלה" };
+  }
+  if (!shiftEndDate.trim()) {
+    return { error: "נא לבחור תאריך סיום" };
   }
   if (!startHour || !startMinute) {
     return { error: "נא לבחור שעת התחלה" };
@@ -44,24 +52,31 @@ export function validateShiftWindow(input: {
   }
 
   const startIso = buildLocalDateTimeIso(shiftDate, startHour, startMinute);
-  const endIso = buildLocalDateTimeIso(shiftDate, endHour, endMinute);
+  const endIso = buildLocalDateTimeIso(shiftEndDate, endHour, endMinute);
 
   if (!startIso || !endIso) {
-    return { error: "שעות לא תקינות" };
+    return { error: "תאריך או שעה לא תקינים" };
   }
 
-  if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
-    return { error: "שעת הסיום חייבת להיות אחרי שעת ההתחלה" };
+  const startMs = new Date(startIso).getTime();
+  const endMs = new Date(endIso).getTime();
+  if (endMs <= startMs) {
+    return { error: "מועד הסיום חייב להיות אחרי מועד ההתחלה (תאריך + שעה)" };
   }
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const picked = new Date(shiftDate + "T00:00:00");
-  if (picked < today) {
+  const startDay = new Date(shiftDate.trim() + "T00:00:00");
+  if (startDay < today) {
     return { error: "לא ניתן לבקש משמרת בעבר" };
   }
 
-  return { startIso, endIso };
+  return {
+    startIso,
+    endIso,
+    startDate: shiftDate.trim(),
+    endDate: shiftEndDate.trim()
+  };
 }
 
 function shiftRpcErrorMessage(error: { message?: string } | null): string {

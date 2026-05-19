@@ -147,6 +147,29 @@ export async function fetchAvailabilityMonthSummary(
   return { days, error: null };
 }
 
+/** Remove saved availability for one day (reverts to mode defaults in the UI). */
+export async function deleteAvailabilityForDate(
+  supabase: SupabaseClient,
+  sitterId: string,
+  date: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from(SITTER_AVAILABILITY_TABLE)
+    .delete()
+    .eq("sitter_id", sitterId)
+    .eq("availability_date", date);
+
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("row-level security") || msg.includes("policy")) {
+      return { error: "אין הרשאה למחוק זמינות (RLS). ודאו שהתחברתם כבייביסיטר." };
+    }
+    return { error: error.message };
+  }
+
+  return { error: null };
+}
+
 export async function saveAvailabilityForDate(
   supabase: SupabaseClient,
   sitterId: string,

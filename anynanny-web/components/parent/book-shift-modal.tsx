@@ -26,6 +26,7 @@ const SUCCESS_MESSAGE = "הבקשה נשלחה בהצלחה לבייביסיטר
 export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess }: BookShiftModalProps) {
   const { user } = useAuth();
   const [bookingDate, setBookingDate] = useState("");
+  const [endBookingDate, setEndBookingDate] = useState("");
   const [startHour, setStartHour] = useState("");
   const [startMinute, setStartMinute] = useState<ParentSearchMinute | "">("");
   const [endHour, setEndHour] = useState("");
@@ -36,6 +37,7 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
 
   const resetForm = useCallback(() => {
     setBookingDate("");
+    setEndBookingDate("");
     setStartHour("");
     setStartMinute("");
     setEndHour("");
@@ -74,6 +76,7 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
 
     const validated = validateShiftWindow({
       shiftDate: bookingDate,
+      shiftEndDate: endBookingDate,
       startHour,
       startMinute,
       endHour,
@@ -94,7 +97,8 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
     setBusy(true);
     const { booking, error: insertError } = await createBooking(supabase, user.id, {
       sitterId,
-      bookingDate: bookingDate.trim(),
+      bookingDate: validated.startDate,
+      endBookingDate: validated.endDate,
       startIso: validated.startIso,
       endIso: validated.endIso
     });
@@ -162,14 +166,20 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
         ) : (
           <form className="mt-5 space-y-4" onSubmit={(e) => void handleSubmit(e)}>
             <label className="block text-right text-sm font-semibold text-[#001F3F]">
-              תאריך המשמרת
+              תאריך התחלה
               <input
                 type="date"
                 required
                 min={minDate}
                 value={bookingDate}
                 disabled={busy}
-                onChange={(ev) => setBookingDate(ev.target.value)}
+                onChange={(ev) => {
+                  const next = ev.target.value;
+                  setBookingDate(next);
+                  if (!endBookingDate || endBookingDate === bookingDate) {
+                    setEndBookingDate(next);
+                  }
+                }}
                 className="mt-1.5 block min-h-12 w-full rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-3 py-2.5 text-sm tabular-nums shadow-inner disabled:opacity-50"
               />
             </label>
@@ -211,7 +221,20 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
                 </div>
               </fieldset>
 
-              <fieldset className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3">
+              <div className="space-y-3">
+                <label className="block text-right text-sm font-semibold text-[#001F3F]">
+                  תאריך סיום
+                  <input
+                    type="date"
+                    required
+                    min={bookingDate || minDate}
+                    value={endBookingDate}
+                    disabled={busy}
+                    onChange={(ev) => setEndBookingDate(ev.target.value)}
+                    className="mt-1.5 block min-h-12 w-full rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-3 py-2.5 text-sm tabular-nums shadow-inner disabled:opacity-50"
+                  />
+                </label>
+                <fieldset className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3">
                 <legend className="px-1 text-right text-sm font-semibold text-[#001F3F]">שעת סיום</legend>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <select
@@ -246,6 +269,7 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
                   </select>
                 </div>
               </fieldset>
+              </div>
             </div>
 
             {error ? (

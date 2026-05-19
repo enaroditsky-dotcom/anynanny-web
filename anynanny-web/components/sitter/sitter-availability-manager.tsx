@@ -7,6 +7,7 @@ import type { CalendarMode } from "@/lib/availability/constants";
 import {
   blockEntireDaySlotIndices,
   countOpenSlotsInIndices,
+  deleteAvailabilityForDate,
   fetchAvailabilityForDate,
   fetchAvailabilityMonthSummary,
   fetchSitterCalendarMode,
@@ -146,6 +147,15 @@ export function SitterAvailabilityManager() {
     void loadMonth();
   }, [sitterId, loadMonth, calendarMode]);
 
+  /** Default to today in the visible month so day actions (e.g. נקה הכל) work without an extra tap. */
+  useEffect(() => {
+    if (!sitterId || selectedDate) return;
+    const now = new Date();
+    if (now.getFullYear() === year && now.getMonth() + 1 === month) {
+      setSelectedDate(formatDateISO(year, month, now.getDate()));
+    }
+  }, [sitterId, year, month, selectedDate]);
+
   useEffect(() => {
     if (!selectedDate) return;
     void loadDay();
@@ -249,6 +259,56 @@ export function SitterAvailabilityManager() {
     applyIndicesState(next, setSlotIndices, slotIndicesRef);
     await persistSlotIndices(next, { silent: true });
   }, [selectedDate, loadingDay, saving, persistSlotIndices]);
+
+  const handleClearAllForDay = useCallback(async () => {
+    if (!sitterId || saving || modeSaving) return;
+
+    let targetDate = selectedDate;
+    if (!targetDate) {
+      const now = new Date();
+      if (now.getFullYear() === year && now.getMonth() + 1 === month) {
+        targetDate = formatDateISO(year, month, now.getDate());
+        setSelectedDate(targetDate);
+      } else {
+        setMessage("בחרו יום בלוח החודש לפני ניקוי.");
+        return;
+      }
+    }
+
+    if (!window.confirm("האם אתה בטוח שברצונך לנקות את כל השעות ליום זה?")) return;
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setMessage("Supabase לא זמין");
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const { error } = await deleteAvailabilityForDate(supabase, sitterId, targetDate);
+      if (error) {
+        console.warn("[sitter_availability] clear day:", error);
+        setMessage(error);
+        return;
+      }
+
+      applyIndicesState([], setSlotIndices, slotIndicesRef);
+      const openCount = countOpenSlotsInIndices(targetDate, calendarModeRef.current, []);
+      setMonthSummary((prev) => ({
+        ...(prev ?? {}),
+        [targetDate]: { marked: openCount }
+      }));
+      setMessage("כל השעות ליום זה נוקו.");
+      void loadMonth();
+    } catch (err) {
+      console.warn("[sitter_availability] clear day failed:", err);
+      setMessage("שגיאה בניקוי היום — נסו שוב.");
+    } finally {
+      setSaving(false);
+    }
+  }, [selectedDate, sitterId, year, month, saving, modeSaving, loadMonth]);
 
   const handleSlotPointerDown = (slotIndex: number) => {
     if (!selectedDate || isSlotPast(selectedDate, slotIndex)) return;
@@ -374,7 +434,8 @@ export function SitterAvailabilityManager() {
       <div className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/90 p-3 text-right">
         <p className="text-sm font-bold text-[#001F3F]">מצב יומן</p>
         <p className="mt-1 text-xs text-slate-600">{modeHint}</p>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
+          <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
           <button
             type="button"
             disabled={modeSaving}
@@ -398,6 +459,16 @@ export function SitterAvailabilityManager() {
             }`}
           >
             פתוח — חסום חריגים
+          </button>
+          </div>
+          <button
+            type="button"
+            disabled={modeSaving || saving}
+            title="נקה את כל השעות ליום הנבחר בלוח"
+            onClick={() => void handleClearAllForDay()}
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs font-semibold text-rose-700 transition hover:border-rose-200 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[6.5rem] sm:shrink-0"
+          >
+            {saving ? "מנקה…" : "נקה הכל"}
           </button>
         </div>
       </div>

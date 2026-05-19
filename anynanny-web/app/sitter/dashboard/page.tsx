@@ -36,7 +36,9 @@ import {
 } from "@/components/session/double-shake-circle-button";
 import { SITTER_FORCE_END_SUCCESS_MESSAGE } from "@/lib/bookings/constants";
 import { SitterDoubleShakeIdleCircle } from "@/components/session/sitter-double-shake-idle-circle";
+import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import { useTodaysLinkedBooking } from "@/lib/bookings/use-todays-linked-booking";
+import { sitterCompleteSession } from "@/lib/session/sitter-complete-session";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 
 function parentRequestedEndAt(row: SupabaseSessionRow): boolean {
@@ -67,6 +69,7 @@ export default function SitterDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   const [forceEndToast, setForceEndToast] = useState<string | null>(null);
+  const [endShiftBusy, setEndShiftBusy] = useState(false);
   /** Wall clock for live timer — must tick every second so elapsed updates (same formula as parent). */
   const [nowMs, setNowMs] = useState(Date.now());
   const [profileCardStatus, setProfileCardStatus] = useState<"loading" | "complete" | "incomplete">("loading");
@@ -381,33 +384,25 @@ export default function SitterDashboardPage() {
     }
   };
 
-  const confirmEndShift = async () => {
-    if (!endConfirmRow?.start_time || !sitterId) return;
+  const completeSessionRow = async (row: SupabaseSessionRow) => {
+    if (!sitterId) return;
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני אישור סיום.");
+      setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני סיום משמרת.");
       return;
     }
     if (auth.userId !== sitterId) {
       setBanner("פג תוקף ההזדהות — רעננו את הדף והתחברו מחדש.");
       return;
     }
-    const endIso = new Date().toISOString();
-    const startMs = new Date(endConfirmRow.start_time).getTime();
-    const endMs = new Date(endIso).getTime();
-    const finalSeconds = Math.max(0, Math.floor((endMs - startMs) / 1000));
+    setEndShiftBusy(true);
     try {
-      const { error } = await auth.supabase
-        .from(SESSIONS_TABLE)
-        .update({
-          status: "completed",
-          end_time: endIso,
-          sitter_end_confirmed_at: endIso,
-          parent_end_requested_at: null,
-          final_elapsed_seconds: finalSeconds,
-          final_amount_nis: Number(((finalSeconds / 3600) * HOURLY_RATE).toFixed(2))
-        })
-        .eq("id", endConfirmRow.id);
+      const { error } = await sitterCompleteSession(
+        auth.supabase,
+        sitterId,
+        row.id,
+        row.start_time
+      );
       if (error) {
         setBanner(friendlySupabaseSessionError(error));
         return;
@@ -415,11 +410,34 @@ export default function SitterDashboardPage() {
       setBanner(null);
       suppressCompletedSummaryIdRef.current = null;
       await refreshForUser(auth.supabase, sitterId);
+      await reloadTodaysBooking();
       router.refresh();
     } catch (e) {
       setBanner(friendlySupabaseSessionError(e));
+    } finally {
+      setEndShiftBusy(false);
     }
   };
+
+  const confirmEndShift = async () => {
+    if (!endConfirmRow) return;
+    await completeSessionRow(endConfirmRow);
+  };
+
+  const endActiveSession = async () => {
+    if (!activeShiftRow) return;
+    await completeSessionRow(activeShiftRow);
+  };
+
+  const handleDevReset = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (supabase && sitterId) {
+      await refreshForUser(supabase, sitterId);
+    }
+    await reloadTodaysBooking();
+    setDashboardStatsRefreshKey((k) => k + 1);
+    setBanner(null);
+  }, [sitterId, refreshForUser, reloadTodaysBooking]);
 
   const openRatingAfterSummaryDismiss = useCallback(() => {
     if (!completedSummaryRow) return;
@@ -466,8 +484,9 @@ export default function SitterDashboardPage() {
           </div>
           <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
             <DoubleShakeCircleButton
-              label="אישור סיום משמרת"
+              label={endShiftBusy ? "מסיים משמרת…" : "סיום משמרת"}
               variant="salmon"
+              busy={endShiftBusy}
               onClick={() => void confirmEndShift()}
             />
           </div>
@@ -493,14 +512,15 @@ export default function SitterDashboardPage() {
             <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{liveTimerText}</p>
             <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{liveEarned}</p>
             <p className="text-xs text-slate-500">
-              סיום המשמרת מתבצע מהצד של ההורה; כאן תופיע בקשת סיום לאישור.
+              לחצו לסיום המשמרת ועצירת הטיימר.
             </p>
           </div>
           <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-8">
             <DoubleShakeCircleButton
-              label="ממתינים לסיום מההורה"
-              variant="waiting-salmon"
-              presentational
+              label={endShiftBusy ? "מסיים משמרת…" : "סיום משמרת"}
+              variant="salmon"
+              busy={endShiftBusy}
+              onClick={() => void endActiveSession()}
             />
           </div>
         </>
@@ -638,6 +658,8 @@ export default function SitterDashboardPage() {
           {sessionSection}
         </div>
       </DoubleShakeShiftPanel>
+
+      <StuckShiftDevResetButton onReset={() => void handleDevReset()} />
       </div>
 
       <SessionRatingModal

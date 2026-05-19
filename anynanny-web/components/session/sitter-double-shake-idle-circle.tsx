@@ -5,8 +5,8 @@ import {
   DOUBLE_SHAKE_NO_SHIFT_TODAY_LABEL,
   DoubleShakeCircleButton
 } from "@/components/session/double-shake-circle-button";
+import { sitterCompleteBooking } from "@/lib/bookings/sitter-complete-booking";
 import { sitterForceEndBooking } from "@/lib/bookings/sitter-force-end-booking";
-import { sitterRequestEndBooking } from "@/lib/bookings/sitter-request-end-booking";
 import { sitterStartShift } from "@/lib/bookings/sitter-start-shift";
 import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -51,21 +51,21 @@ export function SitterDoubleShakeIdleCircle({
     await onBookingUpdated();
   }, [booking, onBookingUpdated, onError]);
 
-  const handleRequestEnd = useCallback(async () => {
+  const handleEndShift = useCallback(async () => {
     if (!booking || booking.status !== "parent_started") return;
 
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      onError?.("יש להתחבר כדי לבקש סיום משמרת.");
+      onError?.("יש להתחבר כדי לסיים משמרת.");
       return;
     }
 
     setBusy(true);
-    const { row, error } = await sitterRequestEndBooking(auth.supabase, auth.userId, booking.id);
+    const { row, error } = await sitterCompleteBooking(auth.supabase, auth.userId, booking.id);
     setBusy(false);
 
     if (error || !row) {
-      onError?.(error ?? "בקשת סיום נכשלה.");
+      onError?.(error ?? "סיום משמרת נכשל.");
       return;
     }
 
@@ -132,10 +132,10 @@ export function SitterDoubleShakeIdleCircle({
         <button
           type="button"
           disabled={busy}
-          onClick={() => void handleRequestEnd()}
-          className="w-full rounded-xl border border-navy-header/25 bg-white px-3 py-2.5 text-xs font-semibold text-navy-header transition hover:bg-brand-cream disabled:opacity-60"
+          onClick={() => void handleEndShift()}
+          className="w-full rounded-xl border border-rose-300 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-900 transition hover:bg-rose-100 disabled:opacity-60"
         >
-          {busy ? "שולח בקשת סיום…" : "בקשת סיום משמרת"}
+          {busy ? "מסיים משמרת…" : "סיום משמרת"}
         </button>
       </div>
     );
