@@ -37,6 +37,8 @@ import {
 import { SITTER_FORCE_END_SUCCESS_MESSAGE } from "@/lib/bookings/constants";
 import { SitterDoubleShakeIdleCircle } from "@/components/session/sitter-double-shake-idle-circle";
 import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
+import { doesBookingBlockSessionShiftUi } from "@/lib/bookings/booking-shift-ui";
+import { fetchTodayBookingShiftGate } from "@/lib/bookings/todays-linked-booking";
 import { useTodaysLinkedBooking } from "@/lib/bookings/use-todays-linked-booking";
 import { sitterCompleteSession } from "@/lib/session/sitter-complete-session";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
@@ -83,9 +85,15 @@ export default function SitterDashboardPage() {
 
   const {
     booking: todaysBooking,
+    shiftGate: todayBookingShiftGate,
     ready: bookingGuardReady,
     reload: reloadTodaysBooking
   } = useTodaysLinkedBooking("sitter", sitterId);
+
+  const sessionUiBlockedByBooking = useMemo(
+    () => bookingGuardReady && doesBookingBlockSessionShiftUi(todayBookingShiftGate),
+    [bookingGuardReady, todayBookingShiftGate]
+  );
 
   useEffect(() => {
     if (!forceEndToast) return;
@@ -154,6 +162,13 @@ export default function SitterDashboardPage() {
     setPendingRow(pending);
     setEndConfirmRow(endConfirm);
     setActiveShiftRow(activeOnly);
+
+    const gate = await fetchTodayBookingShiftGate(supabase, uid, "sitter");
+    if (doesBookingBlockSessionShiftUi(gate)) {
+      setPendingRow(null);
+      setEndConfirmRow(null);
+      setActiveShiftRow(null);
+    }
 
     const dismissedId = readDismissedCompletedSessionId("sitter");
     const { data: completedData, error: completedErr } = await supabase
@@ -430,13 +445,18 @@ export default function SitterDashboardPage() {
   };
 
   const handleDevReset = useCallback(async () => {
+    setPendingRow(null);
+    setActiveShiftRow(null);
+    setEndConfirmRow(null);
+    setBanner(null);
+    setForceEndToast(null);
+
     const supabase = getSupabaseBrowserClient();
     if (supabase && sitterId) {
       await refreshForUser(supabase, sitterId);
     }
     await reloadTodaysBooking();
     setDashboardStatsRefreshKey((k) => k + 1);
-    setBanner(null);
   }, [sitterId, refreshForUser, reloadTodaysBooking]);
 
   const openRatingAfterSummaryDismiss = useCallback(() => {
@@ -475,7 +495,7 @@ export default function SitterDashboardPage() {
             onDismiss={openRatingAfterSummaryDismiss}
           />
         </div>
-      ) : endConfirmRow ? (
+      ) : endConfirmRow && !sessionUiBlockedByBooking ? (
         <>
           <div className="w-full space-y-2 text-right">
             <p className="text-sm font-semibold text-[#001F3F]">ההורה ביקש לסיים את המשמרת</p>
@@ -491,7 +511,7 @@ export default function SitterDashboardPage() {
             />
           </div>
         </>
-      ) : pendingRow ? (
+      ) : pendingRow && !sessionUiBlockedByBooking ? (
         <>
           <div className="w-full space-y-2 text-right">
             <p className="text-xs font-medium text-slate-600">ממתין לאישור שלך</p>
@@ -505,7 +525,7 @@ export default function SitterDashboardPage() {
             />
           </div>
         </>
-      ) : activeShiftRow ? (
+      ) : activeShiftRow && !sessionUiBlockedByBooking ? (
         <>
           <div className="w-full space-y-2 text-right">
             <p className="text-xs font-medium text-slate-600">משמרת פעילה</p>

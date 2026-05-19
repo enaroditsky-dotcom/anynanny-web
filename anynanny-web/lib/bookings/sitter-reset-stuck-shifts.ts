@@ -17,7 +17,8 @@ export type ResetStuckShiftsResult = {
 };
 
 /**
- * Dev/safety: close every open session + today's in-progress booking for this sitter.
+ * Rescue: close open sessions + today's in-progress bookings using status-only writes.
+ * Does not fail the whole operation on a single row — UI should always refresh after.
  */
 export async function resetStuckShiftsForSitter(
   supabase: SupabaseClient,
@@ -26,6 +27,7 @@ export async function resetStuckShiftsForSitter(
   let sessionsCompleted = 0;
   let sessionsCancelled = 0;
   let bookingsCompleted = 0;
+  const warnings: string[] = [];
 
   const { data: activeSessions, error: activeErr } = await supabase
     .from(SESSIONS_TABLE)
@@ -34,20 +36,21 @@ export async function resetStuckShiftsForSitter(
     .eq("status", "active");
 
   if (activeErr) {
-    return { sessionsCompleted: 0, sessionsCancelled: 0, bookingsCompleted: 0, error: activeErr.message };
-  }
-
-  for (const row of activeSessions ?? []) {
-    const { error } = await sitterCompleteSession(
-      supabase,
-      sitterId,
-      row.id as string | number,
-      (row as { start_time?: string | null }).start_time
-    );
-    if (error) {
-      return { sessionsCompleted, sessionsCancelled, bookingsCompleted, error };
+    warnings.push(activeErr.message);
+  } else {
+    for (const row of activeSessions ?? []) {
+      const { error } = await sitterCompleteSession(
+        supabase,
+        sitterId,
+        row.id as string | number,
+        (row as { start_time?: string | null }).start_time
+      );
+      if (error) {
+        warnings.push(error);
+      } else {
+        sessionsCompleted += 1;
+      }
     }
-    sessionsCompleted += 1;
   }
 
   const { data: pendingSessions, error: pendingErr } = await supabase
@@ -57,10 +60,8 @@ export async function resetStuckShiftsForSitter(
     .in("status", [...SESSION_PENDING_START_STATUSES]);
 
   if (pendingErr) {
-    return { sessionsCompleted, sessionsCancelled, bookingsCompleted, error: pendingErr.message };
-  }
-
-  if ((pendingSessions ?? []).length > 0) {
+    warnings.push(pendingErr.message);
+  } else if ((pendingSessions ?? []).length > 0) {
     const { error } = await supabase
       .from(SESSIONS_TABLE)
       .update({ status: SESSION_STATUS_CANCELLED })
@@ -68,9 +69,10 @@ export async function resetStuckShiftsForSitter(
       .in("status", [...SESSION_PENDING_START_STATUSES]);
 
     if (error) {
-      return { sessionsCompleted, sessionsCancelled, bookingsCompleted, error: error.message };
+      warnings.push(error.message);
+    } else {
+      sessionsCancelled = pendingSessions?.length ?? 0;
     }
-    sessionsCancelled = pendingSessions?.length ?? 0;
   }
 
   const today = todayDateISO();
@@ -82,19 +84,31 @@ export async function resetStuckShiftsForSitter(
     .in("status", IN_PROGRESS_BOOKING_STATUSES);
 
   if (bookingsErr) {
-    return { sessionsCompleted, sessionsCancelled, bookingsCompleted, error: bookingsErr.message };
-  }
-
-  for (const row of openBookings ?? []) {
-    const { error } = await sitterCompleteBooking(supabase, sitterId, String(row.id), {
-      allowedStatuses: IN_PROGRESS_BOOKING_STATUSES,
-      markAdminReview: true
-    });
-    if (error) {
-      return { sessionsCompleted, sessionsCancelled, bookingsCompleted, error };
+    warnings.push(bookingsErr.message);
+  } else {
+    for (const row of openBookings ?? []) {
+      const { error } = await sitterCompleteBooking(supabase, sitterId, String(row.id), {
+        allowedStatuses: IN_PROGRESS_BOOKING_STATUSES
+      });
+      if (error) {
+        warnings.push(error);
+      } else {
+        bookingsCompleted += 1;
+      }
     }
-    bookingsCompleted += 1;
   }
 
-  return { sessionsCompleted, sessionsCancelled, bookingsCompleted, error: null };
+  if (warnings.length > 0) {
+    console.warn("[resetStuckShiftsForSitter]", warnings.join(" | "));
+  }
+
+  const didWork =
+    sessionsCompleted > 0 || sessionsCancelled > 0 || bookingsCompleted > 0;
+
+  return {
+    sessionsCompleted,
+    sessionsCancelled,
+    bookingsCompleted,
+    error: didWork ? null : warnings[0] ?? null
+  };
 }

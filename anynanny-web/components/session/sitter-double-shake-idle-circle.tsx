@@ -8,6 +8,7 @@ import {
 import { sitterCompleteBooking } from "@/lib/bookings/sitter-complete-booking";
 import { sitterForceEndBooking } from "@/lib/bookings/sitter-force-end-booking";
 import { sitterStartShift } from "@/lib/bookings/sitter-start-shift";
+import { isBookingEligibleForLiveShiftUi } from "@/lib/bookings/booking-shift-ui";
 import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
@@ -99,6 +100,12 @@ export function SitterDoubleShakeIdleCircle({
   }
 
   if (!booking) {
+    return (
+      <DoubleShakeCircleButton label={DOUBLE_SHAKE_NO_SHIFT_TODAY_LABEL} variant="disabled" presentational />
+    );
+  }
+
+  if (!isBookingEligibleForLiveShiftUi(booking)) {
     return (
       <DoubleShakeCircleButton label={DOUBLE_SHAKE_NO_SHIFT_TODAY_LABEL} variant="disabled" presentational />
     );

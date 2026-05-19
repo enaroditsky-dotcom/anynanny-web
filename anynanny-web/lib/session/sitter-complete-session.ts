@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { HOURLY_RATE, SESSIONS_TABLE } from "@/lib/session/protocol";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 
 function finalTotals(startTime: string | null | undefined, endIso: string) {
   const startMs = startTime ? new Date(startTime).getTime() : new Date(endIso).getTime();
@@ -11,7 +12,7 @@ function finalTotals(startTime: string | null | undefined, endIso: string) {
   };
 }
 
-/** Sitter finalizes an active session (with or without prior parent end request). */
+/** Sitter finalizes an active session — falls back to minimal columns if migrations are missing. */
 export async function sitterCompleteSession(
   supabase: SupabaseClient,
   sitterId: string,
@@ -21,26 +22,65 @@ export async function sitterCompleteSession(
   const endIso = new Date().toISOString();
   const totals = finalTotals(startTime, endIso);
 
-  const { data, error } = await supabase
-    .from(SESSIONS_TABLE)
-    .update({
+  const payloads: Record<string, unknown>[] = [
+    {
       status: "completed",
       end_time: endIso,
       sitter_end_confirmed_at: endIso,
       parent_end_requested_at: null,
       ...totals
-    })
+    },
+    {
+      status: "completed",
+      end_time: endIso
+    },
+    {
+      status: "completed"
+    }
+  ];
+
+  let lastError: string | null = null;
+
+  for (const payload of payloads) {
+    const { data, error } = await supabase
+      .from(SESSIONS_TABLE)
+      .update(payload)
+      .eq("id", sessionId)
+      .eq("sitter_id", sitterId)
+      .eq("status", "active")
+      .select("id")
+      .maybeSingle();
+
+    if (!error && data) {
+      return { error: null };
+    }
+
+    if (error) {
+      lastError = error.message;
+      const optionalColumnMissing =
+        isPostgrestMissingColumnError(error.message, "sitter_end_confirmed_at") ||
+        isPostgrestMissingColumnError(error.message, "parent_end_requested_at") ||
+        isPostgrestMissingColumnError(error.message, "final_elapsed_seconds") ||
+        isPostgrestMissingColumnError(error.message, "final_amount_nis") ||
+        isPostgrestMissingColumnError(error.message, "end_time");
+      if (!optionalColumnMissing) {
+        return { error: error.message };
+      }
+    }
+  }
+
+  const { data: row } = await supabase
+    .from(SESSIONS_TABLE)
+    .select("id, status")
     .eq("id", sessionId)
     .eq("sitter_id", sitterId)
-    .eq("status", "active")
-    .select("id")
     .maybeSingle();
 
-  if (error) {
-    return { error: error.message };
+  if (row && String(row.status) === "completed") {
+    return { error: null };
   }
-  if (!data) {
-    return { error: "לא נמצאה משמרת פעילה לסיום — ייתכן שכבר עודכנה." };
-  }
-  return { error: null };
+
+  return {
+    error: lastError ?? "לא נמצאה משמרת פעילה לסיום — ייתכן שכבר עודכנה."
+  };
 }

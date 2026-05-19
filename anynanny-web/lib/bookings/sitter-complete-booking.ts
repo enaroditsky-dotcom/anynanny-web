@@ -1,10 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  BOOKINGS_TABLE,
-  SITTER_FORCE_END_ADMIN_NOTE,
-  type BookingRow,
-  type BookingStatus
-} from "@/lib/bookings/constants";
+import { closeBookingForSitter } from "@/lib/bookings/booking-status-update";
+import { completeActiveSessionForBookingPartners } from "@/lib/bookings/complete-linked-session";
+import type { BookingRow, BookingStatus } from "@/lib/bookings/constants";
 
 export const IN_PROGRESS_BOOKING_STATUSES: BookingStatus[] = [
   "sitter_started",
@@ -14,10 +11,11 @@ export const IN_PROGRESS_BOOKING_STATUSES: BookingStatus[] = [
 
 type CompleteBookingOptions = {
   allowedStatuses?: BookingStatus[];
+  /** @deprecated Ignored — only core columns are written. */
   markAdminReview?: boolean;
 };
 
-/** Sitter closes a live booking row — sets `completed` and records `actual_end_time`. */
+/** Sitter closes a live booking — status-only update (no optional DB columns). */
 export async function sitterCompleteBooking(
   supabase: SupabaseClient,
   sitterId: string,
@@ -25,51 +23,19 @@ export async function sitterCompleteBooking(
   options: CompleteBookingOptions = {}
 ): Promise<{ row: BookingRow | null; error: string | null }> {
   const allowedStatuses = options.allowedStatuses ?? ["parent_started"];
-  const now = new Date().toISOString();
 
-  const payload: Record<string, unknown> = {
-    status: "completed",
-    actual_end_time: now,
-    updated_at: now
-  };
-  if (options.markAdminReview) {
-    payload.requires_admin_review = true;
-    payload.admin_notes = SITTER_FORCE_END_ADMIN_NOTE;
+  const { row, error } = await closeBookingForSitter(
+    supabase,
+    sitterId,
+    bookingId,
+    allowedStatuses
+  );
+
+  if (error || !row) {
+    return { row: null, error };
   }
 
-  const { data, error } = await supabase
-    .from(BOOKINGS_TABLE)
-    .update(payload)
-    .eq("id", bookingId)
-    .eq("sitter_id", sitterId)
-    .in("status", allowedStatuses)
-    .select(
-      "id, parent_id, sitter_id, booking_date, start_time, end_time, status, actual_start_time, actual_end_time, requires_admin_review, admin_notes, created_at, updated_at"
-    )
-    .maybeSingle();
+  await completeActiveSessionForBookingPartners(supabase, sitterId, row.parent_id);
 
-  if (error) {
-    const msg = error.message.toLowerCase();
-    if (
-      msg.includes("requires_admin_review") ||
-      msg.includes("admin_notes") ||
-      msg.includes("actual_end_time") ||
-      msg.includes("completed")
-    ) {
-      return {
-        row: null,
-        error: "עמודות סיום משמרת חסרות — הריצו את המיגרציות האחרונות ב-Supabase."
-      };
-    }
-    return { row: null, error: error.message };
-  }
-
-  if (!data) {
-    return {
-      row: null,
-      error: "לא ניתן לסיים את המשמרת — ודאו שהמשמרת במצב פעיל (הורה אישר התחלה)."
-    };
-  }
-
-  return { row: data as BookingRow, error: null };
+  return { row, error: null };
 }

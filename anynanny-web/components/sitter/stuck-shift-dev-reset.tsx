@@ -4,8 +4,8 @@ import { useCallback, useState } from "react";
 import { resetStuckShiftsForSitter } from "@/lib/bookings/sitter-reset-stuck-shifts";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
-const SHOW_DEV_RESET =
-  process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEV_SHIFT_RESET === "true";
+/** Rescue control — always visible on sitter screens (status-only Supabase writes). */
+const SHOW_STUCK_SHIFT_RESET = true;
 
 type Props = {
   onReset?: () => void | Promise<void>;
@@ -19,7 +19,7 @@ export function StuckShiftDevResetButton({ onReset, className = "" }: Props) {
   const handleReset = useCallback(async () => {
     if (
       !window.confirm(
-        "לאפס משמרות תקועות? פעולה זו תסגור כל session פעיל וכל booking פתוח להיום עבור המשתמש המחובר."
+        "לאפס משמרת תקועה? פעולה זו תסגור sessions פתוחים ו-bookings פתוחים להיום (סטטוס בלבד)."
       )
     ) {
       return;
@@ -33,8 +33,15 @@ export function StuckShiftDevResetButton({ onReset, className = "" }: Props) {
 
     setBusy(true);
     setMessage(null);
+
     const result = await resetStuckShiftsForSitter(auth.supabase, auth.userId);
     setBusy(false);
+
+    try {
+      await onReset?.();
+    } catch (e) {
+      console.warn("[StuckShiftDevReset] onReset:", e);
+    }
 
     if (result.error) {
       setMessage(result.error);
@@ -51,12 +58,12 @@ export function StuckShiftDevResetButton({ onReset, className = "" }: Props) {
     if (result.bookingsCompleted > 0) {
       parts.push(`${result.bookingsCompleted} bookings נסגרו`);
     }
-    setMessage(parts.length > 0 ? `אופס בהצלחה: ${parts.join(" · ")}` : "לא נמצאו משמרות פתוחות.");
-
-    await onReset?.();
+    setMessage(
+      parts.length > 0 ? `אופס בהצלחה: ${parts.join(" · ")}` : "המסך אופס — אין משמרות פתוחות."
+    );
   }, [onReset]);
 
-  if (!SHOW_DEV_RESET) {
+  if (!SHOW_STUCK_SHIFT_RESET) {
     return null;
   }
 
@@ -68,7 +75,7 @@ export function StuckShiftDevResetButton({ onReset, className = "" }: Props) {
         onClick={() => void handleReset()}
         className="w-full rounded-xl border border-dashed border-amber-400 bg-amber-50/90 px-3 py-2.5 text-xs font-semibold text-amber-950 transition hover:bg-amber-100 disabled:opacity-60"
       >
-        {busy ? "מאפס משמרות…" : "איפוס משמרת תקועה (פיתוח)"}
+        {busy ? "מאפס משמרת…" : "איפוס משמרת תקועה"}
       </button>
       {message ? (
         <p className="text-right text-[11px] leading-snug text-amber-900" role="status">

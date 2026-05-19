@@ -18,7 +18,7 @@ type Props = {
   onResponded?: (status: "approved" | "rejected") => void;
 };
 
-export function SitterPendingBookings({ sitterId, disabled = false }: Props) {
+export function SitterPendingBookings({ sitterId, disabled = false, onResponded }: Props) {
   const [bookings, setBookings] = useState<PendingBookingView[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);

@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
+import { isBookingEligibleForLiveShiftUi } from "@/lib/bookings/booking-shift-ui";
 import { todayDateISO } from "@/lib/bookings/booking-date-utils";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
@@ -57,7 +59,7 @@ export async function fetchTodaysLinkedBooking(
   const { data: row, error } = await supabase
     .from(BOOKINGS_TABLE)
     .select(
-      "id, parent_id, sitter_id, booking_date, start_time, end_time, status, actual_start_time, created_at, updated_at"
+      BOOKING_SELECT_MINIMAL
     )
     .eq(participantColumn, userId)
     .eq("booking_date", today)
@@ -75,6 +77,11 @@ export async function fetchTodaysLinkedBooking(
   }
 
   const booking = row as BookingRow;
+
+  if (!isBookingEligibleForLiveShiftUi(booking)) {
+    return { booking: null, error: null };
+  }
+
   const partnerId = String(booking[partnerColumn as keyof BookingRow]);
 
   const { data: profile } = await supabase
@@ -118,4 +125,29 @@ export async function fetchTodaysLinkedBooking(
     },
     error: null
   };
+}
+
+/** Latest booking row for today (any status) — used to gate session timer UI after early finish. */
+export async function fetchTodayBookingShiftGate(
+  supabase: SupabaseClient,
+  userId: string,
+  role: "parent" | "sitter"
+): Promise<Pick<BookingRow, "status" | "parent_id" | "sitter_id"> | null> {
+  const today = todayDateISO();
+  const participantColumn = role === "parent" ? "parent_id" : "sitter_id";
+
+  const { data, error } = await supabase
+    .from(BOOKINGS_TABLE)
+    .select("status, parent_id, sitter_id")
+    .eq(participantColumn, userId)
+    .eq("booking_date", today)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data as Pick<BookingRow, "status" | "parent_id" | "sitter_id">;
 }

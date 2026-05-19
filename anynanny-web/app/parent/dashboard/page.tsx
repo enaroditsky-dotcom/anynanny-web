@@ -15,6 +15,7 @@ import {
 } from "@/components/session/double-shake-circle-button";
 import { ParentDoubleShakeIdleCircle } from "@/components/session/parent-double-shake-idle-circle";
 import { parentApproveSitterStart } from "@/lib/bookings/parent-approve-sitter-start";
+import { doesBookingBlockSessionShiftUi } from "@/lib/bookings/booking-shift-ui";
 import { useTodaysLinkedBooking } from "@/lib/bookings/use-todays-linked-booking";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -60,9 +61,15 @@ export default function ParentDashboardPage() {
   const [ratingTargetSessionId, setRatingTargetSessionId] = useState<string | null>(null);
   const {
     booking: todaysBooking,
+    shiftGate: todayBookingShiftGate,
     ready: bookingGuardReady,
     reload: reloadTodaysBooking
   } = useTodaysLinkedBooking("parent", parentUserId);
+
+  const sessionUiBlockedByBooking = useMemo(
+    () => bookingGuardReady && doesBookingBlockSessionShiftUi(todayBookingShiftGate),
+    [bookingGuardReady, todayBookingShiftGate]
+  );
 
   useEffect(() => {
     if (!debugToast) return;
@@ -92,6 +99,16 @@ export default function ParentDashboardPage() {
     setSessionState(idle);
     setNowMs(Date.now());
   }, [bookingGuardReady, todaysBooking, sessionState.status]);
+
+  /** Booking completed/cancelled early — hide live session timer even if still inside calendar slot. */
+  useEffect(() => {
+    if (!sessionUiBlockedByBooking) return;
+    if (sessionState.status === "idle" || sessionState.status === "ended") return;
+    const idle: SessionProtocolState = { status: "idle" };
+    persistSessionState(idle);
+    setSessionState(idle);
+    setNowMs(Date.now());
+  }, [sessionUiBlockedByBooking, sessionState.status]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -428,7 +445,8 @@ export default function ParentDashboardPage() {
   };
 
   const sessionRunning =
-    sessionState.status === "active" || sessionState.status === "parent_initiated";
+    !sessionUiBlockedByBooking &&
+    (sessionState.status === "active" || sessionState.status === "parent_initiated");
 
   const waitingNannyStart = sessionState.status === "parent_initiated";
   const waitingNannyEnd =

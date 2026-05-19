@@ -18,6 +18,13 @@ import {
 import { fetchPublicSitterSearchBySerial, runParentSitterSearch } from "@/lib/sitter/parent-sitter-search";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
+/** Drop legacy duplicate-serial banner; exact `.eq('nanny_serial')` handles lookup in the fetcher. */
+function normalizeParentSearchError(error: string | null): string | null {
+  if (!error) return null;
+  if (/נמצאו\s+\d+\s+מטפלות/.test(error)) return null;
+  return error;
+}
+
 export default function ParentSearchPage() {
   const router = useRouter();
   const { isLoading, signedIn, effectiveRole } = useAuth();
@@ -61,7 +68,7 @@ export default function ParentSearchPage() {
 
       if (error) {
         console.warn("[parent/search] search error:", error);
-        setSearchError(error);
+        setSearchError(normalizeParentSearchError(error));
         setSitters([]);
         return;
       }
@@ -97,7 +104,7 @@ export default function ParentSearchPage() {
         if (serialFetchGen.current !== gen) return;
 
         if (error) {
-          setSearchError(error);
+          setSearchError(normalizeParentSearchError(error));
           setSitters([]);
         } else {
           setSearchError(null);
@@ -113,6 +120,7 @@ export default function ParentSearchPage() {
   const showWait = !authSettled || (signedIn && effectiveRole === null);
   const redirectingToLogin = authSettled && !signedIn;
   const serialLookupActive = isSerialTargetedSearch(normalizeParentSearchFilters(draftFilters));
+  const visibleSearchError = serialLookupActive ? null : searchError;
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
@@ -157,7 +165,7 @@ export default function ParentSearchPage() {
         <p className="px-1 text-right text-sm text-slate-600">טוען תוצאות…</p>
       ) : null}
 
-      {showContent && hasSearched && !listLoading && !searchError && !serialLookupActive ? (
+      {showContent && hasSearched && !listLoading && !visibleSearchError && !serialLookupActive ? (
         <p className="px-1 text-right text-xs text-slate-600">ממוינים לפי דירוג ממוצע (גבוה קודם).</p>
       ) : null}
 
@@ -169,14 +177,14 @@ export default function ParentSearchPage() {
 
       {showContent && hasSearched && !listLoading ? (
         <section className="space-y-3 px-1">
-          {searchError ? (
-            <p className="text-right text-xs text-rose-700">{searchError}</p>
+          {visibleSearchError ? (
+            <p className="text-right text-xs text-rose-700">{visibleSearchError}</p>
           ) : null}
 
-          {sitters.length === 0 && !searchError ? (
+          {sitters.length === 0 && !visibleSearchError ? (
             <p className="rounded-3xl border border-navy-header/10 bg-white p-6 text-center text-sm text-slate-600 shadow-soft">
               {serialLookupActive
-                ? "לא נמצאה נני עם מספר אישי זה. בדקו את הקוד (למשל AN-1004) או שהפרופיל מפורסם."
+                ? "לא נמצאה נני עם מספר אישי זה. בדקו את הקוד או שהפרופיל מפורסם."
                 : "לא נמצאו בייביסיטרים התואמים לסינון. נסו להרחיב את החיפוש."}
             </p>
           ) : null}

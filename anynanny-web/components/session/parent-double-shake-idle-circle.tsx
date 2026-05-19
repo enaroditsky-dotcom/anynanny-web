@@ -4,6 +4,7 @@ import {
   DOUBLE_SHAKE_NO_SHIFT_TODAY_LABEL,
   DoubleShakeCircleButton
 } from "@/components/session/double-shake-circle-button";
+import { isBookingEligibleForLiveShiftUi } from "@/lib/bookings/booking-shift-ui";
 import {
   formatParentShiftApproveButtonLabel,
   formatParentShiftStartButtonLabel,
@@ -22,6 +23,12 @@ export function ParentDoubleShakeIdleCircle({ booking, ready, onStartShift }: Pr
   }
 
   if (!booking) {
+    return (
+      <DoubleShakeCircleButton label={DOUBLE_SHAKE_NO_SHIFT_TODAY_LABEL} variant="disabled" presentational />
+    );
+  }
+
+  if (!isBookingEligibleForLiveShiftUi(booking)) {
     return (
       <DoubleShakeCircleButton label={DOUBLE_SHAKE_NO_SHIFT_TODAY_LABEL} variant="disabled" presentational />
     );
