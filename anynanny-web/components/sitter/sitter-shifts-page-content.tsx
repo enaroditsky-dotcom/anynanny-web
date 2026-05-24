@@ -42,7 +42,8 @@ export function SitterShiftsPageContent() {
 
   const handleBookingResponded = useCallback(() => {
     setConfirmedRefreshNonce((n) => n + 1);
-  }, []);
+    void reloadTodaysBooking();
+  }, [reloadTodaysBooking]);
 
   const handleForceEndSuccess = useCallback(async () => {
     setShiftActionError(null);

@@ -1,3 +1,5 @@
+import { isIsraelCity, type IsraelCity } from "@/lib/geo/israel-cities";
+
 export type ParentSearchTransportFilter = "all" | "self" | "taxi";
 
 export type ParentSearchMinExperience = 0 | 1 | 3 | 5;
@@ -19,10 +21,13 @@ export const PARENT_SEARCH_HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) =>
   String(h).padStart(2, "0")
 ) as readonly string[];
 
-/** Quarter-hour steps for minute picker. */
-export const PARENT_SEARCH_MINUTE_OPTIONS = ["00", "15", "30", "45"] as const;
+/** Full minute range 00–59 for parent search time filters. */
+export const PARENT_SEARCH_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, m) =>
+  String(m).padStart(2, "0")
+);
 
-export type ParentSearchMinute = (typeof PARENT_SEARCH_MINUTE_OPTIONS)[number];
+/** Two-digit minute string (`00`–`59`). */
+export type ParentSearchMinute = string;
 
 export type ParentSearchFilters = {
   /** Public serial on `sitter_profiles.nanny_serial` (e.g. AN-1001). */
@@ -39,6 +44,8 @@ export type ParentSearchFilters = {
   minRating: ParentSearchMinRating;
   transport: ParentSearchTransportFilter;
   maxHourlyRate: number;
+  /** Canonical city from `ISRAEL_CITIES` — filters `sitter_profiles.working_cities`. */
+  selectedCity: IsraelCity | "";
 };
 
 export const defaultParentSearchFilters = (): ParentSearchFilters => ({
@@ -51,7 +58,8 @@ export const defaultParentSearchFilters = (): ParentSearchFilters => ({
   minYearsExperience: 0,
   minRating: "all",
   transport: "all",
-  maxHourlyRate: PARENT_SEARCH_MAX_HOURLY_SLIDER
+  maxHourlyRate: PARENT_SEARCH_MAX_HOURLY_SLIDER,
+  selectedCity: ""
 });
 
 /** Merge partial / legacy filter state (e.g. old single `searchHour` field). */
@@ -81,7 +89,11 @@ export function normalizeParentSearchFilters(
     minYearsExperience: partial.minYearsExperience ?? base.minYearsExperience,
     minRating: partial.minRating ?? base.minRating,
     transport: partial.transport ?? base.transport,
-    maxHourlyRate: partial.maxHourlyRate ?? base.maxHourlyRate
+    maxHourlyRate: partial.maxHourlyRate ?? base.maxHourlyRate,
+    selectedCity:
+      partial.selectedCity != null && isIsraelCity(String(partial.selectedCity))
+        ? partial.selectedCity
+        : base.selectedCity
   };
 }
 
@@ -186,6 +198,7 @@ export type ListPublicSittersSearchRpcParams = {
   p_min_rating: number | null;
   p_transport: string;
   p_max_hourly_rate: number;
+  p_search_city: string | null;
 };
 
 /** RPC args for `list_public_sitters_search`. */
@@ -200,6 +213,7 @@ export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): 
     p_min_years_experience: serialOnly ? 0 : minYearsExperienceToRpcValue(safe.minYearsExperience),
     p_min_rating: serialOnly ? null : minRatingToRpcValue(safe.minRating),
     p_transport: serialOnly ? "all" : safe.transport,
-    p_max_hourly_rate: serialOnly ? PARENT_SEARCH_MAX_HOURLY_SLIDER : safe.maxHourlyRate
+    p_max_hourly_rate: serialOnly ? PARENT_SEARCH_MAX_HOURLY_SLIDER : safe.maxHourlyRate,
+    p_search_city: serialOnly || !safe.selectedCity ? null : safe.selectedCity
   };
 }

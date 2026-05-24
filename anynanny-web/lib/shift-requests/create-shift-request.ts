@@ -8,6 +8,14 @@ import {
 export { PARENT_SEARCH_HOUR_OPTIONS, PARENT_SEARCH_MINUTE_OPTIONS };
 export type { ParentSearchMinute };
 
+/**
+ * Per-minute options (00..59, leading zero) for the booking modal time picker.
+ * Parent search uses {@link PARENT_SEARCH_MINUTE_OPTIONS} from the same range.
+ */
+export const BOOK_SHIFT_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, m) =>
+  String(m).padStart(2, "0")
+) as readonly string[];
+
 function buildLocalDateTimeIso(day: string, hour: string, minute: string): string | null {
   const trimmedDay = day.trim();
   if (!trimmedDay || !/^\d{4}-\d{2}-\d{2}$/.test(trimmedDay)) return null;

@@ -3,12 +3,16 @@ import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
+  formatSitterWorkingCitiesError,
+  getSitterProfilesTable,
   isSitterProfileComplete,
   SITTER_PROFILES_TABLE,
   SITTER_PROFILES_USER_COLUMN,
+  SITTER_WORKING_CITIES_COLUMN,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 
 export const dynamic = "force-dynamic";
 
@@ -59,14 +63,17 @@ export async function GET() {
     }
 
     const fk = SITTER_PROFILES_USER_COLUMN;
-    const { data, error } = await supabase.from(SITTER_PROFILES_TABLE).select("*").eq(fk, user.id).maybeSingle();
+    const table = getSitterProfilesTable() as typeof SITTER_PROFILES_TABLE;
+    const { data, error } = await supabase.from(table).select("*").eq(fk, user.id).maybeSingle();
 
     if (error) {
+      console.error("[api/sitter/profile GET]", { table, userId: user.id, message: error.message });
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     return NextResponse.json({ profile: data as SitterProfileRow | null });
-  } catch {
+  } catch (err) {
+    console.error("[api/sitter/profile GET] exception:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
@@ -95,7 +102,8 @@ export async function PUT(request: Request) {
     const body = (await request.json()) as Partial<SitterProfileRow>;
 
     const fk = SITTER_PROFILES_USER_COLUMN;
-    const { data: existing } = await supabase.from(SITTER_PROFILES_TABLE).select("*").eq(fk, user.id).maybeSingle();
+    const table = getSitterProfilesTable() as typeof SITTER_PROFILES_TABLE;
+    const { data: existing } = await supabase.from(table).select("*").eq(fk, user.id).maybeSingle();
 
     const prev = (existing ?? {}) as Partial<SitterProfileRow>;
 
@@ -136,6 +144,10 @@ export async function PUT(request: Request) {
       bio: body.bio !== undefined ? body.bio : prev.bio ?? null,
       hourly_rate_nis:
         body.hourly_rate_nis !== undefined ? numOrNull(body.hourly_rate_nis) : prev.hourly_rate_nis ?? null,
+      working_cities:
+        body.working_cities !== undefined
+          ? normalizeWorkingCities(body.working_cities)
+          : normalizeWorkingCities(prev.working_cities),
       legal_no_criminal_declaration:
         body.legal_no_criminal_declaration !== undefined
           ? Boolean(body.legal_no_criminal_declaration)
@@ -155,17 +167,76 @@ export async function PUT(request: Request) {
     if (fk === "id") delete row.user_id;
 
     const { data, error } = await supabase
-      .from(SITTER_PROFILES_TABLE)
+      .from(table)
       .upsert(row, { onConflict: fk })
       .select("*")
       .single();
 
     if (error) {
+      console.error("[api/sitter/profile PUT]", { table, userId: user.id, message: error.message });
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     return NextResponse.json({ profile: data as SitterProfileRow });
-  } catch {
+  } catch (err) {
+    console.error("[api/sitter/profile PUT] exception:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+/** Patch service areas only - used by sitter profile city picker confirm button. */
+export async function PATCH(request: Request) {
+  try {
+    const supabase = await supabaseFromCookies();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase.from(PROFILES_TABLE).select("role").eq("id", user.id).maybeSingle();
+    if (!userIsSitter(profile, user)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await request.json()) as { working_cities?: unknown };
+    const working_cities = normalizeWorkingCities(body.working_cities);
+
+    if (working_cities.length === 0) {
+      return NextResponse.json({ error: "יש לבחור לפחות עיר אחת." }, { status: 400 });
+    }
+
+    const fk = SITTER_PROFILES_USER_COLUMN;
+    const table = getSitterProfilesTable() as typeof SITTER_PROFILES_TABLE;
+
+    const { data, error } = await supabase
+      .from(table)
+      .update({
+        [SITTER_WORKING_CITIES_COLUMN]: working_cities,
+        updated_at: new Date().toISOString()
+      })
+      .eq(fk, user.id)
+      .select("*")
+      .maybeSingle();
+
+    if (error) {
+      console.error("DB error:", error);
+      const message = formatSitterWorkingCitiesError(error.message);
+      console.error("[api/sitter/profile PATCH working_cities]", {
+        table,
+        column: SITTER_WORKING_CITIES_COLUMN,
+        userId: user.id,
+        working_cities,
+        message: error.message
+      });
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    return NextResponse.json({ profile: data as SitterProfileRow | null });
+  } catch (err) {
+    console.error("[api/sitter/profile PATCH] exception:", err);
+    const message = err instanceof Error ? err.message : "Server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

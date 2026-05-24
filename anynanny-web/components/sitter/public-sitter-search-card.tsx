@@ -5,14 +5,11 @@ import {
   bioExcerpt,
   experienceBadgeLabel,
   formatHourlyRateNis,
+  formatSearchCardRatingLine,
+  formatSearchCardWorkingCities,
   resolveSitterCardTitle,
   transportBadgeLabel
 } from "@/lib/sitter/public-search-card";
-
-function formatAvgLine(avg: number | null, count: number): string {
-  if (count <= 0 || avg == null) return "אין דירוג עדיין";
-  return `${Number(avg).toFixed(1)} ★ (${count})`;
-}
 
 export function parentSitterProfilePath(sitterId: string): string {
   const id = sitterId.trim();
@@ -25,6 +22,7 @@ export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSea
   const rate = sitter.hourly_rate_nis;
   const rateLabel = formatHourlyRateNis(rate);
   const profileHref = parentSitterProfilePath(sitter.id);
+  const serviceAreas = formatSearchCardWorkingCities(sitter.working_cities);
 
   return (
     <Link
@@ -45,17 +43,21 @@ export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSea
               {transportBadgeLabel(sitter.has_car)}
             </span>
           </div>
-          <p className="mt-2 line-clamp-3 text-sm leading-snug text-slate-700">{bioExcerpt(sitter.bio) || "—"}</p>
+          <p className="mt-1.5 text-xs text-slate-600">
+            <span className="font-semibold text-slate-700">אזורי שירות: </span>
+            {serviceAreas}
+          </p>
           <p
-            className={`mt-2 text-sm font-semibold ${rateLabel === "מחיר לא צוין" ? "text-slate-500" : "text-navy-800"}`}
+            className={`mt-1.5 text-sm font-semibold ${rateLabel === "מחיר לא צוין" ? "text-slate-500" : "text-navy-800"}`}
           >
             {rateLabel}
           </p>
+          <p className="mt-2 line-clamp-3 text-sm leading-snug text-slate-700">{bioExcerpt(sitter.bio) || "—"}</p>
         </div>
         <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-2xl bg-amber-50 px-3 py-2 ring-1 ring-amber-200/80">
           <Star className="h-5 w-5 fill-amber-400 text-amber-500" aria-hidden />
           <span className="text-sm font-bold tabular-nums text-amber-950">
-            {formatAvgLine(sitter.avg_rating, sitter.rating_count)}
+            {formatSearchCardRatingLine(sitter)}
           </span>
         </div>
       </div>

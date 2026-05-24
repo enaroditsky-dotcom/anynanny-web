@@ -1,17 +1,36 @@
 "use client";
 
-import { Calendar, MessageCircle } from "lucide-react";
-import { useCallback, useState } from "react";
+import { Calendar, CheckCircle2, MessageCircle, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import { getOrCreateChatRoom } from "@/lib/chat/parent-chat";
+import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type SitterProfileActionsProps = {
   sitterId: string;
   sitterName: string;
-  onBookingSuccess?: () => void;
+  onBookingSuccess?: (bookingId: string) => void;
 };
+
+const REJECTION_NOTICE = "הבייביסיטר דחתה את הזימון למשמרת";
+
+function applyBookingStatusFromPayload(
+  payload: RealtimePostgresChangesPayload<Pick<BookingRow, "status">>,
+  setBookingStatus: (status: BookingStatus) => void
+) {
+  if (payload.eventType === "DELETE") {
+    setBookingStatus("cancelled");
+    return;
+  }
+
+  const row = (payload.new ?? null) as Pick<BookingRow, "status"> | null;
+  if (row?.status) {
+    setBookingStatus(row.status);
+  }
+}
 
 /**
  * Primary CTAs on the public sitter profile: message (chat_rooms) and book shift (bookings pending).
@@ -21,6 +40,78 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
   const [messageBusy, setMessageBusy] = useState(false);
   const [bookModalOpen, setBookModalOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
+  const [bookingStatus, setBookingStatus] = useState<BookingStatus | null>(null);
+
+  const handleBookingSuccess = useCallback(
+    (bookingId: string) => {
+      setBookModalOpen(false);
+      setPendingBookingId(bookingId);
+      setBookingStatus("pending");
+      setActionError(null);
+      onBookingSuccess?.(bookingId);
+    },
+    [onBookingSuccess]
+  );
+
+  useEffect(() => {
+    if (!pendingBookingId) return;
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const { data, error } = await supabase
+        .from(BOOKINGS_TABLE)
+        .select("status, updated_at")
+        .eq("id", pendingBookingId)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      const next = (data as { status?: BookingStatus }).status ?? null;
+      if (next) setBookingStatus(next);
+    })();
+
+    const handleRealtimeChange = (payload: RealtimePostgresChangesPayload<Pick<BookingRow, "status">>) => {
+      applyBookingStatusFromPayload(payload, setBookingStatus);
+    };
+
+    const channel = supabase
+      .channel(`booking-status-${pendingBookingId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: BOOKINGS_TABLE,
+          filter: `id=eq.${pendingBookingId}`
+        },
+        handleRealtimeChange
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: BOOKINGS_TABLE,
+          filter: `id=eq.${pendingBookingId}`
+        },
+        handleRealtimeChange
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [pendingBookingId]);
+
+  useEffect(() => {
+    if (bookingStatus === "approved") {
+      router.push("/parent/dashboard");
+    }
+  }, [bookingStatus, router]);
 
   const handleSendMessage = useCallback(async () => {
     if (!sitterId) return;
@@ -50,8 +141,29 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
     setBookModalOpen(true);
   }, []);
 
+  const showRejectedNotice = bookingStatus === "rejected" || bookingStatus === "cancelled";
+  const showPendingBanner = Boolean(pendingBookingId) && !showRejectedNotice && bookingStatus !== "approved";
+
   return (
     <>
+      {showPendingBanner ? (
+        <div
+          className="flex flex-row-reverse items-start justify-between gap-3 rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-4 py-3 text-right shadow-soft"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex min-w-0 flex-1 flex-row-reverse items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-emerald-950">בקשה נשלחה וממתינה לאישור</p>
+              <p className="mt-0.5 text-xs leading-snug text-emerald-900">
+                שלחנו ל-{sitterName} בקשת תיאום משמרת. תקבלו עדכון כשתאשר או תדחה.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {actionError ? (
         <p
           className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-right text-xs text-rose-900"
@@ -81,6 +193,36 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
           </span>
         </button>
 
+        {showRejectedNotice ? (
+          <div
+            className="rounded-2xl border-2 border-rose-400 bg-rose-50 px-4 py-3.5 text-right shadow-sm"
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="flex flex-row-reverse items-start justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingBookingId(null);
+                  setBookingStatus(null);
+                }}
+                className="shrink-0 rounded-full p-1 text-rose-900 transition hover:bg-rose-100"
+                aria-label="סגור"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-bold leading-snug text-rose-950">
+                  {bookingStatus === "cancelled" ? "בקשת המשמרת בוטלה." : REJECTION_NOTICE}
+                </p>
+                <p className="mt-1 text-xs leading-snug text-rose-900">
+                  ניתן לנסות תאריך או שעה אחרים, או לבחור בייביסיטר אחרת.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={handleBookShift}
@@ -103,9 +245,7 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
         sitterId={sitterId}
         sitterName={sitterName}
         onClose={() => setBookModalOpen(false)}
-        onSuccess={() => {
-          onBookingSuccess?.();
-        }}
+        onSuccess={handleBookingSuccess}
       />
     </>
   );

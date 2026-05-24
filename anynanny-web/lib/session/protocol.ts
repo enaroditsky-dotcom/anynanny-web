@@ -23,6 +23,8 @@ export type SessionProtocolState = {
   endedAtMs?: number;
   finalElapsedSeconds?: number;
   finalAmountNis?: number;
+  /** Linked shift booking (set when session is created / loaded from DB). */
+  linkedBookingId?: string;
   supabaseSessionId?: string;
   /** Parent requested end (`parent_end_requested_at` set); nanny must confirm to finalize. */
   endRequested?: boolean;
@@ -51,6 +53,8 @@ export type SupabaseSessionRow = {
   parent_end_requested_at?: string | null;
   /** When sitter confirms end (new column). */
   sitter_end_confirmed_at?: string | null;
+  /** FK to `bookings.id` when parent starts a session for a booked shift. */
+  booking_id?: string | null;
 };
 
 export function formatElapsed(seconds: number): string {
@@ -109,12 +113,18 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
       : row.status === "active"
         ? "active"
         : "idle";
+  const linkedBookingId =
+    row.booking_id != null && String(row.booking_id).trim() !== ""
+      ? String(row.booking_id)
+      : undefined;
+
   return {
     status: mappedStatus,
     parentStartedAtMs: startedMs,
     endedAtMs: endedMs,
     finalElapsedSeconds: row.final_elapsed_seconds ?? undefined,
     finalAmountNis: row.final_amount_nis ?? undefined,
+    linkedBookingId,
     supabaseSessionId: String(row.id),
     endRequested: Boolean(row.parent_end_requested_at),
     parentEndRequestedAtMs: parentEndReqMs,

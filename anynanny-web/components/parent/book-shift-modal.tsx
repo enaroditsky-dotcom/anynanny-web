@@ -4,13 +4,12 @@ import type { FormEvent } from "react";
 import { Calendar, CheckCircle2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { createBooking } from "@/lib/bookings/create-booking";
+import { PARENT_SEARCH_HOUR_OPTIONS } from "@/lib/sitter/parent-search-filters";
 import {
-  createBooking,
-  PARENT_SEARCH_HOUR_OPTIONS,
-  PARENT_SEARCH_MINUTE_OPTIONS,
-  validateShiftWindow,
-  type ParentSearchMinute
-} from "@/lib/bookings/create-booking";
+  BOOK_SHIFT_MINUTE_OPTIONS,
+  validateShiftWindow
+} from "@/lib/shift-requests/create-shift-request";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type BookShiftModalProps = {
@@ -28,9 +27,9 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
   const [bookingDate, setBookingDate] = useState("");
   const [endBookingDate, setEndBookingDate] = useState("");
   const [startHour, setStartHour] = useState("");
-  const [startMinute, setStartMinute] = useState<ParentSearchMinute | "">("");
+  const [startMinute, setStartMinute] = useState("");
   const [endHour, setEndHour] = useState("");
-  const [endMinute, setEndMinute] = useState<ParentSearchMinute | "">("");
+  const [endMinute, setEndMinute] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -51,14 +50,6 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
     if (!open) return;
     resetForm();
   }, [open, resetForm]);
-
-  useEffect(() => {
-    if (!success) return;
-    const timer = window.setTimeout(() => {
-      onClose();
-    }, 2200);
-    return () => window.clearTimeout(timer);
-  }, [success, onClose]);
 
   const handleClose = useCallback(() => {
     if (busy) return;
@@ -184,6 +175,19 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
               />
             </label>
 
+            <label className="block text-right text-sm font-semibold text-[#001F3F]">
+              תאריך סיום
+              <input
+                type="date"
+                required
+                min={bookingDate || minDate}
+                value={endBookingDate}
+                disabled={busy}
+                onChange={(ev) => setEndBookingDate(ev.target.value)}
+                className="mt-1.5 block min-h-12 w-full rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-3 py-2.5 text-sm tabular-nums shadow-inner disabled:opacity-50"
+              />
+            </label>
+
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <fieldset className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3">
                 <legend className="px-1 text-right text-sm font-semibold text-[#001F3F]">שעת התחלה</legend>
@@ -208,11 +212,11 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
                     aria-label="שעת התחלה — דקות"
                     value={startMinute}
                     disabled={busy}
-                    onChange={(ev) => setStartMinute(ev.target.value as ParentSearchMinute)}
+                    onChange={(ev) => setStartMinute(ev.target.value)}
                     className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
                   >
                     <option value="">דק׳</option>
-                    {PARENT_SEARCH_MINUTE_OPTIONS.map((m) => (
+                    {BOOK_SHIFT_MINUTE_OPTIONS.map((m) => (
                       <option key={m} value={m}>
                         {m}
                       </option>
@@ -221,20 +225,7 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
                 </div>
               </fieldset>
 
-              <div className="space-y-3">
-                <label className="block text-right text-sm font-semibold text-[#001F3F]">
-                  תאריך סיום
-                  <input
-                    type="date"
-                    required
-                    min={bookingDate || minDate}
-                    value={endBookingDate}
-                    disabled={busy}
-                    onChange={(ev) => setEndBookingDate(ev.target.value)}
-                    className="mt-1.5 block min-h-12 w-full rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-3 py-2.5 text-sm tabular-nums shadow-inner disabled:opacity-50"
-                  />
-                </label>
-                <fieldset className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3">
+              <fieldset className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3">
                 <legend className="px-1 text-right text-sm font-semibold text-[#001F3F]">שעת סיום</legend>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <select
@@ -257,11 +248,11 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
                     aria-label="שעת סיום — דקות"
                     value={endMinute}
                     disabled={busy}
-                    onChange={(ev) => setEndMinute(ev.target.value as ParentSearchMinute)}
+                    onChange={(ev) => setEndMinute(ev.target.value)}
                     className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
                   >
                     <option value="">דק׳</option>
-                    {PARENT_SEARCH_MINUTE_OPTIONS.map((m) => (
+                    {BOOK_SHIFT_MINUTE_OPTIONS.map((m) => (
                       <option key={m} value={m}>
                         {m}
                       </option>
@@ -269,7 +260,6 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
                   </select>
                 </div>
               </fieldset>
-              </div>
             </div>
 
             {error ? (

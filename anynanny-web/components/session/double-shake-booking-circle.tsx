@@ -3,6 +3,7 @@
 import { ParentDoubleShakeIdleCircle } from "@/components/session/parent-double-shake-idle-circle";
 import { SitterDoubleShakeIdleCircle } from "@/components/session/sitter-double-shake-idle-circle";
 import { DoubleShakeCircleSlot, DoubleShakeShiftPanel } from "@/components/session/double-shake-circle-button";
+import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
 import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
 
 type BaseProps = {
@@ -34,12 +35,14 @@ export function DoubleShakeBookingCircle(props: DoubleShakeBookingCircleProps) {
       <DoubleShakeCircleSlot>
         {props.role === "parent" ? (
           <ParentDoubleShakeIdleCircle
+            key={bookingLiveSyncKey(booking)}
             booking={booking}
             ready={ready}
             onStartShift={props.onStartShift}
           />
         ) : (
           <SitterDoubleShakeIdleCircle
+            key={bookingLiveSyncKey(booking)}
             booking={booking}
             ready={ready}
             onBookingUpdated={props.onBookingUpdated}

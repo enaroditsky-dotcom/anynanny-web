@@ -1,4 +1,8 @@
 import type { BookingRow, BookingStatus } from "@/lib/bookings/constants";
+import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/use-shift-activation-status";
+
+/** Activation lead time — Double-Shake circle wakes up this long before scheduled start. */
+export const SHIFT_ACTIVATION_LEAD_MS = 10 * 60 * 1000;
 
 /** Booking row is closed — never show live shift / Double-Shake controls. */
 export const BOOKING_TERMINAL_STATUSES: readonly BookingStatus[] = [
@@ -19,44 +23,77 @@ export const BOOKING_PENDING_START_STATUSES: readonly BookingStatus[] = [
   "sitter_started"
 ];
 
-export function isBookingTerminalStatus(status: BookingStatus | string): boolean {
-  return BOOKING_TERMINAL_STATUSES.includes(status as BookingStatus);
+export function isBookingTerminalStatus(status: BookingStatusInput): boolean {
+  const normalized = normalizeBookingStatus(status);
+  return normalized ? BOOKING_TERMINAL_STATUSES.includes(normalized) : false;
 }
 
-export function isBookingLiveShiftStatus(status: BookingStatus | string): boolean {
-  return BOOKING_LIVE_SHIFT_STATUSES.includes(status as BookingStatus);
+export function isBookingLiveShiftStatus(status: BookingStatusInput): boolean {
+  const normalized = normalizeBookingStatus(status);
+  return normalized ? BOOKING_LIVE_SHIFT_STATUSES.includes(normalized) : false;
 }
 
-export function isBookingPendingStartStatus(status: BookingStatus | string): boolean {
-  return BOOKING_PENDING_START_STATUSES.includes(status as BookingStatus);
+export function isBookingPendingStartStatus(status: BookingStatusInput): boolean {
+  const normalized = normalizeBookingStatus(status);
+  return normalized ? BOOKING_PENDING_START_STATUSES.includes(normalized) : false;
 }
 
 export function isNowWithinScheduledBookingWindow(
   booking: Pick<BookingRow, "start_time" | "end_time">,
-  nowMs = Date.now()
+  nowMs = new Date().getTime()
 ): boolean {
   const startMs = new Date(booking.start_time).getTime();
   const endMs = new Date(booking.end_time).getTime();
-  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return false;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return false;
   return nowMs >= startMs && nowMs <= endMs;
 }
 
 /**
+ * Whether the Double-Shake control should be Enabled by the wall clock.
+ * Uses explicit epoch-ms math via `getTime()` so the comparison is identical
+ * across the user's local clock (e.g. Israel UTC+3) and Supabase `timestamptz`:
+ *
+ *   diffMs = new Date(p_start_time).getTime() - new Date().getTime();
+ *
+ * Active when `diffMs <= 600_000` (10 min) AND `now <= end_time`. This single
+ * inequality covers:
+ *   1. Within the 10-min lead window before scheduled start.
+ *   2. After scheduled start, while shift hasn't been activated yet.
+ *   3. "Now-for-now" shifts created ≤10 min away from the current moment.
+ */
+export function isNowWithinShiftActivationWindow(
+  booking: Pick<BookingRow, "start_time" | "end_time">,
+  nowMs = new Date().getTime()
+): boolean {
+  const startMs = new Date(booking.start_time).getTime();
+  const endMs = new Date(booking.end_time).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return false;
+
+  const diffMs = startMs - nowMs;
+  return diffMs <= SHIFT_ACTIVATION_LEAD_MS && nowMs <= endMs;
+}
+
+/**
  * Whether today's linked booking should drive Double-Shake / live timer UI.
- * Live statuses use DB status only; pending-start also requires the scheduled window.
+ * Live statuses use DB status only. Pending-start rows are included for the whole
+ * calendar day so the circle can show a pre-window countdown; button activation
+ * is gated separately via {@link isNowWithinShiftActivationWindow}.
  */
 export function isBookingEligibleForLiveShiftUi(
-  booking: Pick<BookingRow, "status" | "start_time" | "end_time">,
-  nowMs = Date.now()
+  booking: Pick<BookingRow, "status">
 ): boolean {
   if (isBookingTerminalStatus(booking.status)) return false;
+
+  if (booking.status === "pending") {
+    return true;
+  }
 
   if (isBookingLiveShiftStatus(booking.status)) {
     return true;
   }
 
   if (isBookingPendingStartStatus(booking.status)) {
-    return isNowWithinScheduledBookingWindow(booking, nowMs);
+    return true;
   }
 
   return false;

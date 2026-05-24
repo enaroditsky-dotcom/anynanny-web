@@ -2,12 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 import { validateShiftWindow } from "@/lib/shift-requests/create-shift-request";
 
-export { validateShiftWindow };
-export {
-  PARENT_SEARCH_HOUR_OPTIONS,
-  PARENT_SEARCH_MINUTE_OPTIONS,
-  type ParentSearchMinute
-} from "@/lib/shift-requests/create-shift-request";
+export { validateShiftWindow } from "@/lib/shift-requests/create-shift-request";
 
 export async function createBooking(
   supabase: SupabaseClient,

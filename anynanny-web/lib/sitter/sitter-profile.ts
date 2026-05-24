@@ -1,8 +1,34 @@
 /** Types & validation for `public.sitter_profiles`. */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeWorkingCities, type IsraelCity } from "@/lib/geo/israel-cities";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 
 export const SITTER_PROFILES_TABLE = "sitter_profiles" as const;
+
+/** Column on sitter profile row storing canonical city names (`ISRAEL_CITIES`). */
+export const SITTER_WORKING_CITIES_COLUMN = "working_cities" as const;
+
+/**
+ * PostgREST table for sitter extended profile rows.
+ * Default: `sitter_profiles`. Override only if your project uses a different linked table:
+ *   NEXT_PUBLIC_SITTER_PROFILES_TABLE=sitter_profiles
+ */
+export function getSitterProfilesTable(): string {
+  const configured = process.env.NEXT_PUBLIC_SITTER_PROFILES_TABLE?.trim();
+  return configured || SITTER_PROFILES_TABLE;
+}
+
+export function formatSitterWorkingCitiesError(message: string | null | undefined): string {
+  if (!message) return "שמירת אזורי העבודה נכשלה.";
+  if (isPostgrestMissingColumnError(message, SITTER_WORKING_CITIES_COLUMN)) {
+    return (
+      `עמודת ${SITTER_WORKING_CITIES_COLUMN} חסרה בטבלת ${getSitterProfilesTable()}. ` +
+      "הריצו sql/add_sitter_profiles_working_cities.sql ב-Supabase."
+    );
+  }
+  return message;
+}
 
 /**
  * Column linking `sitter_profiles` to `auth.users`.
@@ -36,6 +62,8 @@ export type SitterProfileRow = {
   birth_country: string | null;
   aliyah_year: number | null;
   address_full: string | null;
+  /** Canonical city names from `ISRAEL_CITIES` — parent search filters via `.contains`. */
+  working_cities?: string[] | null;
   military_service: string | null;
   referee_phone_1: string | null;
   referee_phone_2: string | null;
@@ -75,6 +103,8 @@ export type SitterProfilePublic = {
   aliyah_year: number | null;
   preferred_ages: string | null;
   has_car: boolean;
+  /** Canonical cities from `ISRAEL_CITIES` — public on profile card. */
+  working_cities?: IsraelCity[];
   homework_help: boolean;
   light_cooking: boolean;
   updated_at: string;
@@ -97,6 +127,8 @@ export type PublicSitterSearchCard = {
   nanny_serial?: string | null;
   years_experience: number | null;
   has_car: boolean;
+  /** Canonical cities from `ISRAEL_CITIES` — shown on search cards. */
+  working_cities?: IsraelCity[];
   bio: string | null;
   hourly_rate_nis: number | null;
   avg_rating: number | null;
@@ -118,6 +150,7 @@ export function isSitterProfileComplete(p: Partial<SitterProfileRow>): boolean {
   if (!String(p.bio ?? "").trim()) return false;
   if (p.years_experience == null || Number(p.years_experience) < 0) return false;
   if (p.hourly_rate_nis == null || Number(p.hourly_rate_nis) <= 0) return false;
+  if (normalizeWorkingCities(p.working_cities).length === 0) return false;
   return true;
 }
 

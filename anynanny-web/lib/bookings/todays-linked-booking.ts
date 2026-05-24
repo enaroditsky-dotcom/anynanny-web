@@ -4,11 +4,13 @@ import { isBookingEligibleForLiveShiftUi } from "@/lib/bookings/booking-shift-ui
 import { todayDateISO } from "@/lib/bookings/booking-date-utils";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
+import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/use-shift-activation-status";
 import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
-/** Statuses that keep parent/sitter linked for today's Double-Shake flow. */
+/** Statuses that keep parent/sitter linked for today's Double-Shake flow (incl. pending for preview window). */
 export const TODAYS_LINKED_BOOKING_STATUSES: BookingStatus[] = [
+  "pending",
   "approved",
   "sitter_started",
   "parent_started",
@@ -76,7 +78,10 @@ export async function fetchTodaysLinkedBooking(
     return { booking: null, error: null };
   }
 
-  const booking = row as BookingRow;
+  const booking: BookingRow = {
+    ...(row as BookingRow),
+    status: normalizeBookingStatus((row as BookingRow).status as BookingStatusInput) ?? "pending"
+  };
 
   if (!isBookingEligibleForLiveShiftUi(booking)) {
     return { booking: null, error: null };

@@ -13,6 +13,12 @@ export default function SitterPersonalPage() {
         <h2 className="text-right text-sm font-bold text-navy-header">קיצורי דרך</h2>
         <div className="mt-3 flex flex-wrap justify-end gap-2 text-sm">
           <Link
+            href="/sitter/profile"
+            className="rounded-lg border border-navy-header/15 bg-[#FDFBF6] px-3 py-1.5 font-semibold text-navy-header transition hover:bg-white"
+          >
+            פרופיל מקצועי
+          </Link>
+          <Link
             href="/sitter/dashboard"
             className="rounded-lg border border-navy-header/15 bg-[#FDFBF6] px-3 py-1.5 font-semibold text-navy-header transition hover:bg-white"
           >

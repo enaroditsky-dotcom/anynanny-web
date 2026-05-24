@@ -16,6 +16,8 @@ export const SITTER_FORCE_END_ADMIN_NOTE =
 export const SITTER_FORCE_END_SUCCESS_MESSAGE =
   "המשמרת נסגרה ודווחה לבדיקה. האפליקציה שוחררה" as const;
 
+export type BookingPaymentStatus = "unpaid" | "pending_checkout" | "paid";
+
 export type BookingRow = {
   id: string;
   parent_id: string;
@@ -28,6 +30,9 @@ export type BookingRow = {
   actual_end_time?: string | null;
   requires_admin_review?: boolean;
   admin_notes?: string | null;
+  payment_status?: BookingPaymentStatus;
+  paid_at?: string | null;
+  stripe_checkout_session_id?: string | null;
   created_at: string;
   updated_at: string;
 };

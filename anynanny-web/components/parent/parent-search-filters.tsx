@@ -11,6 +11,7 @@ import {
   type ParentSearchMinRating,
   type ParentSearchTransportFilter
 } from "@/lib/sitter/parent-search-filters";
+import { ISRAEL_CITIES, type IsraelCity } from "@/lib/geo/israel-cities";
 
 const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] = [
   { value: 0, label: "0+ שנים" },
@@ -97,11 +98,13 @@ export function ParentSearchFiltersBar({
         partial.searchStartHour !== undefined ? String(partial.searchStartHour) : filters.searchStartHour ?? "",
       searchStartMinute:
         partial.searchStartMinute !== undefined
-          ? String(partial.searchStartMinute)
+          ? (String(partial.searchStartMinute) as ParentSearchMinute | "")
           : filters.searchStartMinute ?? "",
       searchEndHour: partial.searchEndHour !== undefined ? String(partial.searchEndHour) : filters.searchEndHour ?? "",
       searchEndMinute:
-        partial.searchEndMinute !== undefined ? String(partial.searchEndMinute) : filters.searchEndMinute ?? ""
+        partial.searchEndMinute !== undefined
+          ? (String(partial.searchEndMinute) as ParentSearchMinute | "")
+          : filters.searchEndMinute ?? ""
     });
   };
 
@@ -129,6 +132,24 @@ export function ParentSearchFiltersBar({
           value={filters.searchSitterSerial}
           onChange={(e) => patch({ searchSitterSerial: e.target.value })}
         />
+      </label>
+
+      <label className="block text-right text-sm text-navy-900">
+        עיר חיפוש
+        <select
+          className="mt-1 block min-h-11 w-full rounded-xl border border-navy-header/20 bg-[#FDFBF6] px-3 py-2 text-sm"
+          value={filters.selectedCity}
+          onChange={(e) =>
+            patch({ selectedCity: (e.target.value || "") as IsraelCity | "" })
+          }
+        >
+          <option value="">בחר עיר חיפוש...</option>
+          {ISRAEL_CITIES.map((city) => (
+            <option key={city} value={city}>
+              {city}
+            </option>
+          ))}
+        </select>
       </label>
 
       <fieldset className="space-y-3 rounded-xl border border-navy-header/10 bg-[#FDFBF6]/60 p-3">
@@ -174,7 +195,7 @@ export function ParentSearchFiltersBar({
           <p className="text-right text-xs text-slate-500">בחרו תאריך ואז הגדירו טווח שעות (פורמט 24 שעות).</p>
         ) : (
           <p className="text-right text-xs text-slate-500">
-            שעות ריקות: התחלה 00:00, סיום 23:45. חיפוש בודק זמינות לכל הטווח.
+            שעות ריקות: התחלה 00:00, סיום 23:59. חיפוש בודק זמינות לכל הטווח.
           </p>
         )}
       </fieldset>

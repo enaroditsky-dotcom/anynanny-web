@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
   SITTER_PROFILES_TABLE,
   type PublicSitterReview,
@@ -71,6 +72,12 @@ function pickBool(row: Record<string, unknown>, ...keys: string[]): boolean {
   return false;
 }
 
+function pickWorkingCities(row: Record<string, unknown>): SitterProfilePublic["working_cities"] {
+  const raw = row.working_cities ?? row.workingCities;
+  if (raw == null) return [];
+  return normalizeWorkingCities(raw);
+}
+
 /**
  * Normalize `get_sitter_profile_public` / `sitter_profiles` row into UI state.
  * Accepts RPC aliases: years_of_experience, transportation_mode, camelCase drift.
@@ -110,6 +117,7 @@ export function normalizeSitterProfilePublic(
     aliyah_year: pickNumber(raw, "aliyah_year", "aliyahYear"),
     preferred_ages: pickString(raw, "preferred_ages", "preferredAges"),
     has_car,
+    working_cities: pickWorkingCities(raw),
     homework_help: pickBool(raw, "homework_help", "homeworkHelp"),
     light_cooking: pickBool(raw, "light_cooking", "lightCooking"),
     updated_at: pickString(raw, "updated_at", "updatedAt") ?? new Date().toISOString(),
@@ -172,7 +180,7 @@ export async function fetchParentSitterProfile(
     const { data: row, error: rowErr } = await supabase
       .from(SITTER_PROFILES_TABLE)
       .select(
-        "id, full_name, show_full_name, bio, hourly_rate_nis, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages"
+        "id, full_name, show_full_name, bio, hourly_rate_nis, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages, working_cities"
       )
       .eq("id", sitterId)
       .eq("is_public", true)

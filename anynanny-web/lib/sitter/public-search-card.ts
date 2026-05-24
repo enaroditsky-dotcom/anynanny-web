@@ -1,4 +1,5 @@
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
+import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import { getSitterProfilesUserColumn } from "@/lib/sitter/sitter-profile";
 
 /** Canonical column: `public.sitter_profiles.hourly_rate_nis` (app + RPC). */
@@ -43,9 +44,11 @@ export function normalizePublicSearchCard(raw: unknown): PublicSitterSearchCard 
     nanny_serial: pickString(row, "nanny_serial", "nannySerial"),
     years_experience: pickNumber(row, "years_experience", "yearsExperience"),
     has_car: row.has_car === true || row.has_car === "true",
+    working_cities: normalizeWorkingCities(row.working_cities ?? row.workingCities),
     bio: pickString(row, "bio"),
     /** Only `sitter_profiles.hourly_rate_nis` — do not map legacy `hourly_rate` (may hold stale test values). */
     hourly_rate_nis: pickNumber(row, "hourly_rate_nis"),
+    /** Same field names as `get_sitter_profile_public` / profile page. */
     avg_rating: pickNumber(row, "avg_rating", "avgRating"),
     rating_count: pickNumber(row, "rating_count", "ratingCount") ?? 0,
     avatar_url: pickString(row, "avatar_url", "avatarUrl")
@@ -102,9 +105,43 @@ export function transportBadgeLabel(hasCar: boolean): string {
   return hasCar ? "עצמאית" : "צריכה מונית";
 }
 
+export function formatSearchCardWorkingCities(cities: readonly string[] | null | undefined): string {
+  const normalized = normalizeWorkingCities(cities ?? []);
+  if (normalized.length === 0) return "לא הוגדרו אזורי שירות";
+  return normalized.join(", ");
+}
+
 export function bioExcerpt(text: string | null | undefined, max = 120): string {
   if (!text) return "";
   const t = text.trim();
   if (!t) return "";
   return t.length <= max ? t : `${t.slice(0, max)}…`;
+}
+
+/** True when avg is a real rating (not null, not zero). */
+export function isDisplayableSearchRating(avg: number | null | undefined): boolean {
+  if (avg == null || !Number.isFinite(Number(avg))) return false;
+  return Number(avg) > 0;
+}
+
+/** Resolve rating fields — matches profile page (`avg_rating` + `rating_count`). */
+export function resolveSearchCardRating(card: PublicSitterSearchCard): {
+  avg: number | null;
+  count: number;
+} {
+  const avgRaw = card.avg_rating;
+  const avg =
+    avgRaw != null && Number.isFinite(Number(avgRaw)) ? Number(avgRaw) : null;
+  const countRaw = card.rating_count ?? 0;
+  const count = Number.isFinite(Number(countRaw))
+    ? Math.max(0, Math.floor(Number(countRaw)))
+    : 0;
+  return { avg, count };
+}
+
+export function formatSearchCardRatingLine(card: PublicSitterSearchCard): string {
+  const { avg, count } = resolveSearchCardRating(card);
+  if (!isDisplayableSearchRating(avg)) return "אין דירוג עדיין";
+  if (count > 0) return `${avg!.toFixed(1)} ★ (${count})`;
+  return `${avg!.toFixed(1)} ★`;
 }

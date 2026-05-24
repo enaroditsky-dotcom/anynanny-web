@@ -1,3 +1,12 @@
+/** True when Supabase/PostgREST rejected the request (400) — caller should skip setState / retries. */
+export function isSupabaseBadRequestError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const record = error as { status?: number; code?: string; message?: string };
+  if (record.status === 400) return true;
+  const message = (record.message ?? "").toLowerCase();
+  return message.includes("400") || message.includes("bad request");
+}
+
 /** Maps PostgREST / missing-column errors to a short Hebrew message (no raw DB text). */
 export function friendlySupabaseSessionError(error: unknown): string {
   const raw =

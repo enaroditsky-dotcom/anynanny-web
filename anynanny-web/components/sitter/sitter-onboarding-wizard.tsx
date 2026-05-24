@@ -6,16 +6,19 @@ import { useEffect, useState } from "react";
 import {
   isSitterProfileComplete,
   SITTER_PROFILES_TABLE,
-  SITTER_PROFILES_USER_COLUMN
+  SITTER_PROFILES_USER_COLUMN,
+  SITTER_WORKING_CITIES_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
+import { normalizeWorkingCities, type IsraelCity } from "@/lib/geo/israel-cities";
 
 export const SITTER_PROFILE_SAVED_NAV_FLAG = "anynanny_sitter_profile_saved_nav";
 
 const inputClass =
   "mt-1 block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 p-2 text-right text-sm";
 
-/** DB columns: full_name, bio, years_experience, hourly_rate_nis (+ updated_at). nanny_id_number is DB-trigger only. */
+/** DB columns: full_name, bio, years_experience, hourly_rate_nis, working_cities (+ updated_at). */
 type SitterOnboardingWizardProps = {
   /** Fires after a successful upsert (before redirect) so dashboard can refresh nanny ID badge. */
   onSaved?: () => void;
@@ -33,6 +36,7 @@ export function SitterOnboardingWizard({ onSaved }: SitterOnboardingWizardProps 
   const [bio, setBio] = useState("");
   const [yearsExperience, setYearsExperience] = useState("");
   const [hourlyRateNis, setHourlyRateNis] = useState("");
+  const [workingCities, setWorkingCities] = useState<IsraelCity[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +65,7 @@ export function SitterOnboardingWizard({ onSaved }: SitterOnboardingWizardProps 
         const fk = SITTER_PROFILES_USER_COLUMN;
         const { data: row, error: fetchErr } = await supabase
           .from(SITTER_PROFILES_TABLE)
-          .select(`full_name, bio, years_experience, hourly_rate_nis, ${fk}`)
+          .select(`full_name, bio, years_experience, hourly_rate_nis, ${SITTER_WORKING_CITIES_COLUMN}, ${fk}`)
           .eq(fk, user.id)
           .maybeSingle();
 
@@ -86,6 +90,7 @@ export function SitterOnboardingWizard({ onSaved }: SitterOnboardingWizardProps 
           if (r.hourly_rate_nis != null && r.hourly_rate_nis !== "") {
             setHourlyRateNis(String(r.hourly_rate_nis));
           }
+          setWorkingCities(normalizeWorkingCities(r[SITTER_WORKING_CITIES_COLUMN]));
         }
       } catch {
         if (!cancelled) setLoadHint("טעינת הפרופיל נכשלה; אפשר לנסות שמירה בכל זאת.");
@@ -128,7 +133,8 @@ export function SitterOnboardingWizard({ onSaved }: SitterOnboardingWizardProps 
         full_name: fullName.trim() || null,
         bio: bio.trim() || null,
         years_experience: years,
-        hourly_rate_nis: rate
+        hourly_rate_nis: rate,
+        [SITTER_WORKING_CITIES_COLUMN]: workingCities
       };
 
       const complete = isSitterProfileComplete({ ...profileFields, id: user.id });
@@ -260,6 +266,11 @@ export function SitterOnboardingWizard({ onSaved }: SitterOnboardingWizardProps 
             suppressHydrationWarning
           />
         </label>
+        <IsraelCitiesMultiSelect
+          value={workingCities}
+          onChange={setWorkingCities}
+          disabled={busy}
+        />
         <button
           type="submit"
           disabled={busy}
