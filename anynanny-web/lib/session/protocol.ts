@@ -1,19 +1,20 @@
 "use client";
 
-import { DEFAULT_HOURLY_RATE, SESSIONS_TABLE } from "@/lib/billing/session-types";
-
-export const HOURLY_RATE = DEFAULT_HOURLY_RATE;
-export { SESSIONS_TABLE };
-
+export const HOURLY_RATE = 50;
 export const SESSION_STATE_KEY = "anynanny_payer_session_v1";
-export const SESSION_STATUS_PENDING = "pending";
+export const SESSIONS_TABLE = "sessions";
+
+/** DB session lifecycle — parent opens shift awaiting sitter confirmation. */
 export const SESSION_STATUS_PENDING_SITTER_APPROVAL = "pending_sitter_approval";
 
-/** Status strings that mean “waiting for sitter to confirm start”. */
+/** Parent cancelled before sitter confirmed start (or withdrew a pending request). */
+export const SESSION_STATUS_CANCELLED = "cancelled";
+
+/** Status strings that mean “waiting for sitter to confirm start” (constraint removed — include legacy `pending`). */
 export const SESSION_PENDING_START_STATUSES: readonly string[] = [
-  SESSION_STATUS_PENDING,
   SESSION_STATUS_PENDING_SITTER_APPROVAL,
-  "pending"
+  "pending",
+  "pending_confirmation"
 ];
 
 export type SessionProtocolState = {
@@ -22,14 +23,15 @@ export type SessionProtocolState = {
   endedAtMs?: number;
   finalElapsedSeconds?: number;
   finalAmountNis?: number;
-  hourlyRate?: number;
+  /** Linked shift booking (set when session is created / loaded from DB). */
+  linkedBookingId?: string;
   supabaseSessionId?: string;
-  /** Parent requested end (`end_time_requested` / legacy `parent_end_requested_at`). */
+  /** Parent requested end (`parent_end_requested_at` set); nanny must confirm to finalize. */
   endRequested?: boolean;
   parentEndRequestedAtMs?: number;
-  /** Parent confirmed end (`end_time_confirmed_by_parent`). */
+  /** Sitter finalized end (`sitter_end_confirmed_at` / legacy `end_confirmed`). */
   endConfirmed?: boolean;
-  /** Sitter confirmed start (`start_time_confirmed_by_sitter` / legacy `start_confirmed`). */
+  /** Sitter confirmed start (mirrors DB start_confirmed when active). */
   startConfirmed?: boolean;
 };
 
@@ -41,13 +43,6 @@ export type SupabaseSessionRow = {
   user_id?: string | null;
   sitter_id?: string | null;
   status: string;
-  hourly_rate?: number | null;
-  start_time_requested?: string | null;
-  start_time_confirmed_by_sitter?: string | null;
-  end_time_requested?: string | null;
-  end_time_confirmed_by_parent?: string | null;
-  total_minutes?: number | null;
-  total_amount?: number | null;
   start_time?: string | null;
   end_time?: string | null;
   final_elapsed_seconds?: number | null;
@@ -56,8 +51,10 @@ export type SupabaseSessionRow = {
   end_confirmed?: boolean | null;
   start_confirmed?: boolean | null;
   parent_end_requested_at?: string | null;
-  /** @deprecated legacy sitter end confirm */
+  /** When sitter confirms end (new column). */
   sitter_end_confirmed_at?: string | null;
+  /** FK to `bookings.id` when parent starts a session for a booked shift. */
+  booking_id?: string | null;
 };
 
 export function formatElapsed(seconds: number): string {
@@ -98,52 +95,40 @@ export function persistSessionState(next: SessionProtocolState) {
 
 export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefined): SessionProtocolState | null {
   if (!row) return null;
+  const startedMs = row.start_time ? new Date(row.start_time).getTime() : undefined;
+  const endedMs = row.end_time ? new Date(row.end_time).getTime() : undefined;
+  const parentEndReqMs = row.parent_end_requested_at
+    ? new Date(row.parent_end_requested_at).getTime()
+    : undefined;
+  if (row.status === SESSION_STATUS_CANCELLED) {
+    return { status: "idle" };
+  }
 
-  const billableStartIso =
-    row.start_time_confirmed_by_sitter ?? row.start_time ?? null;
-  const startedMs = billableStartIso ? new Date(billableStartIso).getTime() : undefined;
+  const isPendingStart = SESSION_PENDING_START_STATUSES.includes(row.status);
 
-  const endConfirmedIso =
-    row.end_time_confirmed_by_parent ?? row.end_time ?? row.sitter_end_confirmed_at ?? null;
-  const endedMs = endConfirmedIso ? new Date(endConfirmedIso).getTime() : undefined;
-
-  const endRequestedIso = row.end_time_requested ?? row.parent_end_requested_at ?? null;
-  const parentEndReqMs = endRequestedIso ? new Date(endRequestedIso).getTime() : undefined;
-
-  const hourlyRate = Number(row.hourly_rate);
-  const finalAmount =
-    row.total_amount != null
-      ? Number(row.total_amount)
-      : row.final_amount_nis != null
-        ? Number(row.final_amount_nis)
-        : undefined;
-
-  const finalSeconds =
-    row.total_minutes != null
-      ? row.total_minutes * 60
-      : row.final_elapsed_seconds ?? undefined;
-
-  const mappedStatus: SessionProtocolState["status"] =
-    SESSION_PENDING_START_STATUSES.includes(row.status)
-      ? "parent_initiated"
-      : row.status === "completed"
-        ? "ended"
-        : row.status === "active"
-          ? "active"
-          : "idle";
+  const mappedStatus: SessionProtocolState["status"] = isPendingStart
+    ? "parent_initiated"
+    : row.status === "completed"
+      ? "ended"
+      : row.status === "active"
+        ? "active"
+        : "idle";
+  const linkedBookingId =
+    row.booking_id != null && String(row.booking_id).trim() !== ""
+      ? String(row.booking_id)
+      : undefined;
 
   return {
     status: mappedStatus,
     parentStartedAtMs: startedMs,
     endedAtMs: endedMs,
-    finalElapsedSeconds: finalSeconds,
-    finalAmountNis: finalAmount,
-    hourlyRate: Number.isFinite(hourlyRate) && hourlyRate > 0 ? hourlyRate : HOURLY_RATE,
+    finalElapsedSeconds: row.final_elapsed_seconds ?? undefined,
+    finalAmountNis: row.final_amount_nis ?? undefined,
+    linkedBookingId,
     supabaseSessionId: String(row.id),
-    endRequested: Boolean(endRequestedIso),
+    endRequested: Boolean(row.parent_end_requested_at),
     parentEndRequestedAtMs: parentEndReqMs,
-    endConfirmed: Boolean(row.end_time_confirmed_by_parent) || Boolean(row.end_confirmed),
-    startConfirmed:
-      Boolean(row.start_time_confirmed_by_sitter) || Boolean(row.start_confirmed)
+    endConfirmed: Boolean(row.sitter_end_confirmed_at) || Boolean(row.end_confirmed),
+    startConfirmed: Boolean(row.start_confirmed)
   };
 }

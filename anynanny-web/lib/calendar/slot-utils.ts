@@ -9,7 +9,17 @@ export function slotIndexToLabel(index: number): string {
 }
 
 export function parseDateISO(date: string): Date {
-  const [y, mo, d] = date.split("-").map(Number);
+  if (!date || typeof date !== "string") {
+    return new Date(Number.NaN);
+  }
+  const parts = date.split("-");
+  if (parts.length < 3) {
+    return new Date(Number.NaN);
+  }
+  const [y, mo, d] = parts.map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) {
+    return new Date(Number.NaN);
+  }
   return new Date(y, mo - 1, d, 0, 0, 0, 0);
 }
 
@@ -21,5 +31,11 @@ export function slotStartOnDay(dateISO: string, slotIndex: number): Date {
 }
 
 export function isSlotPast(dateISO: string, slotIndex: number, now: Date = new Date()): boolean {
-  return slotStartOnDay(dateISO, slotIndex).getTime() < now.getTime();
+  try {
+    const start = slotStartOnDay(dateISO, slotIndex);
+    if (Number.isNaN(start.getTime())) return true;
+    return start.getTime() < now.getTime();
+  } catch {
+    return true;
+  }
 }

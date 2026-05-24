@@ -9,11 +9,7 @@ async function ensureFile(filePath: string, fallback: string) {
   try {
     await fs.access(filePath);
   } catch {
-    try {
-      await fs.writeFile(filePath, fallback, "utf8");
-    } catch {
-      /* read-only FS — reads fall back to empty arrays */
-    }
+    await fs.writeFile(filePath, fallback, "utf8");
   }
 }
 
@@ -24,8 +20,9 @@ async function ensureStorage() {
 
 export async function listRatings(): Promise<NannyRating[]> {
   await ensureStorage();
+  const raw = await fs.readFile(RATINGS_FILE, "utf8");
+
   try {
-    const raw = await fs.readFile(RATINGS_FILE, "utf8");
     const parsed = JSON.parse(raw) as NannyRating[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -41,8 +38,9 @@ export async function appendRating(entry: NannyRating): Promise<void> {
 
 export async function listProfiles(): Promise<NannyProfile[]> {
   await ensureStorage();
+  const raw = await fs.readFile(PROFILES_FILE, "utf8");
+
   try {
-    const raw = await fs.readFile(PROFILES_FILE, "utf8");
     const parsed = JSON.parse(raw) as NannyProfile[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
