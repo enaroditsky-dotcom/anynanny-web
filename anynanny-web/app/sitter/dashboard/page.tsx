@@ -8,6 +8,7 @@ import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name
 import { SessionFinalSummary } from "@/components/session/session-final-summary";
 import { SessionRatingModal } from "@/components/session/session-rating-modal";
 import { SITTER_PROFILE_SAVED_NAV_FLAG, SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
+import { SitterProfileForm } from "@/components/sitter/sitter-profile-form";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
 import { SitterPendingBookings } from "@/components/sitter/sitter-pending-bookings";
 import {
@@ -29,6 +30,7 @@ import {
 } from "@/lib/session/protocol";
 import { completedSummaryFromSessionRow } from "@/lib/session/completed-summary";
 import { dismissCompletedSession, readDismissedCompletedSessionId } from "@/lib/session/dismissed-completed";
+import { persistShiftLocallyDismissed } from "@/lib/session/dismissed-shift-lock";
 import {
   DoubleShakeCircleButton,
   DoubleShakeCircleSlot,
@@ -38,8 +40,13 @@ import { SITTER_FORCE_END_SUCCESS_MESSAGE } from "@/lib/bookings/constants";
 import { SitterDoubleShakeIdleCircle } from "@/components/session/sitter-double-shake-idle-circle";
 import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import { doesBookingBlockSessionShiftUi } from "@/lib/bookings/booking-shift-ui";
+import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
 import { fetchTodayBookingShiftGate } from "@/lib/bookings/todays-linked-booking";
-import { useTodaysLinkedBooking } from "@/lib/bookings/use-todays-linked-booking";
+import { useCircleBookingSync } from "@/lib/bookings/use-circle-booking-sync";
+import {
+  useTodaysLinkedBooking,
+  type TodaysLinkedBookingSyncPayload
+} from "@/lib/bookings/use-todays-linked-booking";
 import { sitterCompleteSession } from "@/lib/session/sitter-complete-session";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 
@@ -77,6 +84,18 @@ export default function SitterDashboardPage() {
   const [profileCardStatus, setProfileCardStatus] = useState<"loading" | "complete" | "incomplete">("loading");
   const [dashboardStatsRefreshKey, setDashboardStatsRefreshKey] = useState(0);
 
+  const { circleBooking, syncFromPayload, syncFromLinkedBooking } = useCircleBookingSync("sitter");
+
+  const handleBookingLiveSync = useCallback(
+    (payload: TodaysLinkedBookingSyncPayload) => {
+      syncFromPayload(payload);
+      if (payload.booking) {
+        syncFromLinkedBooking(payload.booking);
+      }
+    },
+    [syncFromPayload, syncFromLinkedBooking]
+  );
+
   const { fullName, nameLoading: greetingNameLoading } = useDashboardGreetingName(
     "sitter",
     sitterId,
@@ -88,7 +107,57 @@ export default function SitterDashboardPage() {
     shiftGate: todayBookingShiftGate,
     ready: bookingGuardReady,
     reload: reloadTodaysBooking
-  } = useTodaysLinkedBooking("sitter", sitterId);
+  } = useTodaysLinkedBooking("sitter", sitterId, {
+    onBookingSync: handleBookingLiveSync
+  });
+
+  useEffect(() => {
+    syncFromLinkedBooking(todaysBooking);
+  }, [
+    todaysBooking?.id,
+    todaysBooking?.status,
+    todaysBooking?.updated_at,
+    todaysBooking?.start_time,
+    todaysBooking?.end_time,
+    syncFromLinkedBooking
+  ]);
+
+  const sitterCircleLiveKey = useMemo(
+    () => bookingLiveSyncKey(circleBooking ?? todaysBooking),
+    [
+      circleBooking?.id,
+      circleBooking?.status,
+      circleBooking?.updated_at,
+      todaysBooking?.id,
+      todaysBooking?.status,
+      todaysBooking?.updated_at
+    ]
+  );
+
+  const idleCircleBooking = circleBooking ?? todaysBooking;
+
+  const resolveShiftBookingId = useCallback((): string | null => {
+    const fromBooking = todaysBooking?.id ?? idleCircleBooking?.id ?? null;
+    if (fromBooking) return fromBooking;
+    const row =
+      completedSummaryRow ?? endConfirmRow ?? activeShiftRow ?? pendingRow ?? null;
+    const fromRow = row?.booking_id != null ? String(row.booking_id) : null;
+    return fromRow?.trim() ? fromRow : null;
+  }, [
+    todaysBooking?.id,
+    idleCircleBooking?.id,
+    completedSummaryRow,
+    endConfirmRow,
+    activeShiftRow,
+    pendingRow
+  ]);
+
+  const lockShiftForToday = useCallback(() => {
+    const bookingId = resolveShiftBookingId();
+    if (bookingId) {
+      persistShiftLocallyDismissed(bookingId);
+    }
+  }, [resolveShiftBookingId]);
 
   const sessionUiBlockedByBooking = useMemo(
     () => bookingGuardReady && doesBookingBlockSessionShiftUi(todayBookingShiftGate),
@@ -102,11 +171,12 @@ export default function SitterDashboardPage() {
   }, [forceEndToast]);
 
   const handleForceEndSuccess = useCallback(async () => {
+    lockShiftForToday();
     setBanner(null);
     setForceEndToast(SITTER_FORCE_END_SUCCESS_MESSAGE);
     await reloadTodaysBooking();
     setDashboardStatsRefreshKey((k) => k + 1);
-  }, [reloadTodaysBooking]);
+  }, [reloadTodaysBooking, lockShiftForToday]);
 
   const trackedSessionId = useMemo(() => {
     const raw =
@@ -329,6 +399,7 @@ export default function SitterDashboardPage() {
   }, [pathname, sitterId, refreshSitterProfileCardStatus]);
 
   const handleSitterRatingResolved = useCallback(() => {
+    lockShiftForToday();
     const sid =
       ratingTargetSessionId ?? (completedSummaryRow != null ? String(completedSummaryRow.id) : null);
     if (sid) {
@@ -346,7 +417,7 @@ export default function SitterDashboardPage() {
     if (supabase && sitterId) void refreshForUser(supabase, sitterId);
     router.push("/sitter/dashboard");
     router.refresh();
-  }, [ratingTargetSessionId, completedSummaryRow, sitterId, refreshForUser, router]);
+  }, [ratingTargetSessionId, completedSummaryRow, sitterId, refreshForUser, router, lockShiftForToday]);
 
   const liveElapsed = useMemo(() => {
     const row = endConfirmRow ?? activeShiftRow;
@@ -401,6 +472,13 @@ export default function SitterDashboardPage() {
 
   const completeSessionRow = async (row: SupabaseSessionRow) => {
     if (!sitterId) return;
+    const bookingId =
+      row.booking_id != null && String(row.booking_id).trim()
+        ? String(row.booking_id)
+        : todaysBooking?.id ?? null;
+    if (bookingId) {
+      persistShiftLocallyDismissed(bookingId);
+    }
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
       setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני סיום משמרת.");
@@ -461,12 +539,13 @@ export default function SitterDashboardPage() {
 
   const openRatingAfterSummaryDismiss = useCallback(() => {
     if (!completedSummaryRow) return;
+    lockShiftForToday();
     const id = String(completedSummaryRow.id);
     suppressCompletedSummaryIdRef.current = id;
     setRatingTargetSessionId(id);
     setCompletedSummaryRow(null);
     setRatingOpen(true);
-  }, [completedSummaryRow]);
+  }, [completedSummaryRow, lockShiftForToday]);
 
   const onboardingPending = profileCardStatus === "incomplete";
 
@@ -547,7 +626,8 @@ export default function SitterDashboardPage() {
       ) : (
         <DoubleShakeCircleSlot>
           <SitterDoubleShakeIdleCircle
-            booking={todaysBooking}
+            key={sitterCircleLiveKey}
+            booking={idleCircleBooking}
             ready={bookingGuardReady}
             onBookingUpdated={reloadTodaysBooking}
             onError={(msg) => setBanner(msg)}
@@ -581,6 +661,10 @@ export default function SitterDashboardPage() {
             <SitterOnboardingWizard onSaved={handleOnboardingSaved} />
           </div>
         </section>
+      ) : null}
+
+      {!onboardingPending && sitterId ? (
+        <SitterProfileForm userId={sitterId} />
       ) : null}
 
       {forceEndToast ? (
@@ -668,7 +752,10 @@ export default function SitterDashboardPage() {
       <SitterPendingBookings
         sitterId={sitterId}
         disabled={onboardingPending}
-        onResponded={() => setDashboardStatsRefreshKey((k) => k + 1)}
+        onResponded={(status) => {
+          setDashboardStatsRefreshKey((k) => k + 1);
+          void reloadTodaysBooking();
+        }}
       />
 
       <DoubleShakeShiftPanel
