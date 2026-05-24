@@ -26,9 +26,14 @@ function HomeInner() {
     }
   }, [isManual, router]);
 
-  const goLoginWithRole = (role: "parent" | "sitter") => {
+  const goToRoleDashboard = (role: "parent" | "sitter") => {
     setUserRoleChoice(role);
-    router.push(`/auth/login?role=${role}`);
+    try {
+      localStorage.setItem("active_role", role);
+    } catch {
+      /* ignore */
+    }
+    router.push(role === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
   };
 
   return (
@@ -57,7 +62,7 @@ function HomeInner() {
           <button
             type="button"
             suppressHydrationWarning
-            onClick={() => goLoginWithRole("parent")}
+            onClick={() => goToRoleDashboard("parent")}
             className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#FF8A8A] px-6 py-3 text-center text-base font-bold text-white shadow-soft transition hover:brightness-[1.04] active:brightness-95 sm:min-h-14 sm:w-auto sm:min-w-[12rem] sm:px-8 sm:py-3.5"
           >
             כניסת הורים
@@ -65,7 +70,7 @@ function HomeInner() {
           <button
             type="button"
             suppressHydrationWarning
-            onClick={() => goLoginWithRole("sitter")}
+            onClick={() => goToRoleDashboard("sitter")}
             className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#001F3F] px-6 py-3 text-center text-base font-bold text-white shadow-soft transition hover:brightness-110 active:brightness-95 sm:min-h-14 sm:w-auto sm:min-w-[12rem] sm:px-8 sm:py-3.5"
           >
             כניסת בייביסיטר

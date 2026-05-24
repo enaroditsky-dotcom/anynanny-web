@@ -9,7 +9,11 @@ async function ensureFile(filePath: string, fallback: string) {
   try {
     await fs.access(filePath);
   } catch {
-    await fs.writeFile(filePath, fallback, "utf8");
+    try {
+      await fs.writeFile(filePath, fallback, "utf8");
+    } catch {
+      /* read-only FS — reads fall back to empty arrays */
+    }
   }
 }
 
@@ -20,8 +24,8 @@ async function ensureStorage() {
 
 export async function listParentPreferences(): Promise<ParentPreferences[]> {
   await ensureStorage();
-  const raw = await fs.readFile(PREFERENCES_FILE, "utf8");
   try {
+    const raw = await fs.readFile(PREFERENCES_FILE, "utf8");
     const parsed = JSON.parse(raw) as ParentPreferences[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -45,8 +49,8 @@ function sanitizeBusySlot(raw: Record<string, unknown>): ParentBusySlot | null {
 
 export async function listParentBusySlots(): Promise<ParentBusySlot[]> {
   await ensureStorage();
-  const raw = await fs.readFile(EVENTS_FILE, "utf8");
   try {
+    const raw = await fs.readFile(EVENTS_FILE, "utf8");
     const parsed = JSON.parse(raw) as unknown[];
     if (!Array.isArray(parsed)) return [];
     const slots: ParentBusySlot[] = [];

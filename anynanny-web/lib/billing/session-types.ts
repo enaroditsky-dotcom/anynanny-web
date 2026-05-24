@@ -1,5 +1,8 @@
 /** Billing-phase `public.sessions` row (Double-Shake schema). */
 
+export const SESSIONS_TABLE = "sessions";
+export const DEFAULT_HOURLY_RATE = 50;
+
 export const BILLING_SESSION_STATUS = {
   PENDING: "pending",
   ACTIVE: "active",

@@ -1,10 +1,11 @@
 "use client";
 
-export const HOURLY_RATE = 50;
-export const SESSION_STATE_KEY = "anynanny_payer_session_v1";
-export const SESSIONS_TABLE = "sessions";
+import { DEFAULT_HOURLY_RATE, SESSIONS_TABLE } from "@/lib/billing/session-types";
 
-/** DB session lifecycle — parent opens shift awaiting sitter confirmation. */
+export const HOURLY_RATE = DEFAULT_HOURLY_RATE;
+export { SESSIONS_TABLE };
+
+export const SESSION_STATE_KEY = "anynanny_payer_session_v1";
 export const SESSION_STATUS_PENDING = "pending";
 export const SESSION_STATUS_PENDING_SITTER_APPROVAL = "pending_sitter_approval";
 

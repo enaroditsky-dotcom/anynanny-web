@@ -8,6 +8,7 @@ import {
   requestSessionEnd
 } from "@/lib/billing/session-actions";
 import { calculateLiveAmount, calculateLiveMinutes } from "@/lib/billing/session-calculator";
+import { SESSIONS_TABLE } from "@/lib/billing/session-types";
 import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 import {
   computeLiveElapsedSecondsActive,
@@ -15,7 +16,6 @@ import {
   mapSupabaseRowToProtocol,
   persistSessionState,
   readSessionState,
-  SESSIONS_TABLE,
   type SessionProtocolState,
   type SupabaseSessionRow
 } from "@/lib/session/protocol";
@@ -164,7 +164,7 @@ export function useParentBillingSession() {
 
   const timerText = useMemo(() => formatElapsed(elapsedSeconds), [elapsedSeconds]);
 
-  const startShift = useCallback(async () => {
+  const startShift = useCallback(async (options?: { sitterId?: string; hourlyRate?: number }) => {
     if (actionPending || sessionState.status === "parent_initiated" || sessionState.status === "active") {
       return;
     }
@@ -175,7 +175,7 @@ export function useParentBillingSession() {
       return;
     }
 
-    const pairedSitterId = getPairedSitterUserId();
+    const pairedSitterId = options?.sitterId ?? getPairedSitterUserId();
     if (!pairedSitterId) {
       setBanner("לא נמצא בייביסיטר מקושר. הגדירו anynanny_paired_sitter_user_id או NEXT_PUBLIC_DEV_SITTER_USER_ID.");
       return;
@@ -189,7 +189,10 @@ export function useParentBillingSession() {
     setBanner(null);
 
     try {
-      const hourlyRate = await fetchSitterHourlyRate(auth.supabase, pairedSitterId);
+      const hourlyRate =
+        options?.hourlyRate && options.hourlyRate > 0
+          ? options.hourlyRate
+          : await fetchSitterHourlyRate(auth.supabase, pairedSitterId);
       const result = await insertPendingSession(auth.supabase, {
         parentId: auth.userId,
         sitterId: pairedSitterId,

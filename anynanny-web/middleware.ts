@@ -175,6 +175,7 @@ export async function middleware(request: NextRequest) {
   const trustClientSession =
     pathname === "/parent/dashboard" ||
     pathname === "/sitter/dashboard" ||
+    pathname === "/sitter/personal" ||
     isSitterOnboarding ||
     (pathname.startsWith("/parent") && cookieLikelySession) ||
     (pathname.startsWith("/sitter") && cookieLikelySession);

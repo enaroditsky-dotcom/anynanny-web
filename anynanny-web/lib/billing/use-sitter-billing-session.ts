@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { confirmSessionStartBySitter } from "@/lib/billing/session-actions";
 import { calculateLiveAmount, calculateLiveMinutes } from "@/lib/billing/session-calculator";
-import { BILLING_PENDING_STATUSES } from "@/lib/billing/session-types";
+import { BILLING_PENDING_STATUSES, SESSIONS_TABLE } from "@/lib/billing/session-types";
 import {
   computeLiveElapsedSecondsActive,
   formatElapsed,
-  SESSIONS_TABLE,
   type SupabaseSessionRow
 } from "@/lib/session/protocol";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";

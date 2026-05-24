@@ -1,10 +1,13 @@
+"use client";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { calculateBillingFromSession } from "@/lib/billing/session-calculator";
 import {
   BILLING_SESSION_STATUS,
+  DEFAULT_HOURLY_RATE,
+  SESSIONS_TABLE,
   type BillingSessionRow
 } from "@/lib/billing/session-types";
-import { HOURLY_RATE, SESSIONS_TABLE } from "@/lib/session/protocol";
 import { SITTER_PROFILES_TABLE } from "@/lib/sitter/sitter-profile";
 
 export type SessionActionResult<T> =
@@ -22,7 +25,7 @@ export async function fetchSitterHourlyRate(
     .maybeSingle();
 
   const rate = Number(data?.hourly_rate_nis);
-  return Number.isFinite(rate) && rate > 0 ? rate : HOURLY_RATE;
+  return Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_HOURLY_RATE;
 }
 
 /** Parent Double-Shake: open a pending session with start_time_requested. */
@@ -94,7 +97,7 @@ export async function confirmSessionEndByParent(
   >
 ): Promise<SessionActionResult<BillingSessionRow>> {
   const endConfirmedAt = new Date().toISOString();
-  const hourlyRate = Number(row.hourly_rate) || HOURLY_RATE;
+  const hourlyRate = Number(row.hourly_rate) || DEFAULT_HOURLY_RATE;
   const { totalMinutes, totalAmount } = calculateBillingFromSession(
     {
       startTimeConfirmedBySitter: row.start_time_confirmed_by_sitter,
