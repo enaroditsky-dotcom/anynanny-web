@@ -3,43 +3,40 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { confirmSessionStartBySitter } from "@/lib/billing/session-actions";
 import { calculateLiveAmount, calculateLiveMinutes } from "@/lib/billing/session-calculator";
-import { BILLING_PENDING_STATUSES, SESSIONS_TABLE } from "@/lib/billing/session-types";
 import {
-  computeLiveElapsedSecondsActive,
-  formatElapsed,
-  type SupabaseSessionRow
-} from "@/lib/session/protocol";
+  BILLING_PENDING_STATUSES,
+  SESSIONS_TABLE,
+  type BillingSessionRow
+} from "@/lib/billing/session-types";
+import { computeLiveElapsedSecondsActive, formatElapsed } from "@/lib/session/protocol";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-function billableStartMs(row: SupabaseSessionRow): number | null {
-  const iso =
-    row.start_time_confirmed_by_sitter ??
-    row.start_time ??
-    null;
+function billableStartMs(row: BillingSessionRow): number | null {
+  const iso = row.start_time_confirmed_by_sitter;
   if (!iso) return null;
   const ms = new Date(iso).getTime();
   return Number.isFinite(ms) ? ms : null;
 }
 
-function endRequestedMs(row: SupabaseSessionRow): number | null {
-  const iso = row.end_time_requested ?? row.parent_end_requested_at ?? null;
+function endRequestedMs(row: BillingSessionRow): number | null {
+  const iso = row.end_time_requested;
   if (!iso) return null;
   const ms = new Date(iso).getTime();
   return Number.isFinite(ms) ? ms : null;
 }
 
-function hourlyRateFromRow(row: SupabaseSessionRow): number {
+function hourlyRateFromRow(row: BillingSessionRow): number {
   const rate = Number(row.hourly_rate);
   return Number.isFinite(rate) && rate > 0 ? rate : 50;
 }
 
 export function useSitterBillingSession() {
   const [sitterId, setSitterId] = useState<string | null>(null);
-  const [pendingRow, setPendingRow] = useState<SupabaseSessionRow | null>(null);
-  const [activeShiftRow, setActiveShiftRow] = useState<SupabaseSessionRow | null>(null);
-  const [endPendingRow, setEndPendingRow] = useState<SupabaseSessionRow | null>(null);
+  const [pendingRow, setPendingRow] = useState<BillingSessionRow | null>(null);
+  const [activeShiftRow, setActiveShiftRow] = useState<BillingSessionRow | null>(null);
+  const [endPendingRow, setEndPendingRow] = useState<BillingSessionRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   const [confirmingStart, setConfirmingStart] = useState(false);
@@ -50,11 +47,11 @@ export function useSitterBillingSession() {
     return raw != null ? String(raw) : null;
   }, [endPendingRow?.id, activeShiftRow?.id, pendingRow?.id]);
 
-  const applyRows = useCallback((pendList: SupabaseSessionRow[], actList: SupabaseSessionRow[], uid: string) => {
+  const applyRows = useCallback((pendList: BillingSessionRow[], actList: BillingSessionRow[], uid: string) => {
     const pending = pendList.find((row) => BILLING_PENDING_STATUSES.includes(row.status)) ?? null;
 
-    let endPending: SupabaseSessionRow | null = null;
-    let activeOnly: SupabaseSessionRow | null = null;
+    let endPending: BillingSessionRow | null = null;
+    let activeOnly: BillingSessionRow | null = null;
 
     for (const row of actList) {
       if (row.status === "active" && row.sitter_id === uid && endRequestedMs(row) != null) {
@@ -97,8 +94,8 @@ export function useSitterBillingSession() {
       if (actRes.error) console.warn("[sitter billing] active fetch:", actRes.error.message);
 
       applyRows(
-        (pendRes.data ?? []) as SupabaseSessionRow[],
-        (actRes.data ?? []) as SupabaseSessionRow[],
+        (pendRes.data ?? []) as BillingSessionRow[],
+        (actRes.data ?? []) as BillingSessionRow[],
         uid
       );
     },
@@ -146,7 +143,7 @@ export function useSitterBillingSession() {
     if (!supabase || !sitterId || loading) return;
 
     const onSessionsChange = (payload: { new?: Record<string, unknown> }) => {
-      const row = payload.new as SupabaseSessionRow | undefined;
+      const row = payload.new as BillingSessionRow | undefined;
       if (!row || typeof row !== "object") {
         void refreshForUser(supabase, sitterId);
         return;
@@ -244,7 +241,7 @@ export function useSitterBillingSession() {
     }
 
     const confirmedAt = new Date().toISOString();
-    const optimisticActive: SupabaseSessionRow = {
+    const optimisticActive: BillingSessionRow = {
       ...pendingRow,
       status: "active",
       sitter_id: sitterId,
@@ -269,7 +266,7 @@ export function useSitterBillingSession() {
         return;
       }
 
-      const confirmedRow = result.row as SupabaseSessionRow;
+      const confirmedRow = result.row as BillingSessionRow;
       const rate = hourlyRateFromRow(confirmedRow);
       const loggedStartAt = confirmedRow.start_time_confirmed_by_sitter ?? confirmedAt;
       console.info("[billing] start_time_confirmed_by_sitter:", loggedStartAt, {

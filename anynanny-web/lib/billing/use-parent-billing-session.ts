@@ -8,7 +8,7 @@ import {
   requestSessionEnd
 } from "@/lib/billing/session-actions";
 import { calculateLiveAmount, calculateLiveMinutes } from "@/lib/billing/session-calculator";
-import { SESSIONS_TABLE } from "@/lib/billing/session-types";
+import { DEFAULT_HOURLY_RATE, SESSIONS_TABLE, type BillingSessionRow } from "@/lib/billing/session-types";
 import { getPairedSitterUserId } from "@/lib/session/paired-sitter";
 import {
   computeLiveElapsedSecondsActive,
@@ -38,6 +38,7 @@ export function useParentBillingSession() {
   const [banner, setBanner] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState(false);
+  const [activeHourlyRate, setActiveHourlyRate] = useState(DEFAULT_HOURLY_RATE);
 
   const syncFromStorage = useCallback(() => {
     try {
@@ -145,7 +146,7 @@ export function useParentBillingSession() {
   }, [nowMs, sessionState]);
 
   const earnedNis = useMemo(() => {
-    const rate = sessionState.hourlyRate ?? 50;
+    const rate = activeHourlyRate;
     if (sessionState.status === "active" && sessionState.parentStartedAtMs) {
       const minutes = calculateLiveMinutes({
         startTimeConfirmedBySitter: new Date(sessionState.parentStartedAtMs),
@@ -160,7 +161,7 @@ export function useParentBillingSession() {
       return Number(sessionState.finalAmountNis).toFixed(2);
     }
     return ((elapsedSeconds / 3600) * rate).toFixed(2);
-  }, [elapsedSeconds, nowMs, sessionState]);
+  }, [elapsedSeconds, nowMs, sessionState, activeHourlyRate]);
 
   const timerText = useMemo(() => formatElapsed(elapsedSeconds), [elapsedSeconds]);
 
@@ -207,6 +208,7 @@ export function useParentBillingSession() {
       }
 
       setUseSupabase(true);
+      setActiveHourlyRate(hourlyRate);
       const mapped = applyRowToState(result.row as SupabaseSessionRow);
       if (mapped) {
         setSessionState(mapped);
@@ -287,7 +289,7 @@ export function useParentBillingSession() {
       const result = await confirmSessionEndByParent(auth.supabase, {
         id: sessionState.supabaseSessionId,
         start_time_confirmed_by_sitter: new Date(sessionState.parentStartedAtMs).toISOString(),
-        hourly_rate: sessionState.hourlyRate ?? 50
+        hourly_rate: activeHourlyRate
       });
 
       if (!result.ok) {
@@ -306,7 +308,7 @@ export function useParentBillingSession() {
     } finally {
       setActionPending(false);
     }
-  }, [sessionState]);
+  }, [sessionState, activeHourlyRate]);
 
   const sessionRunning =
     sessionState.status === "active" || sessionState.status === "parent_initiated";
