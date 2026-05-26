@@ -14,6 +14,11 @@ import {
   updateBookingStatus,
   type PendingBookingView
 } from "@/lib/bookings/sitter-pending-bookings";
+import {
+  resolveShiftTimeWindow,
+  sitterHasOverlappingActiveShift,
+  SITTER_OVERLAP_APPROVE_MESSAGE
+} from "@/lib/bookings/sitter-shift-overlap";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const NEW_BOOKING_TOAST_MS = 6000;
@@ -188,6 +193,24 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
     if (!supabase) {
       setActionError("Supabase לא זמין");
       return;
+    }
+
+    const target = bookings.find((b) => b.id === bookingId);
+
+    if (status === "approved" && target) {
+      const proposedWindow = resolveShiftTimeWindow(target);
+      if (proposedWindow) {
+        const hasOverlap = await sitterHasOverlappingActiveShift(
+          supabase,
+          sitterId,
+          proposedWindow,
+          { bookingId }
+        );
+        if (hasOverlap) {
+          window.alert(SITTER_OVERLAP_APPROVE_MESSAGE);
+          return;
+        }
+      }
     }
 
     setActionError(null);
