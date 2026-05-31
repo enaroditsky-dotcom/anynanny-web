@@ -202,58 +202,65 @@ export default function SessionPage() {
   };
 
   return (
-    <main className="min-h-[100dvh] bg-[#FDFBF6] px-4 pb-6 pt-4" dir="rtl">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-        <section className="rounded-3xl bg-white px-5 py-8 text-center shadow-soft">
-          {showLive ? <p className="text-5xl font-bold tracking-wider text-navy-header">{timerText}</p> : null}
-          {showLive ? <p className="mt-3 text-lg font-semibold text-navy-800">סכום שנצבר: ₪{earnedMoney.toFixed(2)}</p> : null}
-          {showFinal ? (
-            <div className="space-y-1">
-              <p className="text-2xl font-bold text-navy-header">סיכום משמרת</p>
-              <p className="text-sm text-slate-600">זמן עבודה כולל: {finalDuration}</p>
-              <p className="text-base font-semibold text-navy-800">הרווחת: ₪{finalAmount}</p>
-              <button
-                type="button"
-                className="mt-3 inline-flex items-center justify-center rounded-xl bg-[#001F3F] px-4 py-2 text-sm font-semibold text-white"
-                onClick={handleEnd}
-              >
-                אישור
-              </button>
-            </div>
-          ) : null}
-          <p className="mt-3 text-sm text-slate-600">{statusHint}</p>
+    <main
+      className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6] py-2"
+      dir="rtl"
+    >
+      <section className="flex min-h-0 flex-1 flex-col rounded-3xl bg-white px-4 py-5 shadow-soft sm:px-5">
+        {showLive ? (
+          <div className="shrink-0 text-center">
+            <p className="text-5xl font-bold tracking-wider text-navy-header">{timerText}</p>
+            <p className="mt-3 text-lg font-semibold text-navy-800">סכום שנצבר: ₪{earnedMoney.toFixed(2)}</p>
+          </div>
+        ) : null}
 
-          <div className="mt-8 flex items-center justify-center">
+        {showFinal ? (
+          <div className="shrink-0 space-y-1 text-center">
+            <p className="text-2xl font-bold text-navy-header">סיכום משמרת</p>
+            <p className="text-sm text-slate-600">זמן עבודה כולל: {finalDuration}</p>
+            <p className="text-base font-semibold text-navy-800">הרווחת: ₪{finalAmount}</p>
             <button
-              className={`flex h-[280px] w-[280px] flex-col items-center justify-center gap-3 rounded-full text-white shadow-soft transition hover:brightness-105 active:brightness-95 ${circleClass}`}
-              onClick={circleAction}
-              disabled={circleDisabled}
+              type="button"
+              className="mt-3 inline-flex items-center justify-center rounded-xl bg-[#001F3F] px-4 py-2 text-sm font-semibold text-white"
+              onClick={handleEnd}
             >
-              <span className="relative h-16 w-16 overflow-hidden rounded-full border border-white/70 bg-white/70">
-                <Image src="/logo.png" alt="" fill className="object-cover object-center" />
-              </span>
-              <span className="text-5xl font-bold">{circleLabel}</span>
+              אישור
             </button>
           </div>
-        </section>
+        ) : null}
 
-        <section className="rounded-2xl bg-white p-3 shadow-soft">
-          <div className="grid grid-cols-3 gap-3">
-            <button className="flex aspect-square flex-col items-center justify-center rounded-xl bg-[#F8FAFC] p-3 text-navy-header transition hover:bg-white">
-              <Calendar className="h-6 w-6" />
-              <span className="mt-2 text-sm font-semibold">יומן</span>
-            </button>
-            <button className="flex aspect-square flex-col items-center justify-center rounded-xl bg-[#F8FAFC] p-3 text-navy-header transition hover:bg-white">
-              <Wallet className="h-6 w-6" />
-              <span className="mt-2 text-sm font-semibold">ארנק</span>
-            </button>
-            <button className="flex aspect-square flex-col items-center justify-center rounded-xl bg-[#F8FAFC] p-3 text-navy-header transition hover:bg-white">
-              <Settings className="h-6 w-6" />
-              <span className="mt-2 text-sm font-semibold">הגדרות</span>
-            </button>
-          </div>
-        </section>
-      </div>
+        <p className="mt-3 shrink-0 text-center text-sm text-slate-600">{statusHint}</p>
+
+        <div className="mt-auto flex min-h-0 flex-1 flex-col items-center justify-center py-4">
+          <button
+            className={`flex h-[min(280px,42vw)] w-[min(280px,42vw)] shrink-0 flex-col items-center justify-center gap-3 rounded-full text-white shadow-soft transition hover:brightness-105 active:brightness-95 ${circleClass}`}
+            onClick={circleAction}
+            disabled={circleDisabled}
+          >
+            <span className="relative h-16 w-16 overflow-hidden rounded-full border border-white/70 bg-white/70">
+              <Image src="/logo.png" alt="" fill className="object-cover object-center" />
+            </span>
+            <span className="text-4xl font-bold sm:text-5xl">{circleLabel}</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="shrink-0 rounded-2xl bg-white p-3 shadow-soft">
+        <div className="grid grid-cols-3 gap-3">
+          <button className="flex aspect-square flex-col items-center justify-center rounded-xl bg-[#F8FAFC] p-3 text-navy-header transition hover:bg-white">
+            <Calendar className="h-6 w-6" />
+            <span className="mt-2 text-sm font-semibold">יומן</span>
+          </button>
+          <button className="flex aspect-square flex-col items-center justify-center rounded-xl bg-[#F8FAFC] p-3 text-navy-header transition hover:bg-white">
+            <Wallet className="h-6 w-6" />
+            <span className="mt-2 text-sm font-semibold">ארנק</span>
+          </button>
+          <button className="flex aspect-square flex-col items-center justify-center rounded-xl bg-[#F8FAFC] p-3 text-navy-header transition hover:bg-white">
+            <Settings className="h-6 w-6" />
+            <span className="mt-2 text-sm font-semibold">הגדרות</span>
+          </button>
+        </div>
+      </section>
     </main>
   );
 }

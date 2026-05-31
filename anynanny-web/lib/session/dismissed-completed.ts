@@ -1,6 +1,8 @@
 "use client";
 
+import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
 import { mapSupabaseRowToProtocol, type SessionProtocolState, type SupabaseSessionRow } from "@/lib/session/protocol";
+import { LIVE_BOOKING_STATUSES_FOR_SESSION_UI } from "@/lib/session/sessions-query";
 
 export type CompletedSessionDismissRole = "parent" | "sitter";
 
@@ -25,6 +27,17 @@ export function dismissCompletedSession(sessionId: string, role: CompletedSessio
   } catch {
     /* ignore */
   }
+}
+
+/** Hide a stale completed session while today's booking is still live for the parent/sitter pair. */
+export function shouldSuppressStaleCompletedSession(params: {
+  completedRow: SupabaseSessionRow | null | undefined;
+  bookingStatus: string | null | undefined;
+  hasInFlightSession: boolean;
+}): boolean {
+  if (!params.completedRow || params.hasInFlightSession) return false;
+  const status = normalizeBookingStatus(params.bookingStatus ?? undefined);
+  return status != null && LIVE_BOOKING_STATUSES_FOR_SESSION_UI.has(status);
 }
 
 /** Latest DB row mapped for parent UI — hides a completed session the user already dismissed. */

@@ -15,7 +15,7 @@ import {
   normalizeSitterProfilePublic,
   unwrapRpcProfilePayload
 } from "@/lib/sitter/fetch-parent-sitter-profile";
-import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
+import { isPostgrestMissingColumnError, isPostgrestMissingFunctionError } from "@/lib/supabase/postgrest-schema";
 import {
   getSitterProfilesUserColumn,
   SITTER_PROFILES_TABLE,
@@ -147,10 +147,32 @@ async function enrichSearchCardsWithProfilePublicRpc(
     cards.map(async (card) => {
       if (isDisplayableSearchRating(card.avg_rating)) return card;
 
+      const fk = getSitterProfilesUserColumn();
+      const direct = await supabase
+        .from(SITTER_PROFILES_TABLE)
+        .select(`${fk}, avg_rating, working_cities, nanny_serial, full_name`)
+        .eq(fk, card.id)
+        .maybeSingle();
+
+      if (!direct.error && direct.data) {
+        const row = direct.data as Record<string, unknown>;
+        const avg = parseAvgRatingValue(row.avg_rating);
+        if (isDisplayableSearchRating(avg)) {
+          return {
+            ...card,
+            avg_rating: avg,
+            working_cities: normalizeWorkingCities(row.working_cities ?? card.working_cities)
+          };
+        }
+      }
+
       const { data, error } = await supabase.rpc("get_sitter_profile_public", {
         target_id: card.id
       });
-      if (error) return card;
+      if (error) {
+        if (isPostgrestMissingFunctionError(error.message)) return card;
+        return card;
+      }
 
       const payload = unwrapRpcProfilePayload(data);
       if (!payload) return card;
@@ -207,6 +229,7 @@ function isRpcRatingSchemaError(message: string): boolean {
 function shouldFallbackBrowseFromRpcError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
+    isPostgrestMissingFunctionError(message) ||
     lower.includes("is_available") ||
     lower.includes("list_public_sitters_no_is_available") ||
     lower.includes("could not find the function") ||

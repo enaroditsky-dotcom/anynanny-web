@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { Calendar, History, Search, Settings, Wallet } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SessionFinalSummary } from "@/components/session/session-final-summary";
-import { SessionRatingModal } from "@/components/session/session-rating-modal";
+import { ParentSessionClosurePanel } from "@/components/session/parent-session-closure-panel";
+import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import { ActionToast } from "@/components/ui/action-toast";
 import { useAuth } from "@/components/auth-provider";
 import { DashboardWelcomeHeader } from "@/components/dashboard/dashboard-welcome-header";
@@ -14,13 +13,22 @@ import {
   DoubleShakeCircleSlot,
   DoubleShakeShiftPanel
 } from "@/components/session/double-shake-circle-button";
-import { ParentDoubleShakeIdleCircle } from "@/components/session/parent-double-shake-idle-circle";
+import { ParentDoubleShakeIdleCircle, ParentSessionTimerCircle } from "@/components/session/parent-double-shake-idle-circle";
 import { parentApproveSitterStart } from "@/lib/bookings/parent-approve-sitter-start";
+import { bookingRowToCircleView } from "@/lib/bookings/circle-booking-state";
+import {
+  isParentBookingApprovalStatus,
+  isParentBookingRejection,
+  isParentBookingTrackingStatus,
+  readBookingRowFromRealtimeChange
+} from "@/lib/bookings/booking-realtime-handler";
 import { doesBookingBlockSessionShiftUi } from "@/lib/bookings/booking-shift-ui";
+import { fetchBookingPaymentStatus } from "@/lib/bookings/fetch-booking-payment-status";
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { useTodaysLinkedBooking, type TodaysLinkedBookingSyncPayload } from "@/lib/bookings/use-todays-linked-booking";
 import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
+import { fetchLinkedBookingById } from "@/lib/bookings/todays-linked-booking";
 import { useCircleBookingSync } from "@/lib/bookings/use-circle-booking-sync";
 import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -30,6 +38,7 @@ import {
   SESSIONS_TABLE,
   SESSION_STATUS_CANCELLED,
   SESSION_STATUS_PENDING_SITTER_APPROVAL,
+  SESSION_PENDING_START_STATUSES,
   computeLiveElapsedSecondsActive,
   type SessionProtocolState,
   type SupabaseSessionRow,
@@ -38,25 +47,53 @@ import {
   persistSessionState,
   readSessionState
 } from "@/lib/session/protocol";
-import { friendlySupabaseSessionError, isSupabaseBadRequestError } from "@/lib/session/supabase-errors";
+import {
+  insertSessionReturningRow,
+  updateSessionReturningRow
+} from "@/lib/session/sessions-query";
+import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
+import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
 import { completedSummaryFromEndedState } from "@/lib/session/completed-summary";
 import { postStripeCheckoutSession } from "@/lib/stripe/post-checkout-session";
+import { submitSessionRating } from "@/lib/ratings/submit-session-rating";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name";
 import {
   dismissCompletedSession,
-  parentSessionStateFromSupabaseRow,
   readDismissedCompletedSessionId
 } from "@/lib/session/dismissed-completed";
 import {
   isShiftLocallyDismissed,
   persistShiftLocallyDismissed
 } from "@/lib/session/dismissed-shift-lock";
+import {
+  canShowParentSessionClosure,
+  fetchRelevantParentSessionRow,
+  isClosureBookingStatus,
+  mergeParentSessionFromDbRow,
+  reconcileStaleEndedLocalState,
+  resolveParentClosureBookingId
+} from "@/lib/session/parent-session-sync";
 
-const BOOKING_SHIFT_REJECTED_NOTICE = "הבייביסיטר דחתה את הזימון למשמרת";
+const BOOKING_SHIFT_REJECTED_NOTICE = "הבקשה נדחתה על ידי המטפלת";
+const BOOKING_SHIFT_PENDING_NOTICE = "בקשה נשלחה וממתינה לאישור";
+const BOOKING_SHIFT_APPROVED_NOTICE = "הבקשה אושרה";
+const BOOKING_SHIFT_APPROVED_TOAST = "הבייביסיטר אישרה את בקשת המשמרת!";
+
+type ClosureBookingVerifyState = "idle" | "checking" | "ready" | "unavailable";
+
+function localizeCheckoutError(message: string): string {
+  const trimmed = message.trim();
+  if (trimmed === "Booking not found.") {
+    return "לא נמצאה משמרת לתשלום — נסו שוב בעוד רגע.";
+  }
+  if (trimmed === "bookingId is required.") {
+    return "ממתינים לפרטי משמרת…";
+  }
+  return trimmed;
+}
 
 export default function ParentDashboardPage() {
-  const router = useRouter();
   const { isLoading: authLoading } = useAuth();
 
   /** getSession() can succeed when middleware getUser() misses — show grid as soon as we see a browser session. */
@@ -70,9 +107,8 @@ export default function ParentDashboardPage() {
   /** Debug: confirms Supabase write reached DB (start insert or end-request update). */
   const [debugToast, setDebugToast] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
-  const [ratingOpen, setRatingOpen] = useState(false);
-  /** Session id for rating after summary — kept out of `sessionState` so the dashboard can return to idle under the modal. */
-  const [ratingTargetSessionId, setRatingTargetSessionId] = useState<string | null>(null);
+  const [closureError, setClosureError] = useState<string | null>(null);
+  const [closureBookingVerify, setClosureBookingVerify] = useState<ClosureBookingVerifyState>("idle");
   const [bookingPaymentStatus, setBookingPaymentStatus] = useState<"unknown" | "paid" | "unpaid">("unknown");
   const [payBusy, setPayBusy] = useState(false);
   const [stripeCheckoutNonce, setStripeCheckoutNonce] = useState(0);
@@ -92,9 +128,8 @@ export default function ParentDashboardPage() {
   }, []);
   const prevShiftGateStatusRef = useRef<string | null>(null);
   const shiftCompletedFrozenRef = useRef(false);
-  const sessionFetchBlockedRef = useRef(false);
 
-  const { circleBooking, syncFromPayload, syncFromLinkedBooking, applyCircleBooking } =
+  const { circleBooking, syncFromPayload, syncFromLinkedBooking, applyCircleBooking, bookingRef } =
     useCircleBookingSync("parent");
 
   const breakCompletedRealtimeLoop = useCallback(
@@ -110,15 +145,47 @@ export default function ParentDashboardPage() {
   const applyBookingShiftNotice = useCallback((status: BookingStatus | null | undefined) => {
     if (status === "rejected" || status === "cancelled") {
       setBookingShiftRejectedNotice(true);
-    } else if (status === "pending" || status === "approved") {
+    } else if (
+      status === "pending" ||
+      status === "approved" ||
+      status === "sitter_started" ||
+      status === "parent_started" ||
+      status === "sitter_ended"
+    ) {
       setBookingShiftRejectedNotice(false);
     }
   }, []);
 
+  const notifyBookingTransition = useCallback(
+    (rowStatus: BookingStatus, source: "realtime" | "reload" | "gate") => {
+      if (isParentBookingRejection(rowStatus)) {
+        applyCircleBooking(null);
+        applyBookingShiftNotice(rowStatus);
+        setBookingFeedbackVariant("error");
+        setBookingFeedbackToast(BOOKING_SHIFT_REJECTED_NOTICE);
+        return;
+      }
+
+      if (isParentBookingApprovalStatus(rowStatus)) {
+        applyBookingShiftNotice("approved");
+        if (source !== "reload") {
+          setBookingFeedbackVariant("success");
+          setBookingFeedbackToast(BOOKING_SHIFT_APPROVED_TOAST);
+        }
+        return;
+      }
+
+      if (isParentBookingTrackingStatus(rowStatus)) {
+        applyBookingShiftNotice(rowStatus);
+      }
+    },
+    [applyBookingShiftNotice, applyCircleBooking]
+  );
+
   const handleBookingLiveSync = useCallback(
     (payload: TodaysLinkedBookingSyncPayload) => {
       const incomingStatus = normalizeBookingStatus(
-        payload.row?.status ?? payload.booking?.status
+        payload.row?.status ?? payload.booking?.status ?? payload.shiftGate?.status
       );
 
       if (incomingStatus === "completed" || todaysBookingStatusRef.current === "completed") {
@@ -135,25 +202,51 @@ export default function ParentDashboardPage() {
         syncFromLinkedBooking(payload.booking);
       }
 
-      const row = payload.row;
-      if (!payload.liveFieldsChanged || !row?.status) return;
+      const rowStatus = normalizeBookingStatus(
+        payload.row?.status ?? payload.booking?.status ?? payload.shiftGate?.status
+      );
+      if (!rowStatus) return;
 
-      const rowStatus = normalizeBookingStatus(row.status) ?? "";
-      if (rowStatus === "rejected" || rowStatus === "cancelled") {
-        applyBookingShiftNotice(rowStatus);
-        setBookingFeedbackVariant("error");
-        setBookingFeedbackToast(BOOKING_SHIFT_REJECTED_NOTICE);
-      } else if (rowStatus === "approved" && payload.source === "realtime") {
-        applyBookingShiftNotice("approved");
-        setBookingFeedbackVariant("success");
-        setBookingFeedbackToast("הבייביסיטר אישרה את בקשת המשמרת!");
+      const prevStatus = prevShiftGateStatusRef.current;
+      const statusChanged = Boolean(prevStatus && prevStatus !== rowStatus);
+
+      if (isParentBookingRejection(rowStatus)) {
+        notifyBookingTransition(rowStatus, payload.source === "reload" ? "reload" : "realtime");
+        return;
+      }
+
+      if (rowStatus === "pending") {
+        applyBookingShiftNotice("pending");
+        if (payload.booking) {
+          applyCircleBooking(payload.booking);
+        } else if (payload.row) {
+          const prev = bookingRef.current ?? todaysBookingRef.current;
+          applyCircleBooking(bookingRowToCircleView(payload.row, prev, "parent"));
+        }
+        return;
+      }
+
+      if (
+        isParentBookingTrackingStatus(rowStatus) &&
+        (statusChanged || payload.source === "realtime" || payload.liveFieldsChanged)
+      ) {
+        if (payload.row && isParentBookingTrackingStatus(payload.row.status)) {
+          const prev = bookingRef.current ?? todaysBookingRef.current;
+          applyCircleBooking(bookingRowToCircleView(payload.row, prev, "parent"));
+        } else if (payload.booking) {
+          applyCircleBooking(payload.booking);
+        }
+
+        notifyBookingTransition(rowStatus, payload.source === "reload" ? "reload" : "realtime");
       }
     },
     [
       breakCompletedRealtimeLoop,
       syncFromPayload,
       syncFromLinkedBooking,
-      applyBookingShiftNotice
+      notifyBookingTransition,
+      applyCircleBooking,
+      bookingRef
     ]
   );
 
@@ -166,8 +259,20 @@ export default function ParentDashboardPage() {
     onBookingSync: handleBookingLiveSync
   });
 
-  const todaysBookingId = todaysBooking?.id ?? "";
-  const todaysBookingStatus = normalizeBookingStatus(todaysBooking?.status) ?? "";
+  const sessionStatus = sessionState.status;
+  const sessionLinkedBookingId = sessionState.linkedBookingId ?? "";
+  const sessionSupabaseSessionId = sessionState.supabaseSessionId ?? "";
+
+  const todaysBookingId =
+    todaysBooking?.id ??
+    circleBooking?.id ??
+    todayBookingShiftGate?.id ??
+    sessionLinkedBookingId ??
+    "";
+  const todaysBookingStatus =
+    normalizeBookingStatus(
+      todaysBooking?.status ?? todayBookingShiftGate?.status ?? circleBooking?.status
+    ) ?? "";
   const todaysBookingUpdatedAt = todaysBooking?.updated_at ?? "";
   const todaysBookingStartTime = todaysBooking?.start_time ?? "";
   const todaysBookingEndTime = todaysBooking?.end_time ?? "";
@@ -184,14 +289,36 @@ export default function ParentDashboardPage() {
   const circleBookingUpdatedAt = circleBooking?.updated_at ?? "";
   const shiftGateStatus = normalizeBookingStatus(todayBookingShiftGate?.status) ?? "";
 
-  const sessionStatus = sessionState.status;
-  const sessionLinkedBookingId = sessionState.linkedBookingId ?? "";
-  const sessionSupabaseSessionId = sessionState.supabaseSessionId ?? "";
-
   const todaysBookingRef = useRef(todaysBooking);
   todaysBookingRef.current = todaysBooking;
   const todaysBookingStatusRef = useRef(todaysBookingStatus);
   todaysBookingStatusRef.current = todaysBookingStatus;
+
+  const applyParentTrackingCircleFromRow = useCallback(
+    (row: BookingRow) => {
+      if (isParentBookingRejection(row.status)) {
+        applyCircleBooking(null);
+        return;
+      }
+
+      if (!isParentBookingTrackingStatus(row.status)) {
+        return;
+      }
+
+      const prev = bookingRef.current ?? todaysBookingRef.current;
+      applyCircleBooking(bookingRowToCircleView(row, prev, "parent"));
+    },
+    [applyCircleBooking, bookingRef]
+  );
+
+  const isParentPendingLocked = useMemo(
+    () =>
+      !bookingShiftRejectedNotice &&
+      (shiftGateStatus === "pending" ||
+        todaysBookingStatus === "pending" ||
+        circleBookingStatus === "pending"),
+    [bookingShiftRejectedNotice, shiftGateStatus, todaysBookingStatus, circleBookingStatus]
+  );
 
   useEffect(() => {
     setShiftUiLocked(isShiftLocallyDismissed(todaysBookingId));
@@ -199,14 +326,13 @@ export default function ParentDashboardPage() {
 
   useEffect(() => {
     if (todaysBookingStatus === "completed") {
-      lockShiftUi(todaysBookingId);
       breakCompletedRealtimeLoop("sync");
       return;
     }
     if (bookingGuardReady && todaysBookingId && !isShiftLocallyDismissed(todaysBookingId)) {
       setShiftUiLocked(false);
     }
-  }, [todaysBookingStatus, todaysBookingId, bookingGuardReady, breakCompletedRealtimeLoop, lockShiftUi]);
+  }, [todaysBookingStatus, todaysBookingId, bookingGuardReady, breakCompletedRealtimeLoop]);
 
   const { fullName, nameLoading: greetingNameLoading } = useDashboardGreetingName(
     "parent",
@@ -234,6 +360,50 @@ export default function ParentDashboardPage() {
   );
 
   const idleCircleBooking = circleBooking ?? todaysBooking;
+
+  /** Hydrate shift circle after refresh when gate exists but enriched row is missing. */
+  useEffect(() => {
+    if (!bookingGuardReady || !parentUserId) return;
+    if (idleCircleBooking) return;
+
+    const status = normalizeBookingStatus(
+      shiftGateStatus || todaysBookingStatus || circleBookingStatus || undefined
+    );
+    const needsHydrate =
+      status === "pending" ||
+      isParentBookingTrackingStatus(status) ||
+      isParentBookingApprovalStatus(status);
+    if (!needsHydrate) return;
+
+    const supabase = getSupabaseBrowserClient();
+    const bookingId = todayBookingShiftGate?.id ?? todaysBookingId;
+    if (!supabase || !bookingId) return;
+
+    let cancelled = false;
+    void fetchLinkedBookingById(supabase, bookingId, "parent")
+      .then((booking) => {
+        if (!cancelled && booking) {
+          applyCircleBooking(booking);
+        }
+      })
+      .catch((error) => {
+        console.warn("[parent] hydrate linked booking:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    bookingGuardReady,
+    parentUserId,
+    idleCircleBooking,
+    shiftGateStatus,
+    todaysBookingStatus,
+    circleBookingStatus,
+    todayBookingShiftGate?.id,
+    todaysBookingId,
+    applyCircleBooking
+  ]);
 
   const sessionUiBlockedByBooking = useMemo(
     () =>
@@ -272,88 +442,128 @@ export default function ParentDashboardPage() {
     ]
   );
 
-  const handlePayForShift = useCallback(async () => {
-    const bid = sessionLinkedBookingId.trim();
-    if (!bid) {
-      setDbBanner("לא נמצאה משמרת מקושרת לתשלום. נסו לרענן את הדף.");
-      return;
-    }
-    const amountNis = completedSummary?.amountNis ?? sessionState.finalAmountNis ?? 0;
-    const amountMinorUnits = Math.max(50, Math.round(Number(amountNis) * 100));
-    setPayBusy(true);
-    setDbBanner(null);
-    try {
-      const result = await postStripeCheckoutSession({
-        bookingId: bid,
-        amountMinorUnits,
-        currency: "ils",
-        description: "תשלום משמרת AnyNanny"
-      });
-      if (!result.ok) {
-        setDbBanner(result.error);
+  const todaysBookingStatusNormalized = useMemo(
+    () =>
+      normalizeBookingStatus(
+        todaysBooking?.status ?? todayBookingShiftGate?.status ?? circleBooking?.status
+      ),
+    [todaysBooking?.status, todayBookingShiftGate?.status, circleBooking?.status]
+  );
+
+  const closureBookingId = useMemo(
+    () =>
+      resolveParentClosureBookingId(
+        sessionLinkedBookingId,
+        todaysBookingId,
+        todaysBookingStatusNormalized
+      ),
+    [sessionLinkedBookingId, todaysBookingId, todaysBookingStatusNormalized]
+  );
+
+  const sessionClosureEligible = useMemo(
+    () =>
+      canShowParentSessionClosure({
+        sessionState,
+        completedSummary,
+        bookingStatus: todaysBookingStatusNormalized
+      }),
+    [sessionState, completedSummary, todaysBookingStatusNormalized]
+  );
+
+
+  const handleConfirmAndPay = useCallback(
+    async (rating: number) => {
+      const sid = sessionSupabaseSessionId?.trim();
+      const bid = closureBookingId.trim();
+      if (!sid) {
+        setClosureError("לא נמצא סשן לדירוג.");
         return;
       }
-      window.location.assign(result.url);
-    } catch (e) {
-      console.error("[parent] Stripe checkout:", e);
-      setDbBanner("שגיאה בפתיחת התשלום. נסו שוב.");
-    } finally {
-      setPayBusy(false);
-    }
-  }, [sessionLinkedBookingId, sessionState.finalAmountNis, completedSummary]);
+      if (!bid || closureBookingVerify !== "ready") {
+        return;
+      }
 
-  const handleSummaryCloseRequestRating = useCallback(() => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        setClosureError("Supabase לא מוגדר.");
+        return;
+      }
+
+      setPayBusy(true);
+      setClosureError(null);
+      setDbBanner(null);
+
+      const ratingResult = await submitSessionRating(supabase, {
+        sessionId: sid,
+        role: "parent",
+        rating
+      });
+      if (!ratingResult.ok) {
+        setClosureError(ratingResult.error);
+        setPayBusy(false);
+        return;
+      }
+
+      const amountNis = completedSummary?.amountNis ?? sessionState.finalAmountNis ?? 0;
+      const amountMinorUnits = Math.max(50, Math.round(Number(amountNis) * 100));
+      try {
+        const result = await postStripeCheckoutSession({
+          bookingId: bid,
+          amountMinorUnits,
+          currency: "ils",
+          description: "תשלום משמרת AnyNanny"
+        });
+        if (!result.ok) {
+          setClosureError(localizeCheckoutError(result.error));
+          setPayBusy(false);
+          return;
+        }
+        window.location.assign(result.url);
+      } catch (e) {
+        console.error("[parent] Stripe checkout:", e);
+        setClosureError("שגיאה בפתיחת התשלום. נסו שוב.");
+        setPayBusy(false);
+      }
+    },
+    [
+      sessionSupabaseSessionId,
+      closureBookingId,
+      closureBookingVerify,
+      sessionState.finalAmountNis,
+      completedSummary
+    ]
+  );
+
+  const handleCheckoutReturnIdle = useCallback(() => {
     const bookingId = sessionLinkedBookingId || todaysBookingId;
     if (bookingId) {
       persistShiftLocallyDismissed(bookingId);
     }
     lockShiftUi(bookingId);
     const sid = sessionSupabaseSessionId;
-    if (!sid) {
-      persistSessionState({ status: "idle" });
-      setSessionState({ status: "idle" });
-      setNowMs(Date.now());
-      return;
-    }
-    setRatingTargetSessionId(sid);
-    persistSessionState({ status: "idle" });
-    setSessionState({ status: "idle" });
-    setNowMs(Date.now());
-    setRatingOpen(true);
-  }, [sessionSupabaseSessionId, sessionLinkedBookingId, todaysBookingId, lockShiftUi]);
-
-  const handleRatingResolved = useCallback(() => {
-    const bookingId = sessionLinkedBookingId || todaysBookingId;
-    if (bookingId) {
-      persistShiftLocallyDismissed(bookingId);
-    }
-    lockShiftUi(bookingId);
-    const sid = ratingTargetSessionId;
     if (sid) {
       dismissCompletedSession(sid, "parent");
     }
-    setRatingTargetSessionId(null);
     persistSessionState({ status: "idle" });
     setSessionState({ status: "idle" });
-    setRatingOpen(false);
-    setDbBanner(null);
+    setClosureError(null);
     setNowMs(Date.now());
-    router.push("/parent/dashboard");
-    router.refresh();
-  }, [router, ratingTargetSessionId, sessionLinkedBookingId, todaysBookingId, lockShiftUi]);
+  }, [sessionSupabaseSessionId, sessionLinkedBookingId, todaysBookingId, lockShiftUi]);
 
   useEffect(() => {
-    if (sessionFetchBlockedRef.current || shiftUiLocked || isShiftLocallyDismissed(todaysBookingId)) {
+    if (isShiftLocallyDismissed(todaysBookingId)) {
+      return;
+    }
+    if (shiftUiLocked && sessionStatus !== "ended") {
       return;
     }
     if (shiftCompletedFrozenRef.current || todaysBookingStatus === "completed") {
       breakCompletedRealtimeLoop("sync");
-      lockShiftUi(todaysBookingId);
       return;
     }
     if (!todaysBookingId) return;
     syncFromLinkedBooking(todaysBookingRef.current);
-  }, [bookingSyncKey, syncFromLinkedBooking, breakCompletedRealtimeLoop, todaysBookingStatus, todaysBookingId, shiftUiLocked, lockShiftUi]);
+  }, [bookingSyncKey, syncFromLinkedBooking, breakCompletedRealtimeLoop, todaysBookingStatus, todaysBookingId, shiftUiLocked, sessionStatus]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -362,12 +572,13 @@ export default function ParentDashboardPage() {
     if (c === "success") {
       setDbBanner("התשלום הושלם בהצלחה.");
       setStripeCheckoutNonce((n) => n + 1);
+      handleCheckoutReturnIdle();
       window.history.replaceState({}, "", window.location.pathname);
     } else if (c === "cancel") {
       setDbBanner("התשלום בוטל. ניתן לנסות שוב בכל עת.");
       window.history.replaceState({}, "", window.location.pathname);
     }
-  }, []);
+  }, [handleCheckoutReturnIdle]);
 
   useEffect(() => {
     if (!debugToast) return;
@@ -375,7 +586,7 @@ export default function ParentDashboardPage() {
     return () => window.clearTimeout(t);
   }, [debugToast]);
 
-  /** Toast when sitter approves/rejects today's booking (via shiftGate realtime refetch). */
+  /** Toast when sitter approves/rejects today's booking (via shiftGate refetch). */
   useEffect(() => {
     const next = shiftGateStatus || null;
     const prev = prevShiftGateStatusRef.current;
@@ -384,24 +595,54 @@ export default function ParentDashboardPage() {
     if (!next || !prev || prev === next) return;
 
     if (prev === "pending" && next === "approved") {
-      setBookingFeedbackVariant("success");
-      setBookingFeedbackToast("הבייביסיטר אישרה את בקשת המשמרת!");
+      notifyBookingTransition("approved", "gate");
+      return;
+    }
+
+    if (
+      prev === "pending" &&
+      (next === "parent_started" || next === "sitter_started" || next === "sitter_ended")
+    ) {
+      notifyBookingTransition(next, "gate");
       return;
     }
 
     if (prev === "pending" && (next === "rejected" || next === "cancelled")) {
-      applyBookingShiftNotice(next);
-      setBookingFeedbackVariant("error");
-      setBookingFeedbackToast(BOOKING_SHIFT_REJECTED_NOTICE);
+      notifyBookingTransition(next, "gate");
     }
-  }, [shiftGateStatus, applyBookingShiftNotice]);
+  }, [shiftGateStatus, notifyBookingTransition]);
 
   /** Sync inline notice from latest today booking row (survives linked-booking refetch). */
   useEffect(() => {
     applyBookingShiftNotice(shiftGateStatus || undefined);
   }, [shiftGateStatus, applyBookingShiftNotice]);
 
-  /** Parent-scoped bookings realtime — toast/notice only; booking state lives in useTodaysLinkedBooking. */
+  /** Re-hydrate booking state when tab regains focus or parent auth becomes available. */
+  useEffect(() => {
+    if (!parentUserId) return;
+
+    void reloadTodaysBooking();
+
+    const refreshFromDb = () => {
+      void reloadTodaysBooking();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshFromDb();
+      }
+    };
+
+    window.addEventListener("focus", refreshFromDb);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", refreshFromDb);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [parentUserId, reloadTodaysBooking]);
+
+  /** Parent bookings realtime — `event: '*'` on bookings; immediate circle + notice updates. */
   useEffect(() => {
     if (shiftCompletedFrozenRef.current || todaysBookingStatus === "completed") {
       return;
@@ -411,18 +652,14 @@ export default function ParentDashboardPage() {
     if (!supabase || !parentUserId) return;
 
     const handleRowChange = (payload: RealtimePostgresChangesPayload<BookingRow>) => {
-      if (payload.eventType !== "UPDATE" && payload.eventType !== "INSERT") return;
+      const row = readBookingRowFromRealtimeChange(payload);
+      if (!row || String(row.parent_id) !== parentUserId) return;
 
-      const row = (payload.new ?? null) as BookingRow | null;
-      if (!row?.status) return;
-
-      const incomingStatus =
-        typeof row.status === "object" && row.status !== null
-          ? (row.status as { name?: string }).name
-          : row.status;
+      const rowStatus = normalizeBookingStatus(row.status);
+      if (!rowStatus) return;
 
       if (
-        incomingStatus === "completed" ||
+        rowStatus === "completed" ||
         todaysBookingStatusRef.current === "completed" ||
         shiftCompletedFrozenRef.current
       ) {
@@ -430,19 +667,21 @@ export default function ParentDashboardPage() {
         return;
       }
 
-      const rowStatus = normalizeBookingStatus(row.status) ?? "";
-      const prevStatus = prevShiftGateStatusRef.current;
-      if (prevStatus === rowStatus) return;
-
-      if (rowStatus === "rejected" || rowStatus === "cancelled") {
-        applyBookingShiftNotice(rowStatus);
-        setBookingFeedbackVariant("error");
-        setBookingFeedbackToast(BOOKING_SHIFT_REJECTED_NOTICE);
-      } else if (rowStatus === "approved" && prevStatus === "pending") {
-        applyBookingShiftNotice("approved");
-        setBookingFeedbackVariant("success");
-        setBookingFeedbackToast("הבייביסיטר אישרה את בקשת המשמרת!");
+      if (isParentBookingRejection(row.status)) {
+        applyCircleBooking(null);
+        notifyBookingTransition(rowStatus, "realtime");
+        void reloadTodaysBooking();
+        return;
       }
+
+      if (isParentBookingTrackingStatus(row.status)) {
+        applyParentTrackingCircleFromRow(row);
+        notifyBookingTransition(rowStatus, "realtime");
+        void reloadTodaysBooking();
+        return;
+      }
+
+      void reloadTodaysBooking();
     };
 
     const channel = supabase
@@ -450,17 +689,7 @@ export default function ParentDashboardPage() {
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `parent_id=eq.${parentUserId}`
-        },
-        handleRowChange
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: BOOKINGS_TABLE,
           filter: `parent_id=eq.${parentUserId}`
@@ -472,32 +701,132 @@ export default function ParentDashboardPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [parentUserId, todaysBookingStatus, applyBookingShiftNotice, breakCompletedRealtimeLoop]);
+  }, [
+    parentUserId,
+    todaysBookingStatus,
+    reloadTodaysBooking,
+    notifyBookingTransition,
+    breakCompletedRealtimeLoop,
+    applyCircleBooking,
+    applyParentTrackingCircleFromRow
+  ]);
+
+  useEffect(() => {
+    if (!sessionClosureEligible || bookingPaymentStatus === "paid") {
+      setClosureBookingVerify("idle");
+      setClosureError(null);
+      return;
+    }
+
+    const bid = closureBookingId.trim();
+    if (!bid) {
+      setClosureBookingVerify("unavailable");
+      setClosureError(null);
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setClosureBookingVerify("unavailable");
+      return;
+    }
+
+    let cancelled = false;
+    setClosureBookingVerify("checking");
+    setClosureError(null);
+
+    void (async () => {
+      const read = safeSupabaseRead(
+        await supabase.from(BOOKINGS_TABLE).select("id, status").eq("id", bid).maybeSingle(),
+        "closure booking verify"
+      );
+
+      if (cancelled) return;
+
+      if (read.error || !read.data) {
+        setClosureBookingVerify(read.schemaDrift ? "ready" : "unavailable");
+        return;
+      }
+
+      const status = normalizeBookingStatus((read.data as BookingRow).status);
+      if (!isClosureBookingStatus(status)) {
+        setClosureBookingVerify("unavailable");
+        return;
+      }
+
+      setClosureBookingVerify("ready");
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionClosureEligible, closureBookingId, bookingPaymentStatus, todaysBookingUpdatedAt]);
 
   useEffect(() => {
     if (sessionStatus !== "ended") {
       setBookingPaymentStatus("unknown");
       return;
     }
-    // Payment columns are not on `bookings` until the stripe migration runs.
-    setBookingPaymentStatus("unpaid");
-  }, [sessionStatus, sessionLinkedBookingId, stripeCheckoutNonce]);
+    const bid = closureBookingId.trim();
+    if (!bid) {
+      setBookingPaymentStatus("unpaid");
+      return;
+    }
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setBookingPaymentStatus("unknown");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await fetchBookingPaymentStatus(supabase, bid);
+        if (!cancelled) setBookingPaymentStatus(status === "paid" ? "paid" : "unpaid");
+      } catch {
+        if (!cancelled) setBookingPaymentStatus("unpaid");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus, closureBookingId, stripeCheckoutNonce]);
 
-  /** No booking today → clear stale session placeholder (keep in-flight / active shift). */
+  /** Preserve post-shift `ended` state for rating/payment — do not reset while closure is pending. */
   useEffect(() => {
-    if (!bookingGuardReady || todaysBookingId) return;
+    if (!bookingGuardReady) return;
+
+    if (sessionStatus === "ended") {
+      return;
+    }
+
+    const liveStatuses = new Set<BookingStatus>([
+      "pending",
+      "approved",
+      "sitter_started",
+      "parent_started",
+      "in_progress",
+      "sitter_ended"
+    ]);
+    const bookingStatus = todaysBookingStatusNormalized;
+    const hasLiveBooking =
+      Boolean(todaysBookingId) && bookingStatus != null && liveStatuses.has(bookingStatus);
+
+    if (hasLiveBooking) return;
+
     if (
-      sessionStatus === "idle" ||
-      sessionStatus === "parent_initiated" ||
-      sessionStatus === "active"
+      (sessionStatus === "active" || sessionStatus === "parent_initiated") &&
+      sessionState.parentStartedAtMs
     ) {
       return;
     }
+
+    if (shiftGateStatus === "pending") return;
+
     const idle: SessionProtocolState = { status: "idle" };
     persistSessionState(idle);
     setSessionState(idle);
     setNowMs(Date.now());
-  }, [bookingGuardReady, todaysBookingId, sessionStatus]);
+  }, [bookingGuardReady, todaysBookingId, todaysBookingStatusNormalized, sessionStatus, shiftGateStatus, sessionState.parentStartedAtMs]);
 
   /** Booking completed/cancelled early — hide live session timer even if still inside calendar slot. */
   useEffect(() => {
@@ -568,7 +897,7 @@ export default function ParentDashboardPage() {
   }, [syncFromStorage]);
 
   useEffect(() => {
-    if (sessionFetchBlockedRef.current || shiftUiLocked || isShiftLocallyDismissed(todaysBookingId)) {
+    if (shiftUiLocked || isShiftLocallyDismissed(todaysBookingId)) {
       return;
     }
     if (!parentUserId || !bookingGuardReady) return;
@@ -581,12 +910,53 @@ export default function ParentDashboardPage() {
       try {
         let local: SessionProtocolState = { status: "idle" };
         try {
-          local = readSessionState();
+          local = reconcileStaleEndedLocalState(
+            readSessionState(),
+            normalizeBookingStatus(todaysBooking?.status)
+          );
         } catch {
           /* ignore */
         }
 
-        if (todaysBookingStatus === "completed" || shiftCompletedFrozenRef.current) {
+        if (todaysBookingStatus === "completed") {
+          lockShiftUi(todaysBookingId);
+          if (isShiftLocallyDismissed(todaysBookingId)) {
+            const idle: SessionProtocolState = { status: "idle" };
+            persistSessionState(idle);
+            if (!cancelled) setSessionState(idle);
+            return;
+          }
+
+          const dismissedId = readDismissedCompletedSessionId("parent");
+          const row = await fetchRelevantParentSessionRow(
+            supabase,
+            parentUserId,
+            todaysBookingId,
+            "completed"
+          );
+          if (cancelled) return;
+
+          if (row) {
+            const merged = mergeParentSessionFromDbRow(row, {
+              dismissedCompletedSessionId: dismissedId,
+              todaysBookingId,
+              localState: local,
+              bookingStatus: "completed"
+            });
+            if (merged) {
+              persistSessionState(merged);
+              if (!cancelled) setSessionState(merged);
+              return;
+            }
+          }
+
+          if (local.status === "ended") {
+            if (!cancelled) setSessionState(local);
+          }
+          return;
+        }
+
+        if (shiftCompletedFrozenRef.current) {
           const idle: SessionProtocolState = { status: "idle" };
           persistSessionState(idle);
           if (!cancelled) setSessionState(idle);
@@ -609,54 +979,33 @@ export default function ParentDashboardPage() {
           if (!cancelled) setSessionState(local);
         }
 
-        const { data: row, error: rowErr } = await supabase
-          .from(SESSIONS_TABLE)
-          .select("*")
-          .eq("parent_id", parentUserId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const row = await fetchRelevantParentSessionRow(
+          supabase,
+          parentUserId,
+          todaysBookingId,
+          todaysBookingStatusNormalized
+        );
 
         if (cancelled) return;
 
-        if (rowErr) {
-          if (isSupabaseBadRequestError(rowErr)) {
-            sessionFetchBlockedRef.current = true;
-            console.warn("[parent] initial sessions fetch 400 - skipping state update");
-            return;
-          }
-          console.warn("[parent] initial sessions fetch:", rowErr.message);
-          return;
-        }
-
         if (row) {
           const dismissedId = readDismissedCompletedSessionId("parent");
-          const mapped = parentSessionStateFromSupabaseRow(row as SupabaseSessionRow, dismissedId);
-          if (mapped) {
-            if (local.status === "active" && mapped.status !== "active") {
-              const preserved: SessionProtocolState = {
-                ...local,
-                supabaseSessionId: mapped.supabaseSessionId ?? local.supabaseSessionId,
-                linkedBookingId: local.linkedBookingId ?? mapped.linkedBookingId ?? todaysBookingId
-              };
-              persistSessionState(preserved);
-              if (!cancelled) setSessionState(preserved);
-              return;
-            }
-            const merged: SessionProtocolState = {
-              ...mapped,
-              linkedBookingId: mapped.linkedBookingId ?? todaysBookingId
-            };
+          const merged = mergeParentSessionFromDbRow(row, {
+            dismissedCompletedSessionId: dismissedId,
+            todaysBookingId,
+            localState: local,
+            bookingStatus: todaysBookingStatusNormalized
+          });
+          if (merged) {
             persistSessionState(merged);
             if (!cancelled) setSessionState(merged);
           }
+        } else if (local.status === "active" || local.status === "parent_initiated") {
+          const idle: SessionProtocolState = { status: "idle" };
+          persistSessionState(idle);
+          if (!cancelled) setSessionState(idle);
         }
       } catch (e) {
-        if (isSupabaseBadRequestError(e)) {
-          sessionFetchBlockedRef.current = true;
-          console.warn("[parent] session hydrate 400 - skipping state update");
-          return;
-        }
         console.warn("[parent] session hydrate error:", e);
       }
     })();
@@ -664,12 +1013,11 @@ export default function ParentDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [parentUserId, bookingGuardReady, todaysBookingId, todaysBookingStatus, todaysBookingUpdatedAt, shiftUiLocked, lockShiftUi]);
+  }, [parentUserId, bookingGuardReady, todaysBookingId, todaysBookingStatus, shiftUiLocked, lockShiftUi]);
 
   /** Prefer row id when known so parent_end_requested_at updates arrive instantly for that session. */
   useEffect(() => {
     if (
-      sessionFetchBlockedRef.current ||
       shiftUiLocked ||
       isShiftLocallyDismissed(todaysBookingId) ||
       shiftCompletedFrozenRef.current ||
@@ -692,27 +1040,24 @@ export default function ParentDashboardPage() {
         const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
         if (!rowData || typeof rowData !== "object") return;
         const dismissedId = readDismissedCompletedSessionId("parent");
-        const mapped = parentSessionStateFromSupabaseRow(rowData as SupabaseSessionRow, dismissedId);
-        if (mapped) {
-          setSessionState((prev) => {
-            if (mapped.status === "idle") {
-              persistSessionState(mapped);
-              return mapped;
-            }
-            const merged: SessionProtocolState = {
-              ...mapped,
-              linkedBookingId: mapped.linkedBookingId ?? prev.linkedBookingId
-            };
-            persistSessionState(merged);
-            return merged;
+        setSessionState((prev) => {
+          if (
+            prev.status === "ended" &&
+            isClosureBookingStatus(todaysBookingStatusNormalized)
+          ) {
+            return prev;
+          }
+          const merged = mergeParentSessionFromDbRow(rowData as SupabaseSessionRow, {
+            dismissedCompletedSessionId: dismissedId,
+            todaysBookingId,
+            localState: prev,
+            bookingStatus: todaysBookingStatusNormalized
           });
-        }
+          if (!merged) return prev;
+          persistSessionState(merged);
+          return merged;
+        });
       } catch (e) {
-        if (isSupabaseBadRequestError(e)) {
-          sessionFetchBlockedRef.current = true;
-          console.warn("[parent] session realtime 400 - skipping state update");
-          return;
-        }
         console.warn("[parent] session realtime handler error:", e);
       }
     };
@@ -725,7 +1070,7 @@ export default function ParentDashboardPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [parentUserId, sessionSupabaseSessionId, todaysBookingStatus, todaysBookingId, shiftUiLocked]);
+  }, [parentUserId, sessionSupabaseSessionId, todaysBookingStatus, todaysBookingId, shiftUiLocked, todaysBookingStatusNormalized]);
 
   const startSession = async () => {
     if (startShiftBusy) return;
@@ -772,19 +1117,18 @@ export default function ParentDashboardPage() {
     applyCircleBooking(preservedBooking);
 
     const startedAtMs = Date.now();
-    const optimisticActive: SessionProtocolState = {
-      status: "active",
-      parentStartedAtMs: startedAtMs,
-      linkedBookingId: preservedBooking.id,
-      startConfirmed: true
-    };
-    persistSessionState(optimisticActive);
-    setSessionState(optimisticActive);
-    setNowMs(startedAtMs);
-    setParentUserId(auth.userId);
     setStartShiftBusy(true);
     setDbBanner(null);
     setUseSupabase(true);
+    setParentUserId(auth.userId);
+
+    const resetLocalSessionIdle = (message: string) => {
+      const idle: SessionProtocolState = { status: "idle" };
+      persistSessionState(idle);
+      setSessionState(idle);
+      setNowMs(Date.now());
+      setDbBanner(message);
+    };
 
     try {
       if (bookingStatus === "sitter_started" || bookingStatus === "approved") {
@@ -811,76 +1155,70 @@ export default function ParentDashboardPage() {
         {
           parent_id: auth.userId,
           sitter_id: linkedSitterId,
-          status: "active",
-          start_time: startIso,
-          start_confirmed: true,
-          booking_id: preservedBooking.id
-        },
-        {
-          parent_id: auth.userId,
-          sitter_id: linkedSitterId,
-          status: "active",
+          status: SESSION_STATUS_PENDING_SITTER_APPROVAL,
           start_time: startIso
         },
         {
           parent_id: auth.userId,
           sitter_id: linkedSitterId,
-          status: SESSION_STATUS_PENDING_SITTER_APPROVAL,
-          start_time: null,
-          booking_id: preservedBooking.id
-        },
-        {
-          parent_id: auth.userId,
-          sitter_id: linkedSitterId,
-          status: SESSION_STATUS_PENDING_SITTER_APPROVAL,
-          start_time: null
+          status: "active",
+          start_time: startIso,
+          start_confirmed: true
         }
       ];
 
-      let row: Record<string, unknown> | null = null;
-      let lastError: { message: string } | null = null;
+      let row: SupabaseSessionRow | null = null;
+      let lastError: string | null = null;
 
       for (const insertBase of sessionInserts) {
-        const ins = await auth.supabase.from(SESSIONS_TABLE).insert(insertBase).select("*").single();
-        if (!ins.error && ins.data) {
-          row = ins.data as Record<string, unknown>;
+        const ins = await insertSessionReturningRow(auth.supabase, insertBase);
+        if (ins.row) {
+          row = ins.row;
           break;
         }
-        if (ins.error) {
-          lastError = ins.error;
-        }
+        lastError = ins.error;
       }
 
       if (row) {
-        const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+        const mapped = mapSupabaseRowToProtocol(row);
+        const isPendingStart = SESSION_PENDING_START_STATUSES.includes(String(row.status));
         const next: SessionProtocolState = mapped
           ? {
-              ...optimisticActive,
               ...mapped,
-              status: "active",
-              parentStartedAtMs: mapped.parentStartedAtMs ?? startedAtMs,
+              status: isPendingStart ? "parent_initiated" : "active",
+              parentStartedAtMs: isPendingStart ? undefined : mapped.parentStartedAtMs ?? startedAtMs,
               linkedBookingId: mapped.linkedBookingId ?? preservedBooking.id,
-              startConfirmed: true
+              startConfirmed: !isPendingStart
             }
-          : optimisticActive;
+          : isPendingStart
+            ? {
+                status: "parent_initiated",
+                linkedBookingId: preservedBooking.id,
+                supabaseSessionId: String(row.id)
+              }
+            : {
+                status: "active",
+                parentStartedAtMs: startedAtMs,
+                linkedBookingId: preservedBooking.id,
+                supabaseSessionId: String(row.id),
+                startConfirmed: true
+              };
         persistSessionState(next);
         setSessionState(next);
         setNowMs(Date.now());
-        setDebugToast("המשמרת התחילה");
+        setDebugToast(isPendingStart ? "בקשת התחלה נשלחה לבייביסיטר" : "המשמרת התחילה");
       } else {
-        console.warn("[parent] session insert failed — keeping local active timer:", lastError?.message);
-        persistSessionState(optimisticActive);
-        setSessionState(optimisticActive);
-        if (lastError) {
-          setDbBanner("המשמרת פעילה מקומית — סנכרון לשרת יושלם ברקע.");
-        }
+        console.warn("[parent] session insert failed:", lastError);
+        resetLocalSessionIdle(
+          friendlySupabaseSessionError(lastError ?? "לא ניתן לסנכרן את המשמרת לשרת.")
+        );
       }
     } catch (e) {
       console.error("[parent] startSession:", e);
-      persistSessionState(optimisticActive);
-      setSessionState(optimisticActive);
       applyCircleBooking(preservedBooking);
-      setDbBanner("המשמרת פעילה מקומית — נסו לרענן אם הטיימר לא מסתנכרן.");
+      resetLocalSessionIdle(
+        friendlySupabaseSessionError(e ?? "לא ניתן לפתוח משמרת — נסו שוב.")
+      );
     } finally {
       setStartShiftBusy(false);
     }
@@ -940,14 +1278,14 @@ export default function ParentDashboardPage() {
       }
       const reqAt = new Date().toISOString();
       try {
-        const { data: row, error } = await auth.supabase
-          .from(SESSIONS_TABLE)
-          .update({ parent_end_requested_at: reqAt })
-          .eq("id", sessionState.supabaseSessionId)
-          .select("*")
-          .single();
-        if (!error && row) {
-          const mapped = mapSupabaseRowToProtocol(row as SupabaseSessionRow);
+        const read = await updateSessionReturningRow(
+          auth.supabase,
+          sessionState.supabaseSessionId,
+          { parent_end_requested_at: reqAt },
+          { parentId: auth.userId }
+        );
+        if (!read.error && read.row) {
+          const mapped = mapSupabaseRowToProtocol(read.row);
           if (mapped) {
             persistSessionState(mapped);
             setSessionState(mapped);
@@ -956,9 +1294,9 @@ export default function ParentDashboardPage() {
             return;
           }
         }
-        if (error) {
-          console.error("[parent] request end failed:", error.message);
-          setDbBanner(friendlySupabaseSessionError(error));
+        if (read.error) {
+          console.error("[parent] request end failed:", read.error);
+          setDbBanner(friendlySupabaseSessionError({ message: read.error }));
         }
       } catch (e) {
         console.error("[parent] endSession:", e);
@@ -967,17 +1305,110 @@ export default function ParentDashboardPage() {
     }
   };
 
-  const showParentIdleCircle =
-    sessionState.status !== "ended" &&
-    (sessionState.status !== "active" && sessionState.status !== "parent_initiated");
-
-  const sessionRunning =
-    !sessionUiBlockedByBooking &&
-    (sessionState.status === "active" || sessionState.status === "parent_initiated");
-
   const waitingNannyStart = sessionState.status === "parent_initiated";
   const waitingNannyEnd =
     sessionState.status === "active" && sessionState.parentEndRequestedAtMs != null;
+
+  const parentShiftStatus = useMemo(
+    () =>
+      normalizeBookingStatus(
+        circleBookingStatus ||
+          todaysBookingStatus ||
+          shiftGateStatus ||
+          undefined
+      ),
+    [circleBookingStatus, todaysBookingStatus, shiftGateStatus]
+  );
+
+  const isParentApprovedShift = isParentBookingApprovalStatus(parentShiftStatus);
+  const isParentTrackingShift = isParentBookingTrackingStatus(parentShiftStatus);
+
+  const staleEndedSessionForLiveBooking = useMemo(
+    () =>
+      sessionState.status === "ended" &&
+      !sessionClosureEligible &&
+      (isParentTrackingShift || parentShiftStatus === "pending"),
+    [sessionState.status, sessionClosureEligible, isParentTrackingShift, parentShiftStatus]
+  );
+
+  /** Prior shift ended in local state must not blank the center when a new approved booking exists. */
+  useEffect(() => {
+    if (!bookingGuardReady || !staleEndedSessionForLiveBooking) return;
+    const idle: SessionProtocolState = { status: "idle" };
+    persistSessionState(idle);
+    setSessionState(idle);
+    setNowMs(Date.now());
+  }, [bookingGuardReady, staleEndedSessionForLiveBooking]);
+
+  const effectiveSessionStatus: SessionProtocolState["status"] =
+    staleEndedSessionForLiveBooking ? "idle" : sessionState.status;
+
+  const showParentPendingNotice = isParentPendingLocked;
+
+  const showParentApprovedNotice =
+    !bookingShiftRejectedNotice &&
+    !showParentPendingNotice &&
+    isParentApprovedShift;
+
+  const sessionRunning =
+    !sessionUiBlockedByBooking &&
+    !sessionClosureEligible &&
+    effectiveSessionStatus !== "ended" &&
+    (effectiveSessionStatus === "active" || effectiveSessionStatus === "parent_initiated");
+
+  const hideSearchShortcuts =
+    isParentPendingLocked ||
+    isParentApprovedShift ||
+    isParentTrackingShift ||
+    sessionRunning ||
+    (Boolean(idleCircleBooking) &&
+      !bookingShiftRejectedNotice &&
+      todaysBookingStatus !== "rejected" &&
+      todaysBookingStatus !== "cancelled");
+
+  const handleDismissRejectedNotice = useCallback(() => {
+    setBookingShiftRejectedNotice(false);
+    setBookingFeedbackToast(null);
+  }, []);
+
+  const showParentShiftCircle =
+    !sessionClosureEligible &&
+    !bookingShiftRejectedNotice &&
+    effectiveSessionStatus !== "active" &&
+    effectiveSessionStatus !== "parent_initiated" &&
+    (Boolean(idleCircleBooking) || isParentTrackingShift || parentShiftStatus === "pending");
+
+  const showParentActiveSessionCenter =
+    effectiveSessionStatus === "active" &&
+    !waitingNannyEnd &&
+    !sessionClosureEligible &&
+    !sessionUiBlockedByBooking;
+
+  const showParentEmergencyReset =
+    sessionRunning ||
+    waitingNannyEnd ||
+    sessionClosureEligible ||
+    sessionState.status === "ended" ||
+    shiftUiLocked;
+
+  const handleParentEmergencyReset = useCallback(async () => {
+    const idle: SessionProtocolState = { status: "idle" };
+    persistSessionState(idle);
+    setSessionState(idle);
+    setClosureError(null);
+    setClosureBookingVerify("idle");
+    setBookingPaymentStatus("unknown");
+    setPayBusy(false);
+    setShiftUiLocked(false);
+    setNowMs(Date.now());
+    shiftCompletedFrozenRef.current = false;
+    await reloadTodaysBooking();
+  }, [reloadTodaysBooking]);
+
+  const inPaymentClosure =
+    sessionClosureEligible &&
+    bookingPaymentStatus !== "paid" &&
+    closureBookingVerify !== "unavailable";
 
   const showLoading =
     clientHasSessionUser !== true && (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading));
@@ -985,7 +1416,7 @@ export default function ParentDashboardPage() {
   if (showLoading) {
     return (
       <main
-        className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10"
+        className="mx-auto flex h-full min-h-0 w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10"
         dir="rtl"
       >
         <p className="text-right text-sm text-slate-600">{"טוען..."}</p>
@@ -994,13 +1425,18 @@ export default function ParentDashboardPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-6rem)] w-full max-w-md flex-col space-y-5 bg-[#FDFBF6] py-2" dir="rtl">
-      <DashboardWelcomeHeader fullName={fullName} nameLoading={greetingNameLoading} />
+    <main
+      className={`mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6] py-2 ${inPaymentClosure ? "gap-2" : "space-y-4"}`}
+      dir="rtl"
+    >
+      <div className="shrink-0">
+        <DashboardWelcomeHeader fullName={fullName} nameLoading={greetingNameLoading} />
+      </div>
 
       {dbBanner ? (
         <div
           role="status"
-          className="flex flex-row-reverse items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-950"
+          className="flex shrink-0 flex-row-reverse items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-950"
         >
           <button
             type="button"
@@ -1013,7 +1449,8 @@ export default function ParentDashboardPage() {
         </div>
       ) : null}
 
-      <section className="rounded-3xl bg-white p-4 shadow-soft sm:p-5">
+      {inPaymentClosure || hideSearchShortcuts ? null : (
+      <section className="shrink-0 rounded-3xl bg-white p-4 shadow-soft sm:p-5">
         <div className="grid grid-cols-2 gap-3">
           <Link
             href="/parent/calendar"
@@ -1066,68 +1503,138 @@ export default function ParentDashboardPage() {
           <span className="min-w-0 flex-1 text-sm font-bold leading-snug text-emerald-950">חיפוש נני — דירוגים וביקורות</span>
         </Link>
       </section>
+      )}
 
-      <DoubleShakeShiftPanel>
-        {sessionRunning ? (
-          <div className="w-full space-y-2 text-right">
-            <p className="text-xs font-medium text-slate-600">
-              {waitingNannyStart
-                ? "ממתין לאישור הבייביסיטר…"
-                : waitingNannyEnd
-                  ? "ממתין לאישור סיום..."
-                  : "משמרת פעילה"}
-            </p>
-            {(sessionState.status === "active" || waitingNannyEnd) && (
-              <>
-                <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{timerText}</p>
-                <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
-              </>
-            )}
-            {waitingNannyStart ? (
-              <>
-                <p className="text-4xl font-bold tabular-nums tracking-wide text-slate-400">00:00:00</p>
-                <p className="text-sm font-semibold text-slate-500">סכום שנצבר: ₪0.00</p>
-              </>
-            ) : null}
-          </div>
-        ) : null}
+      <DoubleShakeShiftPanel className={`min-h-0 flex-1 ${inPaymentClosure ? "!mt-0 !p-2 sm:!p-3" : ""}`}>
+        <div
+          className={`flex min-h-0 w-full flex-1 flex-col items-center overflow-hidden ${
+            sessionRunning ? "justify-center gap-4 py-2" : "min-h-0"
+          }`}
+        >
+          {sessionRunning ? (
+            <div className="w-full shrink-0 space-y-1.5 px-1 text-right">
+              <p className="text-xs font-medium text-slate-600">
+                {waitingNannyStart
+                  ? "ממתין לאישור הבייביסיטר…"
+                  : waitingNannyEnd
+                    ? "ממתין לאישור סיום..."
+                    : "משמרת פעילה"}
+              </p>
+              {(sessionState.status === "active" || waitingNannyEnd) && (
+                <>
+                  <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{timerText}</p>
+                  <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
+                </>
+              )}
+              {waitingNannyStart ? (
+                <>
+                  <p className="text-4xl font-bold tabular-nums tracking-wide text-slate-400">00:00:00</p>
+                  <p className="text-sm font-semibold text-slate-500">סכום שנצבר: ₪0.00</p>
+                </>
+              ) : null}
+            </div>
+          ) : null}
 
-        {bookingShiftRejectedNotice ? (
-          <div
-            className="mb-1 w-full rounded-2xl border-2 border-rose-400 bg-rose-50 px-4 py-3.5 text-right shadow-sm"
-            role="alert"
-            aria-live="assertive"
+          {bookingShiftRejectedNotice ? (
+            <div
+              className="mb-1 w-full shrink-0 rounded-2xl border-2 border-rose-400 bg-rose-50 px-4 py-3.5 text-right shadow-sm"
+              role="alert"
+              aria-live="assertive"
+            >
+              <p className="text-base font-bold leading-snug text-rose-950">{BOOKING_SHIFT_REJECTED_NOTICE}</p>
+              <p className="mt-1 text-sm leading-snug text-rose-900">
+                ניתן לחפש בייביסיטר אחרת או לנסות תאריך ושעה חדשים.
+              </p>
+              <div className="mt-3 flex flex-row-reverse flex-wrap gap-2">
+                <Link
+                  href="/parent/search"
+                  className="rounded-xl bg-[#001F3F] px-4 py-2 text-xs font-bold text-white transition hover:brightness-110"
+                >
+                  חיפוש בייביסיטר
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleDismissRejectedNotice}
+                  className="rounded-xl border border-rose-300 bg-white px-4 py-2 text-xs font-semibold text-rose-900 transition hover:bg-rose-100"
+                >
+                  סגור
+                </button>
+              </div>
+            </div>
+          ) : showParentPendingNotice ? (
+            <div
+              className="mb-1 w-full shrink-0 rounded-2xl border-2 border-sky-300 bg-sky-50 px-4 py-3.5 text-right shadow-sm"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-base font-bold leading-snug text-sky-950">{BOOKING_SHIFT_PENDING_NOTICE}</p>
+              <p className="mt-1 text-sm leading-snug text-sky-900/90">
+                שלחנו את הבקשה לבייביסיטר — תקבלו עדכון כאן ברגע שתאשר או תדחה.
+              </p>
+              {idleCircleBooking?.schedule_label ? (
+                <p className="mt-1 text-sm font-medium text-sky-900/90 tabular-nums">
+                  {idleCircleBooking.schedule_label}
+                </p>
+              ) : null}
+            </div>
+          ) : showParentApprovedNotice ? (
+            <div
+              className="mb-1 w-full shrink-0 rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-4 py-3.5 text-right shadow-sm"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-base font-bold leading-snug text-emerald-950">{BOOKING_SHIFT_APPROVED_NOTICE}</p>
+              <p className="mt-1 text-sm leading-snug text-emerald-900/90">
+                הבייביסיטר אישרה את המשמרת — אפשר להתחיל כשיגיע זמן המשמרת.
+              </p>
+              {idleCircleBooking?.schedule_label ? (
+                <p className="mt-1 text-sm font-medium text-emerald-900/90 tabular-nums">
+                  {idleCircleBooking.schedule_label}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DoubleShakeCircleSlot
+            align={inPaymentClosure ? "start" : "center"}
+            pinToBottom={!sessionRunning}
+            className={sessionRunning ? "!mt-0 pt-4" : undefined}
           >
-            <p className="text-base font-bold leading-snug text-rose-950">{BOOKING_SHIFT_REJECTED_NOTICE}</p>
-          </div>
-        ) : null}
-
-        <DoubleShakeCircleSlot>
-          {sessionState.status === "ended" && completedSummary ? (
-            <SessionFinalSummary
+          {sessionClosureEligible && bookingPaymentStatus === "paid" ? (
+            <p className="text-center text-sm font-semibold text-emerald-800">התשלום הושלם — תודה!</p>
+          ) : sessionClosureEligible &&
+            bookingPaymentStatus !== "paid" &&
+            closureBookingVerify !== "unavailable" &&
+            completedSummary ? (
+            <ParentSessionClosurePanel
               elapsedSeconds={completedSummary.elapsedSeconds}
               amountNis={completedSummary.amountNis}
-              onDismiss={handleSummaryCloseRequestRating}
-              payAvailable={
-                bookingPaymentStatus === "unpaid" && Boolean(sessionState.linkedBookingId?.trim())
-              }
-              payBusy={payBusy}
-              onPay={() => void handlePayForShift()}
-              paymentStatusLabel={
-                bookingPaymentStatus === "paid"
-                  ? "שולם"
-                  : bookingPaymentStatus === "unknown" && sessionState.linkedBookingId
-                    ? "בודקים סטטוס תשלום…"
-                    : null
-              }
+              busy={payBusy}
+              bookingChecking={closureBookingVerify === "checking"}
+              bookingReady={closureBookingVerify === "ready"}
+              errorMessage={closureError}
+              onConfirmAndPay={handleConfirmAndPay}
             />
-          ) : showParentIdleCircle ? (
+          ) : showParentActiveSessionCenter ? (
+            <div className="flex w-full flex-col items-center justify-center gap-4 pt-2">
+              <ParentSessionTimerCircle
+                timerText={timerText}
+                amountLabel={`₪${earnedNis}`}
+                variant="salmon"
+              />
+              <DoubleShakeCircleButton
+                label="סיום משמרת"
+                variant="salmon"
+                onClick={() => void endSession()}
+              />
+            </div>
+          ) : showParentShiftCircle ? (
             <ParentDoubleShakeIdleCircle
               key={parentCircleLiveKey}
               booking={idleCircleBooking}
               ready={bookingGuardReady}
               busy={startShiftBusy}
-              sessionActive={sessionState.status === "active"}
+              sessionActive={effectiveSessionStatus === "active"}
               onStartShift={() => void startSession()}
             />
           ) : waitingNannyStart ? (
@@ -1146,16 +1653,26 @@ export default function ParentDashboardPage() {
                 {cancelBusy ? "מבטלים…" : "ביטול הבקשה"}
               </button>
             </>
-          ) : sessionState.status === "active" && !waitingNannyEnd ? (
-            <DoubleShakeCircleButton label="סיום משמרת" variant="salmon" onClick={() => void endSession()} />
-          ) : waitingNannyEnd ? (
-            <DoubleShakeCircleButton
-              label="ממתין לאישור סיום..."
-              variant="waiting-salmon"
-              presentational
+          ) : waitingNannyEnd && !sessionClosureEligible ? (
+            <div className="mt-2 flex flex-col items-center justify-center pt-2">
+              <DoubleShakeCircleButton
+                label="ממתין לאישור סיום..."
+                variant="waiting-salmon"
+                presentational
+              />
+            </div>
+          ) : isParentTrackingShift || parentShiftStatus === "pending" ? (
+            <ParentDoubleShakeIdleCircle
+              key={parentCircleLiveKey}
+              booking={idleCircleBooking}
+              ready={bookingGuardReady}
+              busy={startShiftBusy}
+              sessionActive={false}
+              onStartShift={() => void startSession()}
             />
           ) : null}
-        </DoubleShakeCircleSlot>
+          </DoubleShakeCircleSlot>
+        </div>
       </DoubleShakeShiftPanel>
 
       {debugToast ? (
@@ -1174,12 +1691,15 @@ export default function ParentDashboardPage() {
         onDismiss={() => setBookingFeedbackToast(null)}
       />
 
-      <SessionRatingModal
-        open={ratingOpen}
-        role="parent"
-        sessionId={ratingTargetSessionId}
-        onResolved={handleRatingResolved}
-      />
+      {showParentEmergencyReset ? (
+        <div className="shrink-0 pb-1 text-center">
+          <StuckShiftDevResetButton
+            role="parent"
+            variant="link"
+            onReset={() => void handleParentEmergencyReset()}
+          />
+        </div>
+      ) : null}
     </main>
   );
 }

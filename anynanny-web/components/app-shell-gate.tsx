@@ -8,8 +8,26 @@ import { RouteTransitionShell } from "@/components/route-transition-shell";
 
 const CHROMELESS_PREFIXES = ["/auth/role-selection", "/auth/login", "/auth/register"];
 
+/**
+ * Screens that must lock to the device viewport with no page scroll (Fixed Viewport).
+ * For these routes the shell height is pinned to the dynamic viewport and the content
+ * area stops scrolling — individual screens distribute space via flex and may opt-in to
+ * a small internal scroll on a specific overflowing box.
+ */
+const FIXED_VIEWPORT_PREFIXES = [
+  "/parent/dashboard",
+  "/parent/search",
+  "/sitter/dashboard",
+  "/sitter/shifts",
+  "/session"
+];
+
 export function isChromelessAuthPath(pathname: string): boolean {
   return CHROMELESS_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+export function isFixedViewportPath(pathname: string): boolean {
+  return FIXED_VIEWPORT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export function AppShellGate({ children }: { children: ReactNode }) {
@@ -24,11 +42,23 @@ export function AppShellGate({ children }: { children: ReactNode }) {
     );
   }
 
+  const fixedViewport = isFixedViewportPath(pathname);
+
   return (
-    <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-md flex-col overflow-hidden bg-white shadow-soft md:my-4 md:min-h-[calc(100dvh-2rem)] md:rounded-[2rem]">
+    <div
+      className={`mx-auto flex w-full min-w-0 max-w-md flex-col overflow-hidden bg-white shadow-soft md:my-4 md:rounded-[2rem] ${
+        fixedViewport
+          ? "h-[100dvh] md:h-[calc(100dvh-2rem)]"
+          : "min-h-0 md:min-h-[calc(100dvh-2rem)]"
+      }`}
+    >
       <AppShellHeader />
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-28 pt-4">
-        <RouteTransitionShell>{children}</RouteTransitionShell>
+      <div
+        className={`relative min-h-0 min-w-0 flex-1 px-4 pb-28 pt-4 ${
+          fixedViewport ? "flex flex-col overflow-hidden" : "overflow-y-auto"
+        }`}
+      >
+        <RouteTransitionShell fill={fixedViewport}>{children}</RouteTransitionShell>
       </div>
       <BottomNavigation />
     </div>

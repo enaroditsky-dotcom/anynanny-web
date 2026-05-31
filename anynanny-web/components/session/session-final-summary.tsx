@@ -1,7 +1,12 @@
 "use client";
 
 import { formatElapsed } from "@/lib/session/protocol";
-import { SESSION_ACTION_CIRCLE_STYLE, SESSION_CIRCLE_SHELL_CLASS } from "@/lib/session/session-circle";
+import {
+  SESSION_ACTION_CIRCLE_STYLE,
+  SESSION_CIRCLE_INNER_CLASS,
+  SESSION_CIRCLE_SHELL_CLASS,
+  SESSION_CIRCLE_SIZE_CLASS
+} from "@/lib/session/session-circle";
 
 type SessionFinalSummaryProps = {
   elapsedSeconds: number;
@@ -32,12 +37,12 @@ export function SessionFinalSummary({
   const amountStr = amountNis.toFixed(2);
 
   return (
-    <div className="flex w-full flex-col items-center gap-4">
+    <div className="flex w-full shrink-0 flex-col items-center gap-4">
       <div
         style={SESSION_ACTION_CIRCLE_STYLE}
-        className={`${SESSION_CIRCLE_SHELL_CLASS} gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25`}
+        className={`${SESSION_CIRCLE_SIZE_CLASS} ${SESSION_CIRCLE_SHELL_CLASS} shrink-0 gap-1 bg-[#001F3F] shadow-[0_12px_40px_-10px_rgba(0,31,63,0.65)] ring-[#001F3F]/25`}
       >
-        <div className="flex max-h-full w-full flex-col items-center justify-center gap-1.5 overflow-y-auto px-2 py-1 text-center">
+        <div className={SESSION_CIRCLE_INNER_CLASS}>
           <p className="text-sm font-bold leading-tight text-white">המשמרת הסתיימה!</p>
           <p className="text-xs font-semibold tabular-nums leading-snug text-white/95">סה״כ זמן: {timerText}</p>
           <p className="text-xs font-semibold leading-snug text-white/95">סה״כ לתשלום: {amountStr} ₪</p>

@@ -22,6 +22,7 @@ type SitterProps = BaseProps & {
   onBookingUpdated: () => Promise<TodaysLinkedBookingView | null>;
   onError?: (message: string) => void;
   onForceEndSuccess?: () => void;
+  onEndShift?: () => Promise<void>;
 };
 
 export type DoubleShakeBookingCircleProps = ParentProps | SitterProps;
@@ -48,6 +49,7 @@ export function DoubleShakeBookingCircle(props: DoubleShakeBookingCircleProps) {
             onBookingUpdated={props.onBookingUpdated}
             onError={props.onError}
             onForceEndSuccess={props.onForceEndSuccess}
+            onEndShift={props.onEndShift}
           />
         )}
       </DoubleShakeCircleSlot>

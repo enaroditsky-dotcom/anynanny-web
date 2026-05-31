@@ -8,10 +8,22 @@ import {
 import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
 import type { TodaysLinkedBookingSyncPayload } from "@/lib/bookings/use-todays-linked-booking";
 import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/use-shift-activation-status";
+import { isSitterBookingAwaitingApprovalStatus } from "@/lib/bookings/booking-realtime-handler";
 
 function isHardTerminalCircleStatus(status: BookingStatusInput): boolean {
   const normalized = normalizeBookingStatus(status);
   return normalized === "rejected" || normalized === "cancelled" || normalized === "completed";
+}
+
+function isLinkedShiftGateStatus(status: BookingStatusInput): boolean {
+  const normalized = normalizeBookingStatus(status);
+  return (
+    normalized === "pending" ||
+    normalized === "approved" ||
+    normalized === "sitter_started" ||
+    normalized === "parent_started" ||
+    normalized === "sitter_ended"
+  );
 }
 
 export function useCircleBookingSync(role: "parent" | "sitter") {
@@ -20,6 +32,10 @@ export function useCircleBookingSync(role: "parent" | "sitter") {
 
   const applyCircleBooking = useCallback((next: TodaysLinkedBookingView | null) => {
     if (next && isHardTerminalCircleStatus(next.status)) {
+      next = null;
+    }
+
+    if (role === "sitter" && next && isSitterBookingAwaitingApprovalStatus(next.status)) {
       next = null;
     }
 
@@ -37,6 +53,9 @@ export function useCircleBookingSync(role: "parent" | "sitter") {
       const resolved = resolveCircleBookingFromSync(payload, bookingRef.current, role);
 
       if (payload.booking === null && payload.row === null && payload.source === "reload") {
+        if (isLinkedShiftGateStatus(payload.shiftGate?.status)) {
+          return false;
+        }
         return applyCircleBooking(null);
       }
 

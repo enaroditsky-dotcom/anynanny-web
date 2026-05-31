@@ -1,29 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BookingRow, BookingStatus } from "@/lib/bookings/constants";
+import { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
 import {
-  isBookingTerminalStatus,
-  SHIFT_ACTIVATION_LEAD_MS
-} from "@/lib/bookings/booking-shift-ui";
+  normalizeBookingStatus,
+  type BookingStatusInput
+} from "@/lib/bookings/booking-status-normalize";
+import { isBookingTerminalStatus } from "@/lib/bookings/booking-shift-ui";
 
-export { SHIFT_ACTIVATION_LEAD_MS };
+export { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
+export { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/booking-status-normalize";
+
 export const NO_ACTIVE_SHIFT_LABEL = "אין משמרת פעילה";
 
 const MINUTES_PER_DAY = 24 * 60;
 const UPCOMING_LEAD_MINUTES = SHIFT_ACTIVATION_LEAD_MS / (60 * 1000);
-
-export type BookingStatusInput = BookingStatus | { name?: BookingStatus | string } | null | undefined;
-
-/** Normalize Supabase/plain status values — parent realtime may send `{ name: "approved" }`. */
-export function normalizeBookingStatus(status: BookingStatusInput): BookingStatus | undefined {
-  if (status == null) return undefined;
-
-  if (typeof status === "object") {
-    const name = status.name;
-    return typeof name === "string" ? (name as BookingStatus) : undefined;
-  }
-
-  return typeof status === "string" ? (status as BookingStatus) : undefined;
-}
 
 /** Shift is permanently closed before the wall clock is evaluated. */
 function isHardTerminalStatus(status: BookingStatus | undefined): boolean {

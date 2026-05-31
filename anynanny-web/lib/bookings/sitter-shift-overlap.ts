@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveBookingWindowMs } from "@/lib/bookings/booking-date-utils";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
+import { SESSIONS_OVERLAP_SELECT } from "@/lib/session/sessions-query";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 
 export const SITTER_OVERLAP_APPROVE_MESSAGE =
   "⚠️ יש לך כבר משמרת מאושרת בשעות חופפות!";
@@ -30,40 +33,101 @@ export type ShiftScheduleInput = {
   end_time: string;
 };
 
-function combineBookingDateTimeMs(bookingDate: string, timePart: string): number | null {
-  const datePart = bookingDate.trim();
-  const timeRaw = timePart.trim();
-  if (!datePart || !timeRaw) return null;
-
-  if (timeRaw.includes("T")) {
-    const ms = new Date(timeRaw).getTime();
-    return Number.isFinite(ms) ? ms : null;
-  }
-
-  const combined = `${datePart}T${timeRaw.length <= 5 ? `${timeRaw}:00` : timeRaw}`;
-  const ms = new Date(combined).getTime();
-  return Number.isFinite(ms) ? ms : null;
-}
-
+/** Resolve shift bounds using full ISO timestamps (handles cross-midnight). */
 export function resolveShiftTimeWindow(input: ShiftScheduleInput): ShiftTimeWindow | null {
-  const startFromIso = new Date(input.start_time).getTime();
-  const endFromIso = new Date(input.end_time).getTime();
-  if (Number.isFinite(startFromIso) && Number.isFinite(endFromIso) && endFromIso > startFromIso) {
-    return { startMs: startFromIso, endMs: endFromIso };
+  if (!input.start_time?.trim()) return null;
+
+  if (input.end_time?.trim()) {
+    const window = resolveBookingWindowMs({
+      booking_date: input.booking_date ?? "",
+      start_time: input.start_time,
+      end_time: input.end_time
+    });
+    if (window) {
+      return { startMs: window.startMs, endMs: window.endMs };
+    }
   }
 
-  const datePart = String(input.booking_date ?? "").trim();
-  if (!datePart) return null;
+  const startMs = new Date(input.start_time).getTime();
+  if (!Number.isFinite(startMs)) return null;
 
-  const startMs = combineBookingDateTimeMs(datePart, input.start_time);
-  const endMs = combineBookingDateTimeMs(datePart, input.end_time);
-  if (startMs == null || endMs == null || endMs <= startMs) return null;
+  if (!input.end_time?.trim()) {
+    return { startMs, endMs: startMs + 24 * 60 * 60 * 1000 };
+  }
 
-  return { startMs, endMs };
+  const endMs = new Date(input.end_time).getTime();
+  if (!Number.isFinite(endMs)) return null;
+
+  let end = endMs;
+  if (end <= startMs) {
+    end += 24 * 60 * 60 * 1000;
+  }
+
+  return { startMs, endMs: end };
 }
 
 export function shiftWindowsOverlap(a: ShiftTimeWindow, b: ShiftTimeWindow): boolean {
   return a.startMs < b.endMs && a.endMs > b.startMs;
+}
+
+async function fetchOverlapSessions(
+  supabase: SupabaseClient,
+  sitterId: string
+): Promise<Array<{ id: string; start_time: string | null; end_time: string | null }>> {
+  const { data: sessionRows, error: sessionError } = await supabase
+    .from(SESSIONS_TABLE)
+    .select(SESSIONS_OVERLAP_SELECT)
+    .eq("sitter_id", sitterId)
+    .in("session_status", [...OVERLAP_BLOCKING_SESSION_STATUSES]);
+
+  if (!sessionError) {
+    return (sessionRows ?? []) as Array<{
+      id: string;
+      start_time: string | null;
+      end_time: string | null;
+    }>;
+  }
+
+  if (isPostgrestMissingColumnError(sessionError.message, "session_status")) {
+    const { data: legacyRows, error: legacyError } = await supabase
+      .from(SESSIONS_TABLE)
+      .select("id, start_time, end_time, status")
+      .eq("sitter_id", sitterId)
+      .eq("status", "active");
+
+    if (legacyError) {
+      console.warn("[sitter-shift-overlap] sessions query failed:", legacyError.message);
+      return [];
+    }
+
+    return (legacyRows ?? []) as Array<{
+      id: string;
+      start_time: string | null;
+      end_time: string | null;
+    }>;
+  }
+
+  console.warn("[sitter-shift-overlap] sessions query failed:", sessionError.message);
+  return [];
+}
+
+function resolveActiveSessionOverlapWindow(
+  row: { start_time: string | null; end_time: string | null },
+  nowMs: number
+): ShiftTimeWindow | null {
+  if (!row.start_time) return null;
+
+  const startMs = new Date(row.start_time).getTime();
+  if (!Number.isFinite(startMs)) return null;
+
+  if (row.end_time) {
+    return resolveShiftTimeWindow({
+      start_time: row.start_time,
+      end_time: row.end_time
+    });
+  }
+
+  return { startMs, endMs: Math.max(nowMs, startMs + 60_000) };
 }
 
 export async function sitterHasOverlappingActiveShift(
@@ -74,6 +138,7 @@ export async function sitterHasOverlappingActiveShift(
 ): Promise<boolean> {
   const excludeBookingId = exclude?.bookingId?.trim() ?? "";
   const excludeSessionId = exclude?.sessionId?.trim() ?? "";
+  const nowMs = Date.now();
 
   const { data: bookingRows, error: bookingError } = await supabase
     .from(BOOKINGS_TABLE)
@@ -100,64 +165,12 @@ export async function sitterHasOverlappingActiveShift(
     }
   }
 
-  const { data: sessionRows, error: sessionError } = await supabase
-    .from(SESSIONS_TABLE)
-    .select("id, booking_id, start_time, end_time, session_status")
-    .eq("sitter_id", sitterId)
-    .in("session_status", [...OVERLAP_BLOCKING_SESSION_STATUSES]);
-
-  if (sessionError) {
-    console.warn("[sitter-shift-overlap] sessions query failed:", sessionError.message);
-    return false;
-  }
-
-  const sessions = (sessionRows ?? []) as Array<{
-    id: string;
-    booking_id: string | null;
-    start_time: string | null;
-    end_time: string | null;
-  }>;
-
-  const bookingIds = [
-    ...new Set(
-      sessions
-        .map((row) => row.booking_id?.trim())
-        .filter((id): id is string => Boolean(id))
-    )
-  ];
-
-  const bookingById = new Map<string, ShiftScheduleInput>();
-  if (bookingIds.length > 0) {
-    const { data: linkedBookings } = await supabase
-      .from(BOOKINGS_TABLE)
-      .select("id, booking_date, start_time, end_time")
-      .in("id", bookingIds);
-
-    for (const raw of linkedBookings ?? []) {
-      if (!raw || typeof raw !== "object" || raw.id == null) continue;
-      bookingById.set(String(raw.id), {
-        booking_date: String(raw.booking_date ?? ""),
-        start_time: String(raw.start_time ?? ""),
-        end_time: String(raw.end_time ?? "")
-      });
-    }
-  }
+  const sessions = await fetchOverlapSessions(supabase, sitterId);
 
   for (const row of sessions) {
     if (excludeSessionId && String(row.id) === excludeSessionId) continue;
-    if (excludeBookingId && row.booking_id === excludeBookingId) continue;
 
-    let window: ShiftTimeWindow | null = null;
-    const linked = row.booking_id ? bookingById.get(row.booking_id) : undefined;
-    if (linked) {
-      window = resolveShiftTimeWindow(linked);
-    }
-    if (!window && row.start_time && row.end_time) {
-      window = resolveShiftTimeWindow({
-        start_time: row.start_time,
-        end_time: row.end_time
-      });
-    }
+    const window = resolveActiveSessionOverlapWindow(row, nowMs);
     if (window && shiftWindowsOverlap(proposed, window)) {
       return true;
     }

@@ -1,8 +1,11 @@
 import type { BookingRow, BookingStatus } from "@/lib/bookings/constants";
-import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/use-shift-activation-status";
+import { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
+import {
+  normalizeBookingStatus,
+  type BookingStatusInput
+} from "@/lib/bookings/booking-status-normalize";
 
-/** Activation lead time — Double-Shake circle wakes up this long before scheduled start. */
-export const SHIFT_ACTIVATION_LEAD_MS = 10 * 60 * 1000;
+export { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
 
 /** Booking row is closed — never show live shift / Double-Shake controls. */
 export const BOOKING_TERMINAL_STATUSES: readonly BookingStatus[] = [
@@ -105,4 +108,13 @@ export function doesBookingBlockSessionShiftUi(
 ): boolean {
   if (!booking) return false;
   return isBookingTerminalStatus(booking.status);
+}
+
+/** True when a booking row still represents an active/in-progress shift (not terminal). */
+export function isBookingLiveForSessionSync(
+  booking: Pick<BookingRow, "status"> | null | undefined
+): boolean {
+  if (!booking) return false;
+  if (isBookingTerminalStatus(booking.status)) return false;
+  return isBookingEligibleForLiveShiftUi(booking);
 }

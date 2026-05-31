@@ -3,7 +3,12 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { ShiftActivationToast } from "@/components/session/shift-activation-toast";
-import { SESSION_ACTION_CIRCLE_STYLE, SESSION_CIRCLE_SHELL_CLASS } from "@/lib/session/session-circle";
+import {
+  SESSION_ACTION_CIRCLE_STYLE,
+  SESSION_CIRCLE_INNER_CLASS,
+  SESSION_CIRCLE_SHELL_CLASS,
+  SESSION_CIRCLE_SIZE_CLASS
+} from "@/lib/session/session-circle";
 import {
   isShiftLocallyDismissed,
   SHIFT_COMPLETED_CIRCLE_LABEL
@@ -65,31 +70,35 @@ export function DoubleShakeCircleButton({
   presentational = false
 }: Props) {
   const hasSubLabel = Boolean(subLabel?.trim());
-  const className = `${SESSION_CIRCLE_SHELL_CLASS}${
-    hasSubLabel ? " overflow-visible" : ""
-  } ${VARIANT_CLASS[variant]} flex flex-col items-center justify-center gap-1.5 px-2`;
-  const circleStyle: CSSProperties = hasSubLabel
-    ? { ...SESSION_ACTION_CIRCLE_STYLE, padding: "1.35rem", overflow: "visible" }
-    : SESSION_ACTION_CIRCLE_STYLE;
+  const className = `${SESSION_CIRCLE_SIZE_CLASS} ${SESSION_CIRCLE_SHELL_CLASS} ${VARIANT_CLASS[variant]}`;
+  const circleStyle: CSSProperties = SESSION_ACTION_CIRCLE_STYLE;
 
-  const labelEl = (
-    <div className="flex w-full flex-col items-center justify-center gap-1 text-center">
-      <span className="max-w-[12rem] text-sm font-bold leading-snug sm:text-base">{label}</span>
+  const labelContent = (
+    <>
+      <span className="max-w-[8.5rem] text-sm font-bold tabular-nums leading-none">{label}</span>
       {hasSubLabel ? (
-        <span className="max-w-[12rem] text-xs font-semibold leading-snug text-white/95 sm:text-sm">
+        <span className="max-w-[8.5rem] text-xs font-semibold tabular-nums leading-none text-white/95">
           {subLabel}
         </span>
       ) : null}
+    </>
+  );
+
+  const circleInner = (leading?: ReactNode) => (
+    <div className={SESSION_CIRCLE_INNER_CLASS}>
+      {leading}
+      {labelContent}
     </div>
   );
 
   if (presentational || variant === "disabled" || variant === "loading") {
     return (
       <div style={circleStyle} className={className} role="status" aria-live="polite">
-        {variant === "loading" ? (
-          <Loader2 className="mb-1 h-6 w-6 shrink-0 animate-spin" aria-hidden />
-        ) : null}
-        {labelEl}
+        {circleInner(
+          variant === "loading" ? (
+            <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden />
+          ) : null
+        )}
       </div>
     );
   }
@@ -104,8 +113,7 @@ export function DoubleShakeCircleButton({
       disabled={busy || isWaiting}
       onClick={onClick}
     >
-      {busy ? <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden /> : null}
-      {labelEl}
+      {circleInner(busy ? <Loader2 className="h-6 w-6 shrink-0 animate-spin" aria-hidden /> : null)}
     </button>
   );
 }
@@ -180,9 +188,25 @@ export function isDoubleShakeShiftTimeWindowActive(active: boolean, isUpcoming: 
 }
 
 /** Centers the primary circle inside {@link DoubleShakeShiftPanel}. */
-export function DoubleShakeCircleSlot({ children }: { children: ReactNode }) {
+export function DoubleShakeCircleSlot({
+  children,
+  align = "center",
+  className = "",
+  /** When false, keeps the circle vertically centered with header copy instead of pinned to the panel bottom. */
+  pinToBottom = true
+}: {
+  children: ReactNode;
+  /** `start` keeps closure/rating panels pinned toward the top of the panel. */
+  align?: "center" | "start";
+  className?: string;
+  pinToBottom?: boolean;
+}) {
   return (
-    <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 px-2 pt-8">
+    <div
+      className={`flex w-full min-h-0 flex-1 flex-col items-center gap-3 overflow-hidden px-1 pb-2 pt-3 ${
+        pinToBottom ? "mt-auto" : "mt-0"
+      } ${align === "start" ? "justify-start" : "justify-center"} ${className}`}
+    >
       {children}
     </div>
   );
@@ -198,7 +222,7 @@ export function DoubleShakeShiftPanel({
 }) {
   return (
     <section
-      className={`mt-1 flex min-h-0 flex-1 flex-col items-center rounded-3xl border-2 border-[#001F3F]/20 bg-white p-4 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-6 ${className}`}
+      className={`mt-1 flex min-h-0 flex-1 flex-col items-center overflow-hidden rounded-3xl border-2 border-[#001F3F]/20 bg-white p-2 shadow-[0_16px_48px_-12px_rgba(0,31,63,0.45)] sm:p-3 ${className}`}
     >
       {children}
     </section>

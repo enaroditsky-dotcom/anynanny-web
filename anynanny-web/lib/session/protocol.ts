@@ -108,15 +108,16 @@ export function mapSupabaseRowToProtocol(row: SupabaseSessionRow | null | undefi
 
   const mappedStatus: SessionProtocolState["status"] = isPendingStart
     ? "parent_initiated"
-    : row.status === "completed"
+    : row.status === "completed" && row.end_time
       ? "ended"
       : row.status === "active"
         ? "active"
         : "idle";
-  const linkedBookingId =
+  const linkedBookingIdRaw =
     row.booking_id != null && String(row.booking_id).trim() !== ""
       ? String(row.booking_id)
-      : undefined;
+      : "";
+  const linkedBookingId = linkedBookingIdRaw || undefined;
 
   return {
     status: mappedStatus,

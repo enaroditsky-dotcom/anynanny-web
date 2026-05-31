@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import { getOrCreateChatRoom } from "@/lib/chat/parent-chat";
+import { fetchPendingBookingForParentSitter } from "@/lib/bookings/todays-linked-booking";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 export type SitterProfileActionsProps = {
   sitterId: string;
@@ -15,7 +17,7 @@ export type SitterProfileActionsProps = {
   onBookingSuccess?: (bookingId: string) => void;
 };
 
-const REJECTION_NOTICE = "הבייביסיטר דחתה את הזימון למשמרת";
+const REJECTION_NOTICE = "הבקשה נדחתה על ידי המטפלת";
 
 function applyBookingStatusFromPayload(
   payload: RealtimePostgresChangesPayload<Pick<BookingRow, "status">>,
@@ -53,6 +55,29 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
     },
     [onBookingSuccess]
   );
+
+  /** Restore "request sent" banner after refresh/tab switch from DB. */
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const auth = await resolveBrowserAuth();
+      if (!auth.ok || cancelled) return;
+
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) return;
+
+      const pending = await fetchPendingBookingForParentSitter(supabase, auth.userId, sitterId);
+      if (cancelled || !pending) return;
+
+      setPendingBookingId(pending.id);
+      setBookingStatus(pending.status);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sitterId]);
 
   useEffect(() => {
     if (!pendingBookingId) return;

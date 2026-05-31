@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
@@ -76,22 +77,23 @@ export async function updateBookingStatus(
   sitterId: string,
   bookingId: string,
   status: Extract<BookingStatus, "approved" | "rejected">
-): Promise<{ error: string | null }> {
+): Promise<{ row: BookingRow | null; error: string | null }> {
   const { data, error } = await supabase
     .from(BOOKINGS_TABLE)
     .update({ status, updated_at: new Date().toISOString() })
     .eq("id", bookingId)
     .eq("sitter_id", sitterId)
     .eq("status", "pending")
-    .select("id");
+    .select(BOOKING_SELECT_MINIMAL)
+    .maybeSingle();
 
   if (error) {
-    return { error: error.message };
+    return { row: null, error: error.message };
   }
 
-  if (!data?.length) {
-    return { error: "הבקשה כבר טופלה או שאינה זמינה" };
+  if (!data) {
+    return { row: null, error: "הבקשה כבר טופלה או שאינה זמינה" };
   }
 
-  return { error: null };
+  return { row: data as BookingRow, error: null };
 }

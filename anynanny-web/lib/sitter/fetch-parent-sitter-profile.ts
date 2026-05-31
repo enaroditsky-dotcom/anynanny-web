@@ -1,10 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
   SITTER_PROFILES_TABLE,
+  SITTER_PROFILES_USER_COLUMN,
   type PublicSitterReview,
   type SitterProfilePublic
 } from "@/lib/sitter/sitter-profile";
+import { isPostgrestMissingFunctionError } from "@/lib/supabase/postgrest-schema";
+import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -136,6 +140,71 @@ function parseReviews(raw: unknown): PublicSitterReview[] {
   return arr.filter((x): x is PublicSitterReview => x != null && typeof x === "object");
 }
 
+async function fetchSitterPublicReviewsDirect(
+  supabase: SupabaseClient,
+  sitterId: string,
+  limit = 10
+): Promise<PublicSitterReview[]> {
+  const read = safeSupabaseRead(
+    await supabase
+      .from(RATINGS_TABLE)
+      .select("rating, comment, created_at")
+      .eq("to_user_id", sitterId)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    "sitter public reviews direct"
+  );
+
+  if (read.error || !read.data) {
+    return [];
+  }
+
+  return (read.data as Array<Record<string, unknown>>)
+    .map((row) => ({
+      rating: Number(row.rating),
+      comment: String(row.comment ?? "").trim(),
+      created_at: String(row.created_at ?? "")
+    }))
+    .filter((row) => Number.isFinite(row.rating) && row.rating >= 1 && row.rating <= 5);
+}
+
+async function fetchSitterProfileDirect(
+  supabase: SupabaseClient,
+  sitterId: string
+): Promise<SitterProfilePublic | null> {
+  const fk = SITTER_PROFILES_USER_COLUMN;
+  const fullSelect =
+    "id, full_name, show_full_name, bio, hourly_rate_nis, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages, working_cities";
+
+  let read = safeSupabaseRead(
+    await supabase
+      .from(SITTER_PROFILES_TABLE)
+      .select(fullSelect)
+      .eq(fk, sitterId)
+      .eq("is_public", true)
+      .maybeSingle(),
+    "sitter profile direct"
+  );
+
+  if (read.error) {
+    read = safeSupabaseRead(
+      await supabase
+        .from(SITTER_PROFILES_TABLE)
+        .select("id, full_name, bio, hourly_rate_nis, years_experience, is_public, updated_at")
+        .eq(fk, sitterId)
+        .eq("is_public", true)
+        .maybeSingle(),
+      "sitter profile direct minimal"
+    );
+  }
+
+  if (read.error || !read.data) {
+    return null;
+  }
+
+  return normalizeSitterProfilePublic(read.data as Record<string, unknown>, sitterId);
+}
+
 export function formatTransportationMode(
   mode: string | null | undefined,
   hasCar?: boolean
@@ -154,55 +223,47 @@ export type ParentSitterProfileLoadResult = {
 };
 
 /**
- * Parent profile: RPC first (`get_sitter_profile_public`), then `sitter_profiles` fallback.
+ * Parent profile: direct `sitter_profiles` read first; RPC only when table row is missing.
  */
 export async function fetchParentSitterProfile(
   supabase: SupabaseClient,
   sitterId: string
 ): Promise<ParentSitterProfileLoadResult> {
-  const { data: profileJson, error: profErr } = await supabase.rpc("get_sitter_profile_public", {
-    target_id: sitterId
-  });
-
-  let profile: SitterProfilePublic | null = null;
-
-  if (!profErr) {
-    const parsed = unwrapRpcProfilePayload(profileJson) ?? parseRpcJson(profileJson);
-    if (parsed) {
-      profile = normalizeSitterProfilePublic(parsed, sitterId);
-      if (profile.is_public === false) {
-        profile = null;
-      }
-    }
-  }
+  let profile = await fetchSitterProfileDirect(supabase, sitterId);
 
   if (!profile) {
-    const { data: row, error: rowErr } = await supabase
-      .from(SITTER_PROFILES_TABLE)
-      .select(
-        "id, full_name, show_full_name, bio, hourly_rate_nis, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages, working_cities"
-      )
-      .eq("id", sitterId)
-      .eq("is_public", true)
-      .maybeSingle();
+    const { data: profileJson, error: profErr } = await supabase.rpc("get_sitter_profile_public", {
+      target_id: sitterId
+    });
 
-    if (!rowErr && row) {
-      profile = normalizeSitterProfilePublic(row as Record<string, unknown>, sitterId);
-    } else if (profErr) {
+    if (!profErr) {
+      const parsed = unwrapRpcProfilePayload(profileJson) ?? parseRpcJson(profileJson);
+      if (parsed) {
+        profile = normalizeSitterProfilePublic(parsed, sitterId);
+        if (profile.is_public === false) {
+          profile = null;
+        }
+      }
+    } else if (!isPostgrestMissingFunctionError(profErr.message)) {
       return { profile: null, reviews: [], error: profErr.message };
     }
   }
 
   if (!profile) {
-    return { profile: null, reviews: [], error: profErr?.message ?? null };
+    return { profile: null, reviews: [], error: null };
   }
 
-  const { data: reviewsRaw, error: revErr } = await supabase.rpc("get_sitter_public_reviews", {
-    p_sitter_id: sitterId,
-    p_limit: 10
-  });
+  let reviews = await fetchSitterPublicReviewsDirect(supabase, sitterId);
 
-  const reviews = revErr ? [] : parseReviews(reviewsRaw);
+  if (reviews.length === 0) {
+    const { data: reviewsRaw, error: revErr } = await supabase.rpc("get_sitter_public_reviews", {
+      p_sitter_id: sitterId,
+      p_limit: 10
+    });
+    if (!revErr) {
+      reviews = parseReviews(reviewsRaw);
+    }
+  }
 
   return { profile, reviews, error: null };
 }

@@ -2,6 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
 
+const IN_FLIGHT_SESSION_STATUSES = [
+  "pending_sitter_approval",
+  "pending",
+  "pending_confirmation",
+  "active"
+] as const;
+
 export async function cancelSitterUpcomingShift(
   supabase: SupabaseClient,
   sitterId: string,
@@ -14,7 +21,7 @@ export async function cancelSitterUpcomingShift(
     .update({ status: "cancelled", updated_at: now })
     .eq("id", bookingId)
     .eq("sitter_id", sitterId)
-    .select("id")
+    .select("id, parent_id")
     .maybeSingle();
 
   if (bookingError) {
@@ -25,21 +32,19 @@ export async function cancelSitterUpcomingShift(
     return { ok: false, error: "לא נמצאה משמרת לביטול." };
   }
 
-  const { error: sessionStatusError } = await supabase
-    .from(SESSIONS_TABLE)
-    .update({ status: "cancelled", session_status: "cancelled" })
-    .eq("booking_id", bookingId)
-    .eq("sitter_id", sitterId);
+  const parentId =
+    bookingRow.parent_id != null ? String(bookingRow.parent_id).trim() : "";
 
-  if (sessionStatusError) {
-    const { error: sessionFallbackError } = await supabase
+  if (parentId) {
+    const { error: participantError } = await supabase
       .from(SESSIONS_TABLE)
       .update({ status: "cancelled" })
-      .eq("booking_id", bookingId)
-      .eq("sitter_id", sitterId);
+      .eq("parent_id", parentId)
+      .eq("sitter_id", sitterId)
+      .in("status", [...IN_FLIGHT_SESSION_STATUSES]);
 
-    if (sessionFallbackError) {
-      console.warn("[cancel-sitter-shift] session update:", sessionFallbackError.message);
+    if (participantError) {
+      console.warn("[cancel-sitter-shift] session update:", participantError.message);
     }
   }
 

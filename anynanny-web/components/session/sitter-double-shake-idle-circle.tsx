@@ -10,10 +10,11 @@ import {
 } from "@/components/session/double-shake-circle-button";
 import { ShiftActivationToast } from "@/components/session/shift-activation-toast";
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
-import { sitterCompleteBooking } from "@/lib/bookings/sitter-complete-booking";
 import { sitterForceEndBooking } from "@/lib/bookings/sitter-force-end-booking";
+import { sitterRequestEndBooking } from "@/lib/bookings/sitter-request-end-booking";
 import { sitterStartShift } from "@/lib/bookings/sitter-start-shift";
 import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
+import { isSitterBookingAwaitingApprovalStatus } from "@/lib/bookings/booking-realtime-handler";
 import { useShiftActivationStatus } from "@/lib/bookings/use-shift-activation-status";
 import {
   persistShiftLocallyDismissed,
@@ -35,6 +36,7 @@ type Props = {
   onBookingUpdated: () => Promise<TodaysLinkedBookingView | null>;
   onError?: (message: string) => void;
   onForceEndSuccess?: () => void;
+  onEndShift?: () => Promise<void>;
 };
 
 function isHardTerminalStatus(status: TodaysLinkedBookingView["status"] | undefined): boolean {
@@ -81,7 +83,8 @@ function SitterDoubleShakeIdleCircleInner({
   ready,
   onBookingUpdated,
   onError,
-  onForceEndSuccess
+  onForceEndSuccess,
+  onEndShift
 }: Props) {
   const { active, isUpcoming, justActivated, withinShiftHours } = useShiftActivationStatus(booking);
   const [busy, setBusy] = useState(false);
@@ -107,6 +110,19 @@ function SitterDoubleShakeIdleCircleInner({
   const handleEndShift = useCallback(async () => {
     if (!booking || booking.status !== "parent_started") return;
 
+    if (onEndShift) {
+      setBusy(true);
+      try {
+        await onEndShift();
+        await onBookingUpdated();
+      } catch (err) {
+        onError?.(err instanceof Error ? err.message : "סיום משמרת נכשל.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
       onError?.("יש להתחבר כדי לסיים משמרת.");
@@ -114,7 +130,7 @@ function SitterDoubleShakeIdleCircleInner({
     }
 
     setBusy(true);
-    const { row, error } = await sitterCompleteBooking(auth.supabase, auth.userId, booking.id);
+    const { row, error } = await sitterRequestEndBooking(auth.supabase, auth.userId, booking.id);
     setBusy(false);
 
     if (error || !row) {
@@ -123,7 +139,7 @@ function SitterDoubleShakeIdleCircleInner({
     }
 
     await onBookingUpdated();
-  }, [booking, onBookingUpdated, onError]);
+  }, [booking, onBookingUpdated, onEndShift, onError]);
 
   const handleForceEnd = useCallback(async () => {
     if (!booking || booking.status !== "sitter_ended") return;
@@ -166,6 +182,15 @@ function SitterDoubleShakeIdleCircleInner({
 
   if (isHardTerminalStatus(booking.status)) {
     return <DoubleShakeDisabledCircleState label={DOUBLE_SHAKE_NO_SHIFT_TODAY_LABEL} variant="disabled" />;
+  }
+
+  if (isSitterBookingAwaitingApprovalStatus(booking.status)) {
+    return (
+      <DoubleShakeDisabledCircleState
+        label="ממתין לאישור הבקשה — אשרו או דחו למעלה"
+        variant="disabled"
+      />
+    );
   }
 
   if (shiftAwake || withinShiftHours) {
@@ -231,6 +256,16 @@ function SitterDoubleShakeIdleCircleInner({
       <div key={liveKey} className="flex w-full flex-col items-center">
         <SitterUpcomingCircle justActivated={justActivated} />
       </div>
+    );
+  }
+
+  if (booking.status === "approved") {
+    return (
+      <DoubleShakeCircleButton
+        label="המשמרת אושרה — ממתין לשעת ההתחלה"
+        variant="waiting-navy"
+        presentational
+      />
     );
   }
 

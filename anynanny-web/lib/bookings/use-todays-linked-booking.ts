@@ -3,24 +3,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { circleBookingsEqual } from "@/lib/bookings/circle-booking-state";
+import { readBookingRowFromRealtimeChange } from "@/lib/bookings/booking-realtime-handler";
 import { didBookingLiveFieldsChange } from "@/lib/bookings/booking-live-key";
 import { isBookingTerminalStatus } from "@/lib/bookings/booking-shift-ui";
-import { isBookingDateToday } from "@/lib/bookings/booking-date-utils";
+import { isSitterBookingAwaitingApprovalStatus } from "@/lib/bookings/booking-realtime-handler";
+import { isBookingRelevantForLiveSync } from "@/lib/bookings/booking-date-utils";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 import {
   normalizeBookingStatus,
   type BookingStatusInput
 } from "@/lib/bookings/use-shift-activation-status";
 import {
+  fetchLinkedBookingById,
+  fetchParentTodayBookingBundle,
   fetchTodayBookingShiftGate,
   fetchTodaysLinkedBooking,
+  fetchTodaysPendingBookingRequest,
+  type TodayBookingShiftGate,
   type TodaysLinkedBookingView
 } from "@/lib/bookings/todays-linked-booking";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type TodaysLinkedBookingSyncPayload = {
   booking: TodaysLinkedBookingView | null;
-  shiftGate: Pick<BookingRow, "status" | "parent_id" | "sitter_id"> | null;
+  shiftGate: TodayBookingShiftGate | null;
   row: BookingRow | null;
   source: "realtime" | "reload";
   /** True when `status` or `updated_at` changed on the tracked booking row. */
@@ -43,22 +49,25 @@ function isBookingRowForUser(
 }
 
 function shiftGateFromRow(
-  row: Pick<BookingRow, "status" | "parent_id" | "sitter_id">
-): Pick<BookingRow, "status" | "parent_id" | "sitter_id"> {
+  row: Pick<BookingRow, "id" | "status" | "parent_id" | "sitter_id">
+): TodayBookingShiftGate {
   return {
+    id: row.id,
     status: row.status,
     parent_id: row.parent_id,
     sitter_id: row.sitter_id
   };
 }
 
-function shiftGateEqual(
-  a: Pick<BookingRow, "status" | "parent_id" | "sitter_id"> | null,
-  b: Pick<BookingRow, "status" | "parent_id" | "sitter_id"> | null
-): boolean {
+function shiftGateEqual(a: TodayBookingShiftGate | null, b: TodayBookingShiftGate | null): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;
-  return a.status === b.status && a.parent_id === b.parent_id && a.sitter_id === b.sitter_id;
+  return (
+    a.id === b.id &&
+    a.status === b.status &&
+    a.parent_id === b.parent_id &&
+    a.sitter_id === b.sitter_id
+  );
 }
 
 function normalizeBookingRow(row: BookingRow): BookingRow {
@@ -89,6 +98,10 @@ function resolveNextBooking(
 ): TodaysLinkedBookingView | null {
   const normalized = normalizeBookingRow(row);
 
+  if (role === "sitter" && isSitterBookingAwaitingApprovalStatus(normalized.status)) {
+    return prev?.id === normalized.id ? null : prev;
+  }
+
   if (isBookingTerminalStatus(normalized.status)) {
     return prev?.id === normalized.id ? null : prev;
   }
@@ -116,15 +129,12 @@ export function useTodaysLinkedBooking(
   options?: UseTodaysLinkedBookingOptions
 ): {
   booking: TodaysLinkedBookingView | null;
-  shiftGate: Pick<BookingRow, "status" | "parent_id" | "sitter_id"> | null;
+  shiftGate: TodayBookingShiftGate | null;
   ready: boolean;
   reload: () => Promise<TodaysLinkedBookingView | null>;
 } {
   const [booking, setBooking] = useState<TodaysLinkedBookingView | null>(null);
-  const [shiftGate, setShiftGate] = useState<Pick<
-    BookingRow,
-    "status" | "parent_id" | "sitter_id"
-  > | null>(null);
+  const [shiftGate, setShiftGate] = useState<TodayBookingShiftGate | null>(null);
   const [ready, setReady] = useState(false);
 
   const onBookingSyncRef = useRef(options?.onBookingSync);
@@ -138,10 +148,12 @@ export function useTodaysLinkedBooking(
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
+  const reloadRef = useRef<() => Promise<TodaysLinkedBookingView | null>>(async () => null);
+
   const notifySync = useCallback(
     (
       nextBooking: TodaysLinkedBookingView | null,
-      nextGate: Pick<BookingRow, "status" | "parent_id" | "sitter_id"> | null,
+      nextGate: TodayBookingShiftGate | null,
       row: BookingRow | null,
       source: TodaysLinkedBookingSyncPayload["source"],
       liveFieldsChanged: boolean
@@ -160,7 +172,7 @@ export function useTodaysLinkedBooking(
   const emitLiveSnapshot = useCallback(
     (
       nextBooking: TodaysLinkedBookingView | null,
-      nextGate: Pick<BookingRow, "status" | "parent_id" | "sitter_id"> | null,
+      nextGate: TodayBookingShiftGate | null,
       row: BookingRow | null,
       source: TodaysLinkedBookingSyncPayload["source"]
     ) => {
@@ -206,12 +218,29 @@ export function useTodaysLinkedBooking(
       return null;
     }
 
-    const [linked, gate] = await Promise.all([
-      fetchTodaysLinkedBooking(supabase, userId, role),
-      fetchTodayBookingShiftGate(supabase, userId, role)
-    ]);
+    let nextBooking: TodaysLinkedBookingView | null = null;
+    let gate: TodayBookingShiftGate | null = null;
+    let fetchError: string | null = null;
 
-    const nextBooking = linked.booking;
+    if (role === "parent") {
+      const bundle = await fetchParentTodayBookingBundle(supabase, userId);
+      nextBooking = bundle.booking;
+      gate = bundle.gate;
+      fetchError = bundle.error;
+    } else {
+      const [linked, gateRow] = await Promise.all([
+        fetchTodaysLinkedBooking(supabase, userId, role),
+        fetchTodayBookingShiftGate(supabase, userId, role)
+      ]);
+
+      nextBooking = linked.booking;
+      gate = gateRow;
+      fetchError = linked.error;
+
+      if (!nextBooking && gate?.id && !isSitterBookingAwaitingApprovalStatus(gate.status)) {
+        nextBooking = await fetchLinkedBookingById(supabase, gate.id, role);
+      }
+    }
     const nextStatus = normalizeBookingStatus(nextBooking?.status as BookingStatusInput);
     if (nextStatus === "completed") {
       completedRealtimeFrozenRef.current = true;
@@ -220,8 +249,8 @@ export function useTodaysLinkedBooking(
     setBooking((prev) => (circleBookingsEqual(prev, nextBooking) ? prev : nextBooking));
     setShiftGate((prev) => (shiftGateEqual(prev, gate) ? prev : gate));
 
-    if (linked.error) {
-      console.warn(`[${role}] today's booking:`, linked.error);
+    if (fetchError) {
+      console.warn(`[${role}] today's booking:`, fetchError);
     }
 
     setReady(true);
@@ -229,17 +258,21 @@ export function useTodaysLinkedBooking(
     return nextBooking;
   }, [role, userId, emitLiveSnapshot]);
 
+  reloadRef.current = reload;
+
   const applyRealtimePatch = useCallback(
     (payload: RealtimePostgresChangesPayload<BookingRow>) => {
       if (!userId) return;
 
+      const row = readBookingRowFromRealtimeChange(payload);
+      if (!row?.id) return;
+
       if (payload.eventType === "DELETE") {
-        const oldRow = (payload.old ?? null) as Partial<BookingRow> | null;
-        if (!oldRow?.id || !isBookingRowForUser(oldRow, role, userId)) return;
+        if (!isBookingRowForUser(row, role, userId)) return;
 
         let nextBooking: TodaysLinkedBookingView | null = null;
         setBooking((prev) => {
-          nextBooking = prev?.id === oldRow.id ? null : prev;
+          nextBooking = prev?.id === row.id ? null : prev;
           return nextBooking;
         });
         setShiftGate((prev) => (prev === null ? prev : null));
@@ -247,9 +280,8 @@ export function useTodaysLinkedBooking(
         return;
       }
 
-      const row = (payload.new ?? null) as BookingRow | null;
-      if (!row?.id || !isBookingRowForUser(row, role, userId)) return;
-      if (row.booking_date && !isBookingDateToday(row.booking_date)) return;
+      if (!isBookingRowForUser(row, role, userId)) return;
+      if (!isBookingRelevantForLiveSync(row)) return;
 
       const incomingStatus = normalizeBookingStatus(row.status as BookingStatusInput);
       if (incomingStatus === "completed") {
@@ -268,8 +300,13 @@ export function useTodaysLinkedBooking(
 
       const gate = shiftGateFromRow(row);
       let nextBooking: TodaysLinkedBookingView | null = null;
+      const liveFieldsChanged = didBookingLiveFieldsChange(liveSnapshotRef.current, row);
 
       setBooking((prev) => {
+        if (role === "sitter" && isSitterBookingAwaitingApprovalStatus(row.status)) {
+          nextBooking = prev?.id === row.id ? null : prev;
+          return nextBooking;
+        }
         const resolved = resolveNextBooking(prev, row, role);
         nextBooking = circleBookingsEqual(prev, resolved) ? prev : resolved;
         return nextBooking;
@@ -277,6 +314,10 @@ export function useTodaysLinkedBooking(
 
       setShiftGate((prev) => (shiftGateEqual(prev, gate) ? prev : gate));
       emitLiveSnapshot(nextBooking, gate, row, "realtime");
+
+      if (liveFieldsChanged && incomingStatus !== "completed") {
+        void reloadRef.current();
+      }
     },
     [role, userId, emitLiveSnapshot]
   );
@@ -316,27 +357,7 @@ export function useTodaysLinkedBooking(
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `${column}=eq.${userId}`
-        },
-        handleChange
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `${column}=eq.${userId}`
-        },
-        handleChange
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
+          event: "*",
           schema: "public",
           table: BOOKINGS_TABLE,
           filter: `${column}=eq.${userId}`

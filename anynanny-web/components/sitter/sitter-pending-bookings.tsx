@@ -36,8 +36,11 @@ function tryVibrate(pattern: number[]) {
 type Props = {
   sitterId: string | null;
   disabled?: boolean;
-  /** Fired after approve/reject succeeds — use to refresh confirmed shifts list. */
-  onResponded?: (status: "approved" | "rejected") => void;
+  /** Fired after approve/reject succeeds — use to refresh linked booking + confirmed shifts. */
+  onResponded?: (result: {
+    status: "approved" | "rejected";
+    booking: PendingBookingView | null;
+  }) => void;
 };
 
 export function SitterPendingBookings({ sitterId, disabled = false, onResponded }: Props) {
@@ -217,7 +220,7 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
     setActingId(bookingId);
     setBookings((prev) => prev.filter((b) => b.id !== bookingId));
 
-    const { error } = await updateBookingStatus(supabase, sitterId, bookingId, status);
+    const { row, error } = await updateBookingStatus(supabase, sitterId, bookingId, status);
     setActingId(null);
 
     if (error) {
@@ -232,7 +235,14 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
     setRespondToastApproved(status === "approved");
     tryVibrate(status === "approved" ? [100, 50, 100] : [80, 40, 80]);
 
-    onResponded?.(status);
+    const respondedBooking =
+      row && target
+        ? ({ ...target, ...row, status } as PendingBookingView)
+        : row
+          ? ({ ...row, parent_full_name: target?.parent_full_name ?? null } as PendingBookingView)
+          : target ?? null;
+
+    onResponded?.({ status, booking: respondedBooking });
     void load();
   };
 
