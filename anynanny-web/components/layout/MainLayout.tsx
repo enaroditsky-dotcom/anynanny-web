@@ -1,6 +1,10 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { Home } from "lucide-react";
 import type { ReactNode } from "react";
+import { useAuth } from "@/components/auth-provider";
 
 type MainLayoutProps = {
   children: ReactNode;
@@ -9,9 +13,12 @@ type MainLayoutProps = {
 };
 
 export function MainLayout({ children, mainClassName }: MainLayoutProps) {
+  const { currentRole } = useAuth();
+  const dashboardHref = currentRole === "sitter" ? "/sitter/dashboard" : "/parent/dashboard";
+
   return (
     <div className="mx-auto flex h-[100dvh] w-full min-w-0 max-w-md flex-col overflow-hidden bg-[#FDFBF6] md:my-4 md:h-[calc(100dvh-2rem)] md:rounded-[2rem] md:shadow-soft">
-      <header className="flex h-14 shrink-0 items-center bg-white px-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)]">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-3 bg-white px-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)]">
         <Link
           href="/"
           className="inline-flex min-w-0 items-center gap-2.5 transition hover:opacity-90 active:opacity-80"
@@ -32,6 +39,14 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
             <span className="text-slate-800">Any</span>
             <span className="text-rose-400">Nanny</span>
           </h1>
+        </Link>
+
+        <Link
+          href={dashboardHref}
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-navy-header ring-1 ring-navy-header/10 transition hover:bg-slate-100 active:scale-95"
+          aria-label="חזרה לדשבורד"
+        >
+          <Home className="h-5 w-5" strokeWidth={2} aria-hidden />
         </Link>
       </header>
 

@@ -54,8 +54,8 @@ export function canShowParentSessionClosure(params: {
   const { sessionState, completedSummary, bookingStatus } = params;
   if (sessionState.status !== "ended" || !completedSummary) return false;
   if (sessionState.endedAtMs == null || !sessionState.supabaseSessionId?.trim()) return false;
-  if (bookingStatus != null && LIVE_BOOKING_STATUSES.has(bookingStatus)) return false;
-  return isClosureBookingStatus(bookingStatus);
+  if (bookingStatus === "rejected" || bookingStatus === "cancelled") return false;
+  return true;
 }
 
 export function mergeParentSessionFromDbRow(
@@ -197,6 +197,9 @@ export function reconcileStaleEndedLocalState(
   bookingStatus: BookingStatus | null | undefined
 ): SessionProtocolState {
   if (local.status !== "ended") return local;
+  if (local.supabaseSessionId?.trim() && local.endedAtMs != null) {
+    return local;
+  }
   if (bookingStatus != null && LIVE_BOOKING_STATUSES.has(bookingStatus)) {
     return { status: "idle" };
   }

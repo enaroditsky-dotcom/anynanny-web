@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
-import { SESSIONS_TABLE, type SupabaseSessionRow } from "@/lib/session/protocol";
+import { SESSIONS_TABLE, SESSION_PENDING_START_STATUSES, type SupabaseSessionRow } from "@/lib/session/protocol";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
 
@@ -149,6 +149,76 @@ export async function insertSessionReturningRow(
       continue;
     }
     break;
+  }
+
+  return { row: null, error: lastError };
+}
+
+const PARENT_ARRIVAL_ACTIVATE_PAYLOADS = (startIso: string): Record<string, unknown>[] => [
+  {
+    status: "active",
+    start_time: startIso,
+    start_confirmed: true,
+    session_status: "in_progress",
+    parent_start_shake: startIso
+  },
+  {
+    status: "active",
+    start_time: startIso,
+    start_confirmed: true,
+    session_status: "active",
+    parent_start_shake: startIso
+  },
+  {
+    status: "active",
+    start_time: startIso,
+    start_confirmed: true
+  }
+];
+
+/** Parent confirmed sitter arrival — activate session row (insert or update) with safe fallbacks. */
+export async function activateParentConfirmedSession(
+  supabase: SupabaseClient,
+  params: {
+    parentId: string;
+    sitterId: string;
+    bookingId: string;
+    startIso: string;
+  }
+): Promise<{ row: SupabaseSessionRow | null; error: string | null }> {
+  const { row: existing } = await fetchSessionForBooking(supabase, {
+    parentId: params.parentId,
+    bookingId: params.bookingId,
+    statuses: [...SESSION_PENDING_START_STATUSES, "active"],
+    orderBy: "created_at",
+    ascending: false
+  });
+
+  let lastError: string | null = null;
+
+  for (const payload of PARENT_ARRIVAL_ACTIVATE_PAYLOADS(params.startIso)) {
+    if (existing?.id) {
+      const updated = await updateSessionReturningRow(
+        supabase,
+        String(existing.id),
+        payload,
+        { parentId: params.parentId }
+      );
+      if (updated.row) {
+        return updated;
+      }
+      lastError = updated.error;
+    } else {
+      const inserted = await insertSessionReturningRow(supabase, {
+        parent_id: params.parentId,
+        sitter_id: params.sitterId,
+        ...payload
+      });
+      if (inserted.row) {
+        return inserted;
+      }
+      lastError = inserted.error;
+    }
   }
 
   return { row: null, error: lastError };

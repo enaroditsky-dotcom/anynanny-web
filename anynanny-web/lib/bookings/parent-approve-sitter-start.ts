@@ -3,9 +3,7 @@ import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 
 /**
- * Parent confirms sitter arrival.
- * Skips `parent_started` — many deployed DBs only allow through `sitter_started`.
- * Touch-only update keeps the row valid without tripping bookings_status_check.
+ * Parent confirms sitter arrival — advances booking to `parent_started` so sitter realtime syncs.
  */
 export async function parentApproveSitterStart(
   supabase: SupabaseClient,
@@ -14,7 +12,10 @@ export async function parentApproveSitterStart(
 ): Promise<{ row: BookingRow | null; error: string | null }> {
   const now = new Date().toISOString();
 
-  const payloads: Record<string, unknown>[] = [{ updated_at: now }, {}];
+  const payloads: Record<string, unknown>[] = [
+    { status: "parent_started", updated_at: now },
+    { status: "parent_started" }
+  ];
 
   let lastError: string | null = null;
 
@@ -24,7 +25,7 @@ export async function parentApproveSitterStart(
       .update(payload)
       .eq("id", bookingId)
       .eq("parent_id", parentId)
-      .in("status", ["sitter_started", "approved"])
+      .eq("status", "sitter_started")
       .select(BOOKING_SELECT_MINIMAL)
       .maybeSingle();
 
@@ -44,12 +45,12 @@ export async function parentApproveSitterStart(
     .eq("parent_id", parentId)
     .maybeSingle();
 
-  if (existing) {
+  if (existing && String(existing.status) === "parent_started") {
     return { row: existing as BookingRow, error: null };
   }
 
   return {
     row: null,
-    error: readErr?.message ?? lastError
+    error: readErr?.message ?? lastError ?? "לא ניתן לאשר הגעה."
   };
 }
