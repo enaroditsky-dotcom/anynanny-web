@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { MainLayout } from "@components/layout/MainLayout";
 import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filters";
 import {
   defaultParentSearchFilters,
@@ -84,51 +84,37 @@ export default function ParentSearchPage() {
   const redirectingToLogin = authSettled && !signedIn;
 
   return (
-    <main className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6]" dir="rtl">
-      <header className="flex shrink-0 items-center justify-between gap-2 pb-1">
-        <Link
-          href="/parent/dashboard"
-          className="inline-flex items-center gap-1 rounded-full border border-navy-header/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-navy-header shadow-sm transition hover:bg-brand-cream"
-        >
-          <ArrowRight className="h-3.5 w-3.5" />
-          חזרה
-        </Link>
-        <div className="min-w-0 text-left">
-          <h1 className="text-base font-bold leading-tight text-navy-header">חיפוש נני</h1>
-          <p className="text-[10px] leading-snug text-slate-500">הגדירו סינון וחפשו בייביסיטר</p>
-        </div>
-      </header>
+    <MainLayout>
+      <div dir="rtl">
+        {showWait ? (
+          <p className="text-right text-sm text-slate-600">טוען…</p>
+        ) : redirectingToLogin ? (
+          <p className="text-right text-sm text-slate-600">מעבירים להתחברות…</p>
+        ) : !showContent ? (
+          <p className="text-right text-sm text-slate-600">טוען…</p>
+        ) : null}
 
-      {showWait ? (
-        <p className="pt-2 text-right text-sm text-slate-600">טוען…</p>
-      ) : redirectingToLogin ? (
-        <p className="pt-2 text-right text-sm text-slate-600">מעבירים להתחברות…</p>
-      ) : !showContent ? (
-        <p className="pt-2 text-right text-sm text-slate-600">טוען…</p>
-      ) : null}
-
-      {showContent ? (
-        <>
-          <div className="flex min-h-0 flex-1 flex-col pt-1">
+        {showContent ? (
+          <>
             <ParentSearchFiltersBar
               filters={draftFilters}
               onChange={(next) => setDraftFilters(normalizeParentSearchFilters(next))}
             />
-          </div>
 
-          <div className="shrink-0 pt-2">
-            <button
-              type="button"
-              disabled={navigating}
-              onClick={handleSearch}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#001F3F] py-3 text-sm font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
-            >
-              <Search className="h-4 w-4" aria-hidden />
-              {navigating ? "מעבירים לתוצאות…" : "חפש בייביסיטר"}
-            </button>
-          </div>
-        </>
-      ) : null}
-    </main>
+            <div className="pt-3">
+              <button
+                type="button"
+                disabled={navigating}
+                onClick={handleSearch}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#001F3F] py-3 text-sm font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
+              >
+                <Search className="h-4 w-4" aria-hidden />
+                {navigating ? "מעבירים לתוצאות…" : "חפש בייביסיטר"}
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </MainLayout>
   );
 }
