@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
-import { SESSIONS_TABLE, SESSION_PENDING_START_STATUSES, type SupabaseSessionRow } from "@/lib/session/protocol";
+import { SESSIONS_TABLE, type SupabaseSessionRow } from "@/lib/session/protocol";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
 
@@ -34,7 +34,6 @@ export const SESSIONS_PROTOCOL_SELECT_CORE =
 export const SESSIONS_INSERT_RETURN_SELECT = SESSIONS_PROTOCOL_SELECT_MINIMAL;
 
 const SESSION_SELECT_FALLBACK_CHAIN = [
-  SESSIONS_PROTOCOL_SELECT,
   SESSIONS_PROTOCOL_SELECT_MINIMAL,
   SESSIONS_PROTOCOL_SELECT_CORE
 ] as const;
@@ -43,7 +42,7 @@ let cachedSessionsProtocolSelect: string | null = null;
 
 /** Resolved select list — downgrades to minimal columns after first missing-column 400. */
 export function getSessionsProtocolSelect(): string {
-  return cachedSessionsProtocolSelect ?? SESSIONS_PROTOCOL_SELECT;
+  return cachedSessionsProtocolSelect ?? SESSIONS_PROTOCOL_SELECT_MINIMAL;
 }
 
 /** Optional legacy column — absent on production until migration is applied. */
@@ -158,21 +157,11 @@ const PARENT_ARRIVAL_ACTIVATE_PAYLOADS = (startIso: string): Record<string, unkn
   {
     status: "active",
     start_time: startIso,
-    start_confirmed: true,
-    session_status: "in_progress",
-    parent_start_shake: startIso
-  },
-  {
-    status: "active",
-    start_time: startIso,
-    start_confirmed: true,
-    session_status: "active",
-    parent_start_shake: startIso
-  },
-  {
-    status: "active",
-    start_time: startIso,
     start_confirmed: true
+  },
+  {
+    status: "active",
+    start_time: startIso
   }
 ];
 
@@ -189,7 +178,7 @@ export async function activateParentConfirmedSession(
   const { row: existing } = await fetchSessionForBooking(supabase, {
     parentId: params.parentId,
     bookingId: params.bookingId,
-    statuses: [...SESSION_PENDING_START_STATUSES, "active"],
+    statuses: ["pending", "active"],
     orderBy: "created_at",
     ascending: false
   });

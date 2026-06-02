@@ -27,7 +27,7 @@ import {
   formatElapsed
 } from "@/lib/session/protocol";
 import { dismissCompletedSession, readDismissedCompletedSessionId, shouldSuppressStaleCompletedSession } from "@/lib/session/dismissed-completed";
-import { readSessionLinkedBookingId } from "@/lib/session/sessions-query";
+import { readSessionLinkedBookingId, SESSIONS_PROTOCOL_SELECT_MINIMAL } from "@/lib/session/sessions-query";
 import { persistShiftLocallyDismissed } from "@/lib/session/dismissed-shift-lock";
 import {
   DoubleShakeCircleButton,
@@ -53,6 +53,8 @@ import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { submitSessionRating } from "@/lib/ratings/submit-session-rating";
 import { useSitterPendingBookingCount } from "@/lib/bookings/use-sitter-pending-booking-count";
 
+const SITTER_DASHBOARD_SESSION_SELECT = SESSIONS_PROTOCOL_SELECT_MINIMAL;
+
 function parentRequestedEndAt(row: SupabaseSessionRow): boolean {
   return row.parent_end_requested_at != null && String(row.parent_end_requested_at).length > 0;
 }
@@ -66,14 +68,6 @@ function rowMatchesEndConfirm(row: SupabaseSessionRow, sitterId: string): boolea
   );
 }
 
-/** Absolute local view — not gated on realtime / DB refresh. */
-type SitterSessionView =
-  | "idle"
-  | "pending_start"
-  | "active"
-  | "end_confirm"
-  | "post_shift_review";
-
 export default function SitterDashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -82,14 +76,11 @@ export default function SitterDashboardPage() {
   const [activeShiftRow, setActiveShiftRow] = useState<SupabaseSessionRow | null>(null);
   const [endConfirmRow, setEndConfirmRow] = useState<SupabaseSessionRow | null>(null);
   const [completedSummaryRow, setCompletedSummaryRow] = useState<SupabaseSessionRow | null>(null);
-  const [sitterSessionView, setSitterSessionView] = useState<SitterSessionView>("idle");
   const [parentPaymentStatus, setParentPaymentStatus] = useState<BookingPaymentStatus>("unknown");
   const [sitterClosureBusy, setSitterClosureBusy] = useState(false);
   const [sitterClosureError, setSitterClosureError] = useState<string | null>(null);
   /** Hide completed row after mandatory rating dismiss (survives refreshForUser). */
   const suppressCompletedSummaryIdRef = useRef<string | null>(null);
-  /** Keeps post-shift review UI after optimistic local completion (DB may lag). */
-  const sitterPostShiftViewLockedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   const [forceEndToast, setForceEndToast] = useState<string | null>(null);
@@ -235,14 +226,13 @@ export default function SitterDashboardPage() {
     const [pendRes, actRes] = await Promise.all([
       supabase
         .from(SESSIONS_TABLE)
-        .select("*")
-        .in("status", [...SESSION_PENDING_START_STATUSES])
+        .select(SITTER_DASHBOARD_SESSION_SELECT)
         .or(`sitter_id.is.null,sitter_id.eq.${uid}`)
         .order("created_at", { ascending: false })
-        .limit(20),
+        .limit(50),
       supabase
         .from(SESSIONS_TABLE)
-        .select("*")
+        .select(SITTER_DASHBOARD_SESSION_SELECT)
         .eq("status", "active")
         .eq("sitter_id", uid)
         .order("created_at", { ascending: false })
@@ -256,7 +246,10 @@ export default function SitterDashboardPage() {
       console.warn("[sitter dashboard] active fetch:", actRes.error.message);
     }
 
-    const pendList = (pendRes.data ?? []) as SupabaseSessionRow[];
+    const pendingStatuses = new Set(SESSION_PENDING_START_STATUSES);
+    const pendList = ((pendRes.data ?? []) as SupabaseSessionRow[]).filter((row) =>
+      pendingStatuses.has(String(row.status))
+    );
     const actList = (actRes.data ?? []) as SupabaseSessionRow[];
 
     const pending = pendList[0] ?? null;
@@ -292,7 +285,7 @@ export default function SitterDashboardPage() {
     const dismissedId = readDismissedCompletedSessionId("sitter");
     const { data: completedData, error: completedErr } = await supabase
       .from(SESSIONS_TABLE)
-      .select("*")
+      .select(SITTER_DASHBOARD_SESSION_SELECT)
       .eq("status", "completed")
       .eq("sitter_id", uid)
       .order("end_time", { ascending: false })
@@ -312,33 +305,22 @@ export default function SitterDashboardPage() {
       }
     }
 
-    if (!gate?.id) {
-      completedShow = null;
-    } else if (completedShow) {
-      const endMs = completedShow.end_time
-        ? new Date(completedShow.end_time).getTime()
-        : NaN;
-      const freshCompletion =
-        Number.isFinite(endMs) && Date.now() - endMs < 4 * 60 * 60 * 1000;
+    const gateStatus = normalizeBookingStatus(gate?.status);
 
-      if (
-        !freshCompletion &&
-        shouldSuppressStaleCompletedSession({
-          completedRow: completedShow,
-          bookingStatus: gate?.status ?? null,
-          hasInFlightSession
-        })
-      ) {
-        completedShow = null;
-      }
+    /** Fresh login / empty calendar — never surface a stale completed session as payment-waiting. */
+    if (!gate?.id || gateStatus !== "completed") {
+      completedShow = null;
+    } else if (
+      shouldSuppressStaleCompletedSession({
+        completedRow: completedShow,
+        bookingStatus: gate?.status ?? null,
+        hasInFlightSession
+      })
+    ) {
+      completedShow = null;
     }
 
-    setCompletedSummaryRow((prev) => {
-      if (sitterPostShiftViewLockedRef.current) {
-        return prev ?? completedShow;
-      }
-      return completedShow;
-    });
+    setCompletedSummaryRow(completedShow);
   }, []);
 
   const refreshSitterProfileCardStatus = useCallback(
@@ -501,8 +483,6 @@ export default function SitterDashboardPage() {
 
       dismissCompletedSession(sid, "sitter");
       suppressCompletedSummaryIdRef.current = sid;
-      sitterPostShiftViewLockedRef.current = false;
-      setSitterSessionView("idle");
       lockShiftForToday();
       setCompletedSummaryRow(null);
       setPendingRow(null);
@@ -584,30 +564,6 @@ export default function SitterDashboardPage() {
     }
   };
 
-  const applySitterSessionFinishedLocally = (row: SupabaseSessionRow) => {
-    sitterPostShiftViewLockedRef.current = true;
-    setSitterSessionView("post_shift_review");
-    const endIso = new Date().toISOString();
-    const startMs = row.start_time ? new Date(row.start_time).getTime() : Date.now();
-    const endMs = new Date(endIso).getTime();
-    const finalSeconds = Math.max(0, Math.floor((endMs - startMs) / 1000));
-    const completedRow: SupabaseSessionRow = {
-      ...row,
-      status: "completed",
-      end_time: endIso,
-      sitter_end_confirmed_at: endIso,
-      final_elapsed_seconds: finalSeconds,
-      final_amount_nis: Number(((finalSeconds / 3600) * HOURLY_RATE).toFixed(2))
-    };
-    setEndConfirmRow(null);
-    setActiveShiftRow(null);
-    setPendingRow(null);
-    setCompletedSummaryRow(completedRow);
-    suppressCompletedSummaryIdRef.current = null;
-    setBanner(null);
-    return completedRow;
-  };
-
   const completeSessionRow = async (row: SupabaseSessionRow) => {
     if (!sitterId) return;
     const bookingId =
@@ -627,7 +583,6 @@ export default function SitterDashboardPage() {
       return;
     }
     setEndShiftBusy(true);
-    applySitterSessionFinishedLocally(row);
     try {
       const { error } = await sitterCompleteSession(
         auth.supabase,
@@ -636,15 +591,16 @@ export default function SitterDashboardPage() {
         row.start_time
       );
       if (error) {
-        console.warn("[sitter] session complete DB sync failed — continuing to rating UI:", error);
-      } else {
-        await refreshForUser(auth.supabase, sitterId);
+        setBanner(friendlySupabaseSessionError(error));
+        return;
       }
+      setBanner(null);
+      suppressCompletedSummaryIdRef.current = null;
+      await refreshForUser(auth.supabase, sitterId);
       await reloadTodaysBooking();
       router.refresh();
     } catch (e) {
-      console.warn("[sitter] session complete threw — continuing to rating UI:", e);
-      await reloadTodaysBooking();
+      setBanner(friendlySupabaseSessionError(e));
     } finally {
       setEndShiftBusy(false);
     }
@@ -671,9 +627,7 @@ export default function SitterDashboardPage() {
     }
   }, [sitterId, refreshSitterProfileCardStatus]);
 
-  const sitterHasInFlightSession =
-    sitterSessionView !== "post_shift_review" &&
-    Boolean(pendingRow || activeShiftRow || endConfirmRow);
+  const sitterHasInFlightSession = Boolean(pendingRow || activeShiftRow || endConfirmRow);
 
   const sitterHasLiveBooking =
     Boolean(activeCircleBooking) &&
@@ -681,10 +635,10 @@ export default function SitterDashboardPage() {
     gateBookingStatus !== "cancelled" &&
     !isSitterBookingAwaitingApprovalStatus(gateBookingStatus);
 
-  const showSitterPostShiftReview =
-    sitterSessionView === "post_shift_review" && Boolean(completedSummaryRow);
-
-  const showSitterCompletedClosure = showSitterPostShiftReview || Boolean(completedSummaryRow);
+  const showSitterCompletedClosure =
+    Boolean(completedSummaryRow) &&
+    !sitterHasInFlightSession &&
+    gateBookingStatus === "completed";
 
   const showSitterIdleWelcome =
     bookingGuardReady &&
@@ -761,7 +715,7 @@ export default function SitterDashboardPage() {
   /** No live booking in DB → clear stale in-flight session UI (keep post-payment rating gate). */
   useEffect(() => {
     if (!bookingGuardReady || loading) return;
-    if (sitterSessionView === "post_shift_review" || showSitterCompletedClosure) return;
+    if (showSitterCompletedClosure) return;
     if (pendingRow || activeShiftRow || endConfirmRow) return;
 
     const hasLiveBooking = isBookingLiveForSessionSync(todaysBooking);
@@ -782,8 +736,7 @@ export default function SitterDashboardPage() {
     pendingRow,
     activeShiftRow,
     endConfirmRow,
-    gateBookingStatus,
-    sitterSessionView
+    gateBookingStatus
   ]);
 
   if (loading) {
@@ -815,7 +768,7 @@ export default function SitterDashboardPage() {
             </div>
           )}
         </div>
-      ) : endConfirmRow && sitterSessionView !== "post_shift_review" && !sessionUiBlockedByBooking ? (
+      ) : endConfirmRow && !sessionUiBlockedByBooking ? (
         <>
           <div className="w-full shrink-0 space-y-2 text-right">
             <p className="text-sm font-semibold text-[#001F3F]">ההורה ביקש לסיים את המשמרת</p>
@@ -831,7 +784,7 @@ export default function SitterDashboardPage() {
             />
           </div>
         </>
-      ) : pendingRow && sitterSessionView !== "post_shift_review" && !sessionUiBlockedByBooking ? (
+      ) : pendingRow && !sessionUiBlockedByBooking ? (
         <>
           <div className="w-full shrink-0 space-y-2 text-right">
             <p className="text-xs font-medium text-slate-600">ממתין לאישור שלך</p>
@@ -845,7 +798,7 @@ export default function SitterDashboardPage() {
             />
           </div>
         </>
-      ) : activeShiftRow && sitterSessionView !== "post_shift_review" && !sessionUiBlockedByBooking ? (
+      ) : activeShiftRow && !sessionUiBlockedByBooking ? (
         <>
           <div className="w-full shrink-0 space-y-2 text-right">
             <p className="text-xs font-medium text-slate-600">משמרת פעילה</p>
