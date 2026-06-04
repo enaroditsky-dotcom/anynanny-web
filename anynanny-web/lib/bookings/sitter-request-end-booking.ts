@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 
 /** Sitter requests end while shift is live — booking moves to `sitter_ended`. */
@@ -15,9 +16,7 @@ export async function sitterRequestEndBooking(
     .eq("id", bookingId)
     .eq("sitter_id", sitterId)
     .eq("status", "parent_started")
-    .select(
-      "id, parent_id, sitter_id, booking_date, start_time, end_time, status, actual_start_time, actual_end_time, created_at, updated_at"
-    )
+    .select(BOOKING_SELECT_MINIMAL)
     .maybeSingle();
 
   if (error) {

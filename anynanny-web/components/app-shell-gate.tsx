@@ -3,8 +3,11 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { AppShellHeader } from "@/components/app-shell-header";
+import { AppShellSessionHydration } from "@/components/app-shell-session-hydration";
+import { AppShellStableBoundary } from "@/components/app-shell-stable-boundary";
 import { BottomNavigation } from "@/components/bottom-navigation";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
+import SessionProvider from "@/context/SessionContext";
 
 const CHROMELESS_PREFIXES = ["/auth/role-selection", "/auth/login", "/auth/register"];
 
@@ -48,34 +51,40 @@ export function AppShellGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (isMainLayoutPath(pathname)) {
-    return (
-      <>
-        <RouteTransitionShell fill>{children}</RouteTransitionShell>
-        <BottomNavigation />
-      </>
-    );
-  }
-
   const fixedViewport = isFixedViewportPath(pathname);
+  const mainLayout = isMainLayoutPath(pathname);
 
   return (
-    <div
-      className={`mx-auto flex w-full min-w-0 max-w-md flex-col overflow-hidden bg-white shadow-soft md:my-4 md:rounded-[2rem] ${
-        fixedViewport
-          ? "h-[100dvh] md:h-[calc(100dvh-2rem)]"
-          : "min-h-0 md:min-h-[calc(100dvh-2rem)]"
-      }`}
-    >
-      <AppShellHeader />
-      <div
-        className={`relative min-h-0 min-w-0 flex-1 px-4 pb-28 pt-4 ${
-          fixedViewport ? "flex flex-col overflow-hidden" : "overflow-y-auto"
-        }`}
-      >
-        <RouteTransitionShell fill={fixedViewport}>{children}</RouteTransitionShell>
-      </div>
-      <BottomNavigation />
-    </div>
+    <SessionProvider>
+      <AppShellSessionHydration />
+      {mainLayout ? (
+        <>
+          <AppShellStableBoundary>
+            <RouteTransitionShell fill>{children}</RouteTransitionShell>
+          </AppShellStableBoundary>
+          <BottomNavigation />
+        </>
+      ) : (
+        <div
+          className={`mx-auto flex w-full min-w-0 max-w-md flex-col overflow-hidden bg-white shadow-soft md:my-4 md:rounded-[2rem] ${
+            fixedViewport
+              ? "h-[100dvh] md:h-[calc(100dvh-2rem)]"
+              : "min-h-0 md:min-h-[calc(100dvh-2rem)]"
+          }`}
+        >
+          <AppShellHeader />
+          <div
+            className={`relative min-h-0 min-w-0 flex-1 px-4 pb-28 pt-4 ${
+              fixedViewport ? "flex flex-col overflow-hidden" : "overflow-y-auto"
+            }`}
+          >
+            <AppShellStableBoundary>
+              <RouteTransitionShell fill={fixedViewport}>{children}</RouteTransitionShell>
+            </AppShellStableBoundary>
+          </div>
+          <BottomNavigation />
+        </div>
+      )}
+    </SessionProvider>
   );
 }

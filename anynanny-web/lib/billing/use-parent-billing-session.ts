@@ -73,34 +73,39 @@ export function useParentBillingSession() {
 
     let cancelled = false;
     void (async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const fromSession = sessionData.session?.user ?? null;
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
-      const resolvedUser = authData.user ?? fromSession;
-      if (authErr && !resolvedUser) return;
-      if (!resolvedUser || cancelled) return;
-
-      const userId = resolvedUser.id;
-      setParentUserId(userId);
       try {
-        localStorage.setItem("active_role", "parent");
+        const { data: sessionData } = await supabase.auth.getSession();
+        const fromSession = sessionData.session?.user ?? null;
+        const { data: authData, error: authErr } = await supabase.auth.getUser();
+        const resolvedUser = authData.user ?? fromSession;
+        if (authErr && !resolvedUser) return;
+        if (!resolvedUser || cancelled) return;
+
+        const userId = resolvedUser.id;
+        setParentUserId(userId);
+        try {
+          localStorage.setItem("active_role", "parent");
+        } catch {
+          /* ignore */
+        }
+
+        const { data: row, error: rowErr } = await supabase
+          .from(SESSIONS_TABLE)
+          .select("*")
+          .eq("parent_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!cancelled && !rowErr && row) {
+          const mapped = applyRowToState(row as SupabaseSessionRow);
+          if (mapped) setSessionState(mapped);
+        }
       } catch {
-        /* ignore */
+        // Network/schema failure → keep clean idle state; never break the provider.
+      } finally {
+        if (!cancelled) setUseSupabase(true);
       }
-
-      const { data: row, error: rowErr } = await supabase
-        .from(SESSIONS_TABLE)
-        .select("*")
-        .eq("parent_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!cancelled && !rowErr && row) {
-        const mapped = applyRowToState(row as SupabaseSessionRow);
-        if (mapped) setSessionState(mapped);
-      }
-      if (!cancelled) setUseSupabase(true);
     })();
 
     return () => {

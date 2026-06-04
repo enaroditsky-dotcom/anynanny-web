@@ -21,10 +21,7 @@ export function RouteTransitionShell({
   }
 
   return (
-    <div
-      key={pathname}
-      className={`animate-fade-route min-w-0 ${fill ? "flex min-h-0 flex-1 flex-col" : ""}`}
-    >
+    <div className={`animate-fade-route min-w-0 ${fill ? "flex min-h-0 flex-1 flex-col" : ""}`}>
       {children}
     </div>
   );

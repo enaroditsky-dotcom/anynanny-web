@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { HOURLY_RATE, SESSIONS_TABLE, formatElapsed } from "@/lib/session/protocol";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
-import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
+import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type BillingSessionRow = {
@@ -35,6 +35,18 @@ export type BillingState =
 
 export const BILLING_SESSION_SELECT =
   "id, parent_id, sitter_id, status, session_status, start_time, end_time, sitter_start_shake, parent_start_shake, sitter_end_shake, parent_end_shake, billing_rate_per_minute, total_amount_charged, stripe_payment_intent_id, final_elapsed_seconds, final_amount_nis";
+
+/**
+ * Columns guaranteed to exist on every deployed schema (pre-billing-migration safe).
+ * Used as a fallback when the full billing/shake columns are missing in production.
+ */
+export const BILLING_SESSION_SELECT_VERIFIED =
+  "id, parent_id, sitter_id, status, start_time, end_time, final_elapsed_seconds, final_amount_nis";
+
+const BILLING_SELECT_FALLBACK_CHAIN = [
+  BILLING_SESSION_SELECT,
+  BILLING_SESSION_SELECT_VERIFIED
+] as const;
 
 const SHAKE_TIMESTAMP_KEYS = [
   "sitter_start_shake",
@@ -379,25 +391,44 @@ export function useBillingSession({ sessionId, participantColumn, participantId 
     }
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from(SESSIONS_TABLE)
-        .select(BILLING_SESSION_SELECT)
-        .eq("id", sessionId)
-        .eq(participantColumn, participantId)
-        .maybeSingle();
+      let lastError: { message: string } | null = null;
 
-      if (fetchError) {
-        setError(friendlySupabaseSessionError(fetchError));
+      for (const select of BILLING_SELECT_FALLBACK_CHAIN) {
+        const { data, error: fetchError } = await supabase
+          .from(SESSIONS_TABLE)
+          .select(select)
+          .eq("id", sessionId)
+          .eq(participantColumn, participantId)
+          .maybeSingle();
+
+        if (!fetchError) {
+          replaceSessionRow(data as Record<string, unknown> | null);
+          setError(null);
+          setLoading(false);
+          return parseBillingSessionRow(data as Record<string, unknown> | null);
+        }
+
+        lastError = fetchError;
+        // Drift: missing billing/shake columns → retry with verified columns only.
+        if (isPostgrestSchemaDriftError(fetchError.message)) continue;
+        break;
+      }
+
+      // Schema drift on every attempt → degrade to a clean state, never tear down the tree.
+      if (lastError && isPostgrestSchemaDriftError(lastError.message)) {
+        console.warn("[billing] session columns unavailable, returning clean state:", lastError.message);
+        setError(null);
         setLoading(false);
         return null;
       }
 
-      replaceSessionRow(data as Record<string, unknown> | null);
-      setError(null);
+      setError(lastError ? friendlySupabaseSessionError(lastError) : null);
       setLoading(false);
-      return parseBillingSessionRow(data as Record<string, unknown> | null);
+      return null;
     } catch (err) {
-      setError(friendlySupabaseSessionError(err));
+      // Network/unexpected failure → clean state, no unhandled exception.
+      console.warn("[billing] session fetch threw, returning clean state:", err);
+      setError(null);
       setLoading(false);
       return null;
     }

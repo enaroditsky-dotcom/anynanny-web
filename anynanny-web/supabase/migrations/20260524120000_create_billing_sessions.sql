@@ -21,9 +21,12 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Table (clean slate for billing foundations)
 -- ---------------------------------------------------------------------------
-drop table if exists public.sessions cascade;
+-- NEUTRALIZED: the original destructive reset is disabled to protect existing
+-- sessions history. The schema is now reconciled in place by
+-- 20260605000000_reconcile_sessions_billing_schema.sql.
+-- drop table if exists public.sessions cascade;
 
-create table public.sessions (
+create table if not exists public.sessions (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

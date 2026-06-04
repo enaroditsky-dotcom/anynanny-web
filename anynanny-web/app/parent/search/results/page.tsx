@@ -144,6 +144,10 @@ function ParentSearchResultsInner() {
 
       setSearchError(null);
       setSitters(cards);
+    } catch (error) {
+      console.warn("[parent/search/results] search threw:", error);
+      setSearchError(null);
+      setSitters([]);
     } finally {
       setListLoading(false);
     }

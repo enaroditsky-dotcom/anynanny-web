@@ -7,16 +7,12 @@ import { ArrowRight, Star } from "lucide-react";
 import { SitterProfileActions } from "@/components/parent/sitter-profile-actions";
 import { SitterProfileWorkingCitiesRow } from "@/components/sitter/sitter-profile-working-cities-row";
 import { useAuth } from "@/components/auth-provider";
-import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
+  fetchParentSitterProfile,
   formatTransportationMode,
-  normalizeSitterProfilePublic,
-  parseRouteSitterId,
-  unwrapRpcProfilePayload
+  parseRouteSitterId
 } from "@/lib/sitter/fetch-parent-sitter-profile";
 import {
-  SITTER_PROFILES_TABLE,
-  SITTER_WORKING_CITIES_COLUMN,
   type PublicSitterReview,
   type SitterProfilePublic
 } from "@/lib/sitter/sitter-profile";
@@ -26,20 +22,6 @@ function formatAvg(avg: number | null | undefined, count: number | null | undefi
   const c = count ?? 0;
   if (c <= 0 || avg == null) return "אין דירוג עדיין";
   return `${Number(avg).toFixed(1)} ★ (${c} ביקורות)`;
-}
-
-function parseReviews(raw: unknown): PublicSitterReview[] {
-  if (raw == null) return [];
-  let list: unknown = raw;
-  if (typeof raw === "string") {
-    try {
-      list = JSON.parse(raw) as unknown;
-    } catch {
-      return [];
-    }
-  }
-  if (!Array.isArray(list)) return [];
-  return list.filter((x): x is PublicSitterReview => x != null && typeof x === "object");
 }
 
 export default function ParentSitterProfilePage() {
@@ -79,60 +61,17 @@ export default function ParentSitterProfilePage() {
     setPageState("loading");
     setLoadError(null);
 
-    const { data, error: profErr } = await supabase.rpc("get_sitter_profile_public", {
-      target_id: sitterId
-    });
-
-    if (profErr) {
-      console.warn("[parent/sitter profile] RPC Error details:", profErr.message, profErr.details, profErr.hint);
-      setLoadError(profErr.message || "שגיאה בביצוע החיפוש");
+    const result = await fetchParentSitterProfile(supabase, sitterId);
+    if (result.error || !result.profile) {
+      setLoadError(result.error);
       setProfile(null);
       setReviews([]);
       setPageState("missing");
       return;
     }
 
-    const rawRow = Array.isArray(data) ? data[0] : data;
-    const payload = unwrapRpcProfilePayload(rawRow) ?? unwrapRpcProfilePayload(data);
-
-    if (!payload) {
-      setProfile(null);
-      setReviews([]);
-      setPageState("missing");
-      return;
-    }
-
-    const normalized = normalizeSitterProfilePublic(payload, sitterId);
-
-    if (!normalized.working_cities?.length) {
-      const { data: wcRow, error: wcErr } = await supabase
-        .from(SITTER_PROFILES_TABLE)
-        .select(SITTER_WORKING_CITIES_COLUMN)
-        .eq("id", sitterId)
-        .maybeSingle();
-
-      if (!wcErr && wcRow) {
-        const cities = normalizeWorkingCities(
-          (wcRow as Record<string, unknown>)[SITTER_WORKING_CITIES_COLUMN]
-        );
-        if (cities.length) normalized.working_cities = cities;
-      }
-    }
-
-    setProfile(normalized);
-
-    const { data: reviewsRaw, error: revErr } = await supabase.rpc("get_sitter_public_reviews", {
-      p_sitter_id: sitterId,
-      p_limit: 10
-    });
-
-    if (revErr) {
-      console.warn("[parent/sitter profile] reviews:", revErr.message);
-      setReviews([]);
-    } else {
-      setReviews(parseReviews(reviewsRaw));
-    }
-
+    setProfile(result.profile);
+    setReviews(result.reviews);
     setPageState("ready");
   }, [sitterId]);
 

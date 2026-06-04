@@ -165,7 +165,7 @@ export default function ParentOnboardingPage() {
         return;
       }
 
-      window.location.assign("/parent/dashboard");
+      router.push("/parent/dashboard");
     } finally {
       setSaving(false);
     }

@@ -15,7 +15,13 @@ import {
   normalizeSitterProfilePublic,
   unwrapRpcProfilePayload
 } from "@/lib/sitter/fetch-parent-sitter-profile";
-import { isPostgrestMissingColumnError, isPostgrestMissingFunctionError } from "@/lib/supabase/postgrest-schema";
+import {
+  isPostgrestMissingColumnError,
+  isPostgrestMissingFunctionError,
+  isSupabaseRpcUnavailableError,
+  readSupabaseErrorMessage
+} from "@/lib/supabase/postgrest-schema";
+import { safeSupabaseReadAsync } from "@/lib/supabase/safe-supabase-read";
 import {
   getSitterProfilesUserColumn,
   SITTER_PROFILES_TABLE,
@@ -200,12 +206,16 @@ async function ensureSearchCardRatings(
   let result = stripInvalidSearchRatings(cards);
 
   if (!options?.skipListRpcEnrich) {
-    const { data, error } = await supabase.rpc(
-      "list_public_sitters_search",
-      toListPublicSittersSearchRpcArgs(filters)
-    );
-    if (!error) {
-      result = mergeRatingsOntoCards(result, parsePublicSearchCards(data));
+    try {
+      const { data, error } = await invokeListPublicSittersSearchRpc(supabase, filters);
+      if (!error && data != null) {
+        result = mergeRatingsOntoCards(result, parsePublicSearchCards(data));
+      }
+    } catch (error) {
+      console.warn(
+        "[parent-sitter-search] list_public_sitters_search enrich skipped:",
+        readSupabaseErrorMessage(error)
+      );
     }
   }
 
@@ -232,12 +242,35 @@ function shouldFallbackBrowseFromRpcError(message: string): boolean {
     isPostgrestMissingFunctionError(message) ||
     lower.includes("is_available") ||
     lower.includes("list_public_sitters_no_is_available") ||
+    lower.includes("list_public_sitters") ||
     lower.includes("could not find the function") ||
     lower.includes("function public.list_public_sitters_search") ||
     lower.includes("p_search_city") ||
     lower.includes("working_cities") ||
     isRpcRatingSchemaError(message)
   );
+}
+
+function shouldFallbackListPublicSittersRpc(error: unknown): boolean {
+  if (!error) return false;
+  if (isSupabaseRpcUnavailableError(error)) return true;
+  const message = readSupabaseErrorMessage(error);
+  return shouldFallbackBrowseFromRpcError(message);
+}
+
+async function invokeListPublicSittersSearchRpc(
+  supabase: SupabaseClient,
+  filters: ParentSearchFilters
+): Promise<{ data: unknown; error: unknown }> {
+  const args = toListPublicSittersSearchRpcArgs(filters);
+  const read = await safeSupabaseReadAsync(
+    () => supabase.rpc("list_public_sitters_search", args),
+    "list_public_sitters_search"
+  );
+  if (read.error) {
+    return { data: null, error: read.error };
+  }
+  return { data: read.data, error: null };
 }
 
 type DirectSearchOptions = {
@@ -451,26 +484,55 @@ export async function runListPublicSittersSearchRpc(
   supabase: SupabaseClient,
   filters: ParentSearchFilters
 ): Promise<ParentSitterSearchResult> {
-  const args = toListPublicSittersSearchRpcArgs(filters);
+  try {
+    const { data: results, error } = await invokeListPublicSittersSearchRpc(supabase, filters);
 
-  const { data: results, error } = await supabase.rpc("list_public_sitters_search", args);
-
-  if (error) {
-    const msg = error.message ?? "";
-    if (shouldFallbackBrowseFromRpcError(msg)) {
-      return runBrowseParentSitterSearchDirect(supabase, filters, {
-        skipListRpcEnrich: isRpcRatingSchemaError(msg)
-      });
+    if (error) {
+      const msg = readSupabaseErrorMessage(error);
+      if (shouldFallbackListPublicSittersRpc(error)) {
+        console.warn(
+          "[parent-sitter-search] list_public_sitters_search unavailable, using direct table query:",
+          msg
+        );
+        const { data, error: fallbackError } = await supabase
+          .from("sitter_profiles")
+          .select("*")
+          .limit(10);
+        if (fallbackError) {
+          return { cards: [], error: fallbackError.message };
+        }
+        const cards = ((data ?? []) as unknown as Record<string, unknown>[])
+          .map((row) => profileRowToSearchCard(row))
+          .filter((card): card is PublicSitterSearchCard => card != null);
+        return { cards, error: null };
+      }
+      return { cards: [], error: msg || "שגיאה בביצוע החיפוש" };
     }
-    return { cards: [], error: msg || "שגיאה בביצוע החיפוש" };
-  }
 
-  return {
-    cards: await ensureSearchCardRatings(supabase, parsePublicSearchCards(results), filters, {
-      skipListRpcEnrich: true
-    }),
-    error: null
-  };
+    return {
+      cards: await ensureSearchCardRatings(supabase, parsePublicSearchCards(results), filters, {
+        skipListRpcEnrich: true
+      }),
+      error: null
+    };
+  } catch (error) {
+    const msg = readSupabaseErrorMessage(error);
+    console.warn(
+      "[parent-sitter-search] list_public_sitters_search threw, using direct table query:",
+      msg
+    );
+    const { data, error: fallbackError } = await supabase
+      .from("sitter_profiles")
+      .select("*")
+      .limit(10);
+    if (fallbackError) {
+      return { cards: [], error: fallbackError.message };
+    }
+    const cards = ((data ?? []) as unknown as Record<string, unknown>[])
+      .map((row) => profileRowToSearchCard(row))
+      .filter((card): card is PublicSitterSearchCard => card != null);
+    return { cards, error: null };
+  }
 }
 
 /** Serial (AN-####) → RPC + direct profile lookup; browse → filtered RPC. */

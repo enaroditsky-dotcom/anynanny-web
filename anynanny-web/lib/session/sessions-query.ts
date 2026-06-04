@@ -4,8 +4,8 @@ import { SESSIONS_TABLE, type SupabaseSessionRow } from "@/lib/session/protocol"
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
 
-/** Overlap probe — billing schema (`session_status`); legacy DB falls back to `status`. */
-export const SESSIONS_OVERLAP_SELECT = "id, start_time, end_time, session_status";
+/** Overlap probe — only columns guaranteed to exist on every schema (status drift safe). */
+export const SESSIONS_OVERLAP_SELECT = "id, start_time, end_time, status";
 
 /** Booking statuses that mean a live shift is still in progress — hide stale completed sessions. */
 export const LIVE_BOOKING_STATUSES_FOR_SESSION_UI = new Set([

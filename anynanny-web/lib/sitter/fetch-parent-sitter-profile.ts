@@ -132,15 +132,7 @@ export function normalizeSitterProfilePublic(
   };
 }
 
-function parseReviews(raw: unknown): PublicSitterReview[] {
-  const value = parseRpcJson(raw);
-  if (!value) return [];
-  const arr = Array.isArray(value) ? value : null;
-  if (!arr) return [];
-  return arr.filter((x): x is PublicSitterReview => x != null && typeof x === "object");
-}
-
-async function fetchSitterPublicReviewsDirect(
+export async function fetchSitterPublicReviews(
   supabase: SupabaseClient,
   sitterId: string,
   limit = 10
@@ -253,17 +245,7 @@ export async function fetchParentSitterProfile(
     return { profile: null, reviews: [], error: null };
   }
 
-  let reviews = await fetchSitterPublicReviewsDirect(supabase, sitterId);
-
-  if (reviews.length === 0) {
-    const { data: reviewsRaw, error: revErr } = await supabase.rpc("get_sitter_public_reviews", {
-      p_sitter_id: sitterId,
-      p_limit: 10
-    });
-    if (!revErr) {
-      reviews = parseReviews(reviewsRaw);
-    }
-  }
+  const reviews = await fetchSitterPublicReviews(supabase, sitterId, 10);
 
   return { profile, reviews, error: null };
 }

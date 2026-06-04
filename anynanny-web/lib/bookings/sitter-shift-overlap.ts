@@ -3,7 +3,6 @@ import { resolveBookingWindowMs } from "@/lib/bookings/booking-date-utils";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
 import { SESSIONS_OVERLAP_SELECT } from "@/lib/session/sessions-query";
-import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 
 export const SITTER_OVERLAP_APPROVE_MESSAGE =
   "⚠️ יש לך כבר משמרת מאושרת בשעות חופפות!";
@@ -74,41 +73,33 @@ async function fetchOverlapSessions(
   supabase: SupabaseClient,
   sitterId: string
 ): Promise<Array<{ id: string; start_time: string | null; end_time: string | null }>> {
-  const { data: sessionRows, error: sessionError } = await supabase
-    .from(SESSIONS_TABLE)
-    .select(SESSIONS_OVERLAP_SELECT)
-    .eq("sitter_id", sitterId)
-    .in("session_status", [...OVERLAP_BLOCKING_SESSION_STATUSES]);
+  const blocking = new Set<string>(
+    OVERLAP_BLOCKING_SESSION_STATUSES.map((s) => s.toLowerCase())
+  );
 
-  if (!sessionError) {
-    return (sessionRows ?? []) as Array<{
-      id: string;
-      start_time: string | null;
-      end_time: string | null;
-    }>;
-  }
-
-  if (isPostgrestMissingColumnError(sessionError.message, "session_status")) {
-    const { data: legacyRows, error: legacyError } = await supabase
+  try {
+    const { data: sessionRows, error: sessionError } = await supabase
       .from(SESSIONS_TABLE)
-      .select("id, start_time, end_time, status")
-      .eq("sitter_id", sitterId)
-      .eq("status", "active");
+      .select(SESSIONS_OVERLAP_SELECT)
+      .eq("sitter_id", sitterId);
 
-    if (legacyError) {
-      console.warn("[sitter-shift-overlap] sessions query failed:", legacyError.message);
+    if (sessionError) {
+      console.warn("[sitter-shift-overlap] sessions query failed:", sessionError.message);
       return [];
     }
 
-    return (legacyRows ?? []) as Array<{
-      id: string;
-      start_time: string | null;
-      end_time: string | null;
-    }>;
+    return (sessionRows ?? [])
+      .map((row) => row as Record<string, unknown>)
+      .filter((row) => blocking.has(String(row.status ?? "").toLowerCase()))
+      .map((row) => ({
+        id: String(row.id),
+        start_time: (row.start_time as string | null) ?? null,
+        end_time: (row.end_time as string | null) ?? null
+      }));
+  } catch (e) {
+    console.warn("[sitter-shift-overlap] sessions query threw:", e);
+    return [];
   }
-
-  console.warn("[sitter-shift-overlap] sessions query failed:", sessionError.message);
-  return [];
 }
 
 function resolveActiveSessionOverlapWindow(

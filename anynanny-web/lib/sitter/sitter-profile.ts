@@ -137,7 +137,7 @@ export type PublicSitterSearchCard = {
   avatar_url?: string | null;
 };
 
-/** One anonymized review from `get_sitter_public_reviews` RPC. */
+/** One anonymized public review for parent-facing sitter profile screens. */
 export type PublicSitterReview = {
   rating: number;
   comment: string;
