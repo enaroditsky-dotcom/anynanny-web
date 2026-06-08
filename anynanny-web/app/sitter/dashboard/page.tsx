@@ -34,7 +34,7 @@ import {
   DoubleShakeCircleSlot,
   DoubleShakeShiftPanel
 } from "@/components/session/double-shake-circle-button";
-import { SITTER_FORCE_END_SUCCESS_MESSAGE } from "@/lib/bookings/constants";
+import { BOOKINGS_TABLE, SITTER_FORCE_END_SUCCESS_MESSAGE } from "@/lib/bookings/constants";
 import { SitterDoubleShakeIdleCircle } from "@/components/session/sitter-double-shake-idle-circle";
 import { SitterShiftApprovalCard } from "@/components/sitter/sitter-shift-approval-card";
 import { doesBookingBlockSessionShiftUi, isBookingLiveForSessionSync } from "@/lib/bookings/booking-shift-ui";
@@ -168,7 +168,6 @@ export default function SitterDashboardPage() {
 
   const idleCircleBooking = circleBooking ?? todaysBooking;
 
-  const idleBookingStatus = normalizeBookingStatus(idleCircleBooking?.status) ?? "";
   const gateBookingStatus = normalizeBookingStatus(todayBookingShiftGate?.status) ?? "";
 
   const sessionUiBlockedByBooking = useMemo(
@@ -436,6 +435,54 @@ export default function SitterDashboardPage() {
     };
   }, [refreshForUser, refreshSitterProfileCardStatus, setSitterBootstrapComplete]);
 
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !sitterId || loading) return;
+
+    const refreshSitterBookingState = () => {
+      void reloadTodaysBooking();
+      void refreshForUser(supabase, sitterId);
+      setDashboardStatsRefreshKey((k) => k + 1);
+    };
+
+    const channel = supabase
+      .channel(`sitter-dashboard-bookings-${sitterId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: BOOKINGS_TABLE,
+          filter: `sitter_id=eq.${sitterId}`
+        },
+        refreshSitterBookingState
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          refreshSitterBookingState();
+        }
+      });
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [sitterId, loading, reloadTodaysBooking, refreshForUser]);
+
+  /** Force a booking re-sync on mount and whenever the sitter's session state changes. */
+  useEffect(() => {
+    void reloadTodaysBooking();
+  }, [
+    reloadTodaysBooking,
+    pendingRow?.id,
+    pendingRow?.status,
+    activeShiftRow?.id,
+    activeShiftRow?.status,
+    endConfirmRow?.id,
+    endConfirmRow?.status,
+    completedSummaryRow?.id,
+    completedSummaryRow?.status
+  ]);
+
   /**
    * When this sitter has a known session row id, listen on `id=eq.{id}` so parent end-request UPDATE is instant.
    * With no row yet, listen to the whole table so the parent's INSERT for a new pending session is still received.
@@ -698,21 +745,6 @@ export default function SitterDashboardPage() {
     !showSitterAwaitingParentApproval &&
     !sitterHasLiveBooking &&
     !showSitterBookingApproval;
-
-  const inFlightBookingStatuses = new Set([
-    "sitter_started",
-    "parent_started",
-    "sitter_ended",
-    "in_progress"
-  ]);
-
-  const showEmergencyReset =
-    !onboardingPending &&
-    !showSitterCompletedClosure &&
-    (Boolean(activeShiftRow) ||
-      Boolean(endConfirmRow) ||
-      Boolean(pendingRow) ||
-      inFlightBookingStatuses.has(idleBookingStatus));
 
   useEffect(() => {
     if (!completedSummaryRow) {
@@ -1069,11 +1101,9 @@ export default function SitterDashboardPage() {
       </DoubleShakeShiftPanel>
       </div>
 
-      {showEmergencyReset ? (
-        <div className="shrink-0 pb-1 text-center">
-          <StuckShiftDevResetButton variant="link" onReset={() => void handleDevReset()} />
-        </div>
-      ) : null}
+      <div className="shrink-0 pb-1 text-center">
+        <StuckShiftDevResetButton variant="link" onReset={() => void handleDevReset()} />
+      </div>
     </main>
   );
 }

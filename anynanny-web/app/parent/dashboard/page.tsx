@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Calendar, History, Search, Settings, Wallet } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ParentSessionClosurePanel } from "@/components/session/parent-session-closure-panel";
+import SessionFinalizer from "@/components/SessionFinalizer";
 import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import { ActionToast } from "@/components/ui/action-toast";
 import { useAuth } from "@/components/auth-provider";
@@ -92,6 +93,7 @@ type ParentDashboardCenterView =
   | "loading"
   | "matching"
   | "in_progress"
+  | "confirm_end"
   | "review_pay"
   | "shift"
   | "idle";
@@ -185,7 +187,9 @@ function selectParentDashboardCenterView(params: {
 
   const dbStatus = params.sessionDbStatus?.toLowerCase() ?? "";
   if (isParentSessionIdleDbStatus(dbStatus)) return "idle";
-  if (dbStatus === "sitter_completed") return "review_pay";
+  // Sitter ended the shift: the parent must explicitly confirm (Double-Shake) before
+  // the Rating/Payment screen appears. Do NOT auto-advance to review_pay here.
+  if (dbStatus === "sitter_completed") return "confirm_end";
   if (
     dbStatus === "payment_pending" ||
     dbStatus === "paid" ||
@@ -313,7 +317,10 @@ export default function ParentDashboardPage() {
   const [payBusy, setPayBusy] = useState(false);
   const [closureSitterReviews, setClosureSitterReviews] = useState<PublicSitterReview[]>([]);
   const [shiftFinishedLocked, setShiftFinishedLocked] = useState(false);
+  const [confirmEndBusy, setConfirmEndBusy] = useState(false);
   const [stripeCheckoutNonce, setStripeCheckoutNonce] = useState(0);
+  /** Session id to finalize ("completed") after a Stripe checkout success return — set once on mount. */
+  const [checkoutFinalizeSessionId, setCheckoutFinalizeSessionId] = useState<string | null>(null);
   const [bookingFeedbackToast, setBookingFeedbackToast] = useState<string | null>(null);
   const [bookingFeedbackVariant, setBookingFeedbackVariant] = useState<"success" | "error" | "info">("info");
   const [startShiftBusy, setStartShiftBusy] = useState(false);
@@ -325,9 +332,11 @@ export default function ParentDashboardPage() {
     setShiftUiLocked(true);
   }, []);
   const prevShiftGateStatusRef = useRef<string | null>(null);
+  const parentDashboardCenterViewRef = useRef<ParentDashboardCenterView>("loading");
 
   const breakCompletedRealtimeLoop = useCallback(
     (source: "sync" | "realtime") => {
+      if (parentDashboardCenterViewRef.current === "review_pay") return;
       if (shiftCompletedFrozenRef.current) return;
       shiftCompletedFrozenRef.current = true;
       console.log(`=== SHIFT COMPLETED: BREAKING REALTIME LOOP (${source}) ===`);
@@ -714,8 +723,11 @@ export default function ParentDashboardPage() {
     ]
   );
 
+  parentDashboardCenterViewRef.current = parentDashboardCenterView;
+
   const showParentSessionClosure = parentDashboardCenterView === "review_pay";
   const parentSessionInProgress = parentDashboardCenterView === "in_progress";
+  const showParentConfirmEnd = parentDashboardCenterView === "confirm_end";
 
   const effectiveClosureSummary = useMemo(() => {
     if (!showParentSessionClosure) return completedSummary;
@@ -938,6 +950,29 @@ export default function ParentDashboardPage() {
     if (!todaysBookingId) return;
     syncFromLinkedBooking(todaysBookingRef.current);
   }, [bookingSyncKey, syncFromLinkedBooking, breakCompletedRealtimeLoop, todaysBookingStatus, todaysBookingId, shiftUiLocked, sessionStatus]);
+
+  /**
+   * Capture the session id to finalize on a Stripe checkout success return, once on mount.
+   * Reads the URL search params first (forward-compatible if `session_id` is added to the
+   * Stripe success_url) and falls back to the persisted session state — both available on
+   * this page. Runs before the success effect below clears the URL via replaceState.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("checkout") !== "success") return;
+    const fromUrl = sp.get("session_id") ?? sp.get("sessionId");
+    let fromStore: string | null = null;
+    try {
+      fromStore = readSessionState().supabaseSessionId ?? null;
+    } catch {
+      fromStore = null;
+    }
+    const id = (fromUrl ?? fromStore)?.trim();
+    if (id) {
+      setCheckoutFinalizeSessionId(id);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1895,6 +1930,64 @@ export default function ParentDashboardPage() {
     }
   };
 
+  /**
+   * Double-Shake end handshake: the sitter has ended, the parent explicitly confirms here.
+   * Calls the atomic RPC (session + booking finalized together) and lands the session in
+   * `payment_pending` so the Rating/Payment screen follows.
+   */
+  const handleParentConfirmEndShift = useCallback(async () => {
+    const sessionId = sessionState.supabaseSessionId;
+    if (!sessionId || confirmEndBusy) return;
+    setConfirmEndBusy(true);
+    setDbBanner(null);
+    try {
+      const auth = await resolveBrowserAuth();
+      if (!auth.ok) {
+        setDbBanner(
+          auth.reason === "no_client"
+            ? "Supabase לא מוגדר."
+            : "יש להתחבר כדי לאשר סיום משמרת."
+        );
+        return;
+      }
+
+      const { error } = await auth.supabase.rpc("end_shift_atomic", {
+        p_session_id: sessionId,
+        p_parent_id: auth.userId,
+        p_end_iso: new Date().toISOString(),
+        p_elapsed: elapsedSeconds,
+        p_amount: Number(earnedNis)
+      });
+
+      if (error) {
+        console.error("[parent] confirm end shift failed:", error);
+        setDbBanner(friendlySupabaseSessionError({ message: error.message }));
+        return;
+      }
+
+      // Optimistically advance to Rating/Payment; realtime will reconcile from the row.
+      setSessionState((prev) => buildParentSessionFinishedState(prev, null));
+      setSessionDbStatus("payment_pending");
+      setParentSessionView("review_pay");
+      await reloadTodaysBooking();
+    } catch (e) {
+      console.error("[parent] confirm end shift:", e);
+      setDbBanner(friendlySupabaseSessionError(e));
+    } finally {
+      setConfirmEndBusy(false);
+    }
+  }, [
+    sessionState.supabaseSessionId,
+    confirmEndBusy,
+    elapsedSeconds,
+    earnedNis,
+    buildParentSessionFinishedState,
+    setSessionState,
+    setSessionDbStatus,
+    setParentSessionView,
+    reloadTodaysBooking
+  ]);
+
   const waitingNannyStart = sessionState.status === "parent_initiated";
   const waitingNannyEnd =
     sessionState.status === "active" && sessionState.parentEndRequestedAtMs != null;
@@ -1993,6 +2086,7 @@ export default function ParentDashboardPage() {
 
   const showShiftPanel =
     showParentSessionClosure ||
+    showParentConfirmEnd ||
     parentSessionInProgress ||
     sessionRunning ||
     waitingNannyStart ||
@@ -2007,13 +2101,6 @@ export default function ParentDashboardPage() {
     !waitingNannyEnd &&
     !showParentSessionClosure &&
     !sessionUiBlockedByBooking;
-
-  const showParentEmergencyReset =
-    sessionRunning ||
-    waitingNannyEnd ||
-    showParentSessionClosure ||
-    sessionState.status === "ended" ||
-    shiftUiLocked;
 
   const handleParentEmergencyReset = useCallback(async () => {
     const idle: SessionProtocolState = { status: "idle" };
@@ -2060,6 +2147,10 @@ export default function ParentDashboardPage() {
       className={`mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6] py-2 ${inPaymentClosure ? "gap-2" : "space-y-4"}`}
       dir="rtl"
     >
+      {checkoutFinalizeSessionId ? (
+        <SessionFinalizer sessionId={checkoutFinalizeSessionId} />
+      ) : null}
+
       <div className="shrink-0">
         <DashboardWelcomeHeader fullName={fullName} nameLoading={greetingNameLoading} />
       </div>
@@ -2239,11 +2330,26 @@ export default function ParentDashboardPage() {
                 amountLabel={`₪${earnedNis}`}
                 variant="salmon"
               />
+            </div>
+          ) : showParentConfirmEnd ? (
+            <div className="flex w-full flex-col items-center justify-center gap-3 pt-2 text-center">
+              <p className="text-sm font-semibold text-navy-800">הבייביסיטר סיימ/ה את המשמרת</p>
+              <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{timerText}</p>
+              <p className="text-sm font-semibold text-navy-800">סכום לתשלום: ₪{earnedNis}</p>
               <DoubleShakeCircleButton
-                label="סיום משמרת"
+                label={confirmEndBusy ? "מאשר…" : "אישור סיום משמרת"}
                 variant="salmon"
-                onClick={() => void endSession()}
+                busy={confirmEndBusy}
+                onClick={() => void handleParentConfirmEndShift()}
               />
+              <button
+                type="button"
+                disabled={confirmEndBusy}
+                onClick={() => setDebugToast("אפשר לאשר את סיום המשמרת כשתהיו מוכנים")}
+                className="rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                לא עכשיו
+              </button>
             </div>
           ) : showParentSessionClosure && bookingPaymentStatus === "paid" ? (
             <p className="text-center text-sm font-semibold text-emerald-800">התשלום הושלם — תודה!</p>
@@ -2324,15 +2430,13 @@ export default function ParentDashboardPage() {
         onDismiss={() => setBookingFeedbackToast(null)}
       />
 
-      {showParentEmergencyReset ? (
-        <div className="shrink-0 pb-1 text-center">
-          <StuckShiftDevResetButton
-            role="parent"
-            variant="link"
-            onReset={() => void handleParentEmergencyReset()}
-          />
-        </div>
-      ) : null}
+      <div className="shrink-0 pb-1 text-center">
+        <StuckShiftDevResetButton
+          role="parent"
+          variant="link"
+          onReset={() => void handleParentEmergencyReset()}
+        />
+      </div>
     </main>
   );
 }

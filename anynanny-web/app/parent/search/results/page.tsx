@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { PublicSitterSearchCardLink } from "@/components/sitter/public-sitter-search-card";
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
@@ -101,9 +101,18 @@ function ParentSearchResultsInner() {
     [searchParams]
   );
 
+  /** Stable identity for the current filter set — cache key for the RPC results. */
+  const searchKey = useMemo(
+    () => JSON.stringify(normalizeParentSearchFilters(filters)),
+    [filters]
+  );
+
   const [sitters, setSitters] = useState<PublicSitterSearchCard[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  /** Filter key of the last successful load — guards against duplicate/spurious refetches. */
+  const loadedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -116,42 +125,57 @@ function ParentSearchResultsInner() {
     }
   }, [isLoading, signedIn, effectiveRole, router]);
 
-  const runSearch = useCallback(async () => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setSearchError("Supabase לא מוגדר.");
-      setSitters([]);
-      setListLoading(false);
-      return;
-    }
-
-    const normalized = normalizeParentSearchFilters(filters);
-
-    setListLoading(true);
-    setSearchError(null);
-
-    try {
-      const { cards, error } = isSerialTargetedSearch(normalized)
-        ? await fetchPublicSitterSearchBySerial(supabase, normalized.searchSitterSerial)
-        : await runParentSitterSearch(supabase, normalized);
-
-      if (error) {
-        console.warn("[parent/search/results] search error:", error);
-        setSearchError(normalizeParentSearchError(error));
+  const runSearch = useCallback(
+    async (opts?: { force?: boolean }) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        setSearchError("Supabase לא מוגדר.");
         setSitters([]);
+        setListLoading(false);
         return;
       }
 
+      /**
+       * Cache hit: these exact filters were already loaded. Skip the refetch so a
+       * spurious re-render (e.g. auth/context churn on tab focus) can't blank the
+       * list or flash the loader — the "re-hydration blink".
+       */
+      const alreadyLoaded = loadedKeyRef.current === searchKey;
+      if (alreadyLoaded && !opts?.force) return;
+
+      const normalized = normalizeParentSearchFilters(filters);
+
+      /** New filters → show the loader. Forced refresh of the same filters → keep stale cards visible. */
+      if (!alreadyLoaded) setListLoading(true);
       setSearchError(null);
-      setSitters(cards);
-    } catch (error) {
-      console.warn("[parent/search/results] search threw:", error);
-      setSearchError(null);
-      setSitters([]);
-    } finally {
-      setListLoading(false);
-    }
-  }, [filters]);
+
+      try {
+        const { cards, error } = isSerialTargetedSearch(normalized)
+          ? await fetchPublicSitterSearchBySerial(supabase, normalized.searchSitterSerial)
+          : await runParentSitterSearch(supabase, normalized);
+
+        if (error) {
+          console.warn("[parent/search/results] search error:", error);
+          setSearchError(normalizeParentSearchError(error));
+          setSitters([]);
+          loadedKeyRef.current = null;
+          return;
+        }
+
+        setSearchError(null);
+        setSitters(cards);
+        loadedKeyRef.current = searchKey;
+      } catch (error) {
+        console.warn("[parent/search/results] search threw:", error);
+        setSearchError(null);
+        setSitters([]);
+        loadedKeyRef.current = null;
+      } finally {
+        setListLoading(false);
+      }
+    },
+    [filters, searchKey]
+  );
 
   const authSettled = !isLoading;
   const showContent = authSettled && signedIn && effectiveRole === "parent";

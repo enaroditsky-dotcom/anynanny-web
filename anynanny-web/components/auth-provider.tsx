@@ -2,7 +2,7 @@
 
 import type { User } from "@supabase/supabase-js";
 import { usePathname } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { resetRedirectDedupe } from "@/lib/auth/redirect-after-sign-in";
 import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -113,6 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [effectiveRole, setEffectiveRole] = useState<ProfileRole | null>(null);
 
+  /** Mirror of `user` for use inside the auth listener (avoids re-subscribing on every change). */
+  const hasUserRef = useRef(false);
+  useEffect(() => {
+    hasUserRef.current = !!user;
+  }, [user]);
+
   const refresh = useCallback(async () => {
     try {
       const next = await loadAuthState();
@@ -154,6 +160,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        /**
+         * Supabase re-emits SIGNED_IN whenever the tab regains focus. If we already
+         * have a user, refresh silently — toggling `isLoading` here collapses dashboards
+         * to a skeleton and forces data views (e.g. parent search) to re-run, causing
+         * an aggressive re-hydration "blink" on every tab switch. Only show the global
+         * loading state on the genuine first sign-in.
+         */
+        if (hasUserRef.current) {
+          void refresh();
+          return;
+        }
         setIsLoading(true);
         void (async () => {
           await refresh();

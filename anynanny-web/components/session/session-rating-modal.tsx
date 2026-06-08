@@ -94,7 +94,8 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
       return;
     }
     if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
-      console.error("[SessionRatingModal] invalid star rating", { stars });
+      console.log("[SessionRatingModal] No star rating provided, skipping rating step.");
+      onResolved();
       return;
     }
 

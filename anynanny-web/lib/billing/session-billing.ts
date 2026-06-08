@@ -337,22 +337,21 @@ export async function recordParentConfirmEnd(
   const endIso = new Date().toISOString();
   const totals = computeFinalTotals(row);
 
-  return updateSessionWithFallbacks(
-    supabase,
-    sessionId,
-    { column: "parent_id", value: parentId },
-    [
-      {
-        session_status: "completed",
-        parent_end_shake: endIso,
-        end_time: endIso,
-        final_elapsed_seconds: totals.elapsedSeconds,
-        total_amount_charged: totals.amountNis,
-        final_amount_nis: totals.amountNis
-      },
-      { session_status: "completed" }
-    ]
-  );
+  // בצע עדכון אטומי: קודם ה-session, מיד אחריו ה-booking
+  const { data, error } = await supabase.rpc("end_shift_atomic", {
+    p_session_id: sessionId,
+    p_parent_id: parentId,
+    p_end_iso: endIso,
+    p_elapsed: totals.elapsedSeconds,
+    p_amount: totals.amountNis
+  });
+
+  if (error) {
+    console.error("[Billing] Atomic shift end failed:", error);
+    return { error: error.message, row: null };
+  }
+
+  return { error: null, row: (data as BillingSessionRow | null) ?? null };
 }
 
 /** @deprecated Use recordParentConfirmEnd */

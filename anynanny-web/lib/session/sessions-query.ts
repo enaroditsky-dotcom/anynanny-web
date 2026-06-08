@@ -303,6 +303,20 @@ async function querySessionsByParticipants(
   }
 
   const orderColumn = query.orderBy ?? (query.completedOnly ? "end_time" : "created_at");
+
+  // Closure/summary lookups explicitly ask for completed rows (via `completedOnly` or a
+  // `completed` entry in the requested statuses) and must keep returning older finished
+  // sessions. Everything else is an "active shift" lookup: it must ignore stale rows and
+  // never resurface a completed session.
+  const wantsCompleted =
+    Boolean(query.completedOnly) ||
+    query.status === "completed" ||
+    Boolean(query.statuses?.includes("completed"));
+
+  // Only consider sessions whose start_time is within the last 24h. Rows with a null
+  // start_time (created but not yet started) are kept so pending sessions still resolve.
+  const recentStartIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
   return selectSessionMaybeSingle(supabase, (select) => {
     let request = supabase
       .from(SESSIONS_TABLE)
@@ -310,6 +324,11 @@ async function querySessionsByParticipants(
       .eq("parent_id", query.parentId)
       .eq("sitter_id", sitterId);
     request = applySessionFilters(request, query);
+    if (!wantsCompleted) {
+      request = request
+        .neq("status", "completed")
+        .or(`start_time.is.null,start_time.gte.${recentStartIso}`);
+    }
     return request.order(orderColumn, { ascending: query.ascending ?? false }).limit(1);
   });
 }
