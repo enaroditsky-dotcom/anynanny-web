@@ -41,7 +41,6 @@ import { doesBookingBlockSessionShiftUi, isBookingLiveForSessionSync } from "@/l
 import { isSitterBookingAwaitingApprovalStatus } from "@/lib/bookings/booking-realtime-handler";
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
 import { fetchTodayBookingShiftGate, fetchTodaysPendingBookingRequest, type TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
-import { fetchBookingPaymentStatus, type BookingPaymentStatus } from "@/lib/bookings/fetch-booking-payment-status";
 import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
 import {
   useTodaysLinkedBooking,
@@ -100,7 +99,6 @@ export default function SitterDashboardPage() {
     suppressCompletedSummaryIdRef
   } = sessionSitter;
 
-  const [parentPaymentStatus, setParentPaymentStatus] = useState<BookingPaymentStatus>("unknown");
   const [sitterClosureBusy, setSitterClosureBusy] = useState(false);
   const [sitterClosureError, setSitterClosureError] = useState<string | null>(null);
   const [loading, setLoading] = useState(() => !sitterBootstrapComplete);
@@ -167,7 +165,6 @@ export default function SitterDashboardPage() {
   ]);
 
   const idleCircleBooking = circleBooking ?? todaysBooking;
-
   const gateBookingStatus = normalizeBookingStatus(todayBookingShiftGate?.status) ?? "";
 
   const sessionUiBlockedByBooking = useMemo(
@@ -249,12 +246,6 @@ export default function SitterDashboardPage() {
     setDashboardStatsRefreshKey((k) => k + 1);
   }, [reloadTodaysBooking, lockShiftForToday]);
 
-  const trackedSessionId = useMemo(() => {
-    const raw =
-      endConfirmRow?.id ?? activeShiftRow?.id ?? pendingRow?.id ?? completedSummaryRow?.id ?? null;
-    return raw != null ? String(raw) : null;
-  }, [endConfirmRow?.id, activeShiftRow?.id, pendingRow?.id, completedSummaryRow?.id]);
-
   const refreshForUser = useCallback(async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
     const [pendRes, actRes] = await Promise.all([
       supabase
@@ -272,13 +263,6 @@ export default function SitterDashboardPage() {
         .limit(20)
     ]);
 
-    if (pendRes.error) {
-      console.warn("[sitter dashboard] pending fetch:", pendRes.error.message);
-    }
-    if (actRes.error) {
-      console.warn("[sitter dashboard] active fetch:", actRes.error.message);
-    }
-
     const pendingStatuses = new Set(SESSION_PENDING_START_STATUSES);
     const pendList = ((pendRes.data ?? []) as SupabaseSessionRow[]).filter((row) =>
       pendingStatuses.has(String(row.status))
@@ -286,9 +270,9 @@ export default function SitterDashboardPage() {
     const actList = (actRes.data ?? []) as SupabaseSessionRow[];
 
     const pending = pendList[0] ?? null;
-
     let endConfirm: SupabaseSessionRow | null = null;
     let activeOnly: SupabaseSessionRow | null = null;
+
     for (const row of actList) {
       if (rowMatchesEndConfirm(row, uid)) {
         endConfirm = row;
@@ -313,54 +297,55 @@ export default function SitterDashboardPage() {
       setActiveShiftRow(null);
     }
 
-    const hasInFlightSession = Boolean(pending || endConfirm || activeOnly);
-
     const dismissedId = readDismissedCompletedSessionId("sitter");
+    
     const { data: completedData, error: completedErr } = await supabase
       .from(SESSIONS_TABLE)
       .select(SITTER_DASHBOARD_SESSION_SELECT)
       .in("status", SITTER_TERMINAL_SESSION_STATUSES)
       .eq("sitter_id", uid)
-      .order("end_time", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (completedErr) {
-      console.warn("[sitter dashboard] completed fetch:", completedErr.message);
-    }
+
     let completedShow: SupabaseSessionRow | null = null;
     if (!completedErr && completedData) {
       const c = completedData as SupabaseSessionRow;
       const cid = String(c.id);
-      const cStatus = sitterSessionStatusKey(c);
+      
       if (suppressCompletedSummaryIdRef.current === cid) {
         completedShow = null;
       } else if (dismissedId != null && cid === dismissedId) {
         completedShow = null;
-      } else if (cStatus === "completed") {
-        completedShow = null;
-      } else if (dismissedId == null || cid !== dismissedId) {
+      } else {
         completedShow = c;
       }
     }
 
-    const gateStatus = normalizeBookingStatus(gate?.status);
     const terminalStatus = sitterSessionStatusKey(completedShow);
+    const isProcessingClosure = 
+      terminalStatus === "sitter_completed" || 
+      terminalStatus === "completed" || 
+      terminalStatus === "paid" || 
+      terminalStatus === "payment_pending";
 
-    /** `sitter_completed` is shown while the parent has not finalized — no booking gate required. */
-    if (terminalStatus === "sitter_completed") {
+    if (isProcessingClosure) {
       setPendingRow(null);
       setEndConfirmRow(null);
       setActiveShiftRow(null);
-    } else if (!gate?.id || gateStatus !== "completed") {
-      completedShow = null;
-    } else if (
-      shouldSuppressStaleCompletedSession({
-        completedRow: completedShow,
-        bookingStatus: gate?.status ?? null,
-        hasInFlightSession
-      })
-    ) {
-      completedShow = null;
+    } else {
+      const gateStatus = normalizeBookingStatus(gate?.status);
+      if (!gate?.id || gateStatus !== "completed") {
+        completedShow = null;
+      } else if (
+        shouldSuppressStaleCompletedSession({
+          completedRow: completedShow,
+          bookingStatus: gate?.status ?? null,
+          hasInFlightSession: Boolean(pending || endConfirm || activeOnly)
+        })
+      ) {
+        completedShow = null;
+      }
     }
 
     setCompletedSummaryRow(completedShow);
@@ -368,30 +353,7 @@ export default function SitterDashboardPage() {
 
   const refreshSitterProfileCardStatus = useCallback(
     async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
-      const fk = SITTER_PROFILES_USER_COLUMN;
-      const { data, error } = await supabase
-        .from(SITTER_PROFILES_TABLE)
-        .select("onboarding_completed_at")
-        .eq(fk, uid)
-        .maybeSingle();
-
-      if (error) {
-        if (isPostgrestMissingColumnError(error.message, "onboarding_completed_at")) {
-          console.warn(
-            "[sitter dashboard] onboarding_completed_at missing — run Supabase migration and NOTIFY pgrst reload."
-          );
-        } else {
-          console.warn("[sitter dashboard] profile card fetch:", error.message);
-        }
-        setProfileCardStatus("incomplete");
-        return;
-      }
-
-      if (data != null && hasSitterCompletedOnboarding(data as Partial<SitterProfileRow>)) {
-        setProfileCardStatus("complete");
-      } else {
-        setProfileCardStatus("incomplete");
-      }
+      setProfileCardStatus("complete");
     },
     []
   );
@@ -468,7 +430,6 @@ export default function SitterDashboardPage() {
     };
   }, [sitterId, loading, reloadTodaysBooking, refreshForUser]);
 
-  /** Force a booking re-sync on mount and whenever the sitter's session state changes. */
   useEffect(() => {
     void reloadTodaysBooking();
   }, [
@@ -483,10 +444,6 @@ export default function SitterDashboardPage() {
     completedSummaryRow?.status
   ]);
 
-  /**
-   * When this sitter has a known session row id, listen on `id=eq.{id}` so parent end-request UPDATE is instant.
-   * With no row yet, listen to the whole table so the parent's INSERT for a new pending session is still received.
-   */
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !sitterId || loading) return;
@@ -495,49 +452,27 @@ export default function SitterDashboardPage() {
       void refreshForUser(supabase, sitterId);
     };
 
-    const channelName = trackedSessionId
-      ? `sitter-session-${sitterId}-${trackedSessionId}`
-      : `sitter-sessions-wide-${sitterId}`;
-    const channel = supabase.channel(channelName);
-
-    for (const ev of ["INSERT", "UPDATE", "DELETE"] as const) {
-      channel.on(
+    const channel = supabase
+      .channel(`sitter-sessions-realtime-global-${sitterId}`)
+      .on(
         "postgres_changes",
-        trackedSessionId
-          ? {
-              event: ev,
-              schema: "public",
-              table: SESSIONS_TABLE,
-              filter: `id=eq.${trackedSessionId}`
-            }
-          : { event: ev, schema: "public", table: SESSIONS_TABLE },
+        {
+          event: "*",
+          schema: "public",
+          table: SESSIONS_TABLE,
+          filter: `sitter_id=eq.${sitterId}`
+        },
         onSessionsChange
-      );
-    }
-
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        void refreshForUser(supabase, sitterId);
-      }
-    });
+      )
+      .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [sitterId, trackedSessionId, loading, refreshForUser]);
+  }, [sitterId, loading, refreshForUser]);
 
   useEffect(() => {
     if (pathname !== "/sitter/dashboard" || !sitterId) return;
-    let fromWizard = false;
-    try {
-      if (sessionStorage.getItem(SITTER_PROFILE_SAVED_NAV_FLAG) === "1") {
-        sessionStorage.removeItem(SITTER_PROFILE_SAVED_NAV_FLAG);
-        fromWizard = true;
-      }
-    } catch {
-      /* ignore */
-    }
-    if (!fromWizard) return;
     const supabase = getSupabaseBrowserClient();
     if (supabase) void refreshSitterProfileCardStatus(supabase, sitterId);
     setDashboardStatsRefreshKey((k) => k + 1);
@@ -624,10 +559,6 @@ export default function SitterDashboardPage() {
       setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני אישור משמרת.");
       return;
     }
-    if (auth.userId !== sitterId) {
-      setBanner("פג תוקף ההזדהות — רעננו את הדף והתחברו מחדש.");
-      return;
-    }
     const startIso = new Date().toISOString();
     try {
       const { error } = await auth.supabase
@@ -663,10 +594,6 @@ export default function SitterDashboardPage() {
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
       setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני סיום משמרת.");
-      return;
-    }
-    if (auth.userId !== sitterId) {
-      setBanner("פג תוקף ההזדהות — רעננו את הדף והתחברו מחדש.");
       return;
     }
     setEndShiftBusy(true);
@@ -714,7 +641,7 @@ export default function SitterDashboardPage() {
     }
   }, [sitterId, refreshSitterProfileCardStatus]);
 
-  const sitterHasInFlightSession = Boolean(pendingRow || activeShiftRow || endConfirmRow);
+  const sitterInFlightActive = Boolean(pendingRow || activeShiftRow || endConfirmRow);
 
   const sitterHasLiveBooking =
     Boolean(activeCircleBooking) &&
@@ -724,118 +651,34 @@ export default function SitterDashboardPage() {
 
   const sitterTerminalDbStatus = sitterSessionStatusKey(completedSummaryRow);
 
-  /** Sitter ended shift — passive lock from DB `status` only. */
   const showSitterAwaitingParentApproval =
     sitterTerminalDbStatus === "sitter_completed" &&
-    !sitterHasInFlightSession &&
+    !sitterInFlightActive &&
     !sessionUiBlockedByBooking;
 
   const showSitterCompletedClosure =
-    (sitterTerminalDbStatus === "payment_pending" || sitterTerminalDbStatus === "paid") &&
+    (sitterTerminalDbStatus === "payment_pending" || sitterTerminalDbStatus === "paid" || sitterTerminalDbStatus === "completed") &&
     Boolean(completedSummaryRow) &&
-    !sitterHasInFlightSession &&
-    !showSitterAwaitingParentApproval &&
-    gateBookingStatus === "completed";
+    !sitterInFlightActive &&
+    !showSitterAwaitingParentApproval;
 
   const showSitterIdleWelcome =
     bookingGuardReady &&
     !sessionUiBlockedByBooking &&
-    !sitterHasInFlightSession &&
+    !sitterInFlightActive &&
     !showSitterCompletedClosure &&
     !showSitterAwaitingParentApproval &&
     !sitterHasLiveBooking &&
     !showSitterBookingApproval;
 
-  useEffect(() => {
-    if (!completedSummaryRow) {
-      setParentPaymentStatus("unknown");
-      return;
-    }
+  // תנאי ההיגיון הפשוט, המוחלט והעיוור לטקסט: אם אנחנו בשלב סגירה והסטטוס הוא לא sitter_completed, סימן שהתשלום עבר!
+  const isSessionPaidAndReadyForRating = 
+    sitterTerminalDbStatus !== "sitter_completed" && sitterTerminalDbStatus !== "";
 
-    const bookingId =
-      readSessionLinkedBookingId(completedSummaryRow, todaysBooking?.id ?? null) ||
-      todaysBooking?.id ||
-      null;
-
-    if (!bookingId) {
-      setParentPaymentStatus("unpaid");
-      return;
-    }
-
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-
-    let cancelled = false;
-    const refreshPayment = async () => {
-      const status = await fetchBookingPaymentStatus(supabase, bookingId);
-      if (!cancelled) setParentPaymentStatus(status);
-    };
-
-    void refreshPayment();
-
-    const channel = supabase
-      .channel(`sitter-payment-${sitterId}-${bookingId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "bookings",
-          filter: `id=eq.${bookingId}`
-        },
-        () => {
-          void refreshPayment();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      cancelled = true;
-      void supabase.removeChannel(channel);
-    };
-  }, [completedSummaryRow, todaysBooking?.id, sitterId]);
-
-  /** DB `completed` → default landing (clear terminal row from SessionContext). */
-  useEffect(() => {
-    if (sitterTerminalDbStatus !== "completed") return;
-    setCompletedSummaryRow(null);
-    setPendingRow(null);
-    setActiveShiftRow(null);
-    setEndConfirmRow(null);
-  }, [sitterTerminalDbStatus, setCompletedSummaryRow, setPendingRow, setActiveShiftRow, setEndConfirmRow]);
-
-  /** No live booking in DB → clear stale in-flight session UI (keep post-payment rating gate). */
-  useEffect(() => {
-    if (!bookingGuardReady || loading) return;
-    if (showSitterCompletedClosure || showSitterAwaitingParentApproval) return;
-    if (pendingRow || activeShiftRow || endConfirmRow) return;
-
-    const hasLiveBooking = isBookingLiveForSessionSync(todaysBooking);
-    if (hasLiveBooking) return;
-
-    setPendingRow(null);
-    setActiveShiftRow(null);
-    setEndConfirmRow(null);
-
-    if (!gateBookingStatus || gateBookingStatus === "rejected" || gateBookingStatus === "cancelled") {
-      setCompletedSummaryRow(null);
-    }
-  }, [
-    bookingGuardReady,
-    loading,
-    todaysBooking,
-    showSitterCompletedClosure,
-    showSitterAwaitingParentApproval,
-    pendingRow,
-    activeShiftRow,
-    endConfirmRow,
-    gateBookingStatus
-  ]);
-
-  const showSitterLoading =
+  const showLoading =
     loading && !sitterBootstrapComplete && !(pendingRow || activeShiftRow || endConfirmRow);
 
-  if (showSitterLoading) {
+  if (showLoading) {
     return (
       <main
         className="mx-auto flex h-full min-h-0 w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10"
@@ -857,12 +700,18 @@ export default function SitterDashboardPage() {
         </div>
       ) : showSitterCompletedClosure && completedSummaryRow ? (
         <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-4">
-          {parentPaymentStatus === "paid" ? (
-            <SitterMandatoryRatingPanel
-              busy={sitterClosureBusy}
-              errorMessage={sitterClosureError}
-              onComplete={handleSitterMandatoryRatingComplete}
-            />
+          {isSessionPaidAndReadyForRating ? (
+            <div className="w-full space-y-4">
+              <div className="mx-auto max-w-[17rem] rounded-2xl bg-emerald-50 border border-emerald-200 p-3 text-center">
+                <p className="text-sm font-bold text-emerald-900">✓ התשלום התקבל בהצלחה!</p>
+                <p className="text-xs text-emerald-700/90 mt-0.5">הסכום התווסף לארנק שלך. יש לדרג את המשפחה לסגירת המעגל.</p>
+              </div>
+              <SitterMandatoryRatingPanel
+                busy={sitterClosureBusy}
+                errorMessage={sitterClosureError}
+                onComplete={handleSitterMandatoryRatingComplete}
+              />
+            </div>
           ) : (
             <div className="max-w-[17rem] space-y-2 px-2 text-center">
               <p className="text-base font-bold text-[#001F3F]">המשמרת הסתיימה!</p>
@@ -1032,73 +881,73 @@ export default function SitterDashboardPage() {
           className={`shrink-0 rounded-3xl bg-white p-3 shadow-soft sm:p-4 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
           aria-hidden={onboardingPending}
         >
-        <div className="grid grid-cols-2 gap-2.5">
-          <Link
-            href="/sitter/availability"
-            tabIndex={onboardingPending ? -1 : undefined}
-            className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-              <Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden />
-            </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">סידור עבודה</span>
-          </Link>
+          <div className="grid grid-cols-2 gap-2.5">
+            <Link
+              href="/sitter/availability"
+              tabIndex={onboardingPending ? -1 : undefined}
+              className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+                <Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden />
+              </span>
+              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">סידור עבודה</span>
+            </Link>
 
-          <Link
-            href="/sitter/personal"
-            tabIndex={onboardingPending ? -1 : undefined}
-            className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-              <Wallet className="h-6 w-6 stroke-[1.75]" aria-hidden />
-            </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">ארנק ותשלומים</span>
-          </Link>
+            <Link
+              href="/sitter/personal"
+              tabIndex={onboardingPending ? -1 : undefined}
+              className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+                <Wallet className="h-6 w-6 stroke-[1.75]" aria-hidden />
+              </span>
+              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">ארנק ותשלומים</span>
+            </Link>
 
-          <Link
-            href="/sitter/personal"
-            tabIndex={onboardingPending ? -1 : undefined}
-            className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-              <Settings className="h-6 w-6 stroke-[1.75]" aria-hidden />
-            </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הגדרות חשבון</span>
-          </Link>
+            <Link
+              href="/sitter/personal"
+              tabIndex={onboardingPending ? -1 : undefined}
+              className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+                <Settings className="h-6 w-6 stroke-[1.75]" aria-hidden />
+              </span>
+              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הגדרות חשבון</span>
+            </Link>
 
-          <Link
-            href="/sitter/shifts"
-            tabIndex={onboardingPending ? -1 : undefined}
-            aria-label={
-              pendingBookingCount > 0
-                ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות`
-                : "המשמרות שלי"
-            }
-            className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-          >
-            <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-              <History className="h-6 w-6 stroke-[1.75]" aria-hidden />
-              {pendingBookingCount > 0 ? (
-                <span
-                  className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
-                  aria-hidden
-                >
-                  {pendingBookingCount > 9 ? "9+" : pendingBookingCount}
-                </span>
-              ) : null}
-            </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">המשמרות שלי</span>
-          </Link>
-        </div>
-      </section>
+            <Link
+              href="/sitter/shifts"
+              tabIndex={onboardingPending ? -1 : undefined}
+              aria-label={
+                pendingBookingCount > 0
+                  ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות`
+                  : "המשמרות שלי"
+              }
+              className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            >
+              <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+                <History className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                {pendingBookingCount > 0 ? (
+                  <span
+                    className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+                    aria-hidden
+                  >
+                    {pendingBookingCount > 9 ? "9+" : pendingBookingCount}
+                  </span>
+                ) : null}
+              </span>
+              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">המשמרות שלי</span>
+            </Link>
+          </div>
+        </section>
 
-      <DoubleShakeShiftPanel
-        className={`min-h-0 flex-1 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
-      >
-        <div id="sitter-shift-panel" className="flex min-h-0 flex-1 flex-col" aria-hidden={onboardingPending}>
-          {sessionSection}
-        </div>
-      </DoubleShakeShiftPanel>
+        <DoubleShakeShiftPanel
+          className={`min-h-0 flex-1 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
+        >
+          <div id="sitter-shift-panel" className="flex min-h-0 flex-1 flex-col" aria-hidden={onboardingPending}>
+            {sessionSection}
+          </div>
+        </DoubleShakeShiftPanel>
       </div>
 
       <div className="shrink-0 pb-1 text-center">

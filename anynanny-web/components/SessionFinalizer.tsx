@@ -42,7 +42,7 @@ export default function SessionFinalizer({ sessionId, onFinalized }: SessionFina
       setState("saving");
 
       const { error } = await supabase.rpc("finalize_session_after_payment", {
-        p_session_id: String(sessionId)
+        p_session_id: sessionId
       });
 
       if (cancelled) return;

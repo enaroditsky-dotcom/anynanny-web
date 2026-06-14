@@ -185,11 +185,16 @@ function selectParentDashboardCenterView(params: {
   if (!params.bookingGuardReady) return "loading";
   if (params.sessionHydrateError) return "idle";
 
+  if (params.bookingStatus === "approved" || params.bookingStatus === "sitter_started") {
+    return "shift";
+  }
+
   const dbStatus = params.sessionDbStatus?.toLowerCase() ?? "";
+  if (dbStatus === "sitter_completed" || params.bookingStatus === "sitter_ended") {
+    return "confirm_end";
+  }
+
   if (isParentSessionIdleDbStatus(dbStatus)) return "idle";
-  // Sitter ended the shift: the parent must explicitly confirm (Double-Shake) before
-  // the Rating/Payment screen appears. Do NOT auto-advance to review_pay here.
-  if (dbStatus === "sitter_completed") return "confirm_end";
   if (
     dbStatus === "payment_pending" ||
     dbStatus === "paid" ||
@@ -208,11 +213,13 @@ function selectParentDashboardCenterView(params: {
   }
 
   const inProgress =
-    params.sessionProtocolStatus === "active" ||
-    params.sessionProtocolStatus === "parent_initiated" ||
-    isLiveSessionDbStatus(params.sessionDbStatus) ||
-    (params.bookingStatus != null &&
-      LIVE_BOOKING_STATUSES_FOR_SESSION_UI.has(params.bookingStatus));
+    dbStatus !== "sitter_completed" &&
+    params.bookingStatus !== "sitter_ended" &&
+    (params.sessionProtocolStatus === "active" ||
+      params.sessionProtocolStatus === "parent_initiated" ||
+      isLiveSessionDbStatus(params.sessionDbStatus) ||
+      (params.bookingStatus != null &&
+        LIVE_BOOKING_STATUSES_FOR_SESSION_UI.has(params.bookingStatus)));
 
   if (inProgress) return "in_progress";
 
@@ -308,7 +315,6 @@ export default function ParentDashboardPage() {
 
   const [useSupabase, setUseSupabase] = useState(false);
   const [dbBanner, setDbBanner] = useState<string | null>(null);
-  /** Debug: confirms Supabase write reached DB (start insert or end-request update). */
   const [debugToast, setDebugToast] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [closureError, setClosureError] = useState<string | null>(null);
@@ -319,7 +325,6 @@ export default function ParentDashboardPage() {
   const [shiftFinishedLocked, setShiftFinishedLocked] = useState(false);
   const [confirmEndBusy, setConfirmEndBusy] = useState(false);
   const [stripeCheckoutNonce, setStripeCheckoutNonce] = useState(0);
-  /** Session id to finalize ("completed") after a Stripe checkout success return — set once on mount. */
   const [checkoutFinalizeSessionId, setCheckoutFinalizeSessionId] = useState<string | null>(null);
   const [bookingFeedbackToast, setBookingFeedbackToast] = useState<string | null>(null);
   const [bookingFeedbackVariant, setBookingFeedbackVariant] = useState<"success" | "error" | "info">("info");
@@ -486,9 +491,9 @@ export default function ParentDashboardPage() {
   const todaysBooking = todaysBookingHook ?? parentBookingCache.booking;
   const todayBookingShiftGate = todayBookingShiftGateHook ?? parentBookingCache.shiftGate;
 
-  const sessionStatus = sessionState.status;
-  const sessionLinkedBookingId = sessionState.linkedBookingId ?? "";
-  const sessionSupabaseSessionId = sessionState.supabaseSessionId ?? "";
+  const sessionStatus = sessionState?.status || "idle";
+  const sessionLinkedBookingId = sessionState?.linkedBookingId ?? "";
+  const sessionSupabaseSessionId = sessionState?.supabaseSessionId ?? "";
 
   const todaysBookingId =
     todaysBooking?.id ??
@@ -648,30 +653,35 @@ export default function ParentDashboardPage() {
   );
 
   const elapsedSeconds = useMemo(() => {
-    if (sessionStatus === "parent_initiated") return 0;
-    const startedAt = sessionState.parentStartedAtMs;
+    if (sessionStatus === "parent_initiated" || sessionStatus === "completed") {
+      return 0;
+    }
+    
+    const startedAt = sessionState?.parentStartedAtMs;
     if (!startedAt) return 0;
+    
     if (sessionStatus === "active") {
       return computeLiveElapsedSecondsActive({
         startMs: startedAt,
-        parentEndRequestedAtMs: sessionState.parentEndRequestedAtMs ?? null,
+        parentEndRequestedAtMs: sessionState?.parentEndRequestedAtMs ?? null,
         nowMs
       });
     }
-    return sessionState.finalElapsedSeconds ?? 0;
-  }, [nowMs, sessionStatus, sessionState.parentStartedAtMs, sessionState.parentEndRequestedAtMs, sessionState.finalElapsedSeconds]);
+    
+    return sessionState?.finalElapsedSeconds ?? 0;
+  }, [nowMs, sessionStatus, sessionState?.parentStartedAtMs, sessionState?.parentEndRequestedAtMs, sessionState?.finalElapsedSeconds]);
 
   const timerText = useMemo(() => formatElapsed(elapsedSeconds), [elapsedSeconds]);
+  
   const earnedNis = useMemo(() => ((elapsedSeconds / 3600) * HOURLY_RATE).toFixed(2), [elapsedSeconds]);
-
   const completedSummary = useMemo(
-    () => completedSummaryFromEndedState(sessionState, HOURLY_RATE),
+    () => completedSummaryFromEndedState(sessionState || { status: "idle" }, HOURLY_RATE),
     [
       sessionStatus,
-      sessionState.endedAtMs,
-      sessionState.finalElapsedSeconds,
-      sessionState.finalAmountNis,
-      sessionState.parentStartedAtMs
+      sessionState?.endedAtMs,
+      sessionState?.finalElapsedSeconds,
+      sessionState?.finalAmountNis,
+      sessionState?.parentStartedAtMs
     ]
   );
 
@@ -696,7 +706,7 @@ export default function ParentDashboardPage() {
   const sessionClosureEligible = useMemo(
     () =>
       canShowParentSessionClosure({
-        sessionState,
+        sessionState: sessionState || { status: "idle" },
         completedSummary,
         bookingStatus: todaysBookingStatusNormalized
       }),
@@ -710,7 +720,7 @@ export default function ParentDashboardPage() {
         sessionHydrateError,
         bookingStatus: todaysBookingStatusNormalized,
         sessionDbStatus,
-        sessionProtocolStatus: sessionState.status,
+        sessionProtocolStatus: sessionStatus,
         sessionClosureEligible,
       }),
     [
@@ -718,27 +728,29 @@ export default function ParentDashboardPage() {
       sessionHydrateError,
       todaysBookingStatusNormalized,
       sessionDbStatus,
-      sessionState.status,
+      sessionStatus,
       sessionClosureEligible
     ]
   );
 
   parentDashboardCenterViewRef.current = parentDashboardCenterView;
 
-  const showParentSessionClosure = parentDashboardCenterView === "review_pay";
+  const isNewBookingPendingStart = todaysBookingStatusNormalized === "approved";
+
+  const showParentSessionClosure = parentDashboardCenterView === "review_pay" && !isNewBookingPendingStart;
   const parentSessionInProgress = parentDashboardCenterView === "in_progress";
-  const showParentConfirmEnd = parentDashboardCenterView === "confirm_end";
+  const showParentConfirmEnd = parentDashboardCenterView === "confirm_end" && !isNewBookingPendingStart;
 
   const effectiveClosureSummary = useMemo(() => {
     if (!showParentSessionClosure) return completedSummary;
     if (completedSummary) return completedSummary;
-    const endMs = sessionState.endedAtMs ?? Date.now();
-    const startMs = sessionState.parentStartedAtMs ?? endMs;
+    const endMs = sessionState?.endedAtMs ?? Date.now();
+    const startMs = sessionState?.parentStartedAtMs ?? endMs;
     const finalSeconds =
-      sessionState.finalElapsedSeconds ??
+      sessionState?.finalElapsedSeconds ??
       Math.max(0, Math.floor((endMs - startMs) / 1000));
     const amountNis =
-      sessionState.finalAmountNis ??
+      sessionState?.finalAmountNis ??
       Number(((finalSeconds / 3600) * HOURLY_RATE).toFixed(2));
     return { elapsedSeconds: finalSeconds, amountNis };
   }, [completedSummary, showParentSessionClosure, sessionState]);
@@ -747,7 +759,7 @@ export default function ParentDashboardPage() {
     (prev: SessionProtocolState, row?: SupabaseSessionRow | null): SessionProtocolState => {
       const endMs = row?.end_time ? new Date(row.end_time).getTime() : Date.now();
       const startMs =
-        prev.parentStartedAtMs ??
+        prev?.parentStartedAtMs ??
         (row?.start_time ? new Date(row.start_time).getTime() : endMs);
       const finalSeconds =
         row?.final_elapsed_seconds != null
@@ -764,11 +776,11 @@ export default function ParentDashboardPage() {
         finalElapsedSeconds: finalSeconds,
         finalAmountNis: finalAmountNis,
         linkedBookingId:
-          prev.linkedBookingId ??
+          prev?.linkedBookingId ??
           readSessionLinkedBookingId(row ?? null, todaysBookingId) ??
           (todaysBookingId || undefined),
         supabaseSessionId:
-          prev.supabaseSessionId ?? (row?.id != null ? String(row.id) : undefined)
+          prev?.supabaseSessionId ?? (row?.id != null ? String(row.id) : undefined)
       };
     },
     [todaysBookingId]
@@ -818,7 +830,6 @@ export default function ParentDashboardPage() {
     todaysBooking?.sitter_id
   ]);
 
-  /** Passive view lock: derive parentSessionView only from SessionContext `sessionDbStatus`. */
   useEffect(() => {
     if (!bookingGuardReady) return;
     const db = sessionDbStatus?.toLowerCase() ?? "";
@@ -849,9 +860,10 @@ export default function ParentDashboardPage() {
     setParentSessionView,
     setSessionDbStatus,
     setShiftFinishedLocked,
-    setShiftUiLocked
+    setShiftUiLocked,
+    setSessionState,
+    shiftCompletedFrozenRef
   ]);
-
 
   const handleConfirmAndPay = useCallback(
     async (rating: number) => {
@@ -886,7 +898,7 @@ export default function ParentDashboardPage() {
         return;
       }
 
-      const amountNis = completedSummary?.amountNis ?? sessionState.finalAmountNis ?? 0;
+      const amountNis = completedSummary?.amountNis ?? sessionState?.finalAmountNis ?? 0;
       const amountMinorUnits = Math.max(50, Math.round(Number(amountNis) * 100));
       try {
         const result = await postStripeCheckoutSession({
@@ -911,7 +923,7 @@ export default function ParentDashboardPage() {
       sessionSupabaseSessionId,
       closureBookingId,
       closureBookingVerify,
-      sessionState.finalAmountNis,
+      sessionState?.finalAmountNis,
       completedSummary
     ]
   );
@@ -934,7 +946,7 @@ export default function ParentDashboardPage() {
     setClosureSitterReviews([]);
     setClosureError(null);
     setNowMs(Date.now());
-  }, [sessionSupabaseSessionId, sessionLinkedBookingId, todaysBookingId, lockShiftUi]);
+  }, [sessionSupabaseSessionId, sessionLinkedBookingId, todaysBookingId, lockShiftUi, setSessionDbStatus, setSessionState, setParentSessionView, setNowMs]);
 
   useEffect(() => {
     if (isShiftLocallyDismissed(todaysBookingId)) {
@@ -949,14 +961,8 @@ export default function ParentDashboardPage() {
     }
     if (!todaysBookingId) return;
     syncFromLinkedBooking(todaysBookingRef.current);
-  }, [bookingSyncKey, syncFromLinkedBooking, breakCompletedRealtimeLoop, todaysBookingStatus, todaysBookingId, shiftUiLocked, sessionStatus]);
+  }, [bookingSyncKey, syncFromLinkedBooking, breakCompletedRealtimeLoop, todaysBookingStatus, todaysBookingId, shiftUiLocked, sessionStatus, shiftCompletedFrozenRef, todaysBookingRef]);
 
-  /**
-   * Capture the session id to finalize on a Stripe checkout success return, once on mount.
-   * Reads the URL search params first (forward-compatible if `session_id` is added to the
-   * Stripe success_url) and falls back to the persisted session state — both available on
-   * this page. Runs before the success effect below clears the URL via replaceState.
-   */
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
@@ -995,7 +1001,6 @@ export default function ParentDashboardPage() {
     return () => window.clearTimeout(t);
   }, [debugToast]);
 
-  /** Toast when sitter approves/rejects today's booking (via shiftGate refetch). */
   useEffect(() => {
     const next = shiftGateStatus || null;
     const prev = prevShiftGateStatusRef.current;
@@ -1021,12 +1026,10 @@ export default function ParentDashboardPage() {
     }
   }, [shiftGateStatus, notifyBookingTransition]);
 
-  /** Sync inline notice from latest today booking row (survives linked-booking refetch). */
   useEffect(() => {
     applyBookingShiftNotice(shiftGateStatus || undefined);
   }, [shiftGateStatus, applyBookingShiftNotice]);
 
-  /** Re-hydrate booking state when tab regains focus or parent auth becomes available. */
   useEffect(() => {
     if (!parentUserId) return;
 
@@ -1051,7 +1054,6 @@ export default function ParentDashboardPage() {
     };
   }, [parentUserId, reloadTodaysBooking]);
 
-  /** Parent bookings realtime — `event: '*'` on bookings; immediate circle + notice updates. */
   useEffect(() => {
     if (shiftCompletedFrozenRef.current || todaysBookingStatus === "completed") {
       return;
@@ -1066,6 +1068,12 @@ export default function ParentDashboardPage() {
 
       const rowStatus = normalizeBookingStatus(row.status);
       if (!rowStatus) return;
+
+      if (rowStatus === "sitter_ended") {
+        void reloadTodaysBooking();
+        setNowMs(Date.now());
+        return;
+      }
 
       if (
         rowStatus === "completed" ||
@@ -1117,7 +1125,10 @@ export default function ParentDashboardPage() {
     notifyBookingTransition,
     breakCompletedRealtimeLoop,
     applyCircleBooking,
-    applyParentTrackingCircleFromRow
+    applyParentTrackingCircleFromRow,
+    shiftCompletedFrozenRef,
+    setNowMs,
+    todaysBookingStatusRef
   ]);
 
   useEffect(() => {
@@ -1200,7 +1211,6 @@ export default function ParentDashboardPage() {
     };
   }, [sessionStatus, closureBookingId, stripeCheckoutNonce]);
 
-  /** Preserve post-shift `ended` state for rating/payment — do not reset while closure is pending. */
   useEffect(() => {
     if (!bookingGuardReady) return;
 
@@ -1242,7 +1252,7 @@ export default function ParentDashboardPage() {
 
     if (
       (sessionStatus === "active" || sessionStatus === "parent_initiated") &&
-      sessionState.parentStartedAtMs
+      sessionState?.parentStartedAtMs
     ) {
       return;
     }
@@ -1259,12 +1269,15 @@ export default function ParentDashboardPage() {
     todaysBookingStatusNormalized,
     sessionStatus,
     shiftGateStatus,
-    sessionState.parentStartedAtMs,
+    sessionState?.parentStartedAtMs,
     sessionHydrateError,
-    sessionDbStatus
+    sessionDbStatus,
+    setSessionState,
+    setSessionDbStatus,
+    setParentSessionView,
+    setNowMs
   ]);
 
-  /** Booking completed/cancelled early — hide live session timer even if still inside calendar slot. */
   useEffect(() => {
     if (!sessionUiBlockedByBooking) return;
     if (sessionStatus === "idle" || sessionStatus === "ended") return;
@@ -1272,7 +1285,7 @@ export default function ParentDashboardPage() {
     persistSessionState(idle);
     setSessionState(idle);
     setNowMs(Date.now());
-  }, [sessionUiBlockedByBooking, sessionStatus]);
+  }, [sessionUiBlockedByBooking, sessionStatus, setSessionState, setNowMs]);
 
   useEffect(() => {
     if (parentBootstrapComplete && clientHasSessionUser === true) return;
@@ -1331,9 +1344,9 @@ export default function ParentDashboardPage() {
 
     return () => {
       cancelled = true;
-      window.removeEventListener("storage", onStorage);
+      window.addEventListener("storage", onStorage);
     };
-  }, [syncFromStorage]);
+  }, [syncFromStorage, setParentUserId]);
 
   useEffect(() => {
     if (shiftUiLocked || isShiftLocallyDismissed(todaysBookingId)) {
@@ -1350,7 +1363,7 @@ export default function ParentDashboardPage() {
         if (!sessionHydrateComplete) {
           setSessionHydrateError(false);
         }
-        let local: SessionProtocolState = sessionState;
+        let local: SessionProtocolState = sessionState || { status: "idle" };
         try {
           local = reconcileStaleEndedLocalState(
             readSessionState(),
@@ -1393,11 +1406,8 @@ export default function ParentDashboardPage() {
             if (isParentSessionIdleDbStatus(rowDbStatus)) {
               const idle: SessionProtocolState = { status: "idle" };
               persistSessionState(idle);
-              if (!cancelled) {
+              if (!cancelled && current.status !== "idle") {
                 setSessionState(idle);
-                setParentSessionView("idle");
-                setSessionDbStatus(null);
-                setShiftFinishedLocked(false);
               }
               return;
             }
@@ -1405,7 +1415,7 @@ export default function ParentDashboardPage() {
             if (isParentReviewSessionDbStatus(rowDbStatus)) {
               const finished = buildParentSessionFinishedState(local, row);
               persistSessionState(finished);
-              if (!cancelled) {
+              if (!cancelled && current.status !== "ended") {
                 setSessionState(finished);
                 setParentSessionView("review_pay");
                 setShiftFinishedLocked(true);
@@ -1452,13 +1462,17 @@ export default function ParentDashboardPage() {
             return;
           }
           const idle: SessionProtocolState = { status: "idle" };
-          persistSessionState(idle);
-          if (!cancelled) setSessionState(idle);
-          return;
-        }
+    persistSessionState(idle);
+    if (!cancelled && sessionState.status !== "idle") {
+      setSessionState(idle);
+    }
+    return; // ה-return עוצר את הפונקציה כאן אם אין todaysBookingId
+  } // <--- זה הסוגר המסולסל שסוגר את התנאי של שורה 1459!
 
         if (local.status === "active" && local.parentStartedAtMs) {
-          if (!cancelled) setSessionState(local);
+          if (!cancelled && sessionState.status !== "active") {
+            setSessionState(local);
+          }
         }
 
         let row = await fetchRelevantParentSessionRow(
@@ -1484,8 +1498,15 @@ export default function ParentDashboardPage() {
           const dismissedId = readDismissedCompletedSessionId("parent");
           const rowDbStatus = String(row.status);
           if (isParentSessionIdleDbStatus(rowDbStatus)) {
+            // חסימה מוחלטת והרמטית: אם הסטטוס המקומי כבר idle, עוצרים את הפונקציה מיד!
+            // זה ימנע מכל טיימר, שגיאה או עדכון ב-Context להריץ שוב את הפקודות שמתחת.
+            if (sessionState.status === "idle") {
+              return;
+            }
+      
             const idle: SessionProtocolState = { status: "idle" };
             persistSessionState(idle);
+            
             if (!cancelled) {
               setSessionState(idle);
               setParentSessionView("idle");
@@ -1494,11 +1515,15 @@ export default function ParentDashboardPage() {
             }
             return;
           }
-          setSessionDbStatus(rowDbStatus);
-          if (isParentReviewSessionDbStatus(rowDbStatus)) {
+      
+          // מעדכנים את הסטטוס המקומי רק אם אנחנו לא ב-idle
+          if (sessionState.status !== "idle") {
+            setSessionDbStatus(rowDbStatus);
+          }
+                  if (isParentReviewSessionDbStatus(rowDbStatus)) {
             const finished = buildParentSessionFinishedState(local, row);
             persistSessionState(finished);
-            if (!cancelled) {
+            if (!cancelled && sessionState.status !== "ended") {
               setSessionState(finished);
               setParentSessionView("review_pay");
               setShiftFinishedLocked(true);
@@ -1533,7 +1558,7 @@ export default function ParentDashboardPage() {
             if (isParentReviewSessionDbStatus(rowDbStatus)) {
               const finished = buildParentSessionFinishedState(local, row);
               persistSessionState(finished);
-              if (!cancelled) {
+              if (!cancelled && sessionState.status !== "ended") {
                 setSessionState(finished);
                 setParentSessionView("review_pay");
                 setShiftFinishedLocked(true);
@@ -1565,10 +1590,17 @@ export default function ParentDashboardPage() {
     lockShiftUi,
     setSessionHydrateComplete,
     todaysBookingStatusNormalized,
-    buildParentSessionFinishedState
+    buildParentSessionFinishedState,
+    sessionState,
+    sessionHydrateComplete,
+    setSessionHydrateError,
+    setSessionState,
+    setParentSessionView,
+    setSessionDbStatus,
+    setShiftFinishedLocked,
+    shiftCompletedFrozenRef
   ]);
 
-  /** Prefer row id when known so parent_end_requested_at updates arrive instantly for that session. */
   useEffect(() => {
     if (
       (shiftUiLocked && sessionStatus !== "ended" && !sessionSupabaseSessionId) ||
@@ -1591,18 +1623,13 @@ export default function ParentDashboardPage() {
       old?: Record<string, unknown>;
     }) => {
       try {
-        // Read the row that triggered the change; prefer `new` (the post-transition
-        // state) and fall back to `old` for DELETE payloads.
         const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
         if (!rowData || typeof rowData !== "object") return;
         const row = rowData as SupabaseSessionRow;
 
-        // STRICT status mapping — the parent view is derived only from the explicit
-        // `payload.new.status` enum, never by advancing a local stage/index on every
-        // incoming sitter event.
         const rowDbStatus = String(row.status ?? "");
         const incomingStatus = rowDbStatus.toLowerCase();
-        // `completed` → parent confirmed; return to default landing (no local stage advance).
+        
         if (isParentSessionIdleDbStatus(rowDbStatus)) {
           const idle: SessionProtocolState = { status: "idle" };
           persistSessionState(idle);
@@ -1616,7 +1643,21 @@ export default function ParentDashboardPage() {
           return;
         }
 
-        // `sitter_completed` / payment terminals → lock Review & Pay from DB status only.
+        if (incomingStatus === "sitter_completed") {
+          setSessionDbStatus(rowDbStatus);
+          setParentSessionView("review_pay");
+          setSessionState((prev) => {
+            const next = buildParentSessionFinishedState(prev, row);
+            persistSessionState(next);
+            return next;
+          });
+          setShiftFinishedLocked(true);
+          setShiftUiLocked(true);
+          void reloadTodaysBooking();
+          setNowMs(Date.now());
+          return;
+        }
+
         if (
           isParentReviewSessionDbStatus(rowDbStatus) ||
           incomingStatus === "payment_pending" ||
@@ -1625,7 +1666,7 @@ export default function ParentDashboardPage() {
           setSessionDbStatus(rowDbStatus);
           setParentSessionView("review_pay");
           setSessionState((prev) => {
-            if (prev.status === "ended") return prev;
+            if (prev?.status === "ended") return prev;
             const next = buildParentSessionFinishedState(prev, row);
             persistSessionState(next);
             return next;
@@ -1636,18 +1677,16 @@ export default function ParentDashboardPage() {
           return;
         }
 
-        // `in_progress` (and any other live status) → keep the active counter running.
-        // Only merge live fields from the row; do not transition the view.
         const dismissedId = readDismissedCompletedSessionId("parent");
         setSessionDbStatus(rowDbStatus);
         setSessionState((prev) => {
-          if (prev.status === "ended") {
+          if (prev?.status === "ended") {
             return prev;
           }
           const merged = mergeParentSessionFromDbRow(row, {
             dismissedCompletedSessionId: dismissedId,
             todaysBookingId,
-            localState: prev,
+            localState: prev || { status: "idle" },
             bookingStatus: todaysBookingStatusNormalized
           });
           if (!merged) return prev;
@@ -1677,12 +1716,60 @@ export default function ParentDashboardPage() {
     buildParentSessionFinishedState,
     bookingGuardReady,
     sessionHydrateError,
-    sessionState.status
+    sessionStatus,
+    reloadTodaysBooking,
+    setSessionDbStatus,
+    setParentSessionView,
+    setSessionState,
+    setShiftFinishedLocked,
+    setShiftUiLocked,
+    shiftCompletedFrozenRef,
+    setNowMs
   ]);
+
+  const handleConfirmShiftStartClick = () => {
+    void startSession();
+  };
+
+  const cancelSession = async () => {
+    if (sessionStatus !== "parent_initiated" || !sessionSupabaseSessionId) return;
+
+    const auth = await resolveBrowserAuth();
+    if (!auth.ok) {
+      setDbBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לבטל את הבקשה.");
+      return;
+    }
+
+    setCancelBusy(true);
+    setDbBanner(null);
+    try {
+      const { error } = await auth.supabase
+        .from(SESSIONS_TABLE)
+        .update({ status: SESSION_STATUS_CANCELLED })
+        .eq("id", sessionSupabaseSessionId)
+        .eq("parent_id", auth.userId);
+
+      if (error) {
+        console.error("[parent] cancel session failed:", error.message);
+        setDbBanner(friendlySupabaseSessionError(error));
+        return;
+      }
+
+      const idle: SessionProtocolState = { status: "idle" };
+      persistSessionState(idle);
+      setSessionState(idle);
+      setNowMs(Date.now());
+    } catch (e) {
+      console.error("[parent] cancelSession:", e);
+      setDbBanner(friendlySupabaseSessionError(e));
+    } finally {
+      setCancelBusy(false);
+    }
+  };
 
   const startSession = async () => {
     if (startShiftBusy) return;
-    if (sessionState.status === "parent_initiated" || sessionState.status === "active") return;
+    if (sessionStatus === "parent_initiated" || sessionStatus === "active") return;
 
     const bookingForShift = circleBooking ?? todaysBooking;
     if (!bookingForShift) {
@@ -1764,7 +1851,17 @@ export default function ParentDashboardPage() {
       let row: SupabaseSessionRow | null = null;
       let lastError: string | null = null;
 
-      if (isArrivalConfirm) {
+      const { data: existingSession } = await auth.supabase
+        .from(SESSIONS_TABLE)
+        .select("*")
+        .eq("parent_id", auth.userId)
+        .eq("sitter_id", linkedSitterId)
+        .in("status", ["pending", "active"])
+        .maybeSingle();
+
+      if (existingSession) {
+        row = existingSession as SupabaseSessionRow;
+      } else if (isArrivalConfirm) {
         const activated = await activateParentConfirmedSession(auth.supabase, {
           parentId: auth.userId,
           sitterId: linkedSitterId,
@@ -1845,98 +1942,8 @@ export default function ParentDashboardPage() {
     }
   };
 
-  const handleConfirmShiftStartClick = () => {
-    void startSession();
-  };
-
-  const cancelSession = async () => {
-    if (sessionState.status !== "parent_initiated" || !sessionState.supabaseSessionId) return;
-
-    const auth = await resolveBrowserAuth();
-    if (!auth.ok) {
-      setDbBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לבטל את הבקשה.");
-      return;
-    }
-
-    setCancelBusy(true);
-    setDbBanner(null);
-    try {
-      const { error } = await auth.supabase
-        .from(SESSIONS_TABLE)
-        .update({ status: SESSION_STATUS_CANCELLED })
-        .eq("id", sessionState.supabaseSessionId)
-        .eq("parent_id", auth.userId);
-
-      if (error) {
-        console.error("[parent] cancel session failed:", error.message);
-        setDbBanner(friendlySupabaseSessionError(error));
-        return;
-      }
-
-      const idle: SessionProtocolState = { status: "idle" };
-      persistSessionState(idle);
-      setSessionState(idle);
-      setNowMs(Date.now());
-    } catch (e) {
-      console.error("[parent] cancelSession:", e);
-      setDbBanner(friendlySupabaseSessionError(e));
-    } finally {
-      setCancelBusy(false);
-    }
-  };
-
-  const endSession = async () => {
-    if (sessionState.status === "parent_initiated") {
-      setDbBanner("ממתין לאישור הבייביסיטר להתחלת המשמרת.");
-      return;
-    }
-    if (sessionState.status !== "active" || !sessionState.parentStartedAtMs) return;
-    if (sessionState.parentEndRequestedAtMs != null) {
-      setDbBanner("כבר נשלחה בקשת סיום — ממתינים לאישור הבייביסיטר.");
-      return;
-    }
-    if (useSupabase && sessionState.supabaseSessionId) {
-      const auth = await resolveBrowserAuth();
-      if (!auth.ok) {
-        setDbBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לשלוח בקשת סיום.");
-        return;
-      }
-      const reqAt = new Date().toISOString();
-      try {
-        const read = await updateSessionReturningRow(
-          auth.supabase,
-          sessionState.supabaseSessionId,
-          { parent_end_requested_at: reqAt },
-          { parentId: auth.userId }
-        );
-        if (!read.error && read.row) {
-          const mapped = mapSupabaseRowToProtocol(read.row);
-          if (mapped) {
-            persistSessionState(mapped);
-            setSessionState(mapped);
-            setDbBanner(null);
-            setDebugToast("Request sent to Sitter");
-            return;
-          }
-        }
-        if (read.error) {
-          console.error("[parent] request end failed:", read.error);
-          setDbBanner(friendlySupabaseSessionError({ message: read.error }));
-        }
-      } catch (e) {
-        console.error("[parent] endSession:", e);
-        setDbBanner(friendlySupabaseSessionError(e));
-      }
-    }
-  };
-
-  /**
-   * Double-Shake end handshake: the sitter has ended, the parent explicitly confirms here.
-   * Calls the atomic RPC (session + booking finalized together) and lands the session in
-   * `payment_pending` so the Rating/Payment screen follows.
-   */
   const handleParentConfirmEndShift = useCallback(async () => {
-    const sessionId = sessionState.supabaseSessionId;
+    const sessionId = sessionSupabaseSessionId;
     if (!sessionId || confirmEndBusy) return;
     setConfirmEndBusy(true);
     setDbBanner(null);
@@ -1965,7 +1972,6 @@ export default function ParentDashboardPage() {
         return;
       }
 
-      // Optimistically advance to Rating/Payment; realtime will reconcile from the row.
       setSessionState((prev) => buildParentSessionFinishedState(prev, null));
       setSessionDbStatus("payment_pending");
       setParentSessionView("review_pay");
@@ -1977,7 +1983,7 @@ export default function ParentDashboardPage() {
       setConfirmEndBusy(false);
     }
   }, [
-    sessionState.supabaseSessionId,
+    sessionSupabaseSessionId,
     confirmEndBusy,
     elapsedSeconds,
     earnedNis,
@@ -1988,9 +1994,9 @@ export default function ParentDashboardPage() {
     reloadTodaysBooking
   ]);
 
-  const waitingNannyStart = sessionState.status === "parent_initiated";
+  const waitingNannyStart = sessionStatus === "parent_initiated";
   const waitingNannyEnd =
-    sessionState.status === "active" && sessionState.parentEndRequestedAtMs != null;
+    sessionStatus === "active" && sessionState?.parentEndRequestedAtMs != null;
 
   const parentShiftStatus = useMemo(
     () =>
@@ -2010,24 +2016,21 @@ export default function ParentDashboardPage() {
     () =>
       !showParentSessionClosure &&
       !parentSessionInProgress &&
-      sessionState.status !== "ended" &&
+      (sessionStatus !== "ended" || parentShiftStatus === "approved" || parentShiftStatus === "sitter_started") &&
       isParentShiftBookingActionable(idleCircleBooking, parentShiftStatus, nowMs),
     [
       showParentSessionClosure,
       parentSessionInProgress,
-      sessionState.status,
+      sessionStatus,
       idleCircleBooking,
       parentShiftStatus,
       nowMs
     ]
   );
 
-  const effectiveSessionStatus: SessionProtocolState["status"] = sessionState.status;
-
-  /** Drop stale in-flight rows (e.g. old `sitter_started`) so home shortcuts return on mount. */
   useEffect(() => {
     if (!bookingGuardReady || showParentSessionClosure) return;
-    if (effectiveSessionStatus !== "idle") return;
+    if (sessionStatus !== "idle") return;
 
     const booking = idleCircleBooking;
     if (!booking) return;
@@ -2040,7 +2043,7 @@ export default function ParentDashboardPage() {
   }, [
     bookingGuardReady,
     showParentSessionClosure,
-    effectiveSessionStatus,
+    sessionStatus,
     idleCircleBooking,
     nowMs,
     applyCircleBooking
@@ -2057,8 +2060,8 @@ export default function ParentDashboardPage() {
   const sessionRunning =
     !sessionUiBlockedByBooking &&
     !showParentSessionClosure &&
-    effectiveSessionStatus !== "ended" &&
-    (effectiveSessionStatus === "active" || effectiveSessionStatus === "parent_initiated");
+    sessionStatus !== "ended" &&
+    (sessionStatus === "active" || sessionStatus === "parent_initiated");
 
   const hideSearchShortcuts =
     isParentPendingLocked ||
@@ -2080,8 +2083,8 @@ export default function ParentDashboardPage() {
     !showParentSessionClosure &&
     !parentSessionInProgress &&
     !bookingShiftRejectedNotice &&
-    effectiveSessionStatus !== "active" &&
-    effectiveSessionStatus !== "parent_initiated" &&
+    sessionStatus !== "active" &&
+    sessionStatus !== "parent_initiated" &&
     hasActionableShiftBooking;
 
   const showShiftPanel =
@@ -2097,7 +2100,7 @@ export default function ParentDashboardPage() {
     hasActionableShiftBooking;
 
   const showParentActiveSessionCenter =
-    effectiveSessionStatus === "active" &&
+    sessionStatus === "active" &&
     !waitingNannyEnd &&
     !showParentSessionClosure &&
     !sessionUiBlockedByBooking;
@@ -2119,7 +2122,7 @@ export default function ParentDashboardPage() {
     setNowMs(Date.now());
     shiftCompletedFrozenRef.current = false;
     await reloadTodaysBooking();
-  }, [reloadTodaysBooking]);
+  }, [reloadTodaysBooking, setSessionState, setSessionDbStatus, setParentSessionView, setNowMs, shiftCompletedFrozenRef]);
 
   const inPaymentClosure =
     showParentSessionClosure &&
@@ -2147,10 +2150,6 @@ export default function ParentDashboardPage() {
       className={`mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6] py-2 ${inPaymentClosure ? "gap-2" : "space-y-4"}`}
       dir="rtl"
     >
-      {checkoutFinalizeSessionId ? (
-        <SessionFinalizer sessionId={checkoutFinalizeSessionId} />
-      ) : null}
-
       <div className="shrink-0">
         <DashboardWelcomeHeader fullName={fullName} nameLoading={greetingNameLoading} />
       </div>
@@ -2243,7 +2242,7 @@ export default function ParentDashboardPage() {
                     ? "ממתין לאישור סיום..."
                     : "משמרת פעילה"}
               </p>
-              {(sessionState.status === "active" || waitingNannyEnd) && (
+              {(sessionStatus === "active" || waitingNannyEnd) && (
                 <>
                   <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{timerText}</p>
                   <p className="text-sm font-semibold text-navy-800">סכום שנצבר: ₪{earnedNis}</p>
@@ -2372,8 +2371,14 @@ export default function ParentDashboardPage() {
               booking={idleCircleBooking}
               ready={bookingGuardReady}
               busy={startShiftBusy}
-              sessionActive={effectiveSessionStatus === "active"}
-              onStartShift={() => handleConfirmShiftStartClick()}
+              sessionActive={sessionStatus === "active"}
+              onStartShift={() => {
+                if (parentShiftStatus === "sitter_started") {
+                  void handleConfirmShiftStartClick();
+                } else {
+                  setDebugToast("יש להמתין שהבייביסיטר תלחץ על התחלת משמרת תחילה");
+                }
+              }}
             />
           ) : waitingNannyStart ? (
             <>
@@ -2405,7 +2410,7 @@ export default function ParentDashboardPage() {
               booking={idleCircleBooking}
               ready={bookingGuardReady}
               busy={startShiftBusy}
-              sessionActive={effectiveSessionStatus === "active"}
+              sessionActive={sessionStatus === "active"}
               onStartShift={() => handleConfirmShiftStartClick()}
             />
           ) : null}
