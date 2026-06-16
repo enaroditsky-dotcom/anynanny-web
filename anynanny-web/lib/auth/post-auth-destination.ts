@@ -47,7 +47,7 @@ function allowedNextPath(role: ProfileRole, nextParam: string | null): string | 
   const safe = sanitizeNextParam(nextParam);
   if (!safe) return null;
   if (role === "parent") {
-    if (safe.startsWith("/parent")) return safe;
+    if (safe.startsWith("/parent") || safe.startsWith("/checkout")) return safe;
     return null;
   }
   if (
