@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
-import { getOrCreateChatRoom } from "@/lib/chat/parent-chat";
+import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
 import { fetchPendingBookingForParentSitter } from "@/lib/bookings/todays-linked-booking";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -35,7 +35,7 @@ function applyBookingStatusFromPayload(
 }
 
 /**
- * Primary CTAs on the public sitter profile: message (chat_rooms) and book shift (bookings pending).
+ * Primary CTAs on the public sitter profile: message (booking chat) and book shift (bookings pending).
  */
 export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }: SitterProfileActionsProps) {
   const router = useRouter();
@@ -143,6 +143,13 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
     setActionError(null);
     setMessageBusy(true);
 
+    const auth = await resolveBrowserAuth();
+    if (!auth.ok) {
+      setActionError("יש להתחבר מחדש");
+      setMessageBusy(false);
+      return;
+    }
+
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
       setActionError("Supabase לא זמין");
@@ -150,15 +157,15 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
       return;
     }
 
-    const { roomId, error } = await getOrCreateChatRoom(supabase, sitterId);
+    const { bookingId, error } = await findChatBookingForParentSitter(supabase, auth.userId, sitterId);
     setMessageBusy(false);
 
-    if (error || !roomId) {
+    if (error || !bookingId) {
       setActionError(error ?? "לא ניתן לפתוח שיחה");
       return;
     }
 
-    router.push(`/parent/chat/${encodeURIComponent(roomId)}`);
+    router.push(`/parent/chat/${encodeURIComponent(bookingId)}`);
   }, [sitterId, router]);
 
   const handleBookShift = useCallback(() => {

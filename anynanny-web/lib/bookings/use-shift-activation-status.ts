@@ -13,9 +13,8 @@ export { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/
 export const NO_ACTIVE_SHIFT_LABEL = "אין משמרת פעילה";
 
 const MINUTES_PER_DAY = 24 * 60;
-const UPCOMING_LEAD_MINUTES = SHIFT_ACTIVATION_LEAD_MS / (60 * 1000);
+const UPCOMING_LEAD_MS = SHIFT_ACTIVATION_LEAD_MS; // 10 דקות במילשניות
 
-/** Shift is permanently closed before the wall clock is evaluated. */
 function isHardTerminalStatus(status: BookingStatus | undefined): boolean {
   return status === "rejected" || status === "cancelled";
 }
@@ -25,7 +24,6 @@ type ShiftWindow = {
   endMs: number;
 };
 
-/** Safely extract local minutes since midnight from minutes-int, "HH:MM", "HH:MM:SS", or ISO. */
 export function getMinutesSinceMidnight(timeStr: string): number {
   const trimmed = timeStr.trim();
   if (!trimmed) return 0;
@@ -52,7 +50,6 @@ export function getMinutesSinceMidnight(timeStr: string): number {
   return hours * 60 + minutes;
 }
 
-/** Fail-safe same-day / cross-midnight window check on minute-of-day values. */
 export function computeWithinShiftHours(
   currentMinutes: number,
   startMinutes: number,
@@ -82,47 +79,6 @@ function formatMinutesLabel(minutes: number): string {
   });
 }
 
-function isUpcomingMinutes(
-  currentMinutes: number,
-  startMinutes: number,
-  leadMinutes: number = UPCOMING_LEAD_MINUTES
-): boolean {
-  const previewStartMinutes = (startMinutes - leadMinutes + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-
-  if (previewStartMinutes < startMinutes) {
-    return currentMinutes >= previewStartMinutes && currentMinutes < startMinutes;
-  }
-
-  return currentMinutes >= previewStartMinutes || currentMinutes < startMinutes;
-}
-
-function minutesUntilUpcoming(
-  currentMinutes: number,
-  startMinutes: number,
-  leadMinutes: number = UPCOMING_LEAD_MINUTES
-): number {
-  const previewStartMinutes = (startMinutes - leadMinutes + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-
-  if (previewStartMinutes < startMinutes) {
-    if (currentMinutes < previewStartMinutes) {
-      return previewStartMinutes - currentMinutes;
-    }
-
-    if (currentMinutes >= startMinutes) {
-      return MINUTES_PER_DAY - currentMinutes + previewStartMinutes;
-    }
-
-    return 0;
-  }
-
-  if (currentMinutes >= previewStartMinutes || currentMinutes < startMinutes) {
-    return 0;
-  }
-
-  return previewStartMinutes - currentMinutes;
-}
-
-/** Resolve start/end epoch-ms on the local calendar day anchored to `nowMs`. */
 export function buildShiftWindowMs(
   booking: Pick<BookingRow, "start_time" | "end_time">,
   nowMs: number
@@ -135,46 +91,12 @@ export function buildShiftWindowMs(
   let startMs = minutesToMsOnDay(startMinutes, nowMs);
   let endMs = minutesToMsOnDay(endMinutes, nowMs);
 
+  // אם המשמרת חוצה את חצות, נקפיץ את סיום המשמרת ליום המחרת
   if (endMinutes < startMinutes || endMs <= startMs) {
     endMs += MINUTES_PER_DAY * 60 * 1000;
   }
 
   return { startMs, endMs };
-}
-
-/** Current live time is inside scheduled shift hours. */
-export function isActiveForLocalWindow(
-  status: BookingStatusInput,
-  booking: Pick<BookingRow, "start_time" | "end_time">,
-  nowMs: number
-): boolean {
-  const currentStatus = normalizeBookingStatus(status);
-  if (!currentStatus || isBookingTerminalStatus(currentStatus)) return false;
-  if (!booking.start_time || !booking.end_time) return false;
-
-  const now = new Date(nowMs);
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const startMinutes = getMinutesSinceMidnight(booking.start_time);
-  const endMinutes = getMinutesSinceMidnight(booking.end_time);
-
-  return computeWithinShiftHours(currentMinutes, startMinutes, endMinutes);
-}
-
-/** Current live time is in the 10-minute preview before scheduled start. */
-export function isUpcomingForLocalWindow(
-  status: BookingStatusInput,
-  booking: Pick<BookingRow, "start_time" | "end_time">,
-  nowMs: number
-): boolean {
-  const currentStatus = normalizeBookingStatus(status);
-  if (!currentStatus || isBookingTerminalStatus(currentStatus)) return false;
-  if (!booking.start_time || !booking.end_time) return false;
-
-  const now = new Date(nowMs);
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const startMinutes = getMinutesSinceMidnight(booking.start_time);
-
-  return isUpcomingMinutes(currentMinutes, startMinutes);
 }
 
 export function useShiftActivationStatus(
@@ -209,40 +131,46 @@ export function useShiftActivationStatus(
       startTimeLabel: ""
     };
 
-    if (statusKey === "completed") {
-      return inactive;
-    }
-
-    if (!booking?.start_time || !booking?.end_time) {
+    if (completedShift || !booking?.start_time || !booking?.end_time) {
       return inactive;
     }
 
     const normalizedStatus = statusKey as BookingStatus | "";
-    const isHardTerminal = isHardTerminalStatus(normalizedStatus || undefined);
-
-    if (isHardTerminal) {
+    if (isHardTerminalStatus(normalizedStatus || undefined)) {
       return inactive;
     }
 
-    const now = new Date(nowMs);
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const startMinutes = getMinutesSinceMidnight(booking.start_time);
-    const endMinutes = getMinutesSinceMidnight(booking.end_time);
+    // בניית חלון זמן אבסולוטי מדויק
+    const window = buildShiftWindowMs(booking, nowMs);
+    if (!window) return inactive;
 
-    const crossesMidnight = endMinutes < startMinutes;
-    const withinShiftHours = crossesMidnight
-      ? currentMinutes >= startMinutes || currentMinutes <= endMinutes
-      : currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+    let { startMs, endMs } = window;
 
-    const isUpcomingPreview = isUpcomingMinutes(currentMinutes, startMinutes);
+    // תיקון קריטי לחצות הלילה: אם השעה עכשיו היא לקראת חצות (למשל 23:55) והמשמרת רשומה ב-00:03,
+    // ה-buildShiftWindowMs עלול לשים את startMs בתחילת היום הנוכחי (כלומר 00:03 של הבוקר שכבר עבר).
+    // אם המשמרת היא בעתיד הקרוב מאוד (בתוך פחות מ-12 שעות מהרגע), נתקן את חלון הזמנים קדימה/אחורה בהתאם.
+    const twelveHoursInMs = 12 * 60 * 60 * 1000;
+    if (nowMs > endMs && nowMs - startMs > twelveHoursInMs) {
+      startMs += MINUTES_PER_DAY * 60 * 1000;
+      endMs += MINUTES_PER_DAY * 60 * 1000;
+    } else if (nowMs < startMs && startMs - nowMs > twelveHoursInMs) {
+      startMs -= MINUTES_PER_DAY * 60 * 1000;
+      endMs -= MINUTES_PER_DAY * 60 * 1000;
+    }
+
+    // בדיקות טווחי זמן מבוססות חלון אבסולוטי
+    const withinShiftHours = nowMs >= startMs && nowMs <= endMs;
+    const isUpcomingPreview = nowMs >= (startMs - UPCOMING_LEAD_MS) && nowMs < startMs;
 
     const active = withinShiftHours;
     const isUpcoming = withinShiftHours || isUpcomingPreview;
 
     let secondsUntilActive = 0;
-    if (!withinShiftHours && !isUpcomingPreview) {
-      secondsUntilActive = minutesUntilUpcoming(currentMinutes, startMinutes) * 60;
+    if (nowMs < startMs) {
+      secondsUntilActive = Math.max(0, Math.floor((startMs - nowMs) / 1000));
     }
+
+    const startMinutes = getMinutesSinceMidnight(booking.start_time);
 
     return {
       active,
