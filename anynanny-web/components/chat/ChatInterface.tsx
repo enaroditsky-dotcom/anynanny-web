@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { fetchBookingMessages, sendBookingMessage } from '@/lib/chat/booking-messages';
 
 interface MessageRow {
   id: string;
@@ -14,8 +15,8 @@ interface MessageRow {
 export default function ChatInterface({ bookingId, userId }: { bookingId: string; userId: string }) {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const supabase = createClientComponentClient();
 
   // גלילה אוטומטית להודעה האחרונה
   const scrollToBottom = () => {
@@ -25,19 +26,19 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
   useEffect(scrollToBottom, [messages]);
 
   useEffect(() => {
-    // 1. טעינה ראשונית של הודעות
-    const fetchMessages = async () => {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('booking_id', bookingId)
-        .order('created_at', { ascending: true });
-      
-      if (data) setMessages(data);
-    };
-    fetchMessages();
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !bookingId) return;
 
-    // 2. האזנה להודעות חדשות בזמן אמת
+    // 1. טעינה ראשונית של הודעות בצורה מאובטחת דרך הפונקציה המובנית שלך
+    const loadInitialMessages = async () => {
+      const { messages: fetched, error } = await fetchBookingMessages(supabase, bookingId);
+      if (!error && fetched) {
+        setMessages(fetched as MessageRow[]);
+      }
+    };
+    void loadInitialMessages();
+
+    // 2. האזנה להודעות חדשות בזמן אמת דרך ערוץ הריל-טיים הרשמי
     const channel = supabase
       .channel(`chat:${bookingId}`)
       .on('postgres_changes', { 
@@ -46,42 +47,58 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
         table: 'messages',
         filter: `booking_id=eq.${bookingId}` 
       }, (payload) => {
-        setMessages((prev) => [...prev, payload.new as MessageRow]);
+        const incoming = payload.new as MessageRow;
+        // מניעת כפילות בסטייט המקומי אם זו הודעה שהקליינט הנוכחי כבר הוסיף
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === incoming.id)) return prev;
+          return [...prev, incoming];
+        });
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [bookingId, supabase]);
+    return () => { 
+      void supabase.removeChannel(channel); 
+    };
+  }, [bookingId]);
 
-  const sendMessage = async (e: React.FormEvent) => {
+  const sendMessageHandler = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || sending) return;
 
-    // שליחה לבסיס הנתונים
-    const { error } = await supabase.from('messages').insert({
-      booking_id: bookingId,
-      sender_id: userId,
-      content: newMessage
-    });
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
 
-    if (!error) {
+    const currentText = newMessage.trim();
+    setSending(true);
+
+    // שליחה דרך מתודת ה-Lib המאובטחת שלך
+    const { message, error } = await sendBookingMessage(supabase, bookingId, userId, currentText);
+
+    if (!error && message) {
       setNewMessage('');
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === message.id)) return prev;
+        return [...prev, message as MessageRow];
+      });
+    } else if (error) {
+      console.error("[ChatInterface] Failed to send message:", error);
     }
+    setSending(false);
   };
 
   return (
-    <div className="flex flex-col h-[400px] border rounded-lg bg-gray-50 overflow-hidden">
+    <div className="flex flex-col h-[400px] border rounded-lg bg-gray-50 overflow-hidden" dir="rtl">
       {/* אזור ההודעות */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((m) => (
           <div 
             key={m.id} 
-            className={`flex ${m.sender_id === userId ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${m.sender_id === userId ? 'justify-start' : 'justify-end'}`}
           >
-            <div className={`max-w-[80%] p-3 rounded-lg shadow-sm ${
+            <div className={`max-w-[80%] p-3 rounded-2xl shadow-sm text-right text-sm leading-relaxed ${
               m.sender_id === userId 
-                ? 'bg-blue-600 text-white rounded-tr-none' 
-                : 'bg-white text-gray-800 rounded-tl-none border'
+                ? 'bg-blue-600 text-white rounded-br-none' 
+                : 'bg-white text-gray-800 rounded-bl-none border border-slate-100'
             }`}>
               {m.content}
             </div>
@@ -91,19 +108,20 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
       </div>
 
       {/* אזור הקלט */}
-      <form onSubmit={sendMessage} className="p-3 bg-white border-t flex gap-2">
+      <form onSubmit={sendMessageHandler} className="p-3 bg-white border-t flex gap-2 items-center">
         <input 
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          className="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={sending}
+          className="flex-1 border border-slate-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 text-right"
           placeholder="הקלד הודעה..."
         />
         <button 
           type="submit" 
-          disabled={!newMessage.trim()}
-          className="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 disabled:opacity-50"
+          disabled={!newMessage.trim() || sending}
+          className="bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition active:scale-[0.98]"
         >
-          שלח
+          {sending ? 'שולח...' : 'שלח'}
         </button>
       </form>
     </div>

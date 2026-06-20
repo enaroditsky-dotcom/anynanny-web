@@ -27,10 +27,12 @@ async function fetchBookingsWithMessagesForUser(
   const userColumn = role === "parent" ? "parent_id" : "sitter_id";
   const partnerColumn = role === "parent" ? "sitter_id" : "parent_id";
 
+  // 1. שליפת משמרות שרק נמצאות בסטטוסים המורשים לצ'אט
   const { data: bookings, error } = await supabase
     .from(BOOKINGS_TABLE)
-    .select("id, parent_id, sitter_id, booking_date, start_time, end_time, updated_at")
+    .select("id, parent_id, sitter_id, booking_date, start_time, end_time, updated_at, status")
     .eq(userColumn, userId)
+    .in("status", CHAT_ELIGIBLE_BOOKING_STATUSES)
     .order("updated_at", { ascending: false });
 
   if (error) {
@@ -56,12 +58,8 @@ async function fetchBookingsWithMessagesForUser(
     }
   }
 
-  const withMessages = bookings.filter((b) => lastMessageAt.has(String((b as { id: string }).id)));
-  if (!withMessages.length) {
-    return { rows: [], error: null };
-  }
-
-  const partnerIds = [...new Set(withMessages.map((b) => String((b as Record<string, string>)[partnerColumn])))];
+  // 2. שולפים את מזהי השותפים מתוך כל המשמרות המורשות (גם אם אין להן הודעות עדיין)
+  const partnerIds = [...new Set(bookings.map((b) => String((b as Record<string, string>)[partnerColumn])))];
   const nameByPartnerId = new Map<string, string>();
 
   if (role === "parent") {
@@ -89,7 +87,8 @@ async function fetchBookingsWithMessagesForUser(
     }
   }
 
-  const rows = withMessages
+  // 3. מיפוי כל המשמרות המורשות לרשימת חלוניות השיחה (שיחה ללא הודעות תקבל את זמן עדכון המשמרת כברירת מחדל)
+  const rows = bookings
     .map((booking) => {
       const row = booking as {
         id: string;

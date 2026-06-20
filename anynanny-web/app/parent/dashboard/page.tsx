@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, History, Search, Settings, Wallet } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Calendar, History, Search, Wallet, LogOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ParentSessionClosurePanel } from "@/components/session/parent-session-closure-panel";
 import SessionFinalizer from "@/components/SessionFinalizer";
@@ -81,6 +82,7 @@ import {
   reconcileStaleEndedLocalState,
   resolveParentClosureBookingId
 } from "@/lib/session/parent-session-sync";
+import { clearDeviceAuthHints } from "@/lib/auth/returning-user";
 
 const BOOKING_SHIFT_REJECTED_NOTICE = "הבקשה נדחתה על ידי המטפלת";
 const BOOKING_SHIFT_PENDING_NOTICE = "בקשה נשלחה וממתינה לאישור";
@@ -107,7 +109,6 @@ const LIVE_SESSION_DB_STATUSES = new Set([
   "pending_confirmation"
 ]);
 
-/** Session statuses that open Review & Pay (billing) — driven only by DB `status`. */
 const PARENT_REVIEW_SESSION_DB_STATUSES = new Set([
   "sitter_completed",
   "completed_pending_review",
@@ -115,10 +116,8 @@ const PARENT_REVIEW_SESSION_DB_STATUSES = new Set([
   "paid"
 ]);
 
-/** Parent confirmed end-of-shift — both dashboards return to default landing. */
 const PARENT_SESSION_IDLE_DB_STATUS = "completed";
 
-/** Statuses to fetch when locating the latest closure-relevant session row. */
 const PARENT_CLOSURE_FETCH_DB_STATUSES: readonly string[] = [
   ...PARENT_REVIEW_SESSION_DB_STATUSES,
   PARENT_SESSION_IDLE_DB_STATUS
@@ -234,7 +233,6 @@ function selectParentDashboardCenterView(params: {
   return "idle";
 }
 
-/** True when today's linked booking should drive Double-Shake / hide home shortcuts. */
 function isParentShiftBookingActionable(
   booking: TodaysLinkedBookingView | null,
   status: BookingStatus | "",
@@ -267,20 +265,10 @@ function isParentShiftBookingActionable(
   return false;
 }
 
-function localizeCheckoutError(message: string): string {
-  const trimmed = message.trim();
-  if (trimmed === "Booking not found.") {
-    return "לא נמצאה משמרת לתשלום — נסו שוב בעוד רגע.";
-  }
-  if (trimmed === "bookingId is required.") {
-    return "ממתינים לפרטי משמרת…";
-  }
-  return trimmed;
-}
-
 export default function ParentDashboardPage() {
+  const router = useRouter();
   const { isLoading: authLoading } = useAuth();
-  const { nowMs, setNowMs, parent: sessionParent, persistParentSession } = useSession();
+  const { nowMs, setNowMs, parent: sessionParent } = useSession();
 
   const {
     userId: parentUserId,
@@ -330,24 +318,39 @@ export default function ParentDashboardPage() {
   const [bookingFeedbackVariant, setBookingFeedbackVariant] = useState<"success" | "error" | "info">("info");
   const [startShiftBusy, setStartShiftBusy] = useState(false);
 
+  const { fullName, nameLoading: greetingNameLoading } = useDashboardGreetingName(
+    "parent",
+    parentUserId
+  );
+
   const lockShiftUi = useCallback((bookingId?: string) => {
     if (bookingId?.trim()) {
       persistShiftLocallyDismissed(bookingId);
     }
     setShiftUiLocked(true);
-  }, []);
+  }, [setShiftUiLocked]);
+
   const prevShiftGateStatusRef = useRef<string | null>(null);
   const parentDashboardCenterViewRef = useRef<ParentDashboardCenterView>("loading");
+
+  const handleLogout = async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    clearDeviceAuthHints();
+    router.replace("/");
+    router.refresh();
+  };
 
   const breakCompletedRealtimeLoop = useCallback(
     (source: "sync" | "realtime") => {
       if (parentDashboardCenterViewRef.current === "review_pay") return;
       if (shiftCompletedFrozenRef.current) return;
       shiftCompletedFrozenRef.current = true;
-      console.log(`=== SHIFT COMPLETED: BREAKING REALTIME LOOP (${source}) ===`);
       applyCircleBooking(null);
     },
-    [applyCircleBooking]
+    [applyCircleBooking, shiftCompletedFrozenRef]
   );
 
   const applyBookingShiftNotice = useCallback((status: BookingStatus | null | undefined) => {
@@ -362,7 +365,7 @@ export default function ParentDashboardPage() {
     ) {
       setBookingShiftRejectedNotice(false);
     }
-  }, []);
+  }, [setBookingShiftRejectedNotice]);
 
   const notifyBookingTransition = useCallback(
     (rowStatus: BookingStatus, source: "realtime" | "reload" | "gate") => {
@@ -387,7 +390,7 @@ export default function ParentDashboardPage() {
         applyBookingShiftNotice(rowStatus);
       }
     },
-    [applyBookingShiftNotice, applyCircleBooking]
+    [applyBookingShiftNotice, applyCircleBooking, setBookingFeedbackVariant, setBookingFeedbackToast]
   );
 
   const handleBookingLiveSync = useCallback(
@@ -460,8 +463,10 @@ export default function ParentDashboardPage() {
       syncFromPayload,
       syncFromLinkedBooking,
       notifyBookingTransition,
+      applyBookingShiftNotice,
       applyCircleBooking,
-      bookingRef
+      bookingRef,
+      shiftCompletedFrozenRef
     ]
   );
 
@@ -560,7 +565,7 @@ export default function ParentDashboardPage() {
 
   useEffect(() => {
     setShiftUiLocked(isShiftLocallyDismissed(todaysBookingId));
-  }, [todaysBookingId]);
+  }, [todaysBookingId, setShiftUiLocked]);
 
   useEffect(() => {
     if (todaysBookingStatus === "completed") {
@@ -570,12 +575,7 @@ export default function ParentDashboardPage() {
     if (bookingGuardReady && todaysBookingId && !isShiftLocallyDismissed(todaysBookingId)) {
       setShiftUiLocked(false);
     }
-  }, [todaysBookingStatus, todaysBookingId, bookingGuardReady, breakCompletedRealtimeLoop]);
-
-  const { fullName, nameLoading: greetingNameLoading } = useDashboardGreetingName(
-    "parent",
-    parentUserId
-  );
+  }, [todaysBookingStatus, todaysBookingId, bookingGuardReady, breakCompletedRealtimeLoop, setShiftUiLocked]);
 
   const syncFromStorage = useCallback(() => {
     try {
@@ -583,7 +583,7 @@ export default function ParentDashboardPage() {
     } catch {
       setSessionState({ status: "idle" });
     }
-  }, []);
+  }, [setSessionState]);
 
   const parentCircleLiveKey = useMemo(
     () => bookingLiveSyncKey(circleBooking ?? todaysBooking),
@@ -599,7 +599,6 @@ export default function ParentDashboardPage() {
 
   const idleCircleBooking = circleBooking ?? todaysBooking;
 
-  /** Hydrate shift circle after refresh when gate exists but enriched row is missing. */
   useEffect(() => {
     if (!bookingGuardReady || !parentUserId) return;
     if (idleCircleBooking) return;
@@ -676,13 +675,7 @@ export default function ParentDashboardPage() {
   const earnedNis = useMemo(() => ((elapsedSeconds / 3600) * HOURLY_RATE).toFixed(2), [elapsedSeconds]);
   const completedSummary = useMemo(
     () => completedSummaryFromEndedState(sessionState || { status: "idle" }, HOURLY_RATE),
-    [
-      sessionStatus,
-      sessionState?.endedAtMs,
-      sessionState?.finalElapsedSeconds,
-      sessionState?.finalAmountNis,
-      sessionState?.parentStartedAtMs
-    ]
+    [sessionState]
   );
 
   const todaysBookingStatusNormalized = useMemo(
@@ -1344,7 +1337,7 @@ export default function ParentDashboardPage() {
 
     return () => {
       cancelled = true;
-      window.addEventListener("storage", onStorage);
+      window.removeEventListener("storage", onStorage);
     };
   }, [syncFromStorage, setParentUserId]);
 
@@ -1406,7 +1399,7 @@ export default function ParentDashboardPage() {
             if (isParentSessionIdleDbStatus(rowDbStatus)) {
               const idle: SessionProtocolState = { status: "idle" };
               persistSessionState(idle);
-              if (!cancelled && current.status !== "idle") {
+              if (!cancelled && local.status !== "idle") {
                 setSessionState(idle);
               }
               return;
@@ -1415,7 +1408,7 @@ export default function ParentDashboardPage() {
             if (isParentReviewSessionDbStatus(rowDbStatus)) {
               const finished = buildParentSessionFinishedState(local, row);
               persistSessionState(finished);
-              if (!cancelled && current.status !== "ended") {
+              if (!cancelled && local.status !== "ended") {
                 setSessionState(finished);
                 setParentSessionView("review_pay");
                 setShiftFinishedLocked(true);
@@ -1462,12 +1455,12 @@ export default function ParentDashboardPage() {
             return;
           }
           const idle: SessionProtocolState = { status: "idle" };
-    persistSessionState(idle);
-    if (!cancelled && sessionState.status !== "idle") {
-      setSessionState(idle);
-    }
-    return; // ה-return עוצר את הפונקציה כאן אם אין todaysBookingId
-  } // <--- זה הסוגר המסולסל שסוגר את התנאי של שורה 1459!
+          persistSessionState(idle);
+          if (!cancelled && sessionState.status !== "idle") {
+            setSessionState(idle);
+          }
+          return;
+        }
 
         if (local.status === "active" && local.parentStartedAtMs) {
           if (!cancelled && sessionState.status !== "active") {
@@ -1498,12 +1491,10 @@ export default function ParentDashboardPage() {
           const dismissedId = readDismissedCompletedSessionId("parent");
           const rowDbStatus = String(row.status);
           if (isParentSessionIdleDbStatus(rowDbStatus)) {
-            // חסימה מוחלטת והרמטית: אם הסטטוס המקומי כבר idle, עוצרים את הפונקציה מיד!
-            // זה ימנע מכל טיימר, שגיאה או עדכון ב-Context להריץ שוב את הפקודות שמתחת.
             if (sessionState.status === "idle") {
               return;
             }
-      
+        
             const idle: SessionProtocolState = { status: "idle" };
             persistSessionState(idle);
             
@@ -1515,12 +1506,11 @@ export default function ParentDashboardPage() {
             }
             return;
           }
-      
-          // מעדכנים את הסטטוס המקומי רק אם אנחנו לא ב-idle
+        
           if (sessionState.status !== "idle") {
             setSessionDbStatus(rowDbStatus);
           }
-                  if (isParentReviewSessionDbStatus(rowDbStatus)) {
+          if (isParentReviewSessionDbStatus(rowDbStatus)) {
             const finished = buildParentSessionFinishedState(local, row);
             persistSessionState(finished);
             if (!cancelled && sessionState.status !== "ended") {
@@ -1789,7 +1779,7 @@ export default function ParentDashboardPage() {
     }
 
     if (bookingStatus === "rejected" || bookingStatus === "cancelled") {
-      setDbBanner("לא ניתן לפתוח משמרת — הבקשה בוטלה או נדחתה.");
+      setDbBanner("לא ניתן לפתוח משמרת — הבקשה בבוטלה או נדחתה.");
       return;
     }
 
@@ -2077,7 +2067,7 @@ export default function ParentDashboardPage() {
   const handleDismissRejectedNotice = useCallback(() => {
     setBookingShiftRejectedNotice(false);
     setBookingFeedbackToast(null);
-  }, []);
+  }, [setBookingShiftRejectedNotice, setBookingFeedbackToast]);
 
   const showParentShiftCircle =
     !showParentSessionClosure &&
@@ -2122,7 +2112,7 @@ export default function ParentDashboardPage() {
     setNowMs(Date.now());
     shiftCompletedFrozenRef.current = false;
     await reloadTodaysBooking();
-  }, [reloadTodaysBooking, setSessionState, setSessionDbStatus, setParentSessionView, setNowMs, shiftCompletedFrozenRef]);
+  }, [reloadTodaysBooking, setSessionState, setSessionDbStatus, setParentSessionView, setNowMs, shiftCompletedFrozenRef, setShiftUiLocked, setShiftFinishedLocked, setSessionHydrateError]);
 
   const inPaymentClosure =
     showParentSessionClosure &&
@@ -2172,48 +2162,42 @@ export default function ParentDashboardPage() {
 
       {inPaymentClosure || hideSearchShortcuts ? null : (
       <section className="shrink-0 rounded-3xl bg-white p-4 shadow-soft sm:p-5">
-        <div className="grid grid-cols-2 gap-3">
+        {/* גריד מרכזי משופר - 3 אריחים בלבד ללא "הגדרות חשבון" */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Link
             href="/parent/calendar"
-            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            className="group flex min-h-[6rem] flex-row-reverse items-center justify-between gap-4 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-4 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98] sm:flex-col sm:items-end sm:justify-between sm:min-h-[7.25rem]"
           >
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <Calendar className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">יומן מפגשים</span>
+            <span className="text-sm font-bold sm:text-xs">יומן מפגשים</span>
           </Link>
 
-          <Link
-            href="/parent/wallet"
-            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-          >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-              <Wallet className="h-7 w-7 stroke-[1.75]" aria-hidden />
-            </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">ארנק ותשלומים</span>
-          </Link>
+          <div className="grid grid-cols-2 gap-3 sm:col-span-2">
+            <Link
+              href="/parent/wallet"
+              className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+                <Wallet className="h-7 w-7 stroke-[1.75]" aria-hidden />
+              </span>
+              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">ארנק ותשלומים</span>
+            </Link>
 
-          <Link
-            href="/parent/settings"
-            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-          >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-              <Settings className="h-7 w-7 stroke-[1.75]" aria-hidden />
-            </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הגדרות חשבון</span>
-          </Link>
-
-          <Link
-            href="/parent/history"
-            className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-          >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-              <History className="h-7 w-7 stroke-[1.75]" aria-hidden />
-            </span>
-            <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">היסטוריית שמרטפות</span>
-          </Link>
+            <Link
+              href="/parent/history"
+              className="group flex min-h-[7.25rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+                <History className="h-7 w-7 stroke-[1.75]" aria-hidden />
+              </span>
+              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">היסטוריית שמרטפות</span>
+            </Link>
+          </div>
         </div>
 
+        {/* שורה רחבה ובולטת לחיפוש נני */}
         <Link
           href="/parent/search"
           className="mt-3 flex min-h-[3.5rem] flex-row-reverse items-center justify-between gap-3 rounded-2xl border border-emerald-700/20 bg-emerald-50/80 px-4 py-3 text-right text-navy-header shadow-sm transition hover:border-emerald-700/35 hover:shadow-md active:scale-[0.99]"
@@ -2419,6 +2403,30 @@ export default function ParentDashboardPage() {
       </DoubleShakeShiftPanel>
       ) : null}
 
+      {/* 🚀 פאנל הכפתורים התחתון והקבוע - מחוץ לכל התנאים, מציג שחרור משמרת והתנתקות בלבד! */}
+      {parentBootstrapComplete && parentUserId && (
+        <div className="w-full border-t border-slate-100 bg-slate-50/50 px-4 py-3 flex items-center justify-between gap-3 shrink-0 rounded-b-3xl">
+          {/* כפתור שחרור משמרת תקועה פרימיום מובנה ואינטואיטיבי להורה */}
+          <button
+            type="button"
+            onClick={() => void handleParentEmergencyReset()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-[0.97]"
+          >
+            <span>שחרור משמרת תקועה</span>
+          </button>
+
+          {/* כפתור התנתקות קבוע מהמערכת */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 shadow-sm transition hover:bg-rose-50 active:scale-[0.97]"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span>התנתקות</span>
+          </button>
+        </div>
+      )}
+
       {debugToast ? (
         <div
           role="status"
@@ -2434,14 +2442,6 @@ export default function ParentDashboardPage() {
         variant={bookingFeedbackVariant}
         onDismiss={() => setBookingFeedbackToast(null)}
       />
-
-      <div className="shrink-0 pb-1 text-center">
-        <StuckShiftDevResetButton
-          role="parent"
-          variant="link"
-          onReset={() => void handleParentEmergencyReset()}
-        />
-      </div>
     </main>
   );
 }

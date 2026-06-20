@@ -1,21 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, History, Settings, Wallet } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, usePathname } from "next/navigation"; // הוספת usePathname ל-Import
+import { Calendar, History, Wallet, LogOut } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name";
 import { SitterMandatoryRatingPanel } from "@/components/session/sitter-mandatory-rating-panel";
 import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
-import { SITTER_PROFILE_SAVED_NAV_FLAG, SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
+import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
-import {
-  hasSitterCompletedOnboarding,
-  SITTER_PROFILES_TABLE,
-  SITTER_PROFILES_USER_COLUMN,
-  type SitterProfileRow
-} from "@/lib/sitter/sitter-profile";
-import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import {
@@ -37,7 +30,7 @@ import {
 import { BOOKINGS_TABLE, SITTER_FORCE_END_SUCCESS_MESSAGE } from "@/lib/bookings/constants";
 import { SitterDoubleShakeIdleCircle } from "@/components/session/sitter-double-shake-idle-circle";
 import { SitterShiftApprovalCard } from "@/components/sitter/sitter-shift-approval-card";
-import { doesBookingBlockSessionShiftUi, isBookingLiveForSessionSync } from "@/lib/bookings/booking-shift-ui";
+import { doesBookingBlockSessionShiftUi } from "@/lib/bookings/booking-shift-ui";
 import { isSitterBookingAwaitingApprovalStatus } from "@/lib/bookings/booking-realtime-handler";
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
 import { fetchTodayBookingShiftGate, fetchTodaysPendingBookingRequest, type TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
@@ -51,6 +44,7 @@ import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { submitSessionRating } from "@/lib/ratings/submit-session-rating";
 import { useSitterPendingBookingCount } from "@/lib/bookings/use-sitter-pending-booking-count";
 import { useSession } from "@/context/SessionContext";
+import { clearDeviceAuthHints } from "@/lib/auth/returning-user";
 
 const SITTER_DASHBOARD_SESSION_SELECT = SESSIONS_PROTOCOL_SELECT_MINIMAL;
 const SITTER_TERMINAL_SESSION_STATUSES = ["completed", "sitter_completed", "payment_pending", "paid"];
@@ -349,7 +343,7 @@ export default function SitterDashboardPage() {
     }
 
     setCompletedSummaryRow(completedShow);
-  }, []);
+  }, [setPendingRow, setEndConfirmRow, setActiveShiftRow, setCompletedSummaryRow, suppressCompletedSummaryIdRef]);
 
   const refreshSitterProfileCardStatus = useCallback(
     async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
@@ -395,7 +389,7 @@ export default function SitterDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [refreshForUser, refreshSitterProfileCardStatus, setSitterBootstrapComplete]);
+  }, [refreshForUser, refreshSitterProfileCardStatus, setSitterBootstrapComplete, setSitterId]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -478,6 +472,16 @@ export default function SitterDashboardPage() {
     setDashboardStatsRefreshKey((k) => k + 1);
   }, [pathname, sitterId, refreshSitterProfileCardStatus]);
 
+  const handleLogout = async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    clearDeviceAuthHints();
+    router.replace("/");
+    router.refresh();
+  };
+
   const handleSitterMandatoryRatingComplete = useCallback(
     async (rating: number) => {
       if (!completedSummaryRow || !sitterId) return;
@@ -515,7 +519,7 @@ export default function SitterDashboardPage() {
       await refreshForUser(supabase, sitterId);
       router.refresh();
     },
-    [completedSummaryRow, sitterId, refreshForUser, router, lockShiftForToday]
+    [completedSummaryRow, sitterId, refreshForUser, router, lockShiftForToday, setCompletedSummaryRow, setPendingRow, setActiveShiftRow, setEndConfirmRow, suppressCompletedSummaryIdRef]
   );
 
   const handleDevReset = useCallback(async () => {
@@ -533,7 +537,7 @@ export default function SitterDashboardPage() {
     }
     await reloadTodaysBooking();
     setDashboardStatsRefreshKey((k) => k + 1);
-  }, [sitterId, refreshForUser, reloadTodaysBooking]);
+  }, [sitterId, refreshForUser, reloadTodaysBooking, setPendingRow, setActiveShiftRow, setEndConfirmRow, setCompletedSummaryRow]);
 
   const liveElapsed = useMemo(() => {
     const row = endConfirmRow ?? activeShiftRow;
@@ -640,7 +644,6 @@ export default function SitterDashboardPage() {
       void refreshSitterProfileCardStatus(supabase, sitterId);
     }
   }, [sitterId, refreshSitterProfileCardStatus]);
-
   const sitterInFlightActive = Boolean(pendingRow || activeShiftRow || endConfirmRow);
 
   const sitterHasLiveBooking =
@@ -671,7 +674,6 @@ export default function SitterDashboardPage() {
     !sitterHasLiveBooking &&
     !showSitterBookingApproval;
 
-  // תנאי ההיגיון הפשוט, המוחלט והעיוור לטקסט: אם אנחנו בשלב סגירה והסטטוס הוא לא sitter_completed, סימן שהתשלום עבר!
   const isSessionPaidAndReadyForRating = 
     sitterTerminalDbStatus !== "sitter_completed" && sitterTerminalDbStatus !== "";
 
@@ -881,63 +883,57 @@ export default function SitterDashboardPage() {
           className={`shrink-0 rounded-3xl bg-white p-3 shadow-soft sm:p-4 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
           aria-hidden={onboardingPending}
         >
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
             <Link
               href="/sitter/availability"
               tabIndex={onboardingPending ? -1 : undefined}
-              className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+              className="group flex min-h-[6rem] flex-row-reverse items-center justify-between gap-4 rounded-2xl border border-emerald-600/15 bg-emerald-50/40 p-4 text-right text-navy-header shadow-sm transition hover:border-emerald-600/30 hover:shadow-md active:scale-[0.98] sm:flex-col sm:items-end sm:justify-between sm:min-h-[6.5rem]"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
                 <Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden />
               </span>
-              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">סידור עבודה</span>
+              <div className="flex flex-col text-right sm:w-full">
+                <span className="text-sm font-bold sm:text-sm">סידור עבודה</span>
+                <span className="text-[11px] text-slate-500 sm:hidden">ניהול ימי ושעות פעילות</span>
+              </div>
             </Link>
 
-            <Link
-              href="/sitter/personal"
-              tabIndex={onboardingPending ? -1 : undefined}
-              className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-                <Wallet className="h-6 w-6 stroke-[1.75]" aria-hidden />
-              </span>
-              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">ארנק ותשלומים</span>
-            </Link>
+            <div className="grid grid-cols-2 gap-2.5 sm:col-span-2 sm:grid-cols-2">
+              <Link
+                href="/sitter/personal"
+                tabIndex={onboardingPending ? -1 : undefined}
+                className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+                  <Wallet className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                </span>
+                <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">ארנק ותשלומים</span>
+              </Link>
 
-            <Link
-              href="/sitter/personal"
-              tabIndex={onboardingPending ? -1 : undefined}
-              className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-                <Settings className="h-6 w-6 stroke-[1.75]" aria-hidden />
-              </span>
-              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הגדרות חשבון</span>
-            </Link>
-
-            <Link
-              href="/sitter/shifts"
-              tabIndex={onboardingPending ? -1 : undefined}
-              aria-label={
-                pendingBookingCount > 0
-                  ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות`
-                  : "המשמרות שלי"
-              }
-              className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
-            >
-              <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-                <History className="h-6 w-6 stroke-[1.75]" aria-hidden />
-                {pendingBookingCount > 0 ? (
-                  <span
-                    className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
-                    aria-hidden
-                  >
-                    {pendingBookingCount > 9 ? "9+" : pendingBookingCount}
-                  </span>
-                ) : null}
-              </span>
-              <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">המשמרות שלי</span>
-            </Link>
+              <Link
+                href="/sitter/shifts"
+                tabIndex={onboardingPending ? -1 : undefined}
+                aria-label={
+                  pendingBookingCount > 0
+                    ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות`
+                    : "המשמרות שלי"
+                }
+                className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+              >
+                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+                  <History className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                  {pendingBookingCount > 0 ? (
+                    <span
+                      className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+                      aria-hidden
+                    >
+                      {pendingBookingCount > 9 ? "9+" : pendingBookingCount}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">המשמרות שלי</span>
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -950,9 +946,27 @@ export default function SitterDashboardPage() {
         </DoubleShakeShiftPanel>
       </div>
 
-      <div className="shrink-0 pb-1 text-center">
-        <StuckShiftDevResetButton variant="link" onReset={() => void handleDevReset()} />
-      </div>
+      {/* 🚀 פאנל הכפתורים התחתון והקבוע של נני - גלוי תמיד עם שחרור משמרת והתנתקות */}
+      {sitterBootstrapComplete && sitterId && (
+        <div className="w-full border-t border-slate-100 bg-slate-50/50 px-4 py-3 flex items-center justify-between gap-3 shrink-0 rounded-b-3xl">
+          <button
+            type="button"
+            onClick={() => void handleDevReset()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-[0.97]"
+          >
+            <span>שחרור משמרת תקועה</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 shadow-sm transition hover:bg-rose-50 active:scale-[0.97]"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span>התנתקות</span>
+          </button>
+        </div>
+      )}
     </main>
   );
 }
