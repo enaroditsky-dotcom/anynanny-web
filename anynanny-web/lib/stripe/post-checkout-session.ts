@@ -14,7 +14,7 @@ export type StripeCheckoutResponse =
 export async function postStripeCheckoutSession(
   body: StripeCheckoutRequest
 ): Promise<StripeCheckoutResponse> {
-  const res = await fetch("/api/stripe/checkout", {
+  const res = await fetch("/api/hyp/checkout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",

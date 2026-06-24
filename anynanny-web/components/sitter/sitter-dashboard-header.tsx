@@ -14,7 +14,7 @@ type SitterDashboardStats = {
 type LoadState = "idle" | "loading" | "ready" | "error";
 
 const idBadgeClass =
-  "inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100/95 px-2.5 py-1 text-[11px] font-semibold text-slate-800 ring-1 ring-slate-200/90 sm:text-xs";
+  "inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs font-semibold px-2.5 py-1 rounded-lg border border-purple-100 shadow-sm";
 
 const ratingBadgeClass =
   "inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50/95 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-amber-950 ring-1 ring-amber-200/80 sm:text-xs";
@@ -46,11 +46,8 @@ function parseGetCurrentUserRatingResponse(data: unknown): SitterDashboardStats 
 type SitterDashboardHeaderProps = {
   fullName?: string | null;
   nameLoading?: boolean;
-  /** Authenticated sitter user id — fetch runs when this is set. */
   sitterId: string | null;
-  /** Bump after questionnaire save so nanny_id_number from DB trigger is refetched. */
   refreshKey?: number;
-  /** Show nanny ID badge only after onboarding; badge appears when RPC returns a serial. */
   showNannyId?: boolean;
   children?: ReactNode;
 };
@@ -107,7 +104,6 @@ export function SitterDashboardHeader({
 
   const greeting = buildDashboardGreetingTitle(fullName, nameLoading);
 
-  const idLabel = stats.nanny_id_number ? `🆔 מזהה: ${stats.nanny_id_number}` : "";
   const ratingLabel = `⭐ ${
     stats.avg_rating != null ? Number(stats.avg_rating).toFixed(1) : "אין דירוג"
   } (${stats.rating_count || 0} חוות דעת)`;
@@ -117,22 +113,18 @@ export function SitterDashboardHeader({
   const showIdSkeleton = showNannyId && statsLoading;
 
   return (
-    <header className="text-right" dir="rtl">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <h1
-          className={`text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem] ${nameLoading ? "animate-pulse" : ""}`}
-        >
-          {greeting}
-        </h1>
+    <header className="text-right px-4" dir="rtl">
+      {/* 👑 שורה אחת אחידה בגודלה, ללא פסיק מיותר */}
+      <h1
+        className={`text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem] ${nameLoading ? "animate-pulse" : ""}`}
+      >
+        {greeting} מה תרצי לעשות היום?
+      </h1>
 
-        {showIdSkeleton ? (
-          <span className="inline-block h-7 w-28 animate-pulse rounded-full bg-slate-100" aria-hidden />
-        ) : showIdBadge ? (
-          <span className={idBadgeClass} title={idLabel}>
-            {idLabel}
-          </span>
-        ) : null}
-
+      {/* 📊 קונטיינר אנכי אחיד ומדויק לפי ה-UI של ההורה */}
+      <div className="mt-2 flex flex-col items-start gap-1.5">
+        
+        {/* תג הדירוג הצהוב (ראשון) */}
         {statsLoading ? (
           <span className="inline-block h-7 w-36 animate-pulse rounded-full bg-amber-50/80" aria-hidden />
         ) : (
@@ -140,9 +132,18 @@ export function SitterDashboardHeader({
             {ratingLabel}
           </span>
         )}
+
+        {/* מזהה נני סגול (שני) */}
+        {showIdSkeleton ? (
+          <span className="inline-block h-7 w-28 animate-pulse rounded-full bg-slate-100" aria-hidden />
+        ) : showIdBadge ? (
+          <span className={idBadgeClass}>
+            <span className="text-[10px] bg-purple-200 text-purple-800 px-1 rounded uppercase font-bold">ID</span>
+            מזהה: {stats.nanny_id_number}
+          </span>
+        ) : null}
       </div>
 
-      <p className="mt-1 text-sm font-medium text-slate-600">מה תרצה לעשות היום?</p>
       {children}
     </header>
   );

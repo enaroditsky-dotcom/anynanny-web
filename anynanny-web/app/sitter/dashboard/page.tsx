@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation"; // הוספת usePathname ל-Import
+import { useRouter, usePathname } from "next/navigation";
 import { Calendar, History, Wallet, LogOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name";
@@ -493,6 +493,7 @@ export default function SitterDashboardPage() {
         return;
       }
 
+      const sitterIdTemp = sitterId;
       setSitterClosureBusy(true);
       setSitterClosureError(null);
 
@@ -516,7 +517,7 @@ export default function SitterDashboardPage() {
       setEndConfirmRow(null);
       setBanner(null);
       setSitterClosureBusy(false);
-      await refreshForUser(supabase, sitterId);
+      await refreshForUser(supabase, sitterIdTemp);
       router.refresh();
     },
     [completedSummaryRow, sitterId, refreshForUser, router, lockShiftForToday, setCompletedSummaryRow, setPendingRow, setActiveShiftRow, setEndConfirmRow, suppressCompletedSummaryIdRef]
@@ -821,6 +822,7 @@ export default function SitterDashboardPage() {
       dir="rtl"
     >
       <div className="shrink-0">
+        {/* 👑 קראנו להדר ומבחינתנו הוא מקבל את המזהה והדירוג מיושרים פיקס תחתיו בצורה אנכית! */}
         <SitterDashboardHeader
           fullName={fullName}
           nameLoading={greetingNameLoading}
@@ -900,7 +902,7 @@ export default function SitterDashboardPage() {
 
             <div className="grid grid-cols-2 gap-2.5 sm:col-span-2 sm:grid-cols-2">
               <Link
-                href="/sitter/personal"
+                href="/sitter/wallet"
                 tabIndex={onboardingPending ? -1 : undefined}
                 className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
               >
@@ -946,7 +948,6 @@ export default function SitterDashboardPage() {
         </DoubleShakeShiftPanel>
       </div>
 
-      {/* 🚀 פאנל הכפתורים התחתון והקבוע של נני - גלוי תמיד עם שחרור משמרת והתנתקות */}
       {sitterBootstrapComplete && sitterId && (
         <div className="w-full border-t border-slate-100 bg-slate-50/50 px-4 py-3 flex items-center justify-between gap-3 shrink-0 rounded-b-3xl">
           <button

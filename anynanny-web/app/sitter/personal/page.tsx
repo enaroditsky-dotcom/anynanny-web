@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DeleteAccountSection } from "@/components/account/delete-account-section";
 import { SitterProfileForm } from "@/components/sitter/sitter-profile-form";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -80,10 +79,6 @@ export default function SitterPersonalPage() {
       </section>
 
       {authReady ? <SitterProfileForm userId={userId} className="mt-1" /> : null}
-
-      <div className="mt-auto pt-2">
-        <DeleteAccountSection />
-      </div>
     </main>
   );
 }

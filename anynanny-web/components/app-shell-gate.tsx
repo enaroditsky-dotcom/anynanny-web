@@ -25,7 +25,7 @@ const FIXED_VIEWPORT_PREFIXES = [
 ];
 
 /** Routes that render `MainLayout` with its own unified header and viewport shell. */
-const MAIN_LAYOUT_PREFIXES = ["/parent/search"];
+const MAIN_LAYOUT_PREFIXES = ["/parent/search", "/parent/wallet"];
 
 export function isChromelessAuthPath(pathname: string): boolean {
   return CHROMELESS_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

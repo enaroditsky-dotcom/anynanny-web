@@ -318,6 +318,8 @@ export default function ParentDashboardPage() {
   const [bookingFeedbackVariant, setBookingFeedbackVariant] = useState<"success" | "error" | "info">("info");
   const [startShiftBusy, setStartShiftBusy] = useState(false);
 
+  const [realParentDisplayId, setRealParentDisplayId] = useState<string | null>(null);
+
   const { fullName, nameLoading: greetingNameLoading } = useDashboardGreetingName(
     "parent",
     parentUserId
@@ -901,7 +903,7 @@ export default function ParentDashboardPage() {
           description: "תשלום משמרת AnyNanny"
         });
         if (!result.ok) {
-          setClosureError(localizeCheckoutError(result.error));
+          setClosureError(result.error);
           setPayBusy(false);
           return;
         }
@@ -1322,6 +1324,17 @@ export default function ParentDashboardPage() {
           const userId = resolvedUser.id;
           if (cancelled) return;
           setParentUserId(userId);
+
+          const { data: profileRow } = await supabase
+            .from("profiles")
+            .select("parent_public_id")
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (!cancelled && profileRow?.parent_public_id) {
+            setRealParentDisplayId(profileRow.parent_public_id);
+          }
+
           try {
             localStorage.setItem("active_role", "parent");
           } catch {
@@ -1494,7 +1507,7 @@ export default function ParentDashboardPage() {
             if (sessionState.status === "idle") {
               return;
             }
-        
+          
             const idle: SessionProtocolState = { status: "idle" };
             persistSessionState(idle);
             
@@ -2140,8 +2153,18 @@ export default function ParentDashboardPage() {
       className={`mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6] py-2 ${inPaymentClosure ? "gap-2" : "space-y-4"}`}
       dir="rtl"
     >
-      <div className="shrink-0">
+      <div className="shrink-0 flex flex-col space-y-1">
         <DashboardWelcomeHeader fullName={fullName} nameLoading={greetingNameLoading} />
+        
+        {/* 👑 קונטיינר מסודר בצד ימין שמרכז את ה-ID מעל הדירוג בצורה יפה ואחידה */}
+        {realParentDisplayId && (
+          <div className="px-4 text-right flex flex-col items-start gap-1">
+            <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs font-semibold px-2.5 py-1 rounded-lg border border-purple-100 shadow-sm animate-in fade-in duration-200">
+              <span className="text-[10px] bg-purple-200 text-purple-800 px-1 rounded uppercase font-bold">ID</span>
+              מזהה: {realParentDisplayId}
+            </span>
+          </div>
+        )}
       </div>
 
       {dbBanner ? (
@@ -2162,7 +2185,6 @@ export default function ParentDashboardPage() {
 
       {inPaymentClosure || hideSearchShortcuts ? null : (
       <section className="shrink-0 rounded-3xl bg-white p-4 shadow-soft sm:p-5">
-        {/* גריד מרכזי משופר - 3 אריחים בלבד ללא "הגדרות חשבון" */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Link
             href="/parent/calendar"
@@ -2197,7 +2219,6 @@ export default function ParentDashboardPage() {
           </div>
         </div>
 
-        {/* שורה רחבה ובולטת לחיפוש נני */}
         <Link
           href="/parent/search"
           className="mt-3 flex min-h-[3.5rem] flex-row-reverse items-center justify-between gap-3 rounded-2xl border border-emerald-700/20 bg-emerald-50/80 px-4 py-3 text-right text-navy-header shadow-sm transition hover:border-emerald-700/35 hover:shadow-md active:scale-[0.99]"
@@ -2275,7 +2296,7 @@ export default function ParentDashboardPage() {
             >
               <p className="text-base font-bold leading-snug text-sky-950">{BOOKING_SHIFT_PENDING_NOTICE}</p>
               <p className="mt-1 text-sm leading-snug text-sky-900/90">
-                שלחנו את הבקשה לבייביסיטר — תקבלו עדכון כאן ברגע שתאשר או תדחה.
+                שלחנו את הבקשה לבייביסיטר — תקבלו עדכון כאן ברגע שתאשר או דחה.
               </p>
               {idleCircleBooking?.schedule_label ? (
                 <p className="mt-1 text-sm font-medium text-sky-900/90 tabular-nums">
@@ -2403,10 +2424,8 @@ export default function ParentDashboardPage() {
       </DoubleShakeShiftPanel>
       ) : null}
 
-      {/* 🚀 פאנל הכפתורים התחתון והקבוע - מחוץ לכל התנאים, מציג שחרור משמרת והתנתקות בלבד! */}
       {parentBootstrapComplete && parentUserId && (
         <div className="w-full border-t border-slate-100 bg-slate-50/50 px-4 py-3 flex items-center justify-between gap-3 shrink-0 rounded-b-3xl">
-          {/* כפתור שחרור משמרת תקועה פרימיום מובנה ואינטואיטיבי להורה */}
           <button
             type="button"
             onClick={() => void handleParentEmergencyReset()}
@@ -2415,7 +2434,6 @@ export default function ParentDashboardPage() {
             <span>שחרור משמרת תקועה</span>
           </button>
 
-          {/* כפתור התנתקות קבוע מהמערכת */}
           <button
             type="button"
             onClick={handleLogout}

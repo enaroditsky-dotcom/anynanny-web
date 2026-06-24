@@ -61,9 +61,9 @@ const sitterItems: NavItem[] = [
     badgeKey: "messages"
   },
   {
-    href: "/sitter/account-settings",
+    href: "/sitter/settings",
     label: "הגדרות",
-    match: (p) => p.startsWith("/sitter/account-settings"),
+    match: (p) => p.startsWith("/sitter/settings"),
     Icon: Settings
   },
   {

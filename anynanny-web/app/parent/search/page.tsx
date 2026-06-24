@@ -57,7 +57,8 @@ function buildResultsSearchParams(filters: ParentSearchFilters): string {
 
 export default function ParentSearchPage() {
   const router = useRouter();
-  const { isLoading, signedIn, effectiveRole } = useAuth();
+  // חילצנו את המידע על ה-user המחובר מה-Auth Provider
+  const { isLoading, signedIn, effectiveRole, user } = useAuth();
   const [draftFilters, setDraftFilters] = useState<ParentSearchFilters>(() => defaultParentSearchFilters());
   const [navigating, setNavigating] = useState(false);
 
@@ -83,9 +84,12 @@ export default function ParentSearchPage() {
   const showWait = !authSettled || (signedIn && effectiveRole === null);
   const redirectingToLogin = authSettled && !signedIn;
 
+  // חילוץ המזהה החדש מהפרופיל של ה-user המחובר (אם קיים בפרטי ה-user או ה-metadata)
+  const parentPublicId = (user as any)?.parent_public_id || (user as any)?.user_metadata?.parent_public_id;
+
   return (
     <MainLayout>
-      <div dir="rtl">
+      <div dir="rtl" className="pt-3">
         {showWait ? (
           <p className="text-right text-sm text-slate-600">טוען…</p>
         ) : redirectingToLogin ? (
@@ -95,24 +99,40 @@ export default function ParentSearchPage() {
         ) : null}
 
         {showContent ? (
-          <>
+          <div className="space-y-4">
+            
+            {/* 👑 הברכה והמזהה המעוצב בול כמו אצל הנני */}
+            <div className="flex flex-wrap items-center gap-2 mb-2 justify-start w-full px-1">
+              <h1 className="text-xl font-bold text-gray-800">
+                שלום! מה תרצה לעשות היום?
+              </h1>
+              
+              {/* 🆔 תג המזהה הסגול להורה */}
+              {parentPublicId && (
+                <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs font-semibold px-2.5 py-1 rounded-lg border border-purple-100 shadow-sm">
+                  <span className="text-[10px] bg-purple-200 text-purple-800 px-1 rounded uppercase font-bold">ID</span>
+                  מזהה: {parentPublicId}
+                </span>
+              )}
+            </div>
+
             <ParentSearchFiltersBar
               filters={draftFilters}
               onChange={(next) => setDraftFilters(normalizeParentSearchFilters(next))}
             />
 
-            <div className="pt-3">
+            <div className="pt-2">
               <button
                 type="button"
                 disabled={navigating}
                 onClick={handleSearch}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#001F3F] py-3 text-sm font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#001F3F] py-3.5 text-sm font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
               >
                 <Search className="h-4 w-4" aria-hidden />
                 {navigating ? "מעבירים לתוצאות…" : "חפש בייביסיטר"}
               </button>
             </div>
-          </>
+          </div>
         ) : null}
       </div>
     </MainLayout>
