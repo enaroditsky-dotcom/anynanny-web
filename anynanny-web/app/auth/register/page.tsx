@@ -78,7 +78,7 @@ function RegisterInner() {
         password,
         options: {
           emailRedirectTo: roleSelectionEmailRedirectTo(),
-          data: {}
+          data: { role: "parent" }
         }
       });
       if (error) {

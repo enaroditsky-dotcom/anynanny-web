@@ -9,6 +9,10 @@ import { SitterMandatoryRatingPanel } from "@/components/session/sitter-mandator
 import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
+import {
+  fetchProfileSerialId,
+  formatSitterPublicIdFromSerial
+} from "@/lib/public/sequential-display-id";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import {
@@ -101,6 +105,8 @@ export default function SitterDashboardPage() {
   const [endShiftBusy, setEndShiftBusy] = useState(false);
   const [profileCardStatus, setProfileCardStatus] = useState<"loading" | "complete" | "incomplete">("loading");
   const [dashboardStatsRefreshKey, setDashboardStatsRefreshKey] = useState(0);
+  const [sitterPublicDisplayId, setSitterPublicDisplayId] = useState<string | null>(null);
+  const [sitterSerialLoaded, setSitterSerialLoaded] = useState(false);
   const [pendingApprovalBooking, setPendingApprovalBooking] = useState<TodaysLinkedBookingView | null>(
     null
   );
@@ -390,6 +396,33 @@ export default function SitterDashboardPage() {
       cancelled = true;
     };
   }, [refreshForUser, refreshSitterProfileCardStatus, setSitterBootstrapComplete, setSitterId]);
+
+  useEffect(() => {
+    if (!sitterId) {
+      setSitterSerialLoaded(false);
+      setSitterPublicDisplayId(null);
+      return;
+    }
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    let cancelled = false;
+    setSitterSerialLoaded(false);
+    void (async () => {
+      const { serialId, role, error } = await fetchProfileSerialId(supabase, sitterId);
+      if (cancelled) return;
+      if (error) {
+        console.warn("[sitter] profile serial load:", error);
+      } else if (role === "sitter") {
+        setSitterPublicDisplayId(formatSitterPublicIdFromSerial(serialId));
+      }
+      setSitterSerialLoaded(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sitterId]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -829,6 +862,8 @@ export default function SitterDashboardPage() {
           sitterId={sitterId}
           refreshKey={dashboardStatsRefreshKey}
           showNannyId={profileCardStatus === "complete"}
+          publicDisplayId={sitterPublicDisplayId}
+          serialIdLoaded={sitterSerialLoaded}
         />
       </div>
 

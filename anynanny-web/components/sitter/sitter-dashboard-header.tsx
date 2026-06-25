@@ -6,7 +6,6 @@ import { buildDashboardGreetingTitle } from "@/lib/user/use-dashboard-greeting-n
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type SitterDashboardStats = {
-  nanny_id_number: string | null;
   avg_rating: number | null;
   rating_count: number;
 };
@@ -22,12 +21,8 @@ const ratingBadgeClass =
 function parseGetCurrentUserRatingResponse(data: unknown): SitterDashboardStats {
   const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
   if (!row || typeof row !== "object") {
-    return { nanny_id_number: null, avg_rating: null, rating_count: 0 };
+    return { avg_rating: null, rating_count: 0 };
   }
-
-  const nannyRaw = row.nanny_id_number ?? row.nannyIdNumber ?? row.nanny_serial ?? row.nannySerial;
-  const nannyTrimmed = typeof nannyRaw === "string" ? nannyRaw.trim() : "";
-  const nanny_id_number = nannyTrimmed.length > 0 ? nannyTrimmed : null;
 
   const avgRaw = row.avg_rating ?? row.avgRating;
   const avg_rating =
@@ -40,7 +35,7 @@ function parseGetCurrentUserRatingResponse(data: unknown): SitterDashboardStats 
   const countRaw = row.rating_count ?? row.ratingCount;
   const rating_count = Number.isFinite(Number(countRaw)) ? Math.max(0, Math.floor(Number(countRaw))) : 0;
 
-  return { nanny_id_number, avg_rating, rating_count };
+  return { avg_rating, rating_count };
 }
 
 type SitterDashboardHeaderProps = {
@@ -49,6 +44,9 @@ type SitterDashboardHeaderProps = {
   sitterId: string | null;
   refreshKey?: number;
   showNannyId?: boolean;
+  /** Sequential AN-#### from profiles.serial_id (+ 1000), computed on the client. */
+  publicDisplayId?: string | null;
+  serialIdLoaded?: boolean;
   children?: ReactNode;
 };
 
@@ -58,11 +56,12 @@ export function SitterDashboardHeader({
   sitterId,
   refreshKey = 0,
   showNannyId = false,
+  publicDisplayId = null,
+  serialIdLoaded = false,
   children
 }: SitterDashboardHeaderProps) {
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [stats, setStats] = useState<SitterDashboardStats>({
-    nanny_id_number: null,
     avg_rating: null,
     rating_count: 0
   });
@@ -92,8 +91,8 @@ export function SitterDashboardHeader({
         return;
       }
 
-      const { nanny_id_number, avg_rating, rating_count } = parseGetCurrentUserRatingResponse(data);
-      setStats({ nanny_id_number, avg_rating, rating_count });
+      const { avg_rating, rating_count } = parseGetCurrentUserRatingResponse(data);
+      setStats({ avg_rating, rating_count });
       setLoadState("ready");
     })();
 
@@ -109,8 +108,8 @@ export function SitterDashboardHeader({
   } (${stats.rating_count || 0} חוות דעת)`;
 
   const statsLoading = !sitterId || loadState === "loading" || loadState === "idle";
-  const showIdBadge = showNannyId && !statsLoading && !!stats.nanny_id_number;
-  const showIdSkeleton = showNannyId && statsLoading;
+  const showIdBadge = showNannyId && !!publicDisplayId;
+  const showIdSkeleton = showNannyId && serialIdLoaded && !publicDisplayId;
 
   return (
     <header className="text-right px-4" dir="rtl">
@@ -139,7 +138,7 @@ export function SitterDashboardHeader({
         ) : showIdBadge ? (
           <span className={idBadgeClass}>
             <span className="text-[10px] bg-purple-200 text-purple-800 px-1 rounded uppercase font-bold">ID</span>
-            מזהה: {stats.nanny_id_number}
+            מזהה: {publicDisplayId}
           </span>
         ) : null}
       </div>

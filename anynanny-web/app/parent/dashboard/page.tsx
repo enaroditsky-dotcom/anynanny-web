@@ -83,6 +83,11 @@ import {
   resolveParentClosureBookingId
 } from "@/lib/session/parent-session-sync";
 import { clearDeviceAuthHints } from "@/lib/auth/returning-user";
+import {
+  cacheParentDisplayId,
+  fetchProfileSerialId,
+  formatParentPublicIdFromSerial
+} from "@/lib/public/sequential-display-id";
 
 const BOOKING_SHIFT_REJECTED_NOTICE = "הבקשה נדחתה על ידי המטפלת";
 const BOOKING_SHIFT_PENDING_NOTICE = "בקשה נשלחה וממתינה לאישור";
@@ -1325,14 +1330,17 @@ export default function ParentDashboardPage() {
           if (cancelled) return;
           setParentUserId(userId);
 
-          const { data: profileRow } = await supabase
-            .from("profiles")
-            .select("parent_public_id")
-            .eq("id", userId)
-            .maybeSingle();
+          const { serialId, role, error: profileErr } = await fetchProfileSerialId(supabase, userId);
+          if (profileErr) {
+            console.warn("[parent] profile serial load:", profileErr);
+          }
 
-          if (!cancelled && profileRow?.parent_public_id) {
-            setRealParentDisplayId(profileRow.parent_public_id);
+          if (!cancelled && role === "parent") {
+            const displayId = formatParentPublicIdFromSerial(serialId);
+            if (displayId) {
+              setRealParentDisplayId(displayId);
+              cacheParentDisplayId(displayId);
+            }
           }
 
           try {
@@ -2193,7 +2201,7 @@ export default function ParentDashboardPage() {
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
               <Calendar className="h-7 w-7 stroke-[1.75]" aria-hidden />
             </span>
-            <span className="text-sm font-bold sm:text-xs">יומן מפגשים</span>
+            <span className="text-sm font-bold sm:text-xs">יומן משמרות</span>
           </Link>
 
           <div className="grid grid-cols-2 gap-3 sm:col-span-2">

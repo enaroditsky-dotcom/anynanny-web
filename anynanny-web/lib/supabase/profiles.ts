@@ -11,6 +11,8 @@ export type ProfileRow = {
   role_selected?: boolean | null;
   /** Set when parent finishes /parent/onboarding. */
   parent_onboarding_completed_at?: string | null;
+  /** Auto-increment serial for P-/AN- display ids (client adds 1000). */
+  serial_id?: number | null;
 };
 
 export function isProfileRole(v: string | null | undefined): v is ProfileRole {

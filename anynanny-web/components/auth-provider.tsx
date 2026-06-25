@@ -8,6 +8,7 @@ import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { readSupabaseErrorMessage } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
+import { sanitizeGreetingDisplayName } from "@/lib/user/greeting-display-name";
 
 export type DashboardViewRole = "parent" | "sitter";
 
@@ -93,9 +94,8 @@ async function loadAuthState(): Promise<{
       }
     }
 
-    const profileName =
-      typeof profile?.full_name === "string" && profile.full_name.trim() ? profile.full_name.trim() : null;
-    const displayName = profileName ?? metaName;
+    const profileName = sanitizeGreetingDisplayName(profile?.full_name, user.email);
+    const displayName = profileName ?? sanitizeGreetingDisplayName(metaName, user.email);
 
     const effectiveRole = await resolveRoleForUser(supabase, user);
 

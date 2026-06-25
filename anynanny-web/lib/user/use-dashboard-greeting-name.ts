@@ -8,16 +8,9 @@ import {
 } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { pickGreetingDisplayName } from "@/lib/user/greeting-display-name";
 
 export type DashboardRole = "parent" | "sitter";
-
-function pickName(...candidates: (string | null | undefined)[]): string | null {
-  for (const c of candidates) {
-    const t = (c ?? "").trim();
-    if (t) return t;
-  }
-  return null;
-}
 
 /** Greeting line for dashboard headers. */
 export function buildDashboardGreetingLine(fullName: string | null, nameLoading: boolean): string {
@@ -34,20 +27,19 @@ export function buildDashboardGreetingTitle(fullName: string | null, nameLoading
 }
 
 /**
- * Resolves display name: role profile table → `profiles.full_name` → auth metadata → AuthProvider cache.
+ * Resolves greeting name from Supabase `profiles.full_name` (and sitter_profiles for sitters).
+ * Never falls back to email or email local-parts.
  */
 export function useDashboardGreetingName(
   role: DashboardRole,
   userId: string | null,
   refreshKey = 0
 ): { fullName: string | null; nameLoading: boolean } {
-  const { displayName, isLoading: authLoading, user } = useAuth();
+  const { isLoading: authLoading, user } = useAuth();
   const [resolvedName, setResolvedName] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
 
-  const metaName =
-    typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() : null;
-  const cachedName = pickName(displayName, metaName, resolvedName);
+  const userEmail = user?.email ?? null;
 
   useEffect(() => {
     if (!userId) {
@@ -83,18 +75,21 @@ export function useDashboardGreetingName(
 
       const sitterFullName =
         roleProfileRes.data && typeof roleProfileRes.data === "object"
-          ? pickName((roleProfileRes.data as { full_name?: string | null }).full_name)
+          ? (roleProfileRes.data as { full_name?: string | null }).full_name
           : null;
 
       const profileFullName =
         profilesRes.data && typeof profilesRes.data === "object"
-          ? pickName((profilesRes.data as { full_name?: string | null }).full_name)
+          ? (profilesRes.data as { full_name?: string | null }).full_name
           : null;
+
+      const metaFullName =
+        typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
 
       const name =
         role === "sitter"
-          ? pickName(sitterFullName, profileFullName, metaName, displayName)
-          : pickName(profileFullName, metaName, displayName);
+          ? pickGreetingDisplayName(userEmail, sitterFullName, profileFullName, metaFullName)
+          : pickGreetingDisplayName(userEmail, profileFullName, metaFullName);
 
       setResolvedName(name);
       setFetching(false);
@@ -103,10 +98,10 @@ export function useDashboardGreetingName(
     return () => {
       cancelled = true;
     };
-  }, [userId, role, metaName, displayName, refreshKey]);
+  }, [userId, role, userEmail, user?.user_metadata?.full_name, refreshKey]);
 
-  const nameLoading = authLoading || (!!userId && fetching && !cachedName);
-  const fullName = pickName(resolvedName, displayName, metaName);
+  const nameLoading = authLoading || (!!userId && fetching);
+  const fullName = resolvedName;
 
   return { fullName, nameLoading };
 }

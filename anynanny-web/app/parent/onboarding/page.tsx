@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { USER_SPECIAL_OCCASIONS_TABLE } from "@/lib/parent/user-special-occasions";
+import { ensureParentProfileBootstrap } from "@/lib/parent/ensure-parent-profile-bootstrap";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
@@ -64,6 +65,12 @@ export default function ParentOnboardingPage() {
         router.replace("/parent/dashboard");
         return;
       }
+
+      const { error: bootstrapErr } = await ensureParentProfileBootstrap(supabase, user);
+      if (bootstrapErr && !cancelled) {
+        setMessage(bootstrapErr);
+      }
+
       setLoading(false);
     })();
     return () => {
@@ -89,6 +96,13 @@ export default function ParentOnboardingPage() {
         router.replace("/auth/login?next=/parent/onboarding");
         return;
       }
+
+      const { error: bootstrapErr } = await ensureParentProfileBootstrap(supabase, user);
+      if (bootstrapErr) {
+        setMessage(bootstrapErr);
+        return;
+      }
+
       const iso = new Date().toISOString();
       let up = await supabase
         .from(PROFILES_TABLE)
@@ -127,6 +141,12 @@ export default function ParentOnboardingPage() {
       const partial = occasions.some((o) => (o.event_name.trim() && !o.event_date) || (!o.event_name.trim() && o.event_date));
       if (partial) {
         setMessage("לכל אירוע יש למלא שם ותאריך, או למחוק את השורה.");
+        return;
+      }
+
+      const { error: bootstrapErr } = await ensureParentProfileBootstrap(supabase, user);
+      if (bootstrapErr) {
+        setMessage(bootstrapErr);
         return;
       }
 
