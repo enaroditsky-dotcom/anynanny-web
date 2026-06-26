@@ -16,7 +16,12 @@ import {
   DoubleShakeShiftPanel
 } from "@/components/session/double-shake-circle-button";
 import { ParentDoubleShakeIdleCircle, ParentSessionTimerCircle } from "@/components/session/parent-double-shake-idle-circle";
-import { parentApproveSitterStart } from "@/lib/bookings/parent-approve-sitter-start";
+import { ParentBookingResponseModal } from "@/components/parent/parent-booking-response-modal";
+import {
+  acknowledgeParentBookingResponse,
+  fetchUnacknowledgedParentBookingResponses,
+  type ParentBookingResponseNotification
+} from "@/lib/bookings/parent-booking-response-notifications";
 import { bookingRowToCircleView } from "@/lib/bookings/circle-booking-state";
 import {
   isParentBookingApprovalStatus,
@@ -322,6 +327,12 @@ export default function ParentDashboardPage() {
   const [bookingFeedbackToast, setBookingFeedbackToast] = useState<string | null>(null);
   const [bookingFeedbackVariant, setBookingFeedbackVariant] = useState<"success" | "error" | "info">("info");
   const [startShiftBusy, setStartShiftBusy] = useState(false);
+  const [bookingResponseNotifications, setBookingResponseNotifications] = useState<
+    ParentBookingResponseNotification[]
+  >([]);
+  const [activeBookingResponseNotification, setActiveBookingResponseNotification] =
+    useState<ParentBookingResponseNotification | null>(null);
+  const [bookingResponseAckBusy, setBookingResponseAckBusy] = useState(false);
 
   const [realParentDisplayId, setRealParentDisplayId] = useState<string | null>(null);
 
@@ -2090,6 +2101,93 @@ export default function ParentDashboardPage() {
     setBookingFeedbackToast(null);
   }, [setBookingShiftRejectedNotice, setBookingFeedbackToast]);
 
+  const refreshBookingResponseNotifications = useCallback(async () => {
+    if (!parentUserId) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    const { notifications, error } = await fetchUnacknowledgedParentBookingResponses(
+      supabase,
+      parentUserId
+    );
+    if (error) {
+      console.warn("[parent] booking response notifications:", error);
+    }
+    setBookingResponseNotifications(notifications);
+    setActiveBookingResponseNotification((current) => {
+      if (current && notifications.some((n) => n.id === current.id)) {
+        return current;
+      }
+      return notifications[0] ?? null;
+    });
+  }, [parentUserId]);
+
+  const handleAcknowledgeBookingResponse = useCallback(async () => {
+    const notification = activeBookingResponseNotification;
+    if (!notification || !parentUserId || bookingResponseAckBusy) return;
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    setBookingResponseAckBusy(true);
+    try {
+      const { ok, error } = await acknowledgeParentBookingResponse(
+        supabase,
+        parentUserId,
+        notification.id
+      );
+      if (!ok) {
+        console.warn("[parent] acknowledge booking response:", error);
+        return;
+      }
+
+      const nextNotifications = bookingResponseNotifications.filter(
+        (item) => item.id !== notification.id
+      );
+      setBookingResponseNotifications(nextNotifications);
+      setActiveBookingResponseNotification(nextNotifications[0] ?? null);
+    } finally {
+      setBookingResponseAckBusy(false);
+    }
+  }, [activeBookingResponseNotification, parentUserId, bookingResponseAckBusy, bookingResponseNotifications]);
+
+  useEffect(() => {
+    if (!parentUserId || !parentBootstrapComplete) return;
+    void refreshBookingResponseNotifications();
+  }, [parentUserId, parentBootstrapComplete, refreshBookingResponseNotifications]);
+
+  useEffect(() => {
+    if (!parentUserId) return;
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel(`parent-dashboard-response-notifications-${parentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: BOOKINGS_TABLE,
+          filter: `parent_id=eq.${parentUserId}`
+        },
+        (payload) => {
+          const row = readBookingRowFromRealtimeChange(payload);
+          if (!row) return;
+          const status = normalizeBookingStatus(row.status);
+          if (status === "approved" || status === "rejected") {
+            void refreshBookingResponseNotifications();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [parentUserId, refreshBookingResponseNotifications]);
+
   const showParentShiftCircle =
     !showParentSessionClosure &&
     !parentSessionInProgress &&
@@ -2467,6 +2565,12 @@ export default function ParentDashboardPage() {
         message={bookingFeedbackToast}
         variant={bookingFeedbackVariant}
         onDismiss={() => setBookingFeedbackToast(null)}
+      />
+
+      <ParentBookingResponseModal
+        notification={activeBookingResponseNotification}
+        busy={bookingResponseAckBusy}
+        onAcknowledge={() => void handleAcknowledgeBookingResponse()}
       />
     </main>
   );

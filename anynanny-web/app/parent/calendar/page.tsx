@@ -66,13 +66,49 @@ function getWeekRange(reference = new Date()): { start: string; end: string } {
   return { start: toDateISO(start), end: toDateISO(end) };
 }
 
-function getMonthRange(reference = new Date()): { start: string; end: string } {
-  const y = reference.getFullYear();
-  const m = reference.getMonth();
-  const lastDay = new Date(y, m + 1, 0).getDate();
+const HEBREW_MONTHS = [
+  "ינואר",
+  "פברואר",
+  "מרץ",
+  "אפריל",
+  "מאי",
+  "יוני",
+  "יולי",
+  "אוגוסט",
+  "ספטמבר",
+  "אוקטובר",
+  "נובמבר",
+  "דצמבר"
+] as const;
+
+const CALENDAR_YEAR_MIN = 2025;
+const CALENDAR_YEAR_MAX = 2030;
+
+const PERIOD_SELECT_CLASS =
+  "min-w-0 flex-1 cursor-pointer appearance-none rounded-xl border border-navy-header/10 bg-white px-3 py-2 text-right text-sm font-semibold text-navy-header shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-navy-header/20";
+
+function SelectChevron() {
+  return (
+    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+      <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+      </svg>
+    </div>
+  );
+}
+
+function calendarYearOptions(): number[] {
+  return Array.from(
+    { length: CALENDAR_YEAR_MAX - CALENDAR_YEAR_MIN + 1 },
+    (_, i) => CALENDAR_YEAR_MIN + i
+  );
+}
+
+function getMonthRangeForPeriod(year: number, month: number): { start: string; end: string } {
+  const lastDay = new Date(year, month, 0).getDate();
   return {
-    start: `${y}-${pad2(m + 1)}-01`,
-    end: `${y}-${pad2(m + 1)}-${pad2(lastDay)}`
+    start: `${year}-${pad2(month)}-01`,
+    end: `${year}-${pad2(month)}-${pad2(lastDay)}`
   };
 }
 
@@ -118,7 +154,11 @@ function buildShiftsByDate(shifts: ParentCalendarShift[]): Map<string, ParentCal
   return map;
 }
 
-function filterShiftsByView(shifts: ParentCalendarShift[], view: CalendarViewMode): ParentCalendarShift[] {
+function filterShiftsByView(
+  shifts: ParentCalendarShift[],
+  view: CalendarViewMode,
+  period?: { month: number; year: number }
+): ParentCalendarShift[] {
   const today = todayDateISO();
   switch (view) {
     case "today":
@@ -128,7 +168,9 @@ function filterShiftsByView(shifts: ParentCalendarShift[], view: CalendarViewMod
       return shifts.filter((s) => s.bookingDate >= start && s.bookingDate <= end);
     }
     case "month": {
-      const { start, end } = getMonthRange();
+      const month = period?.month ?? new Date().getMonth() + 1;
+      const year = period?.year ?? new Date().getFullYear();
+      const { start, end } = getMonthRangeForPeriod(year, month);
       return shifts.filter((s) => s.bookingDate >= start && s.bookingDate <= end);
     }
     case "all":
@@ -245,11 +287,13 @@ function ShiftCard({ shift, compact = false }: { shift: ParentCalendarShift; com
 
 function CalendarShell({
   title,
+  titleControl,
   subtitle,
   children,
   className = ""
 }: {
-  title: string;
+  title?: string;
+  titleControl?: ReactNode;
   subtitle?: string;
   children: ReactNode;
   className?: string;
@@ -259,7 +303,7 @@ function CalendarShell({
       className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm ${className}`.trim()}
     >
       <div className="shrink-0 border-b border-slate-100 px-4 py-3 text-right">
-        <p className="text-sm font-bold text-navy-header">{title}</p>
+        {titleControl ?? (title ? <p className="text-sm font-bold text-navy-header">{title}</p> : null)}
         {subtitle ? <p className="text-[11px] text-slate-500">{subtitle}</p> : null}
       </div>
       {children}
@@ -410,33 +454,81 @@ function WeekGridView({ shifts }: { shifts: ParentCalendarShift[] }) {
   );
 }
 
-function MonthGridView({ shifts }: { shifts: ParentCalendarShift[] }) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const firstDay = new Date(year, month - 1, 1);
-  const daysInMonth = new Date(year, month, 0).getDate();
+function MonthGridView({
+  shifts,
+  currentMonth,
+  currentYear,
+  onMonthChange,
+  onYearChange
+}: {
+  shifts: ParentCalendarShift[];
+  currentMonth: number;
+  currentYear: number;
+  onMonthChange: (month: number) => void;
+  onYearChange: (year: number) => void;
+}) {
+  const firstDay = new Date(currentYear, currentMonth - 1, 1);
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
   const startOffset = firstDay.getDay();
   const [selectedIso, setSelectedIso] = useState<string | null>(null);
 
   const shiftsByDate = useMemo(() => buildShiftsByDate(shifts), [shifts]);
   const monthHasShifts = shifts.length > 0;
 
+  useEffect(() => {
+    setSelectedIso(null);
+  }, [currentMonth, currentYear]);
+
   const cells: Array<{ day: number | null; iso: string | null }> = [];
   for (let i = 0; i < startOffset; i++) cells.push({ day: null, iso: null });
   for (let day = 1; day <= daysInMonth; day++) {
     cells.push({
       day,
-      iso: `${year}-${pad2(month)}-${pad2(day)}`
+      iso: `${currentYear}-${pad2(currentMonth)}-${pad2(day)}`
     });
   }
 
   const selectedShifts = selectedIso ? (shiftsByDate.get(selectedIso) ?? []) : [];
 
+  const periodHeader = (
+    <div className="flex flex-row-reverse items-center justify-center gap-2">
+      <div className="relative min-w-0 flex-1">
+        <select
+          aria-label="בחירת חודש"
+          value={currentMonth}
+          onChange={(e) => onMonthChange(Number(e.target.value))}
+          className={PERIOD_SELECT_CLASS}
+        >
+          {HEBREW_MONTHS.map((label, index) => (
+            <option key={label} value={index + 1}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <SelectChevron />
+      </div>
+      <div className="relative w-[5.5rem] shrink-0">
+        <select
+          aria-label="בחירת שנה"
+          value={currentYear}
+          onChange={(e) => onYearChange(Number(e.target.value))}
+          className={PERIOD_SELECT_CLASS}
+        >
+          {calendarYearOptions().map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
+        <SelectChevron />
+      </div>
+    </div>
+  );
+
   return (
     <CalendarShell
       className="h-full"
-      title={now.toLocaleDateString("he-IL", { month: "long", year: "numeric" })}
+      titleControl={periodHeader}
       subtitle={monthHasShifts ? `${shifts.length} משמרות החודש` : embeddedEmptyHint("month")}
     >
       <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-[10px] font-bold text-slate-400">
@@ -581,6 +673,9 @@ export default function ParentCalendarPage() {
   const [allShifts, setAllShifts] = useState<ParentCalendarShift[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [viewMode, setViewMode] = useState<CalendarViewMode>("today");
+  const initialPeriod = new Date();
+  const [currentMonth, setCurrentMonth] = useState(initialPeriod.getMonth() + 1);
+  const [currentYear, setCurrentYear] = useState(initialPeriod.getFullYear());
 
   const fetchBookedShifts = useCallback(async (resolvedParentId: string) => {
     const supabase = getSupabaseBrowserClient();
@@ -705,8 +800,8 @@ export default function ParentCalendarPage() {
   }, [parentId, fetchBookedShifts]);
 
   const filteredShifts = useMemo(
-    () => filterShiftsByView(allShifts, viewMode),
-    [allShifts, viewMode]
+    () => filterShiftsByView(allShifts, viewMode, { month: currentMonth, year: currentYear }),
+    [allShifts, viewMode, currentMonth, currentYear]
   );
 
   if (!ready) {
@@ -760,7 +855,13 @@ export default function ParentCalendarPage() {
         ) : viewMode === "week" ? (
           <WeekGridView shifts={filteredShifts} />
         ) : viewMode === "month" ? (
-          <MonthGridView shifts={filteredShifts} />
+          <MonthGridView
+            shifts={filteredShifts}
+            currentMonth={currentMonth}
+            currentYear={currentYear}
+            onMonthChange={setCurrentMonth}
+            onYearChange={setCurrentYear}
+          />
         ) : (
           <OverviewGridView shifts={filteredShifts} />
         )}

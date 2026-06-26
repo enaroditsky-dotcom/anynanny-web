@@ -33,6 +33,7 @@ export type BookingRow = {
   payment_status?: BookingPaymentStatus;
   paid_at?: string | null;
   stripe_checkout_session_id?: string | null;
+  parent_notified_at?: string | null;
   created_at: string;
   updated_at: string;
 };
