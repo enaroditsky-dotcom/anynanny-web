@@ -708,7 +708,22 @@ export default function SitterDashboardPage() {
     !sitterHasLiveBooking &&
     !showSitterBookingApproval;
 
-  const isSessionPaidAndReadyForRating = 
+  const shiftStartTimeForVisibility =
+    activeCircleBooking?.start_time ?? todaysBooking?.start_time ?? "";
+
+  const isWithin10Minutes = shiftStartTimeForVisibility
+    ? new Date(shiftStartTimeForVisibility).getTime() - Date.now() <= 10 * 60 * 1000
+    : false;
+
+  const isShiftCurrentlyActive =
+    sitterInFlightActive || showSitterAwaitingParentApproval || showSitterCompletedClosure;
+
+  const showDoubleShakeShiftPanel =
+    isShiftCurrentlyActive ||
+    showSitterBookingApproval ||
+    (sitterHasLiveBooking && isWithin10Minutes && !sessionUiBlockedByBooking);
+
+  const isSessionPaidAndReadyForRating =
     sitterTerminalDbStatus !== "sitter_completed" && sitterTerminalDbStatus !== "";
 
   const showLoading =
@@ -974,6 +989,7 @@ export default function SitterDashboardPage() {
           </div>
         </section>
 
+        {showDoubleShakeShiftPanel ? (
         <DoubleShakeShiftPanel
           className={`min-h-0 flex-1 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
         >
@@ -981,6 +997,7 @@ export default function SitterDashboardPage() {
             {sessionSection}
           </div>
         </DoubleShakeShiftPanel>
+        ) : null}
       </div>
 
       {sitterBootstrapComplete && sitterId && (

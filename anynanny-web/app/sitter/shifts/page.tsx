@@ -232,7 +232,7 @@ export default function SitterShiftsPage() {
   };
 
   const handleContactClick = (parentId: string) => {
-    router.push(`/sitter/chat?parentId=${parentId}`);
+    router.push(`/sitter/messages?parentId=${encodeURIComponent(parentId)}`);
   };
 
   const toggleAddressVisibility = (shiftId: string) => {

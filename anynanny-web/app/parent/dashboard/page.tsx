@@ -33,11 +33,11 @@ import {
 import { doesBookingBlockSessionShiftUi, isBookingTerminalStatus, isNowWithinShiftActivationWindow } from "@/lib/bookings/booking-shift-ui";
 import { isBookingDateToday, isNowWithinBookingWindow, resolveBookingWindowMs } from "@/lib/bookings/booking-date-utils";
 import { fetchBookingPaymentStatus } from "@/lib/bookings/fetch-booking-payment-status";
+import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { useTodaysLinkedBooking, type TodaysLinkedBookingSyncPayload } from "@/lib/bookings/use-todays-linked-booking";
 import {
-  fetchLinkedBookingById,
   type TodaysLinkedBookingView
 } from "@/lib/bookings/todays-linked-booking";
 import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
@@ -62,6 +62,7 @@ import {
   insertSessionReturningRow,
   LIVE_BOOKING_STATUSES_FOR_SESSION_UI,
   readSessionLinkedBookingId,
+  SESSIONS_PROTOCOL_SELECT_MINIMAL,
   updateSessionReturningRow
 } from "@/lib/session/sessions-query";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
@@ -638,15 +639,23 @@ export default function ParentDashboardPage() {
     if (!supabase || !bookingId) return;
 
     let cancelled = false;
-    void fetchLinkedBookingById(supabase, bookingId, "parent")
-      .then((booking) => {
-        if (!cancelled && booking) {
-          applyCircleBooking(booking);
-        }
-      })
-      .catch((error) => {
-        console.warn("[parent] hydrate linked booking:", error);
-      });
+    void (async () => {
+      const read = safeSupabaseRead(
+        await supabase
+          .from(BOOKINGS_TABLE)
+          .select(BOOKING_SELECT_MINIMAL)
+          .eq("id", bookingId)
+          .maybeSingle(),
+        "parent hydrate linked booking"
+      );
+
+      if (!cancelled && read.data) {
+        const prev = bookingRef.current ?? todaysBookingRef.current;
+        applyCircleBooking(bookingRowToCircleView(read.data as BookingRow, prev, "parent"));
+      }
+    })().catch((error) => {
+      console.warn("[parent] hydrate linked booking:", error);
+    });
 
     return () => {
       cancelled = true;
@@ -1878,7 +1887,7 @@ export default function ParentDashboardPage() {
 
       const { data: existingSession } = await auth.supabase
         .from(SESSIONS_TABLE)
-        .select("*")
+        .select(SESSIONS_PROTOCOL_SELECT_MINIMAL)
         .eq("parent_id", auth.userId)
         .eq("sitter_id", linkedSitterId)
         .in("status", ["pending", "active"])
@@ -2076,11 +2085,31 @@ export default function ParentDashboardPage() {
 
   const showParentPendingNotice = isParentPendingLocked;
 
+  const shiftStartTimeForVisibility =
+    idleCircleBooking?.start_time ?? todaysBooking?.start_time ?? "";
+
+  const isWithin10Minutes = shiftStartTimeForVisibility
+    ? new Date(shiftStartTimeForVisibility).getTime() - Date.now() <= 10 * 60 * 1000
+    : false;
+
+  const isShiftCurrentlyActive =
+    parentSessionInProgress ||
+    waitingNannyStart ||
+    waitingNannyEnd ||
+    showParentSessionClosure ||
+    showParentConfirmEnd ||
+    parentShiftStatus === "parent_started" ||
+    parentShiftStatus === "sitter_started" ||
+    parentShiftStatus === "sitter_ended" ||
+    sessionStatus === "active" ||
+    sessionStatus === "parent_initiated";
+
   const showParentApprovedNotice =
     !bookingShiftRejectedNotice &&
     !showParentPendingNotice &&
     isParentApprovedShift &&
-    hasActionableShiftBooking;
+    hasActionableShiftBooking &&
+    isWithin10Minutes;
 
   const sessionRunning =
     !sessionUiBlockedByBooking &&
@@ -2094,10 +2123,12 @@ export default function ParentDashboardPage() {
     showParentSessionClosure ||
     waitingNannyStart ||
     waitingNannyEnd ||
+    bookingShiftRejectedNotice ||
     (hasActionableShiftBooking &&
       !bookingShiftRejectedNotice &&
       todaysBookingStatus !== "rejected" &&
-      todaysBookingStatus !== "cancelled");
+      todaysBookingStatus !== "cancelled" &&
+      (isWithin10Minutes || isShiftCurrentlyActive));
 
   const handleDismissRejectedNotice = useCallback(() => {
     setBookingShiftRejectedNotice(false);
@@ -2197,7 +2228,8 @@ export default function ParentDashboardPage() {
     !bookingShiftRejectedNotice &&
     sessionStatus !== "active" &&
     sessionStatus !== "parent_initiated" &&
-    hasActionableShiftBooking;
+    hasActionableShiftBooking &&
+    isWithin10Minutes;
 
   const showShiftPanel =
     showParentSessionClosure ||
@@ -2209,7 +2241,7 @@ export default function ParentDashboardPage() {
     bookingShiftRejectedNotice ||
     showParentPendingNotice ||
     showParentApprovedNotice ||
-    hasActionableShiftBooking;
+    (hasActionableShiftBooking && (isWithin10Minutes || isShiftCurrentlyActive));
 
   const showParentActiveSessionCenter =
     sessionStatus === "active" &&
