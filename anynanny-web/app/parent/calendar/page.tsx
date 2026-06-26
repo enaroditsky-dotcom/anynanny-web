@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Clock, Loader2 } from "lucide-react";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
-import { todayDateISO } from "@/lib/bookings/booking-date-utils";
+import { resolveBookingWindowMs, todayDateISO } from "@/lib/bookings/booking-date-utils";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
@@ -593,73 +593,122 @@ function MonthGridView({
   );
 }
 
-function OverviewGridView({ shifts }: { shifts: ParentCalendarShift[] }) {
-  const shiftsByDate = useMemo(() => buildShiftsByDate(shifts), [shifts]);
-  const grouped = useMemo(
-    () => [...shiftsByDate.entries()].sort(([a], [b]) => a.localeCompare(b)),
-    [shiftsByDate]
-  );
-  const hasShifts = shifts.length > 0;
+function isoDateFromMs(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const firstDay = new Date(year, month - 1, 1);
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const startOffset = firstDay.getDay();
+function resolveShiftScheduleLabels(
+  shift: Pick<ParentCalendarShift, "bookingDate" | "startTime" | "endTime">
+): {
+  startTimeLabel: string;
+  startDateLabel: string;
+  endTimeLabel: string;
+  endDateLabel: string;
+} {
+  const window = resolveBookingWindowMs({
+    booking_date: shift.bookingDate,
+    start_time: shift.startTime,
+    end_time: shift.endTime
+  });
+  const fallbackDate = formatIsraeliDate(shift.bookingDate);
 
-  const cells: Array<{ day: number | null; iso: string | null }> = [];
-  for (let i = 0; i < startOffset; i++) cells.push({ day: null, iso: null });
-  for (let day = 1; day <= daysInMonth; day++) {
-    cells.push({ day, iso: `${year}-${pad2(month)}-${pad2(day)}` });
+  if (!window) {
+    return {
+      startTimeLabel: formatClockTime(shift.startTime),
+      startDateLabel: fallbackDate,
+      endTimeLabel: formatClockTime(shift.endTime),
+      endDateLabel: fallbackDate
+    };
   }
+
+  const timeFmt: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+
+  return {
+    startTimeLabel: new Date(window.startMs).toLocaleTimeString("he-IL", timeFmt),
+    startDateLabel: formatIsraeliDate(shift.bookingDate.slice(0, 10)),
+    endTimeLabel: new Date(window.endMs).toLocaleTimeString("he-IL", timeFmt),
+    endDateLabel: formatIsraeliDate(isoDateFromMs(window.endMs))
+  };
+}
+
+function AllShiftsListCard({ shift }: { shift: ParentCalendarShift }) {
+  const labels = resolveShiftScheduleLabels(shift);
+
+  return (
+    <li
+      className={`rounded-2xl border border-slate-100 p-4 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
+    >
+      <div className="flex flex-row-reverse items-start justify-between gap-2">
+        <span
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
+        >
+          {parentBookingStatusLabel(shift.status)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-[#001F3F]">{shift.sitterName}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-slate-50/90 p-3">
+        <div className="flex flex-col gap-1 text-right">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">תחילה</p>
+          <span className="text-lg font-bold tabular-nums text-[#001F3F]">{labels.startTimeLabel}</span>
+          <span className="text-sm font-semibold tabular-nums text-slate-700">{labels.startDateLabel}</span>
+        </div>
+
+        <div className="flex flex-col gap-1 border-r border-slate-200 pr-3 text-right">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">סיום</p>
+          <span className="text-lg font-bold tabular-nums text-[#001F3F]">{labels.endTimeLabel}</span>
+          <span className="text-sm font-semibold tabular-nums text-slate-700">{labels.endDateLabel}</span>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-row-reverse items-center justify-between text-[10px] text-slate-500">
+        <Link
+          href={`/parent/sitter/${encodeURIComponent(shift.sitterId)}`}
+          className="font-bold text-navy-header underline"
+        >
+          פרופיל שמרטפית
+        </Link>
+      </div>
+    </li>
+  );
+}
+
+function AllShiftsListView({ shifts }: { shifts: ParentCalendarShift[] }) {
+  const hasShifts = shifts.length > 0;
+  const sortedShifts = useMemo(() => {
+    return [...shifts].sort((a, b) => {
+      const aWindow = resolveBookingWindowMs({
+        booking_date: a.bookingDate,
+        start_time: a.startTime,
+        end_time: a.endTime
+      });
+      const bWindow = resolveBookingWindowMs({
+        booking_date: b.bookingDate,
+        start_time: b.startTime,
+        end_time: b.endTime
+      });
+      return (bWindow?.startMs ?? 0) - (aWindow?.startMs ?? 0);
+    });
+  }, [shifts]);
 
   return (
     <CalendarShell
       className="h-full"
-      title="סקירת כל המשמרות"
-      subtitle={hasShifts ? `${shifts.length} משמרות שנקבעו` : embeddedEmptyHint("all")}
+      title="כל המשמרות שנקבעו"
+      subtitle={hasShifts ? `${shifts.length} משמרות` : embeddedEmptyHint("all")}
     >
-      <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-[10px] font-bold text-slate-400">
-        {HEBREW_WEEKDAYS.map((label) => (
-          <div key={label}>{label}</div>
-        ))}
-      </div>
-      <div className="shrink-0 grid grid-cols-7 gap-1 p-2">
-        {cells.map((cell, index) => {
-          if (!cell.day || !cell.iso) {
-            return <div key={`empty-${index}`} className="min-h-[2.75rem]" />;
-          }
-          const dayShifts = shiftsByDate.get(cell.iso) ?? [];
-          const hasDayShifts = dayShifts.length > 0;
-          return (
-            <div
-              key={cell.iso}
-              className="flex min-h-[2.75rem] flex-col items-center justify-center rounded-lg border border-slate-100 bg-white p-0.5"
-            >
-              <span className={`text-xs tabular-nums ${dateLabelClass(hasDayShifts)}`}>{cell.day}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-contain border-t border-slate-100">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
         {!hasShifts ? (
-          <p className={`px-4 py-6 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>
-            {embeddedEmptyHint("all")}
-          </p>
+          <p className={`py-6 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>{embeddedEmptyHint("all")}</p>
         ) : (
-          grouped.map(([date, dateShifts]) => (
-            <div key={date} className="px-3 py-3">
-              <p className={`mb-2 text-right text-xs tabular-nums ${dateLabelClass(true)}`}>
-                {formatIsraeliDate(date)}
-              </p>
-              <div className="space-y-2">
-                {dateShifts.map((shift) => (
-                  <ShiftCard key={shift.id} shift={shift} compact />
-                ))}
-              </div>
-            </div>
-          ))
+          <ul className="space-y-3">
+            {sortedShifts.map((shift) => (
+              <AllShiftsListCard key={shift.id} shift={shift} />
+            ))}
+          </ul>
         )}
       </div>
     </CalendarShell>
@@ -863,7 +912,7 @@ export default function ParentCalendarPage() {
             onYearChange={setCurrentYear}
           />
         ) : (
-          <OverviewGridView shifts={filteredShifts} />
+          <AllShiftsListView shifts={filteredShifts} />
         )}
         {loadingBookings ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/60">
