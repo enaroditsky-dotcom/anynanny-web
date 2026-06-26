@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Calendar, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, Loader2 } from "lucide-react";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { todayDateISO } from "@/lib/bookings/booking-date-utils";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
@@ -46,6 +46,9 @@ const DAY_START_HOUR = 6;
 const DAY_END_HOUR = 23;
 const TIMELINE_MINUTES = (DAY_END_HOUR - DAY_START_HOUR) * 60;
 
+const DATE_WITH_SHIFT_CLASS = "font-bold text-red-800";
+const DATE_WITHOUT_SHIFT_CLASS = "font-normal text-blue-600";
+
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -84,6 +87,55 @@ function formatClockTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "--:--";
   return d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+}
+
+function dateLabelClass(hasShifts: boolean): string {
+  return hasShifts ? DATE_WITH_SHIFT_CLASS : DATE_WITHOUT_SHIFT_CLASS;
+}
+
+function embeddedEmptyHint(view: CalendarViewMode): string {
+  switch (view) {
+    case "today":
+      return "אין משמרות להיום";
+    case "week":
+      return "אין משמרות השבוע";
+    case "month":
+      return "אין משמרות החודש";
+    case "all":
+      return "אין משמרות שנקבעו";
+    default:
+      return "אין משמרות להצגה";
+  }
+}
+
+function buildShiftsByDate(shifts: ParentCalendarShift[]): Map<string, ParentCalendarShift[]> {
+  const map = new Map<string, ParentCalendarShift[]>();
+  for (const shift of shifts) {
+    const list = map.get(shift.bookingDate) ?? [];
+    list.push(shift);
+    map.set(shift.bookingDate, list);
+  }
+  return map;
+}
+
+function filterShiftsByView(shifts: ParentCalendarShift[], view: CalendarViewMode): ParentCalendarShift[] {
+  const today = todayDateISO();
+  switch (view) {
+    case "today":
+      return shifts.filter((s) => s.bookingDate === today);
+    case "week": {
+      const { start, end } = getWeekRange();
+      return shifts.filter((s) => s.bookingDate >= start && s.bookingDate <= end);
+    }
+    case "month": {
+      const { start, end } = getMonthRange();
+      return shifts.filter((s) => s.bookingDate >= start && s.bookingDate <= end);
+    }
+    case "all":
+      return shifts;
+    default:
+      return shifts;
+  }
 }
 
 function parentBookingStatusLabel(status: BookingStatus): string {
@@ -155,41 +207,6 @@ function shiftTimelineStyle(startTime: string, endTime: string): { top: string; 
   return { top: `${top}%`, height: `${height}%` };
 }
 
-function filterShiftsByView(shifts: ParentCalendarShift[], view: CalendarViewMode): ParentCalendarShift[] {
-  const today = todayDateISO();
-  switch (view) {
-    case "today":
-      return shifts.filter((s) => s.bookingDate === today);
-    case "week": {
-      const { start, end } = getWeekRange();
-      return shifts.filter((s) => s.bookingDate >= start && s.bookingDate <= end);
-    }
-    case "month": {
-      const { start, end } = getMonthRange();
-      return shifts.filter((s) => s.bookingDate >= start && s.bookingDate <= end);
-    }
-    case "all":
-      return shifts;
-    default:
-      return shifts;
-  }
-}
-
-function emptyStateMessage(view: CalendarViewMode): string {
-  switch (view) {
-    case "today":
-      return "אין משמרות להיום";
-    case "week":
-      return "אין משמרות השבוע";
-    case "month":
-      return "אין משמרות החודש";
-    case "all":
-      return "אין משמרות שנקבעו";
-    default:
-      return "אין משמרות להצגה";
-  }
-}
-
 function ShiftCard({ shift, compact = false }: { shift: ParentCalendarShift; compact?: boolean }) {
   return (
     <div
@@ -226,94 +243,170 @@ function ShiftCard({ shift, compact = false }: { shift: ParentCalendarShift; com
   );
 }
 
-function TodayTimelineView({ shifts }: { shifts: ParentCalendarShift[] }) {
-  const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, i) => DAY_START_HOUR + i);
-
+function CalendarShell({
+  title,
+  subtitle,
+  children,
+  className = ""
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-4 py-3 text-right">
-        <p className="text-sm font-bold text-navy-header">{formatIsraeliDate(todayDateISO())}</p>
-        <p className="text-[11px] text-slate-500">תצוגת יום — לוח זמנים</p>
+    <div
+      className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm ${className}`.trim()}
+    >
+      <div className="shrink-0 border-b border-slate-100 px-4 py-3 text-right">
+        <p className="text-sm font-bold text-navy-header">{title}</p>
+        {subtitle ? <p className="text-[11px] text-slate-500">{subtitle}</p> : null}
       </div>
-      <div className="relative flex min-h-[28rem]">
-        <div className="w-12 shrink-0 border-l border-slate-100 bg-slate-50/60">
-          {hours.map((hour) => (
-            <div key={hour} className="flex h-16 items-start justify-center pt-1 text-[9px] font-semibold text-slate-400">
-              {pad2(hour)}:00
-            </div>
-          ))}
-        </div>
-        <div className="relative min-w-0 flex-1 bg-[#FDFBF6]/40">
-          {hours.map((hour) => (
-            <div key={hour} className="h-16 border-b border-slate-100/80" />
-          ))}
-          {shifts.map((shift) => {
-            const style = shiftTimelineStyle(shift.startTime, shift.endTime);
-            return (
-              <div
-                key={shift.id}
-                className={`absolute inset-x-2 overflow-hidden rounded-xl border border-white/80 px-2 py-1.5 shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
-                style={style}
-              >
-                <p className="truncate text-[11px] font-bold text-[#001F3F]">{shift.sitterName}</p>
-                <p className="truncate text-[10px] text-slate-600 tabular-nums">
-                  {formatClockTime(shift.startTime)} – {formatClockTime(shift.endTime)}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {children}
     </div>
   );
 }
 
-function WeekColumnsView({ shifts }: { shifts: ParentCalendarShift[] }) {
-  const { start } = getWeekRange();
-  const startDate = new Date(`${start}T12:00:00`);
-
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(startDate);
-    d.setDate(startDate.getDate() + i);
-    const iso = toDateISO(d);
-    return {
-      iso,
-      label: HEBREW_WEEKDAY_FULL[d.getDay()]!,
-      short: HEBREW_WEEKDAYS[d.getDay()]!,
-      display: formatIsraeliDate(iso),
-      isToday: iso === todayDateISO(),
-      shifts: shifts.filter((s) => s.bookingDate === iso)
-    };
-  });
+function TodayGridView({ shifts }: { shifts: ParentCalendarShift[] }) {
+  const today = todayDateISO();
+  const hasShifts = shifts.length > 0;
+  const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, i) => DAY_START_HOUR + i);
+  const slotCount = hours.length;
+  const timelineHeightRem = slotCount * 3.5;
 
   return (
-    <div className="space-y-3">
-      {days.map((day) => (
-        <div
-          key={day.iso}
-          className={`rounded-2xl border bg-white p-3 shadow-sm ${
-            day.isToday ? "border-navy-header/25 ring-1 ring-navy-header/10" : "border-slate-100"
-          }`}
-        >
-          <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-2">
-            <span className="text-[10px] font-bold text-slate-400 tabular-nums">{day.display}</span>
-            <div className="text-right">
-              <p className="text-sm font-bold text-navy-header">{day.label}</p>
-              {day.isToday ? <p className="text-[10px] font-semibold text-emerald-700">היום</p> : null}
-            </div>
+    <CalendarShell
+      className="h-full"
+      title={`תצוגת יום · ${formatIsraeliDate(today)}`}
+      subtitle={hasShifts ? `${shifts.length} משמרות היום` : embeddedEmptyHint("today")}
+    >
+      <div className="shrink-0 px-4 py-2 text-right">
+        <p className={`text-lg tabular-nums ${dateLabelClass(hasShifts)}`}>{formatIsraeliDate(today)}</p>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-slate-100">
+        <div className="relative flex" style={{ minHeight: `${timelineHeightRem}rem` }}>
+          <div className="sticky right-0 z-[1] w-11 shrink-0 border-l border-slate-100 bg-slate-50/95">
+            {hours.map((hour) => (
+              <div
+                key={hour}
+                className="flex h-14 items-start justify-center pt-1 text-[9px] font-semibold text-slate-400"
+              >
+                {pad2(hour)}:00
+              </div>
+            ))}
           </div>
-          {day.shifts.length === 0 ? (
-            <p className="py-3 text-center text-[11px] text-slate-400">אין משמרות</p>
-          ) : (
-            <div className="space-y-2">
-              {day.shifts.map((shift) => (
-                <ShiftCard key={shift.id} shift={shift} compact />
-              ))}
-            </div>
-          )}
+          <div className="relative min-w-0 flex-1 bg-[#FDFBF6]/40">
+            {hours.map((hour) => (
+              <div key={hour} className="h-14 border-b border-slate-100/80" />
+            ))}
+            {shifts.map((shift) => {
+              const style = shiftTimelineStyle(shift.startTime, shift.endTime);
+              return (
+                <div
+                  key={shift.id}
+                  className={`absolute inset-x-1.5 overflow-hidden rounded-lg border border-white/80 px-2 py-1 shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
+                  style={style}
+                >
+                  <p className="truncate text-[10px] font-bold text-[#001F3F]">{shift.sitterName}</p>
+                  <p className="truncate text-[9px] text-slate-600 tabular-nums">
+                    {formatClockTime(shift.startTime)} – {formatClockTime(shift.endTime)}
+                  </p>
+                </div>
+              );
+            })}
+            {!hasShifts ? (
+              <p
+                className={`pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}
+              >
+                {embeddedEmptyHint("today")}
+              </p>
+            ) : null}
+          </div>
         </div>
-      ))}
-    </div>
+      </div>
+    </CalendarShell>
+  );
+}
+
+function WeekGridView({ shifts }: { shifts: ParentCalendarShift[] }) {
+  const { start } = getWeekRange();
+  const startDate = new Date(`${start}T12:00:00`);
+  const [selectedIso, setSelectedIso] = useState(todayDateISO());
+  const shiftsByDate = useMemo(() => buildShiftsByDate(shifts), [shifts]);
+
+  const days = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + i);
+        const iso = toDateISO(d);
+        const dayShifts = shiftsByDate.get(iso) ?? [];
+        return {
+          iso,
+          dayNum: d.getDate(),
+          weekday: HEBREW_WEEKDAYS[d.getDay()]!,
+          weekdayFull: HEBREW_WEEKDAY_FULL[d.getDay()]!,
+          hasShifts: dayShifts.length > 0,
+          shifts: dayShifts,
+          isToday: iso === todayDateISO()
+        };
+      }),
+    [startDate, shiftsByDate]
+  );
+
+  const selectedShifts = shiftsByDate.get(selectedIso) ?? [];
+  const selectedDay = days.find((d) => d.iso === selectedIso);
+  const weekHasShifts = shifts.length > 0;
+
+  return (
+    <CalendarShell
+      className="h-full"
+      title="תצוגת שבוע"
+      subtitle={weekHasShifts ? `${shifts.length} משמרות השבוע` : embeddedEmptyHint("week")}
+    >
+      <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-[10px] font-bold text-slate-400">
+        {HEBREW_WEEKDAYS.map((label) => (
+          <div key={label}>{label}</div>
+        ))}
+      </div>
+      <div className="shrink-0 grid grid-cols-7 gap-1 p-2">
+        {days.map((day) => (
+          <button
+            key={day.iso}
+            type="button"
+            onClick={() => setSelectedIso(day.iso)}
+            className={`flex min-h-[3.25rem] flex-col items-center justify-center rounded-xl border p-1 transition-colors ${
+              selectedIso === day.iso
+                ? "border-navy-header/30 bg-[#FDFBF6] ring-1 ring-navy-header/15"
+                : "border-slate-100 bg-white hover:bg-slate-50"
+            }`}
+          >
+            <span className={`text-sm tabular-nums ${dateLabelClass(day.hasShifts)}`}>{day.dayNum}</span>
+            {day.hasShifts ? (
+              <span className="mt-0.5 text-[8px] font-bold text-red-800">{day.shifts.length}</span>
+            ) : (
+              <span className="mt-0.5 text-[8px] text-blue-600">—</span>
+            )}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-slate-100 px-3 py-3">
+        <p className="mb-2 text-right text-xs">
+          <span className={dateLabelClass(selectedShifts.length > 0)}>
+            {selectedDay?.weekdayFull} · {formatIsraeliDate(selectedIso)}
+          </span>
+        </p>
+        {selectedShifts.length === 0 ? (
+          <p className={`py-2 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>אין משמרות ביום זה</p>
+        ) : (
+          <div className="space-y-2">
+            {selectedShifts.map((shift) => (
+              <ShiftCard key={shift.id} shift={shift} compact />
+            ))}
+          </div>
+        )}
+      </div>
+    </CalendarShell>
   );
 }
 
@@ -324,16 +417,10 @@ function MonthGridView({ shifts }: { shifts: ParentCalendarShift[] }) {
   const firstDay = new Date(year, month - 1, 1);
   const daysInMonth = new Date(year, month, 0).getDate();
   const startOffset = firstDay.getDay();
+  const [selectedIso, setSelectedIso] = useState<string | null>(null);
 
-  const byDate = useMemo(() => {
-    const map = new Map<string, ParentCalendarShift[]>();
-    for (const shift of shifts) {
-      const list = map.get(shift.bookingDate) ?? [];
-      list.push(shift);
-      map.set(shift.bookingDate, list);
-    }
-    return map;
-  }, [shifts]);
+  const shiftsByDate = useMemo(() => buildShiftsByDate(shifts), [shifts]);
+  const monthHasShifts = shifts.length > 0;
 
   const cells: Array<{ day: number | null; iso: string | null }> = [];
   for (let i = 0; i < startOffset; i++) cells.push({ day: null, iso: null });
@@ -344,95 +431,146 @@ function MonthGridView({ shifts }: { shifts: ParentCalendarShift[] }) {
     });
   }
 
+  const selectedShifts = selectedIso ? (shiftsByDate.get(selectedIso) ?? []) : [];
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-4 py-3 text-right">
-        <p className="text-sm font-bold text-navy-header">
-          {now.toLocaleDateString("he-IL", { month: "long", year: "numeric" })}
-        </p>
-        <p className="text-[11px] text-slate-500">תצוגת חודש</p>
-      </div>
-      <div className="grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-[10px] font-bold text-slate-400">
+    <CalendarShell
+      className="h-full"
+      title={now.toLocaleDateString("he-IL", { month: "long", year: "numeric" })}
+      subtitle={monthHasShifts ? `${shifts.length} משמרות החודש` : embeddedEmptyHint("month")}
+    >
+      <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-[10px] font-bold text-slate-400">
         {HEBREW_WEEKDAYS.map((label) => (
           <div key={label}>{label}</div>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1 p-2">
+      <div className="shrink-0 grid grid-cols-7 gap-1 p-2">
         {cells.map((cell, index) => {
           if (!cell.day || !cell.iso) {
-            return <div key={`empty-${index}`} className="min-h-[4.5rem]" />;
+            return <div key={`empty-${index}`} className="min-h-[3.25rem]" />;
           }
-          const dayShifts = byDate.get(cell.iso) ?? [];
-          const isToday = cell.iso === todayDateISO();
+          const dayShifts = shiftsByDate.get(cell.iso) ?? [];
+          const hasShifts = dayShifts.length > 0;
+          const isSelected = selectedIso === cell.iso;
+          return (
+            <button
+              key={cell.iso}
+              type="button"
+              onClick={() => setSelectedIso((prev) => (prev === cell.iso ? null : cell.iso))}
+              className={`min-h-[3.25rem] rounded-xl border p-1 text-center transition-colors ${
+                isSelected
+                  ? "border-navy-header/30 bg-[#FDFBF6] ring-1 ring-navy-header/15"
+                  : "border-slate-100 bg-white hover:bg-slate-50"
+              }`}
+            >
+              <p className={`text-sm tabular-nums ${dateLabelClass(hasShifts)}`}>{cell.day}</p>
+              {hasShifts ? (
+                <p className="truncate text-[8px] font-bold text-red-800">{dayShifts.length} משמרות</p>
+              ) : (
+                <p className="text-[8px] text-blue-600">—</p>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-slate-100 px-3 py-3">
+        {selectedIso ? (
+          <>
+            <p className="mb-2 text-right text-xs">
+              <span className={dateLabelClass(selectedShifts.length > 0)}>
+                {formatIsraeliDate(selectedIso)}
+              </span>
+            </p>
+            {selectedShifts.length === 0 ? (
+              <p className={`py-2 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>אין משמרות בתאריך זה</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedShifts.map((shift) => (
+                  <ShiftCard key={shift.id} shift={shift} compact />
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <p className={`py-1 text-center text-xs ${monthHasShifts ? "text-slate-500" : DATE_WITHOUT_SHIFT_CLASS}`}>
+            {monthHasShifts ? "לחצו על תאריך לצפייה במשמרות" : embeddedEmptyHint("month")}
+          </p>
+        )}
+      </div>
+    </CalendarShell>
+  );
+}
+
+function OverviewGridView({ shifts }: { shifts: ParentCalendarShift[] }) {
+  const shiftsByDate = useMemo(() => buildShiftsByDate(shifts), [shifts]);
+  const grouped = useMemo(
+    () => [...shiftsByDate.entries()].sort(([a], [b]) => a.localeCompare(b)),
+    [shiftsByDate]
+  );
+  const hasShifts = shifts.length > 0;
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const firstDay = new Date(year, month - 1, 1);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const startOffset = firstDay.getDay();
+
+  const cells: Array<{ day: number | null; iso: string | null }> = [];
+  for (let i = 0; i < startOffset; i++) cells.push({ day: null, iso: null });
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({ day, iso: `${year}-${pad2(month)}-${pad2(day)}` });
+  }
+
+  return (
+    <CalendarShell
+      className="h-full"
+      title="סקירת כל המשמרות"
+      subtitle={hasShifts ? `${shifts.length} משמרות שנקבעו` : embeddedEmptyHint("all")}
+    >
+      <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-[10px] font-bold text-slate-400">
+        {HEBREW_WEEKDAYS.map((label) => (
+          <div key={label}>{label}</div>
+        ))}
+      </div>
+      <div className="shrink-0 grid grid-cols-7 gap-1 p-2">
+        {cells.map((cell, index) => {
+          if (!cell.day || !cell.iso) {
+            return <div key={`empty-${index}`} className="min-h-[2.75rem]" />;
+          }
+          const dayShifts = shiftsByDate.get(cell.iso) ?? [];
+          const hasDayShifts = dayShifts.length > 0;
           return (
             <div
               key={cell.iso}
-              className={`min-h-[4.5rem] rounded-xl border p-1 text-right ${
-                isToday
-                  ? "border-navy-header/25 bg-[#FDFBF6] ring-1 ring-navy-header/10"
-                  : dayShifts.length
-                    ? "border-emerald-100 bg-emerald-50/40"
-                    : "border-slate-100 bg-white"
-              }`}
+              className="flex min-h-[2.75rem] flex-col items-center justify-center rounded-lg border border-slate-100 bg-white p-0.5"
             >
-              <p className={`text-[10px] font-bold ${isToday ? "text-navy-header" : "text-slate-600"}`}>
-                {cell.day}
-              </p>
-              <div className="mt-0.5 space-y-0.5">
-                {dayShifts.slice(0, 2).map((shift) => (
-                  <p
-                    key={shift.id}
-                    className="truncate rounded bg-white/80 px-0.5 text-[8px] font-semibold text-[#001F3F]"
-                    title={shift.sitterName}
-                  >
-                    {formatClockTime(shift.startTime)} {shift.sitterName}
-                  </p>
-                ))}
-                {dayShifts.length > 2 ? (
-                  <p className="text-[8px] font-bold text-slate-500">+{dayShifts.length - 2}</p>
-                ) : null}
-              </div>
+              <span className={`text-xs tabular-nums ${dateLabelClass(hasDayShifts)}`}>{cell.day}</span>
             </div>
           );
         })}
       </div>
-    </div>
-  );
-}
-
-function AllShiftsListView({ shifts }: { shifts: ParentCalendarShift[] }) {
-  const grouped = useMemo(() => {
-    const map = new Map<string, ParentCalendarShift[]>();
-    for (const shift of shifts) {
-      const list = map.get(shift.bookingDate) ?? [];
-      list.push(shift);
-      map.set(shift.bookingDate, list);
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [shifts]);
-
-  return (
-    <section className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-soft">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
-        <span className="text-[10px] font-semibold text-slate-400 tabular-nums">{shifts.length} משמרות</span>
-        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
-          <Calendar className="h-3 w-3" />
-          <span>כל המשמרות שנקבעו</span>
-        </div>
-      </div>
-      <div className="divide-y divide-slate-100">
-        {grouped.map(([date, dateShifts]) => (
-          <div key={date} className="px-3 py-3">
-            <p className="mb-2 text-right text-xs font-bold text-navy-header">{formatIsraeliDate(date)}</p>
-            <div className="space-y-2">
-              {dateShifts.map((shift) => (
-                <ShiftCard key={shift.id} shift={shift} />
-              ))}
+      <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-contain border-t border-slate-100">
+        {!hasShifts ? (
+          <p className={`px-4 py-6 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>
+            {embeddedEmptyHint("all")}
+          </p>
+        ) : (
+          grouped.map(([date, dateShifts]) => (
+            <div key={date} className="px-3 py-3">
+              <p className={`mb-2 text-right text-xs tabular-nums ${dateLabelClass(true)}`}>
+                {formatIsraeliDate(date)}
+              </p>
+              <div className="space-y-2">
+                {dateShifts.map((shift) => (
+                  <ShiftCard key={shift.id} shift={shift} compact />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
-    </section>
+    </CalendarShell>
   );
 }
 
@@ -572,64 +710,66 @@ export default function ParentCalendarPage() {
   );
 
   if (!ready) {
-    return <p className="text-center text-sm text-slate-600">טוען...</p>;
+    return (
+      <div className="flex h-full min-h-0 items-center justify-center">
+        <p className="text-center text-sm text-slate-600">טוען...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-4 py-2" dir="rtl">
-      <Link
-        href="/parent/dashboard"
-        className="flex items-center gap-1 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
-      >
-        <span>חזרה לדשבורד</span>
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-      </Link>
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden" dir="rtl">
+      <div className="shrink-0 space-y-4 pb-3">
+        <Link
+          href="/parent/dashboard"
+          className="flex items-center gap-1 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
+        >
+          <span>חזרה לדשבורד</span>
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+        </Link>
 
-      <div>
-        <label htmlFor="calendar-view-mode" className="mb-2 block pr-1 text-xs font-bold text-slate-400">
-          בחר תצוגה
-        </label>
-        <div className="relative">
-          <select
-            id="calendar-view-mode"
-            value={viewMode}
-            onChange={(e) => setViewMode(e.target.value as CalendarViewMode)}
-            className="w-full cursor-pointer appearance-none rounded-2xl border border-navy-header/10 bg-white p-3.5 text-right text-sm font-semibold text-navy-header shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-navy-header/20"
-          >
-            {VIEW_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-500">
-            <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-            </svg>
+        <div>
+          <label htmlFor="calendar-view-mode" className="mb-2 block pr-1 text-xs font-bold text-slate-400">
+            בחר תצוגה
+          </label>
+          <div className="relative">
+            <select
+              id="calendar-view-mode"
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value as CalendarViewMode)}
+              className="w-full cursor-pointer appearance-none rounded-2xl border border-navy-header/10 bg-white p-3.5 text-right text-sm font-semibold text-navy-header shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-navy-header/20"
+            >
+              {VIEW_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-500">
+              <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>
 
-      {loadingBookings ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 bg-white py-14 text-slate-400 shadow-sm">
-          <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-          <p className="text-sm">טוען משמרות...</p>
-        </div>
-      ) : filteredShifts.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-14 text-center shadow-sm">
-          <Calendar className="mx-auto mb-3 h-8 w-8 text-slate-300" aria-hidden />
-          <p className="text-sm font-semibold text-slate-600">{emptyStateMessage(viewMode)}</p>
-          <p className="mt-1 text-xs text-slate-400">כשתיקבענה משמרות חדשות, הן יופיעו כאן.</p>
-        </div>
-      ) : viewMode === "today" ? (
-        <TodayTimelineView shifts={filteredShifts} />
-      ) : viewMode === "week" ? (
-        <WeekColumnsView shifts={filteredShifts} />
-      ) : viewMode === "month" ? (
-        <MonthGridView shifts={filteredShifts} />
-      ) : (
-        <AllShiftsListView shifts={filteredShifts} />
-      )}
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        {viewMode === "today" ? (
+          <TodayGridView shifts={filteredShifts} />
+        ) : viewMode === "week" ? (
+          <WeekGridView shifts={filteredShifts} />
+        ) : viewMode === "month" ? (
+          <MonthGridView shifts={filteredShifts} />
+        ) : (
+          <OverviewGridView shifts={filteredShifts} />
+        )}
+        {loadingBookings ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/60">
+            <Loader2 className="h-5 w-5 animate-spin text-slate-500" aria-label="טוען משמרות" />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

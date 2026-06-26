@@ -19,6 +19,7 @@ const CHROMELESS_PREFIXES = ["/auth/role-selection", "/auth/login", "/auth/regis
  */
 const FIXED_VIEWPORT_PREFIXES = [
   "/parent/dashboard",
+  "/parent/calendar",
   "/sitter/dashboard",
   "/sitter/shifts",
   "/session"
