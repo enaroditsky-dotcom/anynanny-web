@@ -156,110 +156,114 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
           </div>
         ) : (
           <form className="mt-5 space-y-4" onSubmit={(e) => void handleSubmit(e)}>
-            <label className="block text-right text-sm font-semibold text-[#001F3F]">
-              תאריך התחלה
-              <input
-                type="date"
-                required
-                min={minDate}
-                value={bookingDate}
-                disabled={busy}
-                onChange={(ev) => {
-                  const next = ev.target.value;
-                  setBookingDate(next);
-                  if (!endBookingDate || endBookingDate === bookingDate) {
-                    setEndBookingDate(next);
-                  }
-                }}
-                className="mt-1.5 block min-h-12 w-full rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-3 py-2.5 text-sm tabular-nums shadow-inner disabled:opacity-50"
-              />
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-3">
+                <label className="block text-right text-sm font-semibold text-[#001F3F]">
+                  תאריך התחלה
+                  <input
+                    type="date"
+                    required
+                    min={minDate}
+                    value={bookingDate}
+                    disabled={busy}
+                    onChange={(ev) => {
+                      const next = ev.target.value;
+                      setBookingDate(next);
+                      if (!endBookingDate || endBookingDate === bookingDate) {
+                        setEndBookingDate(next);
+                      }
+                    }}
+                    className="mt-1.5 block min-h-12 w-full rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-3 py-2.5 text-sm tabular-nums shadow-inner disabled:opacity-50"
+                  />
+                </label>
 
-            <label className="block text-right text-sm font-semibold text-[#001F3F]">
-              תאריך סיום
-              <input
-                type="date"
-                required
-                min={bookingDate || minDate}
-                value={endBookingDate}
-                disabled={busy}
-                onChange={(ev) => setEndBookingDate(ev.target.value)}
-                className="mt-1.5 block min-h-12 w-full rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-3 py-2.5 text-sm tabular-nums shadow-inner disabled:opacity-50"
-              />
-            </label>
+                <fieldset className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3">
+                  <legend className="px-1 text-right text-sm font-semibold text-[#001F3F]">שעת התחלה</legend>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <select
+                      required
+                      aria-label="שעת התחלה — שעה"
+                      value={startHour}
+                      disabled={busy}
+                      onChange={(ev) => setStartHour(ev.target.value)}
+                      className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
+                    >
+                      <option value="">שעה</option>
+                      {PARENT_SEARCH_HOUR_OPTIONS.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      required
+                      aria-label="שעת התחלה — דקות"
+                      value={startMinute}
+                      disabled={busy}
+                      onChange={(ev) => setStartMinute(ev.target.value)}
+                      className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
+                    >
+                      <option value="">דק׳</option>
+                      {BOOK_SHIFT_MINUTE_OPTIONS.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </fieldset>
+              </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <fieldset className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3">
-                <legend className="px-1 text-right text-sm font-semibold text-[#001F3F]">שעת התחלה</legend>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <select
+              <div className="flex flex-col gap-3 border-r border-navy-header/10 pr-3">
+                <label className="block text-right text-sm font-semibold text-[#001F3F]">
+                  תאריך סיום
+                  <input
+                    type="date"
                     required
-                    aria-label="שעת התחלה — שעה"
-                    value={startHour}
+                    min={bookingDate || minDate}
+                    value={endBookingDate}
                     disabled={busy}
-                    onChange={(ev) => setStartHour(ev.target.value)}
-                    className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
-                  >
-                    <option value="">שעה</option>
-                    {PARENT_SEARCH_HOUR_OPTIONS.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    required
-                    aria-label="שעת התחלה — דקות"
-                    value={startMinute}
-                    disabled={busy}
-                    onChange={(ev) => setStartMinute(ev.target.value)}
-                    className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
-                  >
-                    <option value="">דק׳</option>
-                    {BOOK_SHIFT_MINUTE_OPTIONS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </fieldset>
+                    onChange={(ev) => setEndBookingDate(ev.target.value)}
+                    className="mt-1.5 block min-h-12 w-full rounded-2xl border border-navy-header/15 bg-[#FDFBF6] px-3 py-2.5 text-sm tabular-nums shadow-inner disabled:opacity-50"
+                  />
+                </label>
 
-              <fieldset className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3">
-                <legend className="px-1 text-right text-sm font-semibold text-[#001F3F]">שעת סיום</legend>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <select
-                    required
-                    aria-label="שעת סיום — שעה"
-                    value={endHour}
-                    disabled={busy}
-                    onChange={(ev) => setEndHour(ev.target.value)}
-                    className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
-                  >
-                    <option value="">שעה</option>
-                    {PARENT_SEARCH_HOUR_OPTIONS.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    required
-                    aria-label="שעת סיום — דקות"
-                    value={endMinute}
-                    disabled={busy}
-                    onChange={(ev) => setEndMinute(ev.target.value)}
-                    className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
-                  >
-                    <option value="">דק׳</option>
-                    {BOOK_SHIFT_MINUTE_OPTIONS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </fieldset>
+                <fieldset className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3">
+                  <legend className="px-1 text-right text-sm font-semibold text-[#001F3F]">שעת סיום</legend>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <select
+                      required
+                      aria-label="שעת סיום — שעה"
+                      value={endHour}
+                      disabled={busy}
+                      onChange={(ev) => setEndHour(ev.target.value)}
+                      className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
+                    >
+                      <option value="">שעה</option>
+                      {PARENT_SEARCH_HOUR_OPTIONS.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      required
+                      aria-label="שעת סיום — דקות"
+                      value={endMinute}
+                      disabled={busy}
+                      onChange={(ev) => setEndMinute(ev.target.value)}
+                      className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
+                    >
+                      <option value="">דק׳</option>
+                      {BOOK_SHIFT_MINUTE_OPTIONS.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </fieldset>
+              </div>
             </div>
 
             {error ? (

@@ -32,8 +32,10 @@ export type ParentSearchMinute = string;
 export type ParentSearchFilters = {
   /** Public serial on `sitter_profiles.nanny_serial` (e.g. AN-1001). */
   searchSitterSerial: string;
-  /** `YYYY-MM-DD` from `<input type="date">` */
+  /** `YYYY-MM-DD` — shift/booking start date */
   searchDate: string;
+  /** `YYYY-MM-DD` — shift/booking end date (overnight); defaults to start when empty */
+  searchEndDate: string;
   /** `00`–`23` (24-hour) — required window start */
   searchStartHour: string;
   searchStartMinute: ParentSearchMinute | "";
@@ -51,6 +53,7 @@ export type ParentSearchFilters = {
 export const defaultParentSearchFilters = (): ParentSearchFilters => ({
   searchSitterSerial: "",
   searchDate: "",
+  searchEndDate: "",
   searchStartHour: "",
   searchStartMinute: "",
   searchEndHour: "",
@@ -82,6 +85,7 @@ export function normalizeParentSearchFilters(
     searchSitterSerial:
       partial.searchSitterSerial ?? partial.searchNannyId ?? base.searchSitterSerial,
     searchDate: partial.searchDate ?? base.searchDate,
+    searchEndDate: partial.searchEndDate ?? base.searchEndDate,
     searchStartHour: partial.searchStartHour ?? legacyHour ?? base.searchStartHour,
     searchStartMinute: partial.searchStartMinute ?? legacyMinute ?? base.searchStartMinute,
     searchEndHour: partial.searchEndHour ?? base.searchEndHour,
@@ -181,10 +185,10 @@ export function buildSearchStartTimeIso(filters: ParentSearchFilters): string | 
   return buildLocalDateTimeIso(day, safe.searchStartHour, safe.searchStartMinute, { hour: "00", minute: "00" });
 }
 
-/** Combine local date + 24h end time into ISO for `p_end_time`. */
+/** Combine local end date + 24h end time into ISO for `p_end_time`. */
 export function buildSearchEndTimeIso(filters: ParentSearchFilters): string | null {
   const safe = normalizeParentSearchFilters(filters);
-  const day = (safe.searchDate || "").trim();
+  const day = (safe.searchEndDate || safe.searchDate || "").trim();
   if (!day) return null;
   return buildLocalDateTimeIso(day, safe.searchEndHour, safe.searchEndMinute, { hour: "23", minute: "45" });
 }

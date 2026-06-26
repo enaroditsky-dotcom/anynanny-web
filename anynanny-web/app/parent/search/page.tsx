@@ -22,6 +22,7 @@ function buildResultsSearchParams(filters: ParentSearchFilters): string {
 
   if (safe.selectedCity) params.set("city", safe.selectedCity);
   if (safe.searchDate) params.set("date", safe.searchDate);
+  if (safe.searchEndDate) params.set("endDate", safe.searchEndDate);
 
   if (safe.searchStartHour.trim()) {
     const hour = safe.searchStartHour.padStart(2, "0");

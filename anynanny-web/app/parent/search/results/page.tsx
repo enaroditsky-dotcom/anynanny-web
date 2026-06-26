@@ -79,6 +79,7 @@ function parseFiltersFromSearchParams(params: URLSearchParams): ParentSearchFilt
   return normalizeParentSearchFilters({
     searchSitterSerial: readParam(params, ["searchSitterSerial", "serial", "searchNannyId"]),
     searchDate: readParam(params, ["date", "searchDate"]),
+    searchEndDate: readParam(params, ["endDate", "searchEndDate"]),
     searchStartHour: startClock.hour,
     searchStartMinute: startClock.minute,
     searchEndHour: endClock.hour,

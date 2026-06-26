@@ -117,6 +117,7 @@ export function ParentSearchFiltersBar({
   };
 
   const clearTimes = {
+    searchEndDate: "",
     searchStartHour: "",
     searchStartMinute: "" as const,
     searchEndHour: "",
@@ -165,40 +166,63 @@ export function ParentSearchFiltersBar({
       <fieldset className="space-y-2 rounded-xl border border-slate-100 bg-[#FDFBF6]/50 p-3">
         <legend className="px-1.5 text-right text-xs font-bold text-navy-header">תאריך ושעות נדרשות</legend>
 
-        <label className="block text-right text-xs font-semibold text-navy-header">
-          תאריך
-          <input
-            type="date"
-            className={`${FIELD_CONTROL} bg-white tabular-nums`}
-            value={filters.searchDate}
-            onChange={(e) => {
-              const searchDate = e.target.value;
-              if (!searchDate) {
-                patch({ searchDate: "", ...clearTimes });
-              } else {
-                patch({ searchDate });
-              }
-            }}
-          />
-        </label>
-
         <div className="grid grid-cols-2 gap-2.5">
-          <TimeBlock
-            title="התחלה"
-            hour={filters.searchStartHour ?? ""}
-            minute={filters.searchStartMinute ?? ""}
-            disabled={!filters.searchDate}
-            onHourChange={(searchStartHour) => patch({ searchStartHour })}
-            onMinuteChange={(searchStartMinute) => patch({ searchStartMinute })}
-          />
-          <TimeBlock
-            title="סיום"
-            hour={filters.searchEndHour ?? ""}
-            minute={filters.searchEndMinute ?? ""}
-            disabled={!filters.searchDate}
-            onHourChange={(searchEndHour) => patch({ searchEndHour })}
-            onMinuteChange={(searchEndMinute) => patch({ searchEndMinute })}
-          />
+          <div className="flex flex-col gap-2.5">
+            <label className="block text-right text-xs font-semibold text-navy-header">
+              תאריך התחלה
+              <input
+                type="date"
+                className={`${FIELD_CONTROL} bg-white tabular-nums`}
+                value={filters.searchDate}
+                onChange={(e) => {
+                  const searchDate = e.target.value;
+                  if (!searchDate) {
+                    patch({ searchDate: "", ...clearTimes });
+                  } else {
+                    patch({
+                      searchDate,
+                      searchEndDate:
+                        !filters.searchEndDate || filters.searchEndDate === filters.searchDate
+                          ? searchDate
+                          : filters.searchEndDate
+                    });
+                  }
+                }}
+              />
+            </label>
+
+            <TimeBlock
+              title="התחלה"
+              hour={filters.searchStartHour ?? ""}
+              minute={filters.searchStartMinute ?? ""}
+              disabled={!filters.searchDate}
+              onHourChange={(searchStartHour) => patch({ searchStartHour })}
+              onMinuteChange={(searchStartMinute) => patch({ searchStartMinute })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2.5 border-r border-slate-100 pr-2.5">
+            <label className="block text-right text-xs font-semibold text-navy-header">
+              תאריך סיום
+              <input
+                type="date"
+                className={`${FIELD_CONTROL} bg-white tabular-nums`}
+                min={filters.searchDate || undefined}
+                value={filters.searchEndDate}
+                disabled={!filters.searchDate}
+                onChange={(e) => patch({ searchEndDate: e.target.value })}
+              />
+            </label>
+
+            <TimeBlock
+              title="סיום"
+              hour={filters.searchEndHour ?? ""}
+              minute={filters.searchEndMinute ?? ""}
+              disabled={!filters.searchDate}
+              onHourChange={(searchEndHour) => patch({ searchEndHour })}
+              onMinuteChange={(searchEndMinute) => patch({ searchEndMinute })}
+            />
+          </div>
         </div>
       </fieldset>
 
