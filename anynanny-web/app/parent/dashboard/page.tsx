@@ -1,9 +1,9 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Calendar, History, Search, Wallet, LogOut } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Calendar, History, LogOut, Search, Wallet } from "lucide-react";
 import { ParentSessionClosurePanel } from "@/components/session/parent-session-closure-panel";
 import SessionFinalizer from "@/components/SessionFinalizer";
 import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
@@ -22,6 +22,7 @@ import {
   fetchUnacknowledgedParentBookingResponses,
   type ParentBookingResponseNotification
 } from "@/lib/bookings/parent-booking-response-notifications";
+import { parentApproveSitterStart } from "@/lib/bookings/parent-approve-sitter-start";
 import { bookingRowToCircleView } from "@/lib/bookings/circle-booking-state";
 import {
   isParentBookingApprovalStatus,
@@ -35,8 +36,10 @@ import { fetchBookingPaymentStatus } from "@/lib/bookings/fetch-booking-payment-
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { useTodaysLinkedBooking, type TodaysLinkedBookingSyncPayload } from "@/lib/bookings/use-todays-linked-booking";
-import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
-import { fetchLinkedBookingById } from "@/lib/bookings/todays-linked-booking";
+import {
+  fetchLinkedBookingById,
+  type TodaysLinkedBookingView
+} from "@/lib/bookings/todays-linked-booking";
 import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
