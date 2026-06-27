@@ -3,6 +3,10 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import {
+  PARENT_TERMS_LABEL,
+  TermsAcceptanceCheckbox
+} from "@/components/auth/terms-acceptance-checkbox";
 import { USER_SPECIAL_OCCASIONS_TABLE } from "@/lib/parent/user-special-occasions";
 import { ensureParentProfileBootstrap } from "@/lib/parent/ensure-parent-profile-bootstrap";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -17,6 +21,7 @@ export default function ParentOnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [occasions, setOccasions] = useState<OccasionDraft[]>([{ event_name: "", event_date: "" }]);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -89,6 +94,11 @@ export default function ParentOnboardingPage() {
     setSaving(true);
     setMessage("");
     try {
+      if (!termsAccepted) {
+        setMessage("יש לאשר את תנאי השימוש לפני המשך ההרשמה.");
+        return;
+      }
+
       const {
         data: { user }
       } = await supabase.auth.getUser();
@@ -121,7 +131,7 @@ export default function ParentOnboardingPage() {
     } finally {
       setSaving(false);
     }
-  }, [router]);
+  }, [router, termsAccepted]);
 
   const finish = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -129,6 +139,11 @@ export default function ParentOnboardingPage() {
     setSaving(true);
     setMessage("");
     try {
+      if (!termsAccepted) {
+        setMessage("יש לאשר את תנאי השימוש לפני המשך ההרשמה.");
+        return;
+      }
+
       const {
         data: { user }
       } = await supabase.auth.getUser();
@@ -189,7 +204,7 @@ export default function ParentOnboardingPage() {
     } finally {
       setSaving(false);
     }
-  }, [occasions, router]);
+  }, [occasions, router, termsAccepted]);
 
   if (loading) {
     return (
@@ -253,10 +268,18 @@ export default function ParentOnboardingPage() {
 
       {message ? <p className="mt-4 text-sm text-rose-700">{message}</p> : null}
 
-      <div className="mt-8 flex flex-col gap-3 sm:flex-row-reverse">
+      <TermsAcceptanceCheckbox
+        id="parent-terms-accepted"
+        label={PARENT_TERMS_LABEL}
+        checked={termsAccepted}
+        onChange={setTermsAccepted}
+        disabled={saving}
+      />
+
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row-reverse">
         <button
           type="button"
-          disabled={saving}
+          disabled={saving || !termsAccepted}
           onClick={() => void finish()}
           className="rounded-2xl bg-[#001F3F] px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
         >
@@ -264,7 +287,7 @@ export default function ParentOnboardingPage() {
         </button>
         <button
           type="button"
-          disabled={saving}
+          disabled={saving || !termsAccepted}
           onClick={() => void skipFinish()}
           className="rounded-2xl border border-navy-header/20 px-6 py-3 text-sm font-semibold text-navy-header disabled:opacity-60"
         >

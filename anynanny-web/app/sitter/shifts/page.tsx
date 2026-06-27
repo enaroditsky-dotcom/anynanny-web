@@ -1,18 +1,24 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { BookingCalendarPanel } from "@/components/bookings/booking-calendar-panel";
+import type { CalendarShift } from "@/components/bookings/booking-calendar-views";
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
+import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
+import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
 import { resolveBookingWindowMs } from "@/lib/bookings/booking-date-utils";
 import {
   resolveShiftTimeWindow,
   sitterHasOverlappingActiveShift,
   SITTER_OVERLAP_APPROVE_MESSAGE
 } from "@/lib/bookings/sitter-shift-overlap";
-import { updateBookingStatus } from "@/lib/bookings/sitter-pending-bookings";
+import { formatBookingSchedule, updateBookingStatus } from "@/lib/bookings/sitter-pending-bookings";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+
+/** DB may store legacy `confirmed`; normalized in app as `approved`. */
+const SITTER_CALENDAR_CONFIRMED_STATUSES = ["approved", "confirmed"] as const;
 
 interface BookingRow {
   id: string;
@@ -38,7 +44,7 @@ interface Shift {
   end_time: string;
 }
 
-type ViewType = "upcoming" | "past" | "pending";
+type ViewType = "pending" | "calendar" | "past";
 
 function formatDateHe(dateStr: string): string {
   if (!dateStr) return "";
@@ -83,25 +89,25 @@ function statusBadge(status: string, viewType: ViewType): { label: string; class
   if (viewType === "past" || status === "completed") {
     return { label: "בוצעה", className: "bg-emerald-50 text-emerald-700" };
   }
-  if (status === "approved") {
+  if (status === "approved" || status === "confirmed") {
     return { label: "מאושרת", className: "bg-emerald-50 text-emerald-700" };
   }
   return { label: "עתידית", className: "bg-amber-50 text-amber-700" };
 }
 
 export default function SitterShiftsPage() {
-  const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
 
-  const [viewType, setViewType] = useState<ViewType>("upcoming");
+  const [viewType, setViewType] = useState<ViewType>("calendar");
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [calendarShifts, setCalendarShifts] = useState<CalendarShift[]>([]);
   const [loading, setLoading] = useState(true);
-  const [visibleAddressId, setVisibleAddressId] = useState<string | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const fetchRealShifts = useCallback(async () => {
+  const fetchListShifts = useCallback(async () => {
     const sitterId = user?.id;
     if (!sitterId) {
       setShifts([]);
@@ -117,8 +123,6 @@ export default function SitterShiftsPage() {
         return;
       }
 
-      const todayStr = new Date().toISOString().split("T")[0];
-
       let query = supabase
         .from("bookings")
         .select("id, parent_id, booking_date, start_time, end_time, status")
@@ -126,14 +130,12 @@ export default function SitterShiftsPage() {
 
       if (viewType === "pending") {
         query = query.eq("status", "pending");
-      } else if (viewType === "upcoming") {
-        query = query.gte("booking_date", todayStr).neq("status", "completed").neq("status", "rejected");
       } else {
         query = query.eq("status", "completed");
       }
 
       const { data, error } = await query.order("booking_date", {
-        ascending: viewType !== "past"
+        ascending: viewType === "pending"
       });
 
       if (error) throw error;
@@ -181,10 +183,83 @@ export default function SitterShiftsPage() {
     }
   }, [user?.id, viewType]);
 
+  const fetchCalendarShifts = useCallback(async () => {
+    const sitterId = user?.id;
+    if (!sitterId) {
+      setCalendarShifts([]);
+      setCalendarLoading(false);
+      return;
+    }
+
+    setCalendarLoading(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        setCalendarShifts([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from(BOOKINGS_TABLE)
+        .select("id, parent_id, booking_date, start_time, end_time, status")
+        .eq("sitter_id", sitterId)
+        .in("status", [...SITTER_CALENDAR_CONFIRMED_STATUSES])
+        .order("booking_date", { ascending: true })
+        .order("start_time", { ascending: true });
+
+      if (error) throw error;
+
+      const bookingRows = (data ?? []) as BookingRow[];
+      const parentIds = [...new Set(bookingRows.map((row) => row.parent_id).filter(Boolean))];
+
+      const parentNameById = new Map<string, string>();
+      if (parentIds.length > 0) {
+        const { data: profileRows, error: profilesError } = await supabase
+          .from(PROFILES_TABLE)
+          .select("id, full_name")
+          .in("id", parentIds);
+
+        if (profilesError) {
+          console.warn("Could not load parent names for calendar:", profilesError.message);
+        } else {
+          for (const profile of profileRows ?? []) {
+            const name =
+              typeof profile.full_name === "string" && profile.full_name.trim()
+                ? profile.full_name.trim()
+                : null;
+            if (name) parentNameById.set(String(profile.id), name);
+          }
+        }
+      }
+
+      setCalendarShifts(
+        bookingRows.map((row) => ({
+          id: row.id,
+          partnerId: row.parent_id,
+          partnerName: parentNameById.get(row.parent_id) ?? "הורה AnyNanny",
+          bookingDate: row.booking_date,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          status: (normalizeBookingStatus(row.status) ?? "approved") as BookingStatus,
+          scheduleLabel: formatBookingSchedule(row)
+        }))
+      );
+    } catch (err) {
+      console.error("Error fetching calendar shifts:", err);
+      setCalendarShifts([]);
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (authLoading) return;
-    void fetchRealShifts();
-  }, [authLoading, fetchRealShifts]);
+    if (viewType === "calendar") {
+      void fetchCalendarShifts();
+      return;
+    }
+    void fetchListShifts();
+  }, [authLoading, viewType, fetchListShifts, fetchCalendarShifts]);
 
   useEffect(() => {
     if (!actionMessage) return;
@@ -223,29 +298,26 @@ export default function SitterShiftsPage() {
 
     if (error) {
       setActionError(error);
-      void fetchRealShifts();
+      void fetchListShifts();
       return;
     }
 
     setActionMessage(status === "approved" ? "המשמרת אושרה — ההורה יקבל עדכון" : "הבקשה נדחתה — ההורה יקבל עדכון");
-    void fetchRealShifts();
+    void fetchListShifts();
   };
 
-  const handleContactClick = (parentId: string) => {
-    router.push(`/sitter/messages?parentId=${encodeURIComponent(parentId)}`);
-  };
-
-  const toggleAddressVisibility = (shiftId: string) => {
-    setVisibleAddressId(visibleAddressId === shiftId ? null : shiftId);
-  };
+  const calendarProfileHref = useCallback(
+    (shift: CalendarShift) => `/sitter/messages?parentId=${encodeURIComponent(shift.partnerId)}`,
+    []
+  );
 
   return (
     <SitterPageShell
       title="לוח המשמרות שלי"
-      subtitle="בקשות ממתינות לאישור, ומשמרות מאושרות — הכל מטבלת הבקשות האמיתית."
+      subtitle="בקשות ממתינות לאישור, יומן משמרות מאושרות, והיסטוריה — הכל מטבלת הבקשות האמיתית."
     >
-      <div className="w-full max-w-md mx-auto text-right" dir="rtl">
-        <div className="mb-6">
+      <div className="flex h-full min-h-0 w-full max-w-md flex-col mx-auto text-right" dir="rtl">
+        <div className="shrink-0 mb-4">
           <label className="block text-xs font-bold text-gray-400 uppercase mb-2 mr-1">
             בחר סוג תצוגה
           </label>
@@ -254,13 +326,12 @@ export default function SitterShiftsPage() {
               value={viewType}
               onChange={(e) => {
                 setViewType(e.target.value as ViewType);
-                setVisibleAddressId(null);
                 setActionError(null);
               }}
               className="w-full p-3.5 bg-white border border-gray-200 rounded-xl font-semibold text-gray-700 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none transition-all cursor-pointer"
             >
               <option value="pending">⏳ ממתינות לאישור</option>
-              <option value="upcoming">🔮 משמרות עתידיות</option>
+              <option value="calendar">📅 יומן משמרות</option>
               <option value="past">✅ משמרות שבוצעו</option>
             </select>
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-500">
@@ -274,7 +345,7 @@ export default function SitterShiftsPage() {
         {actionMessage ? (
           <p
             role="status"
-            className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900"
+            className="mb-4 shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900"
           >
             {actionMessage}
           </p>
@@ -283,20 +354,31 @@ export default function SitterShiftsPage() {
         {actionError ? (
           <p
             role="alert"
-            className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-900"
+            className="mb-4 shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-900"
           >
             {actionError}
           </p>
         ) : null}
 
-        {loading || authLoading ? (
+        {viewType === "calendar" ? (
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <BookingCalendarPanel
+              shifts={calendarShifts}
+              loading={calendarLoading || authLoading}
+              viewModeSelectId="sitter-shifts-calendar-view-mode"
+              profileHref={calendarProfileHref}
+              profileLinkLabel="צור קשר"
+              className="h-full"
+            />
+          </div>
+        ) : loading || authLoading ? (
           <div className="text-center py-10 text-gray-400 font-medium">מושך נתונים חיים מה-Database...</div>
         ) : shifts.length === 0 ? (
           <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-gray-200 text-gray-400">
             אין משמרות רשומות בקטגוריה זו ב-Supabase.
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4">
             {shifts.map((shift) => {
               const badge = statusBadge(shift.status, viewType);
               const isPending = shift.status === "pending";
@@ -361,30 +443,6 @@ export default function SitterShiftsPage() {
                       >
                         {actingId === shift.id ? "מעבד…" : "דחיית בקשה"}
                       </button>
-                    </div>
-                  ) : viewType === "upcoming" ? (
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleAddressVisibility(shift.id)}
-                        className="flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 rounded-xl text-sm transition-colors"
-                      >
-                        📍 {visibleAddressId === shift.id ? "הסתר כתובת" : "הצג כתובת"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleContactClick(shift.parent_id)}
-                        className="flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm shadow-amber-100"
-                      >
-                        💬 צור קשר
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {visibleAddressId === shift.id && !isPending ? (
-                    <div className="bg-amber-50/60 border border-amber-100 text-amber-900 p-3 rounded-xl text-sm">
-                      <span className="block text-xs text-amber-700 font-bold mb-0.5">כתובת זמנית:</span>
-                      <span className="font-semibold">{shift.address}</span>
                     </div>
                   ) : null}
                 </div>

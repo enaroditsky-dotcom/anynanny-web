@@ -10,6 +10,10 @@ import {
   SITTER_WORKING_CITIES_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  SITTER_TERMS_LABEL,
+  TermsAcceptanceCheckbox
+} from "@/components/auth/terms-acceptance-checkbox";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import { normalizeWorkingCities, type IsraelCity } from "@/lib/geo/israel-cities";
 
@@ -37,6 +41,7 @@ export function SitterOnboardingWizard({ onSaved }: SitterOnboardingWizardProps 
   const [yearsExperience, setYearsExperience] = useState("");
   const [hourlyRateNis, setHourlyRateNis] = useState("");
   const [workingCities, setWorkingCities] = useState<IsraelCity[]>([]);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +141,11 @@ export function SitterOnboardingWizard({ onSaved }: SitterOnboardingWizardProps 
         hourly_rate_nis: rate,
         [SITTER_WORKING_CITIES_COLUMN]: workingCities
       };
+
+      if (!termsAccepted) {
+        setSaveWarning("יש לאשר את תנאי השימוש לפני סיום ההרשמה.");
+        return;
+      }
 
       const complete = isSitterProfileComplete({ ...profileFields, id: user.id });
       if (!complete) {
@@ -271,9 +281,16 @@ export function SitterOnboardingWizard({ onSaved }: SitterOnboardingWizardProps 
           onChange={setWorkingCities}
           disabled={busy}
         />
+        <TermsAcceptanceCheckbox
+          id="sitter-terms-accepted"
+          label={SITTER_TERMS_LABEL}
+          checked={termsAccepted}
+          onChange={setTermsAccepted}
+          disabled={busy}
+        />
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || !termsAccepted}
           className="inline-flex w-full flex-row-reverse items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3 text-sm font-semibold text-white disabled:opacity-60"
         >
           {busy ? (

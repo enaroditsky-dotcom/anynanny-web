@@ -9,7 +9,7 @@ import { BottomNavigation } from "@/components/bottom-navigation";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
 import SessionProvider from "@/context/SessionContext";
 
-const CHROMELESS_PREFIXES = ["/auth/role-selection", "/auth/login", "/auth/register"];
+const CHROMELESS_PREFIXES = ["/auth/role-selection", "/auth/login", "/auth/register", "/terms"];
 
 /**
  * Screens that must lock to the device viewport with no page scroll (Fixed Viewport).
@@ -40,9 +40,14 @@ export function isMainLayoutPath(pathname: string): boolean {
   return MAIN_LAYOUT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+export function isLandingGatewayPath(pathname: string): boolean {
+  return pathname === "/";
+}
+
 export function AppShellGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const chromeless = isChromelessAuthPath(pathname);
+  const landingGateway = isLandingGatewayPath(pathname);
 
   if (chromeless) {
     return (
@@ -72,7 +77,11 @@ export function AppShellGate({ children }: { children: ReactNode }) {
       ) : (
         <div className="mx-auto flex h-screen w-full min-w-0 max-w-md flex-col overflow-hidden bg-white shadow-soft md:my-4 md:rounded-[2rem] md:h-[calc(100dvh-2rem)]">
           <AppShellHeader />
-          <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-28 pt-4">
+          <div
+            className={`relative min-h-0 min-w-0 flex-1 px-4 pt-4 ${
+              landingGateway ? "overflow-hidden overscroll-none pb-4" : "overflow-y-auto pb-28"
+            }`}
+          >
             <AppShellStableBoundary>
               <RouteTransitionShell fill={fixedViewport}>{children}</RouteTransitionShell>
             </AppShellStableBoundary>
