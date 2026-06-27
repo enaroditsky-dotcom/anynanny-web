@@ -88,12 +88,28 @@ export function resolveSitterCardTitle(card: PublicSitterSearchCard): string {
   return "בייביסיטר ללא שם";
 }
 
+/** Flat 10% platform fee on sitter base rate shown to parents. */
+export const PARENT_PLATFORM_FEE_MULTIPLIER = 1.1;
+
+/** Parent-facing hourly rate (base sitter rate + 10% platform fee). */
+export function parentFacingHourlyRateNis(rate: number | null | undefined): number | null {
+  if (rate == null || !Number.isFinite(rate) || rate <= 0) return null;
+  return Math.round(rate * PARENT_PLATFORM_FEE_MULTIPLIER);
+}
+
 /** Display label from `hourly_rate_nis` only — no defaults, no other columns. */
 export function formatHourlyRateNis(rate: number | null | undefined): string {
   if (rate == null || !Number.isFinite(rate) || rate <= 0) {
     return "מחיר לא צוין";
   }
   return `₪${Math.round(rate)} / שעה`;
+}
+
+/** Parent search cards: sitter base rate with 10% platform fee included. */
+export function formatParentFacingHourlyRateNis(rate: number | null | undefined): string {
+  const withFee = parentFacingHourlyRateNis(rate);
+  if (withFee == null) return "מחיר לא צוין";
+  return `₪${withFee} / שעה`;
 }
 
 export function experienceBadgeLabel(years: number | null | undefined): string {

@@ -4,7 +4,7 @@ import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
   bioExcerpt,
   experienceBadgeLabel,
-  formatHourlyRateNis,
+  formatParentFacingHourlyRateNis,
   formatSearchCardRatingLine,
   formatSearchCardWorkingCities,
   resolveSitterCardTitle,
@@ -19,8 +19,7 @@ export function parentSitterProfilePath(sitterId: string): string {
 
 export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSearchCard }) {
   const title = resolveSitterCardTitle(sitter);
-  const rate = sitter.hourly_rate_nis;
-  const rateLabel = formatHourlyRateNis(rate);
+  const rateLabel = formatParentFacingHourlyRateNis(sitter.hourly_rate_nis);
   const profileHref = parentSitterProfilePath(sitter.id);
   const serviceAreas = formatSearchCardWorkingCities(sitter.working_cities);
 
