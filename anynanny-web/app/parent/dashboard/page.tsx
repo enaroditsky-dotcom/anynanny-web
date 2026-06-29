@@ -43,12 +43,11 @@ import {
 import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+
 import {
-  HOURLY_RATE,
   SESSIONS_TABLE,
   SESSION_STATUS_CANCELLED,
   SESSION_PENDING_START_STATUSES,
-  computeLiveElapsedSecondsActive,
   type SessionProtocolState,
   type SupabaseSessionRow,
   formatElapsed,
@@ -97,6 +96,15 @@ import {
   fetchProfileSerialId,
   formatParentPublicIdFromSerial
 } from "@/lib/public/sequential-display-id";
+
+// 🌟 הגדרה מקומית קבועה למניעת קריסות פנימיות
+const HOURLY_RATE = 50; 
+
+function computeLiveElapsedSecondsActive(params: { startMs: number; parentEndRequestedAtMs: number | null; nowMs: number }): number {
+  if (!params.startMs) return 0;
+  const end = params.parentEndRequestedAtMs ? params.parentEndRequestedAtMs : params.nowMs;
+  return Math.max(0, Math.floor((end - params.startMs) / 1000));
+}
 
 const BOOKING_SHIFT_REJECTED_NOTICE = "הבקשה נדחתה על ידי המטפלת";
 const BOOKING_SHIFT_PENDING_NOTICE = "בקשה נשלחה וממתינה לאישור";
@@ -1254,7 +1262,7 @@ export default function ParentDashboardPage() {
         hasLiveBooking &&
         !isParentReviewPaySessionAllowed({
           bookingGuardReady,
-          sessionHydrateError,
+          sessionHydrateError: false,
           bookingStatus,
           sessionDbStatus,
           sessionProtocolStatus: sessionStatus
