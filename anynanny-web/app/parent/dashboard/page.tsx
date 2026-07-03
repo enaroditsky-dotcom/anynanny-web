@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Calendar, History, LogOut, Search, Wallet } from "lucide-react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { Calendar, History, LogOut, Search, Wallet, Zap } from "lucide-react";
 import { ParentSessionClosurePanel } from "@/components/session/parent-session-closure-panel";
 import SessionFinalizer from "@/components/SessionFinalizer";
 import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
@@ -68,7 +68,6 @@ import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
 import { completedSummaryFromEndedState } from "@/lib/session/completed-summary";
-import { postStripeCheckoutSession } from "@/lib/stripe/post-checkout-session";
 import { submitSessionRating } from "@/lib/ratings/submit-session-rating";
 import type { PublicSitterReview } from "@/lib/sitter/sitter-profile";
 import { fetchSitterPublicReviews } from "@/lib/sitter/fetch-parent-sitter-profile";
@@ -96,8 +95,11 @@ import {
   fetchProfileSerialId,
   formatParentPublicIdFromSerial
 } from "@/lib/public/sequential-display-id";
+import { parentRequestEndSession } from "@/lib/session/parent-request-end-session";
 
-// 🌟 הגדרה מקומית קבועה למניעת קריסות פנימיות
+// 🔥 שינוי 1: ייבוא רשימת הערים האחידה מהקונפיג שייצרנו
+import { SUPPORTED_CITIES } from "@/lib/bookings/cities-config";
+
 const HOURLY_RATE = 50; 
 
 function computeLiveElapsedSecondsActive(params: { startMs: number; parentEndRequestedAtMs: number | null; nowMs: number }): number {
@@ -289,6 +291,8 @@ function isParentShiftBookingActionable(
 
 export default function ParentDashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { isLoading: authLoading } = useAuth();
   const { nowMs, setNowMs, parent: sessionParent } = useSession();
 
@@ -339,6 +343,11 @@ export default function ParentDashboardPage() {
   const [bookingFeedbackToast, setBookingFeedbackToast] = useState<string | null>(null);
   const [bookingFeedbackVariant, setBookingFeedbackVariant] = useState<"success" | "error" | "info">("info");
   const [startShiftBusy, setStartShiftBusy] = useState(false);
+  
+  const [nowBusy, setNowBusy] = useState(false);
+  const [showCityModal, setShowCityModal] = useState(false);
+  const [selectedCity, setSelectedCity] = useState("חיפה");
+
   const [bookingResponseNotifications, setBookingResponseNotifications] = useState<
     ParentBookingResponseNotification[]
   >([]);
@@ -871,8 +880,11 @@ export default function ParentDashboardPage() {
     }
     if (isParentSessionIdleDbStatus(db)) {
       const idle: SessionProtocolState = { status: "idle" };
-      persistSessionState(idle);
-      setSessionState(idle);
+      const status = normalizeBookingStatus(todaysBooking?.status);
+      if (status !== "completed") {
+        persistSessionState(idle);
+        setSessionState(idle);
+      }
       setParentSessionView("idle");
       setSessionDbStatus(null);
       setShiftFinishedLocked(false);
@@ -893,9 +905,11 @@ export default function ParentDashboardPage() {
     setShiftFinishedLocked,
     setShiftUiLocked,
     setSessionState,
-    shiftCompletedFrozenRef
+    shiftCompletedFrozenRef,
+    todaysBooking?.status
   ]);
 
+  // 🔥 שינוי 2: שדרוג מנגנון ה-Bypass למעקף חברת הסליקה בתקופת ה-Beta
   const handleConfirmAndPay = useCallback(
     async (rating: number) => {
       const sid = sessionSupabaseSessionId?.trim();
@@ -931,22 +945,31 @@ export default function ParentDashboardPage() {
 
       const amountNis = completedSummary?.amountNis ?? sessionState?.finalAmountNis ?? 0;
       const amountMinorUnits = Math.max(50, Math.round(Number(amountNis) * 100));
+      
       try {
-        const result = await postStripeCheckoutSession({
-          bookingId: bid,
-          amountMinorUnits,
-          currency: "ils",
-          description: "תשלום משמרת AnyNanny"
+        // קריאה ישירה ל-Endpoint של המעקף (Mock Bypass)
+        const response = await fetch("/api/hyp/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookingId: bid,
+            amountMinorUnits,
+            currency: "ils",
+            description: "תשלום משמרת AnyNanny - סימולציית Beta"
+          }),
         });
-        if (!result.ok) {
-          setClosureError(result.error);
+
+        const data = await response.json();
+        if (data.url) {
+          // דוחף את הדפדפן להפניה חזרה המקומית כדי לסגור מעגל Realtime מול הנני
+          window.location.assign(data.url);
+        } else {
+          setClosureError(data.error || "שגיאה בביצוע מעקף תשלום");
           setPayBusy(false);
-          return;
         }
-        window.location.assign(result.url);
       } catch (e) {
-        console.error("[parent] Stripe checkout:", e);
-        setClosureError("שגיאה בפתיחת התשלום. נסו שוב.");
+        console.error("[parent] Beta simulation checkout:", e);
+        setClosureError("שגיאה ברשת בבקשת מעקף תשלום.");
         setPayBusy(false);
       }
     },
@@ -958,6 +981,51 @@ export default function ParentDashboardPage() {
       completedSummary
     ]
   );
+
+  const handleAnyNannyNowClick = () => {
+    if (sessionStatus !== "idle") {
+      setDebugToast("יש לסיים את המשמרת הנוכחית תחילה.");
+      return;
+    }
+    setShowCityModal(true);
+  };
+
+  const handleLaunchBroadcast = async () => {
+    if (nowBusy || !parentUserId) return;
+    
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      alert("Supabase לא מוגדר בדשבורד.");
+      return;
+    }
+
+    setNowBusy(true);
+    try {
+      const { data, error } = await supabase
+        .from("broadcast_alerts")
+        .insert([
+          {
+            parent_id: parentUserId,
+            city: selectedCity, 
+            service_type: "sitter",
+            status: "pending"
+          }
+        ])
+        .select("id")
+        .maybeSingle();
+
+      if (error || !data) throw error || new Error("לא התקבל מזהה שידור.");
+
+      setShowCityModal(false);
+      router.push(`/parent/search/broadcast-radar?alertId=${data.id}&city=${selectedCity}&type=sitter`);
+
+    } catch (err) {
+      console.error("❌ Error launching AnyNanny NOW:", err);
+      alert("תקלה בהפעלת קריאה מיידית. נסו שוב.");
+    } finally {
+      setNowBusy(false);
+    }
+  };
 
   const handleCheckoutReturnIdle = useCallback(() => {
     const bookingId = sessionLinkedBookingId || todaysBookingId;
@@ -972,7 +1040,10 @@ export default function ParentDashboardPage() {
     persistSessionState({ status: "idle" });
     setSessionState({ status: "idle" });
     setShiftFinishedLocked(false);
-    setParentSessionView("idle");
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("checkout") === "success") {
+       setParentSessionView("idle");
+    }
     setSessionDbStatus(null);
     setClosureSitterReviews([]);
     setClosureError(null);
@@ -1333,7 +1404,7 @@ export default function ParentDashboardPage() {
         setClientHasSessionUser(!!data.session?.user);
       } catch (e) {
         console.warn("[parent] auth getSession failed:", e);
-      } finally {
+      } finally { 
         setParentBootstrapComplete(true);
       }
     })();
@@ -1575,7 +1646,7 @@ export default function ParentDashboardPage() {
           const merged = mergeParentSessionFromDbRow(row, {
             dismissedCompletedSessionId: dismissedId,
             todaysBookingId,
-            localState: local,
+            localState: local, // החזרת משתנה הלוקאל התקין
             bookingStatus: todaysBookingStatusNormalized
           });
           if (merged) {
@@ -1615,7 +1686,7 @@ export default function ParentDashboardPage() {
       } catch (e) {
         console.warn("[parent] session hydrate error:", e);
         setSessionHydrateError(true);
-      } finally {
+      } finally { 
         if (!cancelled) setSessionHydrateComplete(true);
       }
     })();
@@ -1778,7 +1849,7 @@ export default function ParentDashboardPage() {
 
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      setDbBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לבטל את הבקשה.");
+      setDbBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לביטל את הבקשה.");
       return;
     }
 
@@ -1979,7 +2050,7 @@ export default function ParentDashboardPage() {
       resetLocalSessionIdle(
         friendlySupabaseSessionError(e ?? "לא ניתן לפתוח משמרת — נסו שוב.")
       );
-    } finally {
+    } finally { // 🔥 תיקון איות: מ-finaly ל-finally התקני בשורה 2057
       setStartShiftBusy(false);
     }
   };
@@ -2276,7 +2347,7 @@ export default function ParentDashboardPage() {
     await reloadTodaysBooking();
   }, [reloadTodaysBooking, setSessionState, setSessionDbStatus, setParentSessionView, setNowMs, shiftCompletedFrozenRef, setShiftUiLocked, setShiftFinishedLocked, setSessionHydrateError]);
 
-  const inPaymentClosure =
+  const interstateClosure =
     showParentSessionClosure &&
     bookingPaymentStatus !== "paid" &&
     closureBookingVerify !== "unavailable";
@@ -2299,13 +2370,12 @@ export default function ParentDashboardPage() {
 
   return (
     <main
-      className={`mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6] py-2 ${inPaymentClosure ? "gap-2" : "space-y-4"}`}
+      className={`mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6] py-2 ${interstateClosure ? "gap-2" : "space-y-4"}`}
       dir="rtl"
     >
       <div className="shrink-0 flex flex-col space-y-1">
         <DashboardWelcomeHeader fullName={fullName} nameLoading={greetingNameLoading} />
         
-        {/* 👑 קונטיינר מסודר בצד ימין שמרכז את ה-ID מעל הדירוג בצורה יפה ואחידה */}
         {realParentDisplayId && (
           <div className="px-4 text-right flex flex-col items-start gap-1">
             <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs font-semibold px-2.5 py-1 rounded-lg border border-purple-100 shadow-sm animate-in fade-in duration-200">
@@ -2332,7 +2402,7 @@ export default function ParentDashboardPage() {
         </div>
       ) : null}
 
-      {inPaymentClosure || hideSearchShortcuts ? null : (
+      {interstateClosure || hideSearchShortcuts ? null : (
       <section className="shrink-0 rounded-3xl bg-white p-4 shadow-soft sm:p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Link
@@ -2368,6 +2438,22 @@ export default function ParentDashboardPage() {
           </div>
         </div>
 
+        {/* כפתור AnyNanny NOW */}
+        <button
+          type="button"
+          disabled={nowBusy}
+          onClick={handleAnyNannyNowClick}
+          className="mt-3 flex w-full min-h-[3.75rem] flex-row-reverse items-center justify-between gap-3 rounded-2xl border border-red-200 bg-gradient-to-br from-[#FFF5F5] to-[#FFF2F2] px-4 py-3 text-right shadow-sm ring-1 ring-red-500/10 transition hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white shadow-md animate-pulse">
+            <Zap className="h-5 w-5 fill-white" />
+          </span>
+          <div className="min-w-0 flex-1 space-y-0.5 text-right">
+            <span className="block text-sm font-black text-red-950">AnyNanny NOW</span>
+            <span className="block text-[11px] font-bold text-red-600/90">הפעלת קריאה מיידית — מענה מעכשיו לעכשיו</span>
+          </div>
+        </button>
+
         <Link
           href="/parent/search"
           className="mt-3 flex min-h-[3.5rem] flex-row-reverse items-center justify-between gap-3 rounded-2xl border border-emerald-700/20 bg-emerald-50/80 px-4 py-3 text-right text-navy-header shadow-sm transition hover:border-emerald-700/35 hover:shadow-md active:scale-[0.99]"
@@ -2375,13 +2461,13 @@ export default function ParentDashboardPage() {
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-emerald-800/15">
             <Search className="h-5 w-5 text-emerald-800" aria-hidden />
           </span>
-          <span className="min-w-0 flex-1 text-sm font-bold leading-snug text-emerald-950">חיפוש נני — דירוגים וביקורות</span>
+          <span className="min-w-0 flex-1 text-sm font-bold leading-snug text-emerald-950">לוח חיפוש רגיל — תזמון מראש וביקורות</span>
         </Link>
       </section>
       )}
 
       {showShiftPanel ? (
-      <DoubleShakeShiftPanel className={`min-h-0 flex-1 ${inPaymentClosure ? "!mt-0 !p-2 sm:!p-3" : ""}`}>
+      <DoubleShakeShiftPanel className={`min-h-0 flex-1 ${interstateClosure ? "!mt-0 !p-2 sm:!p-3" : ""}`}>
         <div
           className={`flex min-h-0 w-full flex-1 flex-col items-center overflow-hidden ${
             sessionRunning ? "justify-center gap-4 py-2" : "min-h-0"
@@ -2472,7 +2558,7 @@ export default function ParentDashboardPage() {
           ) : null}
 
           <DoubleShakeCircleSlot
-            align={inPaymentClosure ? "start" : "center"}
+            align={interstateClosure ? "start" : "center"}
             pinToBottom={!sessionRunning}
             className={sessionRunning ? "!mt-0 pt-4" : undefined}
           >
@@ -2615,6 +2701,55 @@ export default function ParentDashboardPage() {
         busy={bookingResponseAckBusy}
         onAcknowledge={() => void handleAcknowledgeBookingResponse()}
       />
+
+      {/* 🔥 מודאל בחירת אזור מהיר (2 קליקים) מובנה ומאובטח המרונדר דינמית מרשימת ה-Config הארצית SUPPORTED_CITIES */}
+      {showCityModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs" dir="rtl">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-slate-100 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500 shadow-inner">
+              <Zap className="h-5 w-5 fill-current" />
+            </div>
+            
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-slate-800">אישור מיקום עבור AnyNanny NOW</h3>
+              <p className="text-xs text-slate-500 font-medium">היכן אתה צריך את המטפלת מעכשיו לעכשיו?</p>
+            </div>
+
+            <div className="space-y-2">
+              <select
+                value={selectedCity}
+                onChange={(e) => setSelectedCity(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#001F3F]/20"
+              >
+                {SUPPORTED_CITIES.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                disabled={nowBusy}
+                onClick={handleLaunchBroadcast}
+                className="flex-1 rounded-xl bg-red-500 py-3 text-xs font-bold text-white shadow-md hover:brightness-110 active:scale-[0.98] disabled:opacity-50 transition"
+              >
+                {nowBusy ? "משדר..." : "אישור ושידור ברק"}
+              </button>
+              <button
+                type="button"
+                disabled={nowBusy}
+                onClick={() => setShowCityModal(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-500 hover:bg-slate-50 transition"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

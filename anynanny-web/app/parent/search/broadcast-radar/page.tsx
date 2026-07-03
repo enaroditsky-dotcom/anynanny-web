@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MainLayout } from "@components/layout/MainLayout";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Zap, ShieldCheck, Star, Clock } from "lucide-react";
+import { Zap, ShieldCheck, Star, Clock, AlertCircle, RefreshCw, ArrowRight, XCircle } from "lucide-react";
 
 interface RespondingSitter {
   id: string;
@@ -26,22 +26,72 @@ export default function BroadcastRadarPage() {
 
   const [responders, setResponders] = useState<RespondingSitter[]>([]);
   const [dots, setDots] = useState(".");
+  const [isExpired, setIsExpired] = useState(false);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // אנימציית נקודות קטנה לטעינה
   useEffect(() => {
+    if (isExpired) return;
     const interval = setInterval(() => {
       setDots((prev) => (prev.length >= 3 ? "." : prev + "."));
     }, 500);
     return () => clearInterval(interval);
-  }, []);
+  }, [isExpired]);
 
-  // האזנה בזמן אמת (Realtime) לתגובות של נניז
+  // 1. האזנה בזמן אמת לשינוי הסטטוס של השידור עצמו (זיהוי פג תוקף או ביטול)
   useEffect(() => {
-    if (!alertId || alertId === "null") {
-      console.warn("⚠️ BroadcastRadarPage: alertId is missing or string 'null' inside useEffect.");
-      return;
-    }
+    if (!alertId || alertId === "null") return;
+
+    const alertChannel = supabase
+      .channel(`alert_status:${alertId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "broadcasts", // 🔥 סנכרון שם הטבלה המדויק שלך מבוסס ה-Table Editor
+          filter: `id=eq.${alertId}`
+        },
+        (payload) => {
+          console.log("Base alert updated in DB:", payload.new);
+          if (payload.new.status === "expired" || payload.new.status === "cancelled") {
+            setIsExpired(true);
+          }
+        }
+      )
+      .subscribe();
+
+    // בדיקה ראשונית של הסטטוס הנוכחי למקרה שההורה רענן את העמוד
+    const checkCurrentStatus = async () => {
+      const { data } = await supabase
+        .from("broadcasts")
+        .select("status, created_at")
+        .eq("id", alertId)
+        .maybeSingle();
+      
+      if (data?.status === "expired" || data?.status === "cancelled") {
+        setIsExpired(true);
+      } else if (data?.created_at) {
+        // הגנה לוקאלית: אם עברו יותר מ-20 דקות מרגע היצירה, נחשיב כפג תוקף
+        const minutesPassed = (Date.now() - new Date(data.created_at).getTime()) / 1000 / 60;
+        if (minutesPassed >= 20) {
+          setIsExpired(true);
+          await supabase.from("broadcasts").update({ status: "expired" }).eq("id", alertId);
+        }
+      }
+    };
+    
+    void checkCurrentStatus();
+
+    return () => {
+      supabase.removeChannel(alertChannel);
+    };
+  }, [alertId, supabase]);
+
+  // 2. האזנה בזמן אמת (Realtime) לתגובות של נניז
+  useEffect(() => {
+    if (!alertId || alertId === "null" || isExpired) return;
 
     console.log(`📡 Parent initialising Realtime channel for alert ID: ${alertId}`);
 
@@ -60,7 +110,6 @@ export default function BroadcastRadarPage() {
           const sitterId = payload.new.sitter_id;
           
           try {
-            // שליפת הפרופיל של הנני שהגיבה
             const { data: sitterProfile, error: profileError } = await supabase
               .from("sitter_profiles") 
               .select("full_name, hourly_rate_nis, years_experience")
@@ -73,7 +122,6 @@ export default function BroadcastRadarPage() {
             }
 
             if (!sitterProfile) {
-              console.warn(`⚠️ No profile found for sitter ID: ${sitterId}`);
               setResponders((prev) => {
                 if (prev.some((r) => r.id === sitterId)) return prev;
                 return [
@@ -89,8 +137,6 @@ export default function BroadcastRadarPage() {
               });
               return;
             }
-
-            console.log("✅ Successfully fetched profile for radar:", sitterProfile);
 
             setResponders((prev) => {
               if (prev.some((r) => r.id === sitterId)) return prev;
@@ -110,14 +156,37 @@ export default function BroadcastRadarPage() {
           }
         }
       )
-      .subscribe((status) => {
-        console.log(`🔗 Radar subscription status: ${status}`);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [alertId, supabase]);
+  }, [alertId, isExpired, supabase]);
+
+  // 🔥 פונקציית ביטול ועצירה ידנית מובנית
+  const handleCancelBroadcast = async () => {
+    if (!alertId || isCancelling) return;
+
+    setIsCancelling(true);
+    try {
+      const response = await fetch("/api/broadcast/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ broadcastId: alertId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to cancel broadcast via API");
+      }
+
+      router.push("/parent/search");
+    } catch (err) {
+      console.error("❌ Error stopping broadcast:", err);
+      alert("תקלה בעצירת השידור, נסה שנית.");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const handleSelectSitter = async (sitter: RespondingSitter) => {
     if (!alertId || alertId === "null") {
@@ -132,20 +201,16 @@ export default function BroadcastRadarPage() {
         return;
       }
 
-      // 1. עדכון סטטוס ה-Broadcast ל-'filled'
       await supabase
-        .from("broadcast_alerts")
+        .from("broadcasts")
         .update({ status: "filled" })
         .eq("id", alertId);
 
-      // 2. חישוב זמנים מדויקים עבור שדות החובה ב-Database
       const now = new Date();
       const bookingDateStr = now.toISOString();
       const startTimeStr = now.toISOString();
-      const endTime = new Date(now.getTime() + 3 * 60 * 60 * 1000); // ברירת מחדל ל-3 שעות
+      const endTime = new Date(now.getTime() + 3 * 60 * 60 * 1000);
       const endTimeStr = endTime.toISOString();
-
-      console.log("📤 Creating booking with all required timestamps...");
 
       const { error: bookingError } = await supabase
         .from("bookings")
@@ -162,8 +227,6 @@ export default function BroadcastRadarPage() {
       if (bookingError) throw bookingError;
 
       alert(`מזל טוב! סגרת משמרת מיידית מול ${sitter.name}. המשמרת תואמה בהצלחה.`);
-      
-      // ניווט לדשבורד להפעלת המודאל המובנה
       router.push("/parent/dashboard");
 
     } catch (err) {
@@ -174,7 +237,7 @@ export default function BroadcastRadarPage() {
 
   const serviceLabel = type === "lactation" ? "יועצת הנקה" : type === "sleep" ? "יועצת שינה" : "בייביסיטר";
 
-  // בדיקה אם ה-alertId חסר לחלוטין ברמת הרינדור (רק אם הוא לא הגיע בכלל)
+  // חיווי אם מזהה השידור לא קיים בכלל ב-URL
   if (!alertId && errorStatus === "missing_id") {
     return (
       <MainLayout>
@@ -194,80 +257,131 @@ export default function BroadcastRadarPage() {
   return (
     <MainLayout>
       <div dir="rtl" className="mx-auto max-w-md space-y-6 pt-4 px-2">
-        <div className="rounded-3xl bg-gradient-to-br from-[#FFF5F5] to-[#FFF0F0] p-5 border border-[#FF8A8A]/20 shadow-sm text-center space-y-3 relative overflow-hidden">
-          <div className="absolute -left-4 -top-4 text-[#FF8A8A]/10 transform -rotate-12">
-            <Zap className="h-24 w-24 fill-current" />
-          </div>
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#FF8A8A] text-white shadow-md">
-            <Zap className="h-6 w-6 fill-white" />
-          </div>
-          <div className="space-y-1">
-            <h1 className="text-xl font-black text-navy-header">השידור המיידי הופעל ב{city}</h1>
-            <p className="text-xs text-slate-500 font-medium">מחפשים עבורך {serviceLabel} מעכשיו לעכשיו</p>
-          </div>
-          <div className="flex items-center justify-center gap-1.5 pt-1 text-sm font-bold text-[#FF8A8A]">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF8A8A] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FF8A8A]"></span>
-            </span>
-            <span>נניז בסביבה מקבלות התראה כעת{dots}</span>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <h2 className="text-xs font-bold text-slate-400 mr-1 uppercase tracking-wider">
-            מטפלות פנויות שהגיבו ({responders.length})
-          </h2>
-
-          {responders.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center space-y-2">
-              <Clock className="mx-auto h-8 w-8 text-slate-300 animate-spin" style={{ animationDuration: '3s' }} />
-              <p className="text-xs font-bold text-slate-600">ממתינים לתגובה ראשונה...</p>
-              <p className="text-[10px] text-slate-400 max-w-xs mx-auto">בדרך כלל לוקח לנניז בסביבה בין 1 ל-3 דקות לאשר את הקריאה בטלפון שלהן.</p>
+        
+        {/* תצוגת פג תוקף או ביטול: מופעלת אם השידור נסגר ללא מענה או בוטל */}
+        {isExpired && responders.length === 0 ? (
+          <div className="rounded-3xl bg-white p-6 border border-slate-100 shadow-soft text-center space-y-4 animate-fadeIn">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600 shadow-inner">
+              <AlertCircle className="h-6 w-6" />
             </div>
-          ) : (
-            <div className="space-y-2.5">
-              {responders.map((sitter) => (
-                <div 
-                  key={sitter.id}
-                  className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-white shadow-soft"
+            <div className="space-y-1">
+              <h1 className="text-lg font-black text-navy-header">החיפוש הופסק או פג תוקף</h1>
+              <p className="text-xs text-slate-500 font-medium px-4 leading-relaxed">
+                השידור המיידי לאזור {city} נעצר בהצלחה או עבר את הגבלת הזמן של 20 דקות ללא מענה זמין מעכשיו לעכשיו.
+              </p>
+            </div>
+            
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => router.push("/parent/search")}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-navy-header px-4 py-3 text-xs font-bold text-white shadow-sm hover:bg-[#001F3F]/90 transition"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                הפעל שידור חדש
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/parent/search?mode=normal")}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+              >
+                מעבר לחיפוש רגיל בלוח
+                <ArrowRight className="h-3.5 w-3.5 rotate-120" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* תצוגת הראדאר הרגילה כשהשידור פעיל */
+          <>
+            <div className="rounded-3xl bg-gradient-to-br from-[#FFF5F5] to-[#FFF0F0] p-5 border border-[#FF8A8A]/20 shadow-sm text-center space-y-3 relative overflow-hidden">
+              <div className="absolute -left-4 -top-4 text-[#FF8A8A]/10 transform -rotate-12">
+                <Zap className="h-24 w-24 fill-current" />
+              </div>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#FF8A8A] text-white shadow-md">
+                <Zap className="h-6 w-6 fill-white" />
+              </div>
+              <div className="space-y-1">
+                <h1 className="text-xl font-black text-navy-header">השידור המיידי הופעל ב{city}</h1>
+                <p className="text-xs text-slate-500 font-medium">מחפשים עבורך {serviceLabel} מעכשיו לעכשיו</p>
+              </div>
+              <div className="flex items-center justify-center gap-1.5 pt-1 text-sm font-bold text-[#FF8A8A]">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF8A8A] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FF8A8A]"></span>
+                </span>
+                <span>נניז בסביבה מקבלות התראה כעת{dots}</span>
+              </div>
+
+              {/* 🔥 כפתור ביטול ה-Broadcast המובנה החדש המותאם לעיצוב */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  disabled={isCancelling}
+                  onClick={handleCancelBroadcast}
+                  className="mx-auto flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white/90 px-4 py-2 text-xs font-bold text-rose-600 shadow-xs transition hover:bg-rose-50 active:scale-[0.98] disabled:opacity-50"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center font-black text-purple-700 text-sm">
-                      {sitter.name[0]}
-                    </div>
-                    <div className="space-y-0.5 text-right">
-                      <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1">
-                        {sitter.name}
-                        <span className="inline-flex items-center gap-0.5 text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-md font-bold">
-                          <Star className="h-2.5 w-2.5 fill-current text-amber-500" />
-                          {sitter.rating}
-                        </span>
-                      </h3>
-                      <p className="text-[11px] text-slate-500 font-medium">{sitter.experience} שנות ניסיון • ₪{sitter.hourlyRate}/שעה</p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSelectSitter(sitter)}
-                    className="rounded-xl bg-navy-header px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#001F3F]/90 transition"
-                  >
-                    בחירה וסגירה
-                  </button>
-                </div>
-              ))}
+                  <XCircle className="h-3.5 w-3.5" />
+                  <span>{isCancelling ? "מבטל..." : "עצור חיפוש וביטול קריאה"}</span>
+                </button>
+              </div>
             </div>
-          )}
-        </div>
 
-        <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 flex items-start gap-2.5 text-right">
-          <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <h4 className="text-[11px] font-bold text-slate-700">הגנה מלאה על המשמרת</h4>
-            <p className="text-[10px] text-slate-500 leading-normal">כל הנניז הרשומות בפלטפורמה עברו אימות פרופיל קשיח ובדיקת רקע. הבחירה שלך בטוחה לחלוטין.</p>
-          </div>
-        </div>
+            <div className="space-y-3">
+              <h2 className="text-xs font-bold text-slate-400 mr-1 uppercase tracking-wider">
+                מטפלות פנויות שהגיבו ({responders.length})
+              </h2>
+
+              {responders.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center space-y-2">
+                  <Clock className="mx-auto h-8 w-8 text-slate-300 animate-spin" style={{ animationDuration: '3s' }} />
+                  <p className="text-xs font-bold text-slate-600">ממתינים לתגובה ראשונה...</p>
+                  <p className="text-[10px] text-slate-400 max-w-xs mx-auto">בדרך כלל לוקח לנניז בסביבה בין 1 ל-3 דקות לאשר את הקריאה בטלפון שלהן.</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {responders.map((sitter) => (
+                    <div 
+                      key={sitter.id}
+                      className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-white shadow-soft"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center font-black text-purple-700 text-sm">
+                          {sitter.name[0]}
+                        </div>
+                        <div className="space-y-0.5 text-right">
+                          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1">
+                            {sitter.name}
+                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-md font-bold">
+                              <Star className="h-2.5 w-2.5 fill-current text-amber-500" />
+                              {sitter.rating}
+                            </span>
+                          </h3>
+                          <p className="text-[11px] text-slate-500 font-medium">{sitter.experience} שנות ניסיון • ₪{sitter.hourlyRate}/שעה</p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSitter(sitter)}
+                        className="rounded-xl bg-navy-header px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#001F3F]/90 transition"
+                      >
+                        בחירה וסגירה
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 flex items-start gap-2.5 text-right">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <h4 className="text-[11px] font-bold text-slate-700">הגנה מלאה על המשמרת</h4>
+                <p className="text-[10px] text-slate-500 leading-normal">כל הנניז הרשומות בפלטפורמה עברו אימות פרופיל קשיח ובדיקת רקע. הבחירה שלך בטוחה לחלוטין.</p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </MainLayout>
   );

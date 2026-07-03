@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { DoubleShakeShiftPanel } from "@/components/session/double-shake-circle-button";
 import { BillingSessionMetrics } from "@/components/billing/BillingSessionMetrics";
 import { readStrictSessionStatus } from "@/lib/billing/billing-lifecycle";
+import { Star } from "lucide-react";
 import {
   BILLING_SESSION_SELECT,
   formatNis,
@@ -84,7 +85,12 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
   const [startBusy, setStartBusy] = useState(false);
   const [endBusy, setEndBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
+  const [ratingBusy, setRatingBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  
+  // ניהול כוכבי דירוג מקומי אצל הנני
+  const [rating, setRating] = useState<number>(0);
+  const [isFinishedEntirely, setIsFinishedEntirely] = useState(false);
 
   const handleSitterStart = useCallback(async () => {
     if (startBusy || sessionStatus !== "confirmed" || !row) return;
@@ -157,6 +163,34 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
     }
   }, [commitSessionRow, endBusy, row, sessionId, sessionStatus, sitterId]);
 
+  // שליחת דירוג ההורה על ידי הנני וסגירה מוחלטת
+  const handleSitterSubmitRating = async () => {
+    if (rating === 0 || ratingBusy) return;
+    setRatingBusy(true);
+    
+    try {
+      const supabase = getSupabaseBrowserClient();
+      
+      // 1. שמירת הדירוג בטבלה המתאימה
+      await supabase.from("sitter_ratings").insert([
+        {
+          session_id: sessionId,
+          sitter_id: sitterId,
+          parent_id: row?.parent_id,
+          rating_stars: rating
+        }
+      ]);
+
+      // 2. סגירת התצוגה המקומית סופית
+      setIsFinishedEntirely(true);
+      triggerHaptic([60, 30, 60]);
+    } catch (err) {
+      console.error("Error submitting rating for parent:", err);
+    } finally {
+      setRatingBusy(false);
+    }
+  };
+
   const handleResetShakes = useCallback(async () => {
     if (resetBusy) return;
     if (
@@ -222,6 +256,13 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
 
   if (loading || !row) {
     mainCard = <StatusCard>טוען פרטי משמרת…</StatusCard>;
+  } else if (isFinishedEntirely) {
+    mainCard = (
+      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-5 text-center space-y-2">
+        <h3 className="text-sm font-bold text-emerald-900">המשמרת נסגרה ונחתמה!</h3>
+        <p className="text-xs text-emerald-700 font-medium">הכסף הועבר לחשבונך והסיכום שמור במערכת. נתראה במשמרת הבאה!</p>
+      </div>
+    );
   } else if (sessionStatus === "confirmed") {
     mainCard = (
       <button
@@ -268,17 +309,67 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
         <StatusCard>ממתין לאישור סיום מההורה…</StatusCard>
       </div>
     );
-  } else if (sessionStatus === "completed") {
+  } 
+  // 🔥 שלב הביניים החדש: ההורה אישר סיום, אבל התשלום טרם בוצע בפועל
+  else if (sessionStatus === "completed" && row.session_status !== "paid") {
     mainCard = (
-      <div className="space-y-3">
-        <StatusCard>המשמרת הסתיימה בהצלחה.</StatusCard>
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4 text-center space-y-1">
+          <h3 className="text-xs font-bold text-amber-800">ההורה אישר את סיום המשמרת!</h3>
+          <p className="text-[11px] text-amber-700 leading-normal">ההורה נמצא כעת בשלב ביצוע התשלום והסליקה. מיד עם אישור העסקה המסך שלך יתעדכן.</p>
+        </div>
         <BillingSessionMetrics
           timerText={timerText}
           accruedNis={formatNis(accruedNis)}
           ratePerMinute={ratePerMinute}
           isLive={false}
-          headline="סיכום סופי"
+          headline="סיכום ממתין לתשלום"
         />
+      </div>
+    );
+  } 
+  // 🔥 שלב הגראנד-פינאלה: התשלום סולק בהצלחה! מציגים לנני הודעת הצלחה + בקשת דירוג
+  else if (row.session_status === "paid") {
+    mainCard = (
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center space-y-1.5 shadow-soft">
+          <span className="text-xl">💰</span>
+          <h3 className="text-sm font-black text-emerald-900">התשלום התקבל בהצלחה!</h3>
+          <p className="text-xs text-emerald-700">הסכום על סך ₪{formatNis(accruedNis)} הועבר לחשבונך.</p>
+        </div>
+
+        <div className="rounded-2xl bg-white border border-slate-100 p-4 text-center space-y-3 shadow-soft">
+          <div className="space-y-0.5">
+            <h4 className="text-xs font-bold text-slate-700">איך היה ההורה?</h4>
+            <p className="text-[10px] text-slate-400">דרגי את החוויה שלך כדי לעזור לנניז אחרות בסביבה</p>
+          </div>
+          
+          <div className="flex justify-center gap-2" dir="ltr">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                onClick={() => setRating(star)}
+                className="transition active:scale-95"
+              >
+                <Star
+                  className={`h-7 w-7 ${
+                    star <= rating ? "fill-amber-400 text-amber-400" : "text-slate-200"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            disabled={rating === 0 || ratingBusy}
+            onClick={handleSitterSubmitRating}
+            className="w-full rounded-xl bg-navy-header py-2.5 text-xs font-bold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+          >
+            {ratingBusy ? "שומר..." : "סיום ותודה"}
+          </button>
+        </div>
       </div>
     );
   } else {
@@ -311,9 +402,11 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
         </div>
       </DoubleShakeShiftPanel>
 
-      <div className="mt-3 shrink-0 px-1">
-        <BillingResetButton busy={resetBusy} onClick={() => void handleResetShakes()} />
-      </div>
+      {!isFinishedEntirely && row?.session_status !== "paid" && (
+        <div className="mt-3 shrink-0 px-1">
+          <BillingResetButton busy={resetBusy} onClick={() => void handleResetShakes()} />
+        </div>
+      )}
     </div>
   );
 }

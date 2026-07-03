@@ -9,6 +9,7 @@ import { SitterMandatoryRatingPanel } from "@/components/session/sitter-mandator
 import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
+import { SitterBroadcastAlertModal } from "@/components/sitter/SitterBroadcastAlertModal"; 
 import {
   fetchProfileSerialId,
   formatSitterPublicIdFromSerial
@@ -167,6 +168,15 @@ export default function SitterDashboardPage() {
   const idleCircleBooking = circleBooking ?? todaysBooking;
   const gateBookingStatus = normalizeBookingStatus(todayBookingShiftGate?.status) ?? "";
 
+  // 🔥 הגנה קריטית: אם המשמרת ב-Gate מסומנת כגמורה, דואגים לאפס אקטיבית את ה-Circle בזיכרון המקומי
+  useEffect(() => {
+    if (gateBookingStatus === "completed" || gateBookingStatus === "cancelled" || gateBookingStatus === "rejected") {
+      if (circleBooking != null) {
+        applyCircleBooking(null);
+      }
+    }
+  }, [gateBookingStatus, circleBooking, applyCircleBooking]);
+
   const sessionUiBlockedByBooking = useMemo(
     () => bookingGuardReady && doesBookingBlockSessionShiftUi(todayBookingShiftGate),
     [bookingGuardReady, todayBookingShiftGate]
@@ -230,7 +240,9 @@ export default function SitterDashboardPage() {
     if (bookingId) {
       persistShiftLocallyDismissed(bookingId);
     }
-  }, [resolveShiftBookingId]);
+    // איפוס קאש אקטיבי כדי למנוע את מצב העיגול התקוע
+    applyCircleBooking(null);
+  }, [resolveShiftBookingId, applyCircleBooking]);
 
   useEffect(() => {
     if (!forceEndToast) return;
@@ -317,6 +329,8 @@ export default function SitterDashboardPage() {
         completedShow = null;
       } else if (dismissedId != null && cid === dismissedId) {
         completedShow = null;
+      } else if (c.sitter_rating != null) { 
+        completedShow = null;
       } else {
         completedShow = c;
       }
@@ -335,7 +349,7 @@ export default function SitterDashboardPage() {
       setActiveShiftRow(null);
     } else {
       const gateStatus = normalizeBookingStatus(gate?.status);
-      if (!gate?.id || gateStatus !== "completed") {
+      if (!gate?.id || gateStatus === "completed" || gateStatus === "rejected" || gateStatus === "cancelled") {
         completedShow = null;
       } else if (
         shouldSuppressStaleCompletedSession({
@@ -543,20 +557,24 @@ export default function SitterDashboardPage() {
 
       dismissCompletedSession(sid, "sitter");
       suppressCompletedSummaryIdRef.current = sid;
-      lockShiftForToday();
+      
+      // איפוס קריטי ומוחלט של כל זכר למשמרת הישנה כדי להעלים את העיגול מיד
+      applyCircleBooking(null);
       setCompletedSummaryRow(null);
       setPendingRow(null);
       setActiveShiftRow(null);
       setEndConfirmRow(null);
+      
       setBanner(null);
       setSitterClosureBusy(false);
       await refreshForUser(supabase, sitterIdTemp);
       router.refresh();
     },
-    [completedSummaryRow, sitterId, refreshForUser, router, lockShiftForToday, setCompletedSummaryRow, setPendingRow, setActiveShiftRow, setEndConfirmRow, suppressCompletedSummaryIdRef]
+    [completedSummaryRow, sitterId, refreshForUser, router, applyCircleBooking, setCompletedSummaryRow, setPendingRow, setActiveShiftRow, setEndConfirmRow, suppressCompletedSummaryIdRef]
   );
 
   const handleDevReset = useCallback(async () => {
+    applyCircleBooking(null);
     setPendingRow(null);
     setActiveShiftRow(null);
     setEndConfirmRow(null);
@@ -571,7 +589,7 @@ export default function SitterDashboardPage() {
     }
     await reloadTodaysBooking();
     setDashboardStatsRefreshKey((k) => k + 1);
-  }, [sitterId, refreshForUser, reloadTodaysBooking, setPendingRow, setActiveShiftRow, setEndConfirmRow, setCompletedSummaryRow]);
+  }, [sitterId, refreshForUser, reloadTodaysBooking, applyCircleBooking, setPendingRow, setActiveShiftRow, setEndConfirmRow, setCompletedSummaryRow]);
 
   const liveElapsed = useMemo(() => {
     const row = endConfirmRow ?? activeShiftRow;
@@ -648,6 +666,7 @@ export default function SitterDashboardPage() {
       }
       setBanner(null);
       suppressCompletedSummaryIdRef.current = null;
+      applyCircleBooking(null); // איפוס הבוקינג בסיום מוצלח של משמרת
       await refreshForUser(auth.supabase, sitterId);
       await reloadTodaysBooking();
       router.refresh();
@@ -678,10 +697,12 @@ export default function SitterDashboardPage() {
       void refreshSitterProfileCardStatus(supabase, sitterId);
     }
   }, [sitterId, refreshSitterProfileCardStatus]);
+
   const sitterInFlightActive = Boolean(pendingRow || activeShiftRow || endConfirmRow);
 
   const sitterHasLiveBooking =
     Boolean(activeCircleBooking) &&
+    gateBookingStatus !== "completed" &&
     gateBookingStatus !== "rejected" &&
     gateBookingStatus !== "cancelled" &&
     !isSitterBookingAwaitingApprovalStatus(gateBookingStatus);
@@ -724,7 +745,7 @@ export default function SitterDashboardPage() {
     (sitterHasLiveBooking && isWithin10Minutes && !sessionUiBlockedByBooking);
 
   const isSessionPaidAndReadyForRating =
-    sitterTerminalDbStatus !== "sitter_completed" && sitterTerminalDbStatus !== "";
+    sitterTerminalDbStatus === "paid" || sitterTerminalDbStatus === "completed" || gateBookingStatus === "completed";
 
   const showLoading =
     loading && !sitterBootstrapComplete && !(pendingRow || activeShiftRow || endConfirmRow);
@@ -834,7 +855,7 @@ export default function SitterDashboardPage() {
         </div>
       ) : showSitterBookingApproval ? (
         <p className="text-center text-sm text-slate-600">טוען בקשה ממתינה…</p>
-      ) : showSitterIdleWelcome ? (
+      ) : showSitterIdleWelcome || gateBookingStatus === "completed" ? (
         <div className="flex w-full flex-1 flex-col items-center justify-center gap-3 px-4 py-6 text-center">
           <p className="text-base font-bold text-[#001F3F]">היומן שלך פנוי כרגע</p>
           <p className="max-w-[18rem] text-sm leading-snug text-slate-600">
@@ -870,7 +891,6 @@ export default function SitterDashboardPage() {
       dir="rtl"
     >
       <div className="shrink-0">
-        {/* 👑 קראנו להדר ומבחינתנו הוא מקבל את המזהה והדירוג מיושרים פיקס תחתיו בצורה אנכית! */}
         <SitterDashboardHeader
           fullName={fullName}
           nameLoading={greetingNameLoading}
@@ -989,14 +1009,14 @@ export default function SitterDashboardPage() {
           </div>
         </section>
 
-        {showDoubleShakeShiftPanel ? (
-        <DoubleShakeShiftPanel
-          className={`min-h-0 flex-1 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
-        >
-          <div id="sitter-shift-panel" className="flex min-h-0 flex-1 flex-col" aria-hidden={onboardingPending}>
-            {sessionSection}
-          </div>
-        </DoubleShakeShiftPanel>
+        {showDoubleShakeShiftPanel || gateBookingStatus === "completed" ? (
+          <DoubleShakeShiftPanel
+            className={`min-h-0 flex-1 ${onboardingPending ? "pointer-events-none select-none blur-[2px] opacity-55" : ""}`}
+          >
+            <div id="sitter-shift-panel" className="flex min-h-0 flex-1 flex-col" aria-hidden={onboardingPending}>
+              {sessionSection}
+            </div>
+          </DoubleShakeShiftPanel>
         ) : null}
       </div>
 
@@ -1020,6 +1040,8 @@ export default function SitterDashboardPage() {
           </button>
         </div>
       )}
+
+      {sitterId && <SitterBroadcastAlertModal sitterId={sitterId} />}
     </main>
   );
 }

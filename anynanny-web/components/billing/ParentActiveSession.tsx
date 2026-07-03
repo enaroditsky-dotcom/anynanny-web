@@ -63,7 +63,6 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
     participantId: parentId
   });
 
-  // שמירת ה-refresh ב-Ref כדי למנוע לופים של רינדור
   const refreshRef = useRef(refresh);
   useEffect(() => { refreshRef.current = refresh; }, [refresh]);
 
@@ -79,9 +78,13 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
   const [actionError, setActionError] = useState<string | null>(null);
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
   const [checkoutAmountNis, setCheckoutAmountNis] = useState<number | null>(null);
+  
+  // מודאל הדירוג ייפתח מיד עם סיום המשמרת
   const [ratingOpen, setRatingOpen] = useState(false);
+  // משתנה בוליאני שמסמן שההורה סיים לדרג ואפשר לעבור לשלב הסליקה
+  const [ratingCompleted, setRatingCompleted] = useState(false);
 
-  // Real-time listener: מאזין לעדכונים בלי ליצור לופים
+  // Real-time listener לעדכונים מול ה-Database
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
@@ -97,7 +100,6 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
           filter: `id=eq.${sessionId}`,
         },
         () => {
-          // שימוש ב-Ref מונע את הלופ
           refreshRef.current();
         }
       )
@@ -165,8 +167,9 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
     }
   }, [commitSessionRow, confirmEndBusy, parentId, row, sessionId, lifecyclePhase]);
 
+  // פונקציית יצירת סשן תשלום (Hyp / Cardcom)
   const handleStartPayment = useCallback(async () => {
-    if (checkoutBusy || !genuinelyCompleted || !row) return;
+    if (checkoutBusy || !row) return;
 
     setCheckoutBusy(true);
     setActionError(null);
@@ -189,14 +192,22 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
         setCheckoutClientSecret(result.clientSecret);
         setCheckoutAmountNis(result.amount ?? accruedNis);
       } else {
-        setActionError("לא התקבל clientSecret מ-Stripe.");
+        setActionError("לא התקבל מפתח סליקה תקין מחברת הסליקה.");
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "שגיאה בהכנת התשלום.");
     } finally {
       setCheckoutBusy(false);
     }
-  }, [accruedNis, checkoutBusy, genuinelyCompleted, refresh, row, sessionId]);
+  }, [accruedNis, checkoutBusy, refresh, row, sessionId]);
+
+  // מופעל אוטומטית ברגע שההורה מסיים לדרג במודאל
+  const handleRatingResolved = useCallback(() => {
+    setRatingOpen(false);
+    setRatingCompleted(true);
+    // 🔥 מעבר אוטומטי ומיידי לשלב הפקת אמצעי התשלום והסליקה
+    void handleStartPayment();
+  }, [handleStartPayment]);
 
   const handlePaymentSuccess = useCallback(async () => {
     setCheckoutClientSecret(null);
@@ -216,18 +227,24 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
     setCheckoutClientSecret(null);
     setCheckoutAmountNis(null);
     setRatingOpen(false);
+    setRatingCompleted(false);
     await refresh();
   }, [refresh]);
 
+  // פתיחת מודאל הדירוג אוטומטית ברגע שהמשמרת אושרה כהלכה על ידי שני הצדדים
   useEffect(() => {
     if (!genuinelyCompleted) {
       setCheckoutClientSecret(null);
       setCheckoutAmountNis(null);
       setRatingOpen(false);
+      setRatingCompleted(false);
       return;
     }
-    setRatingOpen(true);
-  }, [genuinelyCompleted]);
+    // פותח את המודאל רק אם הוא עדיין לא דורג בסבב הנוכחי
+    if (!ratingCompleted) {
+      setRatingOpen(true);
+    }
+  }, [genuinelyCompleted, ratingCompleted]);
 
   const showEmergencyReset =
     sessionStatus === "sitter_started" ||
@@ -285,7 +302,15 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
   } else if (genuinelyCompleted) {
     mainCard = (
       <div className="flex w-full max-w-[14rem] flex-col items-center gap-2">
-        <StatusCard>המשמרת הסתיימה בהצלחה.</StatusCard>
+        {row.session_status === "paid" ? (
+          <div className="w-full text-center p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-1">
+            <h3 className="text-xs font-bold text-emerald-800">🎉 המשמרת שולמה בהצלחה!</h3>
+            <p className="text-[10px] text-emerald-600">הסיכום נחתם ונשמר בדשבורד.</p>
+          </div>
+        ) : (
+          <StatusCard>המשמרת הסתיימה. מעבר לתשלום.</StatusCard>
+        )}
+        
         <BillingSessionMetrics
           timerText={timerText}
           accruedNis={formatNis(accruedNis)}
@@ -293,24 +318,34 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
           isLive={false}
           headline="סיכום סופי"
         />
-        {!checkoutClientSecret ? (
-          <button
-            type="button"
-            disabled={checkoutBusy}
-            onClick={() => void handleStartPayment()}
-            className="w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-70"
-          >
-            {checkoutBusy ? "מכין תשלום…" : "ביצוע תשלום"}
-          </button>
-        ) : null}
-        {checkoutClientSecret && checkoutAmountNis != null ? (
-          <BillingInlineCheckout
-            clientSecret={checkoutClientSecret}
-            amountNis={checkoutAmountNis}
-            onSuccess={() => void handlePaymentSuccess()}
-            onError={(message) => setActionError(message)}
-          />
-        ) : null}
+
+        {/* שלב בחירת אמצעי תשלום וסליקה: מוצג אוטומטית רק לאחר שהדירוג הושלם והמשמרת לא שולמה עדיין */}
+        {ratingCompleted && row.session_status !== "paid" && (
+          <div className="w-full space-y-2 pt-1">
+            {!checkoutClientSecret ? (
+              <button
+                type="button"
+                disabled={checkoutBusy}
+                onClick={() => void handleStartPayment()}
+                className="w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-70"
+              >
+                {checkoutBusy ? "מכין מסך סליקה…" : "פתח אמצעי תשלום"}
+              </button>
+            ) : null}
+
+            {checkoutClientSecret && checkoutAmountNis != null ? (
+              <div className="w-full border-t border-slate-100 pt-3">
+                <p className="text-[11px] font-bold text-slate-500 text-right mb-2">בחירת אמצעי תשלום:</p>
+                <BillingInlineCheckout
+                  clientSecret={checkoutClientSecret}
+                  amountNis={checkoutAmountNis}
+                  onSuccess={() => void handlePaymentSuccess()}
+                  onError={(message) => setActionError(message)}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
     );
   } else {
@@ -351,7 +386,7 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
           open={ratingOpen}
           role="parent"
           sessionId={sessionId}
-          onResolved={() => setRatingOpen(false)}
+          onResolved={handleRatingResolved}
         />
       ) : null}
     </div>
