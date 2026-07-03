@@ -8,9 +8,7 @@ import {
 } from "@/lib/supabase/middleware-client";
 
 function isPublicAuthPath(pathname: string): boolean {
-  if (pathname === "/auth/register" || pathname.startsWith("/auth/register/")) return true;
-  if (pathname === "/auth/role-selection" || pathname.startsWith("/auth/role-selection/")) return true;
-  return false;
+  return pathname.startsWith("/auth/");
 }
 
 function isProtectedAppPath(pathname: string): boolean {
@@ -33,12 +31,13 @@ async function refreshSession(request: NextRequest): Promise<{
   }
 
   const { supabase, getResponse } = createSupabaseMiddlewareClient(request);
-  await supabase.auth.getSession();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  return { response: getResponse(), user: user ? { id: user.id } : null };
+  try {
+    await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
+    return { response: getResponse(), user: user ? { id: user.id } : null };
+  } catch {
+    return { response: getResponse(), user: null };
+  }
 }
 
 export async function middleware(request: NextRequest) {
@@ -64,42 +63,46 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
 
-  const isAuth = pathname === "/auth" || pathname.startsWith("/auth/");
-  if (isAuth) {
-    const { response } = await refreshSession(request);
-    return response;
-  }
-
   if (!isProtectedAppPath(pathname)) {
     return NextResponse.next();
   }
 
   const { supabase, getResponse } = createSupabaseMiddlewareClient(request);
-  await supabase.auth.getSession();
-  const {
-    data: { user: authUser }
-  } = await supabase.auth.getUser();
   const response = getResponse();
 
-  if (authUser) {
-    const gate = await getRoleGateRedirect(
-      supabase,
-      authUser.id,
-      pathname,
-      authUser.email ?? null
-    );
-    if (gate) {
-      const roleSelection = new URL(gate, request.url);
-      const redirect = NextResponse.redirect(roleSelection);
-      return applySupabaseCookies(response, redirect);
+  try {
+    // 1. ננסה למשוך את ה-Session והמשתמש
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    // 🛡️ טיפול בבג שמחקת את החשבון ב-Supabase לייב:
+    if (sessionError || (session && !session.user)) {
+      throw new Error("User missing from auth backend");
     }
-    return response;
-  }
 
-  const login = new URL("/auth/login", request.url);
-  login.searchParams.set("next", `${pathname}${search}`);
-  const redirect = NextResponse.redirect(login);
-  return applySupabaseCookies(response, redirect);
+    // אם אין סשן בכלל - זרוק ל-Login
+    if (!session) {
+      const login = new URL("/auth/login", request.url);
+      login.searchParams.set("next", `${pathname}${search}`);
+      return applySupabaseCookies(response, NextResponse.redirect(login));
+    }
+
+    return response;
+
+  } catch (err) {
+    console.error("🎯 זיהוי חשבון מחוק או טוקן שבור - מנקים סשן ומנתבים מחדש:", err);
+    
+    // החשבון נמחק מאחורי הקלעים! ננקה את הקוקיז ונעיף אותו בצורה חלקה לעמוד הבית או לעמוד שגיאה
+    const target = new URL("/auth/login", request.url);
+    target.searchParams.set("error", "account_deleted"); // נוסיף פרמטר קטן כדי שהיוזר יבין מה קרה
+    
+    const redirectResponse = NextResponse.redirect(target);
+    
+    // מאפסים את טוקני ה-Auth המקומיים כדי לעצור את הלולאה וההבהוב מיד
+    redirectResponse.cookies.set("sb-access-token", "", { maxAge: 0 });
+    redirectResponse.cookies.set("sb-refresh-token", "", { maxAge: 0 });
+    
+    return applySupabaseCookies(response, redirectResponse);
+  }
 }
 
 export const config = {

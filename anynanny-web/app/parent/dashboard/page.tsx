@@ -97,7 +97,7 @@ import {
 } from "@/lib/public/sequential-display-id";
 import { parentRequestEndSession } from "@/lib/session/parent-request-end-session";
 
-// 🔥 שינוי 1: ייבוא רשימת הערים האחידה מהקונפיג שייצרנו
+// ייבוא רשימת הערים האחידה מהקונפיג שייצרנו
 import { SUPPORTED_CITIES } from "@/lib/bookings/cities-config";
 
 const HOURLY_RATE = 50; 
@@ -356,6 +356,9 @@ export default function ParentDashboardPage() {
   const [bookingResponseAckBusy, setBookingResponseAckBusy] = useState(false);
 
   const [realParentDisplayId, setRealParentDisplayId] = useState<string | null>(null);
+  
+  // 🛡️ שכבת הגנה עליונה - מניעת רינדור הדשבורד עד לאימות פרופיל מלא
+  const [checkingAuthEnforcement, setCheckingAuthEnforcement] = useState(true);
 
   const { fullName, nameLoading: greetingNameLoading } = useDashboardGreetingName(
     "parent",
@@ -540,11 +543,11 @@ export default function ParentDashboardPage() {
   const sessionSupabaseSessionId = sessionState?.supabaseSessionId ?? "";
 
   const todaysBookingId =
-    todaysBooking?.id ??
+    `token_${todaysBooking?.id}` && (todaysBooking?.id ??
     circleBooking?.id ??
     todayBookingShiftGate?.id ??
     sessionLinkedBookingId ??
-    "";
+    "");
   const todaysBookingStatus =
     normalizeBookingStatus(
       todaysBooking?.status ?? todayBookingShiftGate?.status ?? circleBooking?.status
@@ -639,7 +642,7 @@ export default function ParentDashboardPage() {
   const idleCircleBooking = circleBooking ?? todaysBooking;
 
   useEffect(() => {
-    if (!bookingGuardReady || !parentUserId) return;
+    if (!bookingGuardReady || !parentUserId || checkingAuthEnforcement) return;
     if (idleCircleBooking) return;
 
     const status = normalizeBookingStatus(
@@ -680,13 +683,15 @@ export default function ParentDashboardPage() {
   }, [
     bookingGuardReady,
     parentUserId,
+    checkingAuthEnforcement,
     idleCircleBooking,
     shiftGateStatus,
     todaysBookingStatus,
     circleBookingStatus,
     todayBookingShiftGate?.id,
     todaysBookingId,
-    applyCircleBooking
+    applyCircleBooking,
+    bookingRef
   ]);
 
   const sessionUiBlockedByBooking = useMemo(
@@ -871,7 +876,7 @@ export default function ParentDashboardPage() {
   ]);
 
   useEffect(() => {
-    if (!bookingGuardReady) return;
+    if (!bookingGuardReady || checkingAuthEnforcement) return;
     const db = sessionDbStatus?.toLowerCase() ?? "";
     if (db === "sitter_completed" || isParentReviewSessionDbStatus(db)) {
       setParentSessionView("review_pay");
@@ -898,6 +903,7 @@ export default function ParentDashboardPage() {
     }
   }, [
     bookingGuardReady,
+    checkingAuthEnforcement,
     sessionDbStatus,
     parentSessionView,
     setParentSessionView,
@@ -909,7 +915,7 @@ export default function ParentDashboardPage() {
     todaysBooking?.status
   ]);
 
-  // 🔥 שינוי 2: שדרוג מנגנון ה-Bypass למעקף חברת הסליקה בתקופת ה-Beta
+  // שדרוג מנגנון ה-Bypass למעקף חברת הסליקה בתקופת ה-Beta המותאם ל-Cardcom
   const handleConfirmAndPay = useCallback(
     async (rating: number) => {
       const sid = sessionSupabaseSessionId?.trim();
@@ -947,28 +953,27 @@ export default function ParentDashboardPage() {
       const amountMinorUnits = Math.max(50, Math.round(Number(amountNis) * 100));
       
       try {
-        // קריאה ישירה ל-Endpoint של המעקף (Mock Bypass)
-        const response = await fetch("/api/hyp/checkout", {
+        // קריאה ישירה ל-Endpoint של מעקף הסליקה המותאם ל-CARDCOM
+        const response = await fetch("/api/cardcom/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             bookingId: bid,
             amountMinorUnits,
             currency: "ils",
-            description: "תשלום משמרת AnyNanny - סימולציית Beta"
+            description: "תשלום משמרת AnyNanny - סימולציית Beta Cardcom"
           }),
         });
 
         const data = await response.json();
         if (data.url) {
-          // דוחף את הדפדפן להפניה חזרה המקומית כדי לסגור מעגל Realtime מול הנני
           window.location.assign(data.url);
         } else {
           setClosureError(data.error || "שגיאה בביצוע מעקף תשלום");
           setPayBusy(false);
         }
       } catch (e) {
-        console.error("[parent] Beta simulation checkout:", e);
+        console.error("[parent] Beta Cardcom simulation checkout:", e);
         setClosureError("שגיאה ברשת בבקשת מעקף תשלום.");
         setPayBusy(false);
       }
@@ -1061,9 +1066,9 @@ export default function ParentDashboardPage() {
       breakCompletedRealtimeLoop("sync");
       return;
     }
-    if (!todaysBookingId) return;
+    if (!todaysBookingId || checkingAuthEnforcement) return;
     syncFromLinkedBooking(todaysBookingRef.current);
-  }, [bookingSyncKey, syncFromLinkedBooking, breakCompletedRealtimeLoop, todaysBookingStatus, todaysBookingId, shiftUiLocked, sessionStatus, shiftCompletedFrozenRef, todaysBookingRef]);
+  }, [bookingSyncKey, syncFromLinkedBooking, checkingAuthEnforcement, breakCompletedRealtimeLoop, todaysBookingStatus, todaysBookingId, shiftUiLocked, sessionStatus, shiftCompletedFrozenRef, todaysBookingRef]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1133,7 +1138,7 @@ export default function ParentDashboardPage() {
   }, [shiftGateStatus, applyBookingShiftNotice]);
 
   useEffect(() => {
-    if (!parentUserId) return;
+    if (!parentUserId || checkingAuthEnforcement) return;
 
     void reloadTodaysBooking();
 
@@ -1154,10 +1159,10 @@ export default function ParentDashboardPage() {
       window.removeEventListener("focus", refreshFromDb);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [parentUserId, reloadTodaysBooking]);
+  }, [parentUserId, checkingAuthEnforcement, reloadTodaysBooking]);
 
   useEffect(() => {
-    if (shiftCompletedFrozenRef.current || todaysBookingStatus === "completed") {
+    if (shiftCompletedFrozenRef.current || todaysBookingStatus === "completed" || checkingAuthEnforcement) {
       return;
     }
 
@@ -1222,6 +1227,7 @@ export default function ParentDashboardPage() {
     };
   }, [
     parentUserId,
+    checkingAuthEnforcement,
     todaysBookingStatus,
     reloadTodaysBooking,
     notifyBookingTransition,
@@ -1234,7 +1240,7 @@ export default function ParentDashboardPage() {
   ]);
 
   useEffect(() => {
-    if (!showParentSessionClosure || bookingPaymentStatus === "paid") {
+    if (!showParentSessionClosure || bookingPaymentStatus === "paid" || checkingAuthEnforcement) {
       setClosureBookingVerify("idle");
       setClosureError(null);
       return;
@@ -1282,10 +1288,10 @@ export default function ParentDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [showParentSessionClosure, closureBookingId, bookingPaymentStatus, todaysBookingUpdatedAt]);
+  }, [showParentSessionClosure, closureBookingId, checkingAuthEnforcement, bookingPaymentStatus, todaysBookingUpdatedAt]);
 
   useEffect(() => {
-    if (sessionStatus !== "ended") {
+    if (sessionStatus !== "ended" || checkingAuthEnforcement) {
       setBookingPaymentStatus("unknown");
       return;
     }
@@ -1311,10 +1317,10 @@ export default function ParentDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionStatus, closureBookingId, stripeCheckoutNonce]);
+  }, [sessionStatus, closureBookingId, checkingAuthEnforcement, stripeCheckoutNonce]);
 
   useEffect(() => {
-    if (!bookingGuardReady) return;
+    if (!bookingGuardReady || checkingAuthEnforcement) return;
 
     const liveStatuses = new Set<BookingStatus>([
       "pending",
@@ -1367,6 +1373,7 @@ export default function ParentDashboardPage() {
     setNowMs(Date.now());
   }, [
     bookingGuardReady,
+    checkingAuthEnforcement,
     todaysBookingId,
     todaysBookingStatusNormalized,
     sessionStatus,
@@ -1381,13 +1388,13 @@ export default function ParentDashboardPage() {
   ]);
 
   useEffect(() => {
-    if (!sessionUiBlockedByBooking) return;
+    if (!sessionUiBlockedByBooking || checkingAuthEnforcement) return;
     if (sessionStatus === "idle" || sessionStatus === "ended") return;
     const idle: SessionProtocolState = { status: "idle" };
     persistSessionState(idle);
     setSessionState(idle);
     setNowMs(Date.now());
-  }, [sessionUiBlockedByBooking, sessionStatus, setSessionState, setNowMs]);
+  }, [sessionUiBlockedByBooking, checkingAuthEnforcement, sessionStatus, setSessionState, setNowMs]);
 
   useEffect(() => {
     if (parentBootstrapComplete && clientHasSessionUser === true) return;
@@ -1432,12 +1439,26 @@ export default function ParentDashboardPage() {
           if (cancelled) return;
           setParentUserId(userId);
 
-          const { serialId, role, error: profileErr } = await fetchProfileSerialId(supabase, userId);
-          if (profileErr) {
-            console.warn("[parent] profile serial load:", profileErr);
+          // 🛡️ בדיקת חובה קשיחה ואימות כפול - מניעת מעקף שאלון הורים לפנים!
+          const { data: profile, error: profileErr } = await supabase
+            .from("profiles")
+            .select("role, full_name, phone")
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (profileErr || !profile?.full_name || !profile?.phone) {
+            if (!cancelled) {
+              router.replace("/parent/onboarding");
+            }
+            return;
           }
 
-          if (!cancelled && role === "parent") {
+          const { serialId, error: serialErr } = await fetchProfileSerialId(supabase, userId);
+          if (serialErr) {
+            console.warn("[parent] profile serial load:", serialErr);
+          }
+
+          if (!cancelled) {
             const displayId = formatParentPublicIdFromSerial(serialId);
             if (displayId) {
               setRealParentDisplayId(displayId);
@@ -1452,8 +1473,10 @@ export default function ParentDashboardPage() {
           }
 
           setUseSupabase(true);
+          setCheckingAuthEnforcement(false); // פתיחת הרינדור בבטחה רק כשהפרופיל אומת כמלא
         } catch (e) {
           console.warn("[parent] auth bootstrap failed:", e);
+          setCheckingAuthEnforcement(false);
         }
       })();
     }
@@ -1462,10 +1485,10 @@ export default function ParentDashboardPage() {
       cancelled = true;
       window.removeEventListener("storage", onStorage);
     };
-  }, [syncFromStorage, setParentUserId]);
+  }, [syncFromStorage, setParentUserId, router]);
 
   useEffect(() => {
-    if (shiftUiLocked || isShiftLocallyDismissed(todaysBookingId)) {
+    if (shiftUiLocked || isShiftLocallyDismissed(todaysBookingId) || checkingAuthEnforcement) {
       return;
     }
     if (!parentUserId || !bookingGuardReady) return;
@@ -1646,7 +1669,7 @@ export default function ParentDashboardPage() {
           const merged = mergeParentSessionFromDbRow(row, {
             dismissedCompletedSessionId: dismissedId,
             todaysBookingId,
-            localState: local, // החזרת משתנה הלוקאל התקין
+            localState: local,
             bookingStatus: todaysBookingStatusNormalized
           });
           if (merged) {
@@ -1697,6 +1720,7 @@ export default function ParentDashboardPage() {
   }, [
     parentUserId,
     bookingGuardReady,
+    checkingAuthEnforcement,
     todaysBookingId,
     todaysBookingStatus,
     shiftUiLocked,
@@ -1718,6 +1742,7 @@ export default function ParentDashboardPage() {
     if (
       (shiftUiLocked && sessionStatus !== "ended" && !sessionSupabaseSessionId) ||
       isShiftLocallyDismissed(todaysBookingId) ||
+      checkingAuthEnforcement ||
       ((shiftCompletedFrozenRef.current || todaysBookingStatus === "completed") &&
         sessionStatus !== "ended" &&
         !sessionSupabaseSessionId)
@@ -1821,6 +1846,7 @@ export default function ParentDashboardPage() {
     };
   }, [
     parentUserId,
+    checkingAuthEnforcement,
     sessionSupabaseSessionId,
     todaysBookingStatus,
     todaysBookingId,
@@ -2050,7 +2076,7 @@ export default function ParentDashboardPage() {
       resetLocalSessionIdle(
         friendlySupabaseSessionError(e ?? "לא ניתן לפתוח משמרת — נסו שוב.")
       );
-    } finally { // 🔥 תיקון איות: מ-finaly ל-finally התקני בשורה 2057
+    } finally { 
       setStartShiftBusy(false);
     }
   };
@@ -2058,19 +2084,19 @@ export default function ParentDashboardPage() {
   const handleParentConfirmEndShift = useCallback(async () => {
     const sessionId = sessionSupabaseSessionId;
     if (!sessionId || confirmEndBusy) return;
+    const auth = await resolveBrowserAuth();
+    if (!auth.ok) {
+      setDbBanner(
+        auth.reason === "no_client"
+          ? "Supabase לא מוגדר."
+          : "יש להתחבר כדי לאשר סיום משמרת."
+      );
+      return;
+    }
+
     setConfirmEndBusy(true);
     setDbBanner(null);
     try {
-      const auth = await resolveBrowserAuth();
-      if (!auth.ok) {
-        setDbBanner(
-          auth.reason === "no_client"
-            ? "Supabase לא מוגדר."
-            : "יש להתחבר כדי לאשר סיום משמרת."
-        );
-        return;
-      }
-
       const { error } = await auth.supabase.rpc("end_shift_atomic", {
         p_session_id: sessionId,
         p_parent_id: auth.userId,
@@ -2142,7 +2168,7 @@ export default function ParentDashboardPage() {
   );
 
   useEffect(() => {
-    if (!bookingGuardReady || showParentSessionClosure) return;
+    if (!bookingGuardReady || showParentSessionClosure || checkingAuthEnforcement) return;
     if (sessionStatus !== "idle") return;
 
     const booking = idleCircleBooking;
@@ -2155,6 +2181,7 @@ export default function ParentDashboardPage() {
     applyCircleBooking(null);
   }, [
     bookingGuardReady,
+    checkingAuthEnforcement,
     showParentSessionClosure,
     sessionStatus,
     idleCircleBooking,
@@ -2257,6 +2284,9 @@ export default function ParentDashboardPage() {
       const nextNotifications = bookingResponseNotifications.filter(
         (item) => item.id !== notification.id
       );
+      bookingResponseNotifications.filter(
+        (item) => item.id !== notification.id
+      );
       setBookingResponseNotifications(nextNotifications);
       setActiveBookingResponseNotification(nextNotifications[0] ?? null);
     } finally {
@@ -2265,12 +2295,12 @@ export default function ParentDashboardPage() {
   }, [activeBookingResponseNotification, parentUserId, bookingResponseAckBusy, bookingResponseNotifications]);
 
   useEffect(() => {
-    if (!parentUserId || !parentBootstrapComplete) return;
+    if (!parentUserId || !parentBootstrapComplete || checkingAuthEnforcement) return;
     void refreshBookingResponseNotifications();
-  }, [parentUserId, parentBootstrapComplete, refreshBookingResponseNotifications]);
+  }, [parentUserId, parentBootstrapComplete, checkingAuthEnforcement, refreshBookingResponseNotifications]);
 
   useEffect(() => {
-    if (!parentUserId) return;
+    if (!parentUserId || checkingAuthEnforcement) return;
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
@@ -2299,7 +2329,7 @@ export default function ParentDashboardPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [parentUserId, refreshBookingResponseNotifications]);
+  }, [parentUserId, checkingAuthEnforcement, refreshBookingResponseNotifications]);
 
   const showParentShiftCircle =
     !showParentSessionClosure &&
@@ -2352,10 +2382,8 @@ export default function ParentDashboardPage() {
     bookingPaymentStatus !== "paid" &&
     closureBookingVerify !== "unavailable";
 
-  const showLoading =
-    !parentBootstrapComplete &&
-    clientHasSessionUser !== true &&
-    (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading));
+  // 🛡️ מסך טעינה חכם המאובטח כפליים – מגן על הדשבורד מפריצה ודילוגי URL
+  const showLoading = checkingAuthEnforcement || (!parentBootstrapComplete && clientHasSessionUser !== true && (clientHasSessionUser === null || (clientHasSessionUser === false && authLoading)));
 
   if (showLoading) {
     return (
@@ -2363,10 +2391,107 @@ export default function ParentDashboardPage() {
         className="mx-auto flex h-full min-h-0 w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10"
         dir="rtl"
       >
-        <p className="text-right text-sm text-slate-600">{"טוען..."}</p>
+        <p className="text-right text-sm text-slate-600 animate-pulse">בודק הרשאות גישה ומאמת פרופיל הורה…</p>
       </main>
     );
   }
+
+  const sessionSection = (
+    <>
+      {showParentActiveSessionCenter ? (
+        <div className="flex w-full flex-col items-center justify-center gap-4 pt-2">
+          <ParentSessionTimerCircle
+            timerText={timerText}
+            amountLabel={`₪${earnedNis}`}
+            variant="salmon"
+          />
+        </div>
+      ) : showParentConfirmEnd ? (
+        <div className="flex w-full flex-col items-center justify-center gap-3 pt-2 text-center">
+          <p className="text-sm font-semibold text-navy-800">הבייביסיטר סיימ/ה את המשמרת</p>
+          <p className="text-4xl font-bold tabular-nums tracking-wide text-[#001F3F]">{timerText}</p>
+          <p className="text-sm font-semibold text-navy-800">סכום לתשלום: ₪{earnedNis}</p>
+          <DoubleShakeCircleButton
+            label={confirmEndBusy ? "מאשר…" : "אישור סיום משמרת"}
+            variant="salmon"
+            busy={confirmEndBusy}
+            onClick={() => void handleParentConfirmEndShift()}
+          />
+          <button
+            type="button"
+            disabled={confirmEndBusy}
+            onClick={() => setDebugToast("אפשר לאשר את סיום המשמרת כשתהיו מוכנים")}
+            className="rounded-xl border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            לא עכשיו
+          </button>
+        </div>
+      ) : showParentSessionClosure && bookingPaymentStatus === "paid" ? (
+        <p className="text-center text-sm font-semibold text-emerald-800">התשלום הושלם — תודה!</p>
+      ) : showParentSessionClosure &&
+        bookingPaymentStatus !== "paid" &&
+        closureBookingVerify !== "unavailable" &&
+        effectiveClosureSummary ? (
+        <ParentSessionClosurePanel
+          elapsedSeconds={effectiveClosureSummary.elapsedSeconds}
+          amountNis={effectiveClosureSummary.amountNis}
+          busy={payBusy}
+          bookingChecking={closureBookingVerify === "checking"}
+          bookingReady={closureBookingVerify === "ready"}
+          errorMessage={closureError}
+          onConfirmAndPay={handleConfirmAndPay}
+        />
+      ) : showParentShiftCircle ? (
+        <ParentDoubleShakeIdleCircle
+          key={parentCircleLiveKey}
+          booking={idleCircleBooking}
+          ready={bookingGuardReady}
+          busy={startShiftBusy}
+          sessionActive={sessionStatus === "active"}
+          onStartShift={() => {
+            if (parentShiftStatus === "sitter_started") {
+              void handleConfirmShiftStartClick();
+            } else {
+              setDebugToast("יש להמתין שהבייביסיטר תלחץ על התחלת משמרת תחילה");
+            }
+          }}
+        />
+      ) : waitingNannyStart ? (
+        <>
+          <DoubleShakeCircleButton
+            label="ממתין לאישור…"
+            variant="waiting-navy"
+            presentational
+          />
+          <button
+            type="button"
+            disabled={cancelBusy}
+            onClick={() => void cancelSession()}
+            className="rounded-xl border border-rose-300/90 bg-rose-50/50 px-4 py-2.5 text-sm font-semibold text-rose-800 shadow-sm transition hover:border-rose-400 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {cancelBusy ? "מבטלים…" : "ביטול הבקשה"}
+          </button>
+        </>
+      ) : waitingNannyEnd && !showParentSessionClosure ? (
+        <div className="mt-2 flex flex-col items-center justify-center pt-2">
+          <DoubleShakeCircleButton
+            label="ממתין לאישור סיום..."
+            variant="waiting-salmon"
+            presentational
+          />
+        </div>
+      ) : parentSessionInProgress && (isParentTrackingShift || parentShiftStatus === "pending") ? (
+        <ParentDoubleShakeIdleCircle
+          key={parentCircleLiveKey}
+          booking={idleCircleBooking}
+          ready={bookingGuardReady}
+          busy={startShiftBusy}
+          sessionActive={sessionStatus === "active"}
+          onStartShift={() => handleConfirmShiftStartClick()}
+        />
+      ) : null}
+    </>
+  );
 
   return (
     <main
@@ -2702,7 +2827,7 @@ export default function ParentDashboardPage() {
         onAcknowledge={() => void handleAcknowledgeBookingResponse()}
       />
 
-      {/* 🔥 מודאל בחירת אזור מהיר (2 קליקים) מובנה ומאובטח המרונדר דינמית מרשימת ה-Config הארצית SUPPORTED_CITIES */}
+      {/* מודאל בחירת אזור מהיר מובנה ומאובטח המרונדר דינמית מרשימת ה-Config הארצית SUPPORTED_CITIES */}
       {showCityModal && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs" dir="rtl">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-slate-100 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">

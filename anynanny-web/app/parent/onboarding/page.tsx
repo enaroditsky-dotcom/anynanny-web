@@ -1,299 +1,419 @@
-"use client";
+'use client';
 
-import { Plus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import {
-  PARENT_TERMS_LABEL,
-  TermsAcceptanceCheckbox
-} from "@/components/auth/terms-acceptance-checkbox";
-import { USER_SPECIAL_OCCASIONS_TABLE } from "@/lib/parent/user-special-occasions";
-import { ensureParentProfileBootstrap } from "@/lib/parent/ensure-parent-profile-bootstrap";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
-import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import InfoTooltip from '@/components/ui/InfoTooltip';
+import { Plus, Trash2, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 
-type OccasionDraft = { event_name: string; event_date: string };
+interface CustomEvent {
+  name: string;
+  date: string;
+}
 
-export default function ParentOnboardingPage() {
+export default function ParentOnboarding() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [occasions, setOccasions] = useState<OccasionDraft[]>([{ event_name: "", event_date: "" }]);
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const supabase = createClientComponentClient();
+  const [step, setStep] = useState(0); // 0 = מסך פתיחה, 1 = אישי וביטחון, 2 = פינוקים, 3 = משפחה גרעינית
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user || cancelled) {
-        if (!cancelled) router.replace("/auth/login?next=/parent/onboarding");
-        return;
-      }
-      const first = await supabase
-        .from(PROFILES_TABLE)
-        .select("role, parent_onboarding_completed_at")
-        .eq("id", user.id)
-        .maybeSingle();
-      let profile = first.data;
-      if (
-        first.error &&
-        isPostgrestMissingColumnError(first.error.message, "parent_onboarding_completed_at")
-      ) {
-        const second = await supabase.from(PROFILES_TABLE).select("role").eq("id", user.id).maybeSingle();
-        if (second.error) {
-          if (!cancelled) setLoading(false);
-          return;
-        }
-        profile =
-          second.data !== null && second.data !== undefined
-            ? { ...second.data, parent_onboarding_completed_at: null as string | null }
-            : null;
-      } else if (first.error) {
-        if (!cancelled) setLoading(false);
-        return;
-      }
-      if (cancelled) return;
-      if (profile?.role !== "parent") {
-        router.replace("/parent/dashboard");
-        return;
-      }
-      if (profile?.parent_onboarding_completed_at) {
-        router.replace("/parent/dashboard");
-        return;
-      }
+  // מצב שדות הטופס
+  const [formData, setFormData] = useState({
+    fullName: '',
+    phone: '',
+    city: '',
+    idNumber: '',
+    birthday: '',
+    spouseBirthday: '',
+    anniversaryDate: '',
+    childrenCount: 0,
+    notesForSitter: '',
+  });
 
-      const { error: bootstrapErr } = await ensureParentProfileBootstrap(supabase, user);
-      if (bootstrapErr && !cancelled) {
-        setMessage(bootstrapErr);
+  const [childrenBirthdays, setChildrenBirthdays] = useState<string[]>([]);
+  const [customEvents, setCustomEvents] = useState<CustomEvent[]>([]);
+
+  // עדכון שדות רגילים
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // עדכון כמות ילדים ופתיחת שדות דינמיים
+  const handleChildrenCountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const count = parseInt(e.target.value, 10) || 0;
+    setFormData((prev) => ({ ...prev, childrenCount: count }));
+    
+    // התאמת אורך המערך לכמות שנבחרה
+    setChildrenBirthdays((prev) => {
+      const updated = [...prev];
+      if (count > updated.length) {
+        while (updated.length < count) updated.push('');
+      } else {
+        updated.splice(count);
       }
+      return updated;
+    });
+  };
 
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+  const handleChildBirthdayChange = (index: number, value: string) => {
+    setChildrenBirthdays((prev) => {
+      const updated = [...prev];
+      updated[index] = value;
+      return updated;
+    });
+  };
 
-  const addRow = () => setOccasions((rows) => [...rows, { event_name: "", event_date: "" }]);
-  const removeRow = (i: number) => setOccasions((rows) => rows.filter((_, j) => j !== i));
-  const patchRow = (i: number, patch: Partial<OccasionDraft>) =>
-    setOccasions((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  // ניהול אירועים מיוחדים נוספים
+  const addCustomEvent = () => {
+    setCustomEvents((prev) => [...prev, { name: '', date: '' }]);
+  };
 
-  const skipFinish = useCallback(async () => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    setSaving(true);
-    setMessage("");
+  const removeCustomEvent = (index: number) => {
+    setCustomEvents((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCustomEventChange = (index: number, field: keyof CustomEvent, value: string) => {
+    setCustomEvents((prev) => {
+      const updated = [...prev];
+      updated[index][field] = value;
+      return updated;
+    });
+  };
+
+  // שליחת הנתונים ל-Supabase עם מנגנון עקיפה חכם לפיתוח
+  const handleSubmit = async () => {
+    setLoading(true);
     try {
-      if (!termsAccepted) {
-        setMessage("יש לאשר את תנאי השימוש לפני המשך ההרשמה.");
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // אם אין משתמש מחובר ואנחנו בסביבת לוקאל/פיתוח - נעקוף את החסימה כדי לבדוק זרימה חלקה
+      if (!user && window.location.hostname === 'localhost') {
+        console.log('סביבת פיתוח מקומית זוהתה (ללא משתמש מחובר) - נתוני הטופס שנאספו:', {
+          ...formData,
+          childrenBirthdays,
+          customEvents
+        });
+        router.push('/parent/dashboard');
         return;
       }
 
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace("/auth/login?next=/parent/onboarding");
-        return;
-      }
+      if (!user) throw new Error('User not found');
 
-      const { error: bootstrapErr } = await ensureParentProfileBootstrap(supabase, user);
-      if (bootstrapErr) {
-        setMessage(bootstrapErr);
-        return;
-      }
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: formData.fullName,
+          phone: formData.phone,
+          city: formData.city,
+          id_number: formData.idNumber,
+          birthday: formData.birthday || null,
+          spouse_birthday: formData.spouseBirthday || null,
+          anniversary_date: formData.anniversaryDate || null,
+          children_count: formData.childrenCount,
+          children_birthdays: childrenBirthdays,
+          custom_events: customEvents,
+          notes_for_sitter: formData.notesForSitter,
+        })
+        .eq('id', user.id);
 
-      const iso = new Date().toISOString();
-      let up = await supabase
-        .from(PROFILES_TABLE)
-        .update({ parent_onboarding_completed_at: iso, updated_at: iso })
-        .eq("id", user.id);
-      if (
-        up.error &&
-        isPostgrestMissingColumnError(up.error.message, "parent_onboarding_completed_at")
-      ) {
-        up = await supabase.from(PROFILES_TABLE).update({ updated_at: iso }).eq("id", user.id);
-      }
-      if (up.error) {
-        setMessage(up.error.message);
-        return;
-      }
+      if (error) throw error;
+
+      // מעבר אוטומטי לדשבורד של ההורה בסיום
+      router.push('/parent/dashboard');
+    } catch (error) {
+      console.error('Error saving onboarding details:', error);
+      alert('חלה שגיאה בשמירת הנתונים. אנא נסה שוב.');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
-  }, [router, termsAccepted]);
+  };
 
-  const finish = useCallback(async () => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    setSaving(true);
-    setMessage("");
-    try {
-      if (!termsAccepted) {
-        setMessage("יש לאשר את תנאי השימוש לפני המשך ההרשמה.");
-        return;
-      }
-
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace("/auth/login?next=/parent/onboarding");
-        return;
-      }
-
-      const filled = occasions.filter((o) => o.event_name.trim() && o.event_date);
-      const partial = occasions.some((o) => (o.event_name.trim() && !o.event_date) || (!o.event_name.trim() && o.event_date));
-      if (partial) {
-        setMessage("לכל אירוע יש למלא שם ותאריך, או למחוק את השורה.");
-        return;
-      }
-
-      const { error: bootstrapErr } = await ensureParentProfileBootstrap(supabase, user);
-      if (bootstrapErr) {
-        setMessage(bootstrapErr);
-        return;
-      }
-
-      const { error: delErr } = await supabase.from(USER_SPECIAL_OCCASIONS_TABLE).delete().eq("user_id", user.id);
-      if (delErr) {
-        setMessage(delErr.message);
-        return;
-      }
-      if (filled.length > 0) {
-        const { error: insErr } = await supabase.from(USER_SPECIAL_OCCASIONS_TABLE).insert(
-          filled.map((o) => ({
-            user_id: user.id,
-            event_name: o.event_name.trim(),
-            event_date: o.event_date
-          }))
-        );
-        if (insErr) {
-          setMessage(insErr.message);
-          return;
-        }
-      }
-
-      const iso = new Date().toISOString();
-      let up = await supabase
-        .from(PROFILES_TABLE)
-        .update({ parent_onboarding_completed_at: iso, updated_at: iso })
-        .eq("id", user.id);
-      if (
-        up.error &&
-        isPostgrestMissingColumnError(up.error.message, "parent_onboarding_completed_at")
-      ) {
-        up = await supabase.from(PROFILES_TABLE).update({ updated_at: iso }).eq("id", user.id);
-      }
-      if (up.error) {
-        setMessage(up.error.message);
-        return;
-      }
-
-      router.push("/parent/dashboard");
-    } finally {
-      setSaving(false);
-    }
-  }, [occasions, router, termsAccepted]);
-
-  if (loading) {
-    return (
-      <main className="mx-auto max-w-md py-16 text-center text-sm text-slate-600" dir="rtl">
-        טוען…
-      </main>
-    );
-  }
+  const nextStep = () => setStep((prev) => prev + 1);
+  const prevStep = () => setStep((prev) => prev - 1);
 
   return (
-    <main className="mx-auto w-full max-w-lg px-4 py-8" dir="rtl">
-      <h1 className="text-2xl font-bold text-navy-header">ברוכים הבאים</h1>
-      <p className="mt-2 text-sm text-slate-600">
-        שלב אופציונלי: רגעים מיוחדים (ימי הולדת, חגים) — עוזר לבייביסיטר להתכונן. אפשר לדלג.
-      </p>
+    <div className="min-h-screen bg-stone-50 text-stone-800 flex flex-col p-5 font-sans dir-rtl text-right" dir="rtl">
+      
+      {/* 🌟 Header האפליקציה הרשמי - Retro Boutique Style */}
+      <header className="w-full max-w-xl mx-auto flex items-center justify-between border-b border-stone-200 pb-3 mb-4">
+        {/* השם AnyNanny בסגנון ובצבעי המותג הרשמיים */}
+        <span className="text-2xl font-serif font-black tracking-tight bg-gradient-to-r from-stone-900 via-stone-800 to-emerald-800 bg-clip-text text-transparent">
+          AnyNanny
+        </span>
 
-      <section className="mt-8 space-y-4 rounded-2xl border border-navy-header/10 bg-white p-4 shadow-soft">
-        <h2 className="text-sm font-semibold text-navy-header">רגעים מיוחדים (אופציונלי)</h2>
-        {occasions.map((row, i) => (
-          <div key={i} className="flex flex-col gap-2 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-end">
-            <label className="min-w-0 flex-1 text-xs font-medium text-navy-900">
-              שם האירוע
-              <input
-                className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2 text-sm"
-                value={row.event_name}
-                onChange={(e) => patchRow(i, { event_name: e.target.value })}
-                disabled={saving}
-              />
-            </label>
-            <label className="w-full text-xs font-medium text-navy-900 sm:w-40">
-              תאריך
-              <input
-                type="date"
-                className="mt-1 block w-full rounded-lg border border-navy-header/20 p-2 text-sm"
-                value={row.event_date}
-                onChange={(e) => patchRow(i, { event_date: e.target.value })}
-                disabled={saving}
-              />
-            </label>
-            <button
-              type="button"
-              aria-label="מחיקת שורה"
-              onClick={() => removeRow(i)}
-              disabled={saving || occasions.length <= 1}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-rose-200 text-rose-600 disabled:opacity-30"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+        {/* לוגו הנני בתוך עיגול מושלם */}
+        <div className="w-10 h-10 rounded-full border border-stone-200 overflow-hidden bg-stone-100 flex items-center justify-center shadow-sm">
+          <img 
+            src="/logo-nanny.png" 
+            alt="AnyNanny Logo" 
+            className="w-full h-full object-cover"
+          />
+        </div>
+      </header>
+
+      {/* פס התקדמות עדין - מופיע רק משלב 1 והלאה */}
+      {step > 0 && (
+        <div className="w-full max-w-xl mx-auto mb-6">
+          <div className="flex justify-between text-xs text-stone-400 mb-1.5 font-medium">
+            <span>פרטים וביטחון</span>
+            <span>רגעים מיוחדים</span>
+            <span>משפחה גרעינית</span>
           </div>
-        ))}
-        <button
-          type="button"
-          onClick={addRow}
-          disabled={saving}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"
-        >
-          <Plus className="h-4 w-4" />
-          הוספת אירוע
-        </button>
-      </section>
+          <div className="w-full h-1 bg-stone-200 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-stone-700 transition-all duration-300" 
+              style={{ width: `${(step / 3) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
 
-      {message ? <p className="mt-4 text-sm text-rose-700">{message}</p> : null}
+      {/* 📱 אזור התוכן - מיושר לחלק העליון למניעת גלילה במסך הפתיחה */}
+      <div className="w-full max-w-xl mx-auto flex-1 pt-2">
+        <div className="w-full bg-white border border-stone-200 p-6 rounded-2xl shadow-sm space-y-6">
+          
+          {/* 👋 מסך פתיחה */}
+          {step === 0 && (
+            <div className="text-center space-y-5 py-2 animate-fade-in">
+              <h1 className="text-2xl font-serif text-stone-900 font-bold leading-snug tracking-tight">
+                ברוכים הבאים למשפחת
+                <br />
+                <span className="text-3xl font-black bg-gradient-to-r from-stone-900 to-stone-700 bg-clip-text text-transparent">AnyNanny!</span>
+              </h1>
+              <p className="text-sm font-sans text-stone-600 leading-relaxed max-w-sm mx-auto">
+                איזה כיף שאתם כאן איתנו. נשמח להכיר אתכם קצת יותר לעומק, כדי שנוכל להפציע אתכם בימים המיוחדים שלכם במהלך השנה, או סתם לפנק אתכם בדברים קטנים שאתם הכי אוהבים.
+              </p>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-sm font-medium transition-all shadow-sm"
+                >
+                  קדימה, בואו נתחיל! ✨
+                </button>
+              </div>
+            </div>
+          )}
 
-      <TermsAcceptanceCheckbox
-        id="parent-terms-accepted"
-        label={PARENT_TERMS_LABEL}
-        checked={termsAccepted}
-        onChange={setTermsAccepted}
-        disabled={saving}
-      />
+          {/* 📋 שלב 1: פרטים אישיים וביטחון */}
+          {step === 1 && (
+            <div className="space-y-5 animate-fade-in">
+              <h2 className="text-xl font-serif text-stone-900 font-bold border-b border-stone-100 pb-2">פרטים אישיים וביטחון</h2>
+              
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-stone-700">שם מלא</label>
+                <input
+                  type="text"
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-stone-500 transition-colors text-sm"
+                  placeholder="ישראל ישראלי"
+                />
+              </div>
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row-reverse">
-        <button
-          type="button"
-          disabled={saving || !termsAccepted}
-          onClick={() => void finish()}
-          className="rounded-2xl bg-[#001F3F] px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
-        >
-          {saving ? "שומרים…" : "סיום והמשך לדשבורד"}
-        </button>
-        <button
-          type="button"
-          disabled={saving || !termsAccepted}
-          onClick={() => void skipFinish()}
-          className="rounded-2xl border border-navy-header/20 px-6 py-3 text-sm font-semibold text-navy-header disabled:opacity-60"
-        >
-          דילוג (ללא אירועים)
-        </button>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-stone-700">מספר טלפון</label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-stone-500 transition-colors text-sm"
+                  placeholder="050-1234567"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-stone-700">עיר מגורים</label>
+                <input
+                  type="text"
+                  name="city"
+                  value={formData.city}
+                  onChange={handleChange}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-stone-500 transition-colors text-sm"
+                  placeholder="למשל: חיפה"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center">
+                  <label className="text-sm font-medium text-stone-700">מספר תעודת זהות</label>
+                  <InfoTooltip content="מכיוון שאנחנו רוצים ליצור פלטפורמה בטוחה ב-100% לשני הצדדים, חשוב לנו לוודא שכל חברי הקהילה שלנו מאומתים. כך גם המטפלת (הנני) יודעת בדיוק ובביטחון מלא לבית של מי היא נכנסת, וגם הילדים שלכם נשארים בידיים הבטוחות ביותר." />
+                </div>
+                <input
+                  type="text"
+                  name="idNumber"
+                  value={formData.idNumber}
+                  onChange={handleChange}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-stone-500 transition-colors text-sm"
+                  placeholder="9 ספרות"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 🎂 שלב 2: ימי הולדת ורגעים מיוחדים */}
+          {step === 2 && (
+            <div className="space-y-5 animate-fade-in">
+              <h2 className="text-xl font-serif text-stone-900 font-bold border-b border-stone-100 pb-2">רגעים מיוחדים שלכם 🎂</h2>
+              <p className="text-xs text-stone-500 -mt-2">כאן נאסוף את תאריכי החגיגות כדי שנוכל לפנק אתכם ברגע הנכון!</p>
+              
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-stone-700">תאריך הלידה שלך</label>
+                <input
+                  type="date"
+                  name="birthday"
+                  value={formData.birthday}
+                  onChange={handleChange}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-stone-500 transition-colors text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-stone-700">תאריך הלידה של בן/בת הזוג <span className="text-stone-400 text-xs">(אופציונלי)</span></label>
+                <input
+                  type="date"
+                  name="spouseBirthday"
+                  value={formData.spouseBirthday}
+                  onChange={handleChange}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-stone-500 transition-colors text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-stone-700">תאריך יום הנישואין שלכם <span className="text-stone-400 text-xs">(כדי שנדאג לכם לערב דייט שקט!)</span></label>
+                <input
+                  type="date"
+                  name="anniversaryDate"
+                  value={formData.anniversaryDate}
+                  onChange={handleChange}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-stone-500 transition-colors text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 👶 שלב 3: המשפחה הגרעינית שלכם */}
+          {step === 3 && (
+            <div className="space-y-5 max-h-[60vh] overflow-y-auto px-1 animate-fade-in">
+              <h2 className="text-xl font-serif text-stone-900 font-bold border-b border-stone-100 pb-2">המשפחה הגרעינית שלכם</h2>
+              
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-stone-700">מספר הילדים במשפחה</label>
+                <select
+                  name="childrenCount"
+                  value={formData.childrenCount}
+                  onChange={handleChildrenCountChange}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-stone-500 transition-colors text-sm"
+                >
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
+                    <option key={num} value={num}>{num}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* שדות תאריכי לידה דינמיים לילדים */}
+              {childrenBirthdays.map((birthday, index) => (
+                <div key={index} className="flex flex-col gap-1.5 p-3 bg-stone-50 border border-stone-150 rounded-xl animate-fade-in">
+                  <label className="text-sm font-medium text-stone-700">תאריך לידה - ילד/ה {index + 1}</label>
+                  <input
+                    type="date"
+                    value={birthday}
+                    onChange={(e) => handleChildBirthdayChange(index, e.target.value)}
+                    className="w-full p-2 bg-white border border-stone-200 rounded-lg focus:outline-none focus:border-stone-500 text-sm"
+                  />
+                </div>
+              ))}
+
+              {/* הוספת אירועים נוספים דינמיים */}
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-stone-700">אירועים ותאריכים נוספים שתרצו שנציין?</label>
+                  <button
+                    type="button"
+                    onClick={addCustomEvent}
+                    className="text-xs flex items-center gap-1 text-stone-600 hover:text-stone-900 font-medium transition-colors"
+                  >
+                    <Plus size={14} /> הוספת אירוע
+                  </button>
+                </div>
+
+                {customEvents.map((event, index) => (
+                  <div key={index} className="flex gap-2 items-center animate-fade-in">
+                    <input
+                      type="text"
+                      placeholder="שם האירוע (למשל: יומולדת לסבתא)"
+                      value={event.name}
+                      onChange={(e) => handleCustomEventChange(index, 'name', e.target.value)}
+                      className="flex-1 p-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
+                    />
+                    <input
+                      type="date"
+                      value={event.date}
+                      onChange={(e) => handleCustomEventChange(index, 'date', e.target.value)}
+                      className="p-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCustomEvent(index)}
+                      className="text-stone-400 hover:text-red-600 p-1 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-1.5 pt-1">
+                <label className="text-sm font-medium text-stone-700">דברים שחשוב שהנני תדע מראש?</label>
+                <textarea
+                  name="notesForSitter"
+                  value={formData.notesForSitter}
+                  onChange={handleChange}
+                  rows={3}
+                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-stone-500 transition-colors text-xs resize-none"
+                  placeholder="אלרגיות במשפחה, חיות מחמד ידידותיות בבית או כל הערה מנהלתית אחרת..."
+                />
+              </div>
+            </div>
+          )}
+
+          {/* כפתורי ניווט תחתוניים */}
+          {step > 0 && (
+            <div className="flex justify-between items-center pt-4 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={prevStep}
+                className="flex items-center gap-1 text-xs font-medium text-stone-500 hover:text-stone-800 transition-colors"
+              >
+                <ArrowRight size={14} /> חזרה
+              </button>
+
+              {step < 3 ? (
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="flex items-center gap-1 px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white text-xs font-medium rounded-xl transition-all shadow-sm"
+                >
+                  המשך לצעד הבא <ArrowLeft size={14} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="flex items-center gap-1.5 px-5 py-2 bg-stone-900 hover:bg-stone-800 text-white text-xs font-medium rounded-xl transition-all shadow-sm disabled:opacity-50"
+                >
+                  {loading ? 'שומר נתונים...' : 'סיום והצטרפות למשפחה'} <Check size={14} />
+                </button>
+              )}
+            </div>
+          )}
+
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

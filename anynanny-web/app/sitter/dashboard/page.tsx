@@ -111,6 +111,9 @@ export default function SitterDashboardPage() {
   const [pendingApprovalBooking, setPendingApprovalBooking] = useState<TodaysLinkedBookingView | null>(
     null
   );
+  
+  // 🛡️ שכבת הגנה עליונה - מניעת רינדור הדשבורד עד לאימות פרופיל מלא
+  const [checkingAuthEnforcement, setCheckingAuthEnforcement] = useState(true);
 
   const handleBookingLiveSync = useCallback(
     (payload: TodaysLinkedBookingSyncPayload) => {
@@ -168,7 +171,7 @@ export default function SitterDashboardPage() {
   const idleCircleBooking = circleBooking ?? todaysBooking;
   const gateBookingStatus = normalizeBookingStatus(todayBookingShiftGate?.status) ?? "";
 
-  // 🔥 הגנה קריטית: אם המשמרת ב-Gate מסומנת כגמורה, דואגים לאפס אקטיבית את ה-Circle בזיכרון המקומי
+  // הגנה קריטית: אם המשמרת ב-Gate מסומנת כגמורה, דואגים לאפס אקטיבית את ה-Circle בזיכרון המקומי
   useEffect(() => {
     if (gateBookingStatus === "completed" || gateBookingStatus === "cancelled" || gateBookingStatus === "rejected") {
       if (circleBooking != null) {
@@ -376,6 +379,7 @@ export default function SitterDashboardPage() {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
       setLoading(false);
+      setCheckingAuthEnforcement(false);
       setBanner("Supabase לא מוגדר.");
       return;
     }
@@ -387,6 +391,7 @@ export default function SitterDashboardPage() {
       if (!auth.ok) {
         if (!cancelled) {
           setLoading(false);
+          setCheckingAuthEnforcement(false);
           setBanner(
             auth.reason === "no_client"
               ? "Supabase לא מוגדר."
@@ -397,19 +402,37 @@ export default function SitterDashboardPage() {
       }
       if (cancelled) return;
       setSitterId(auth.userId);
+
+      // 🛡️ בדיקת חובה קשיחה: מניעת מעקף שאלון האונבורדינג לפנים
+      const { data: profile } = await auth.supabase
+        .from("profiles")
+        .select("full_name, phone")
+        .eq("id", auth.userId)
+        .maybeSingle();
+
+      if (!profile?.full_name || !profile?.phone) {
+        if (!cancelled) {
+          router.replace("/sitter/onboarding");
+        }
+        return;
+      }
+
+      // רק אם הפרופיל מלא, מאפשרים להמשיך להרצת הדשבורד וטעינת הנתונים
       await Promise.all([
         refreshForUser(auth.supabase, auth.userId),
         refreshSitterProfileCardStatus(auth.supabase, auth.userId)
       ]);
+      
       if (cancelled) return;
       setLoading(false);
       setSitterBootstrapComplete(true);
+      setCheckingAuthEnforcement(false); // פתיחת הרינדור בבטחה
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [refreshForUser, refreshSitterProfileCardStatus, setSitterBootstrapComplete, setSitterId]);
+  }, [refreshForUser, refreshSitterProfileCardStatus, setSitterBootstrapComplete, setSitterId, router]);
 
   useEffect(() => {
     if (!sitterId) {
@@ -440,7 +463,7 @@ export default function SitterDashboardPage() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !sitterId || loading) return;
+    if (!supabase || !sitterId || loading || checkingAuthEnforcement) return;
 
     const refreshSitterBookingState = () => {
       void reloadTodaysBooking();
@@ -469,12 +492,14 @@ export default function SitterDashboardPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [sitterId, loading, reloadTodaysBooking, refreshForUser]);
+  }, [sitterId, loading, checkingAuthEnforcement, reloadTodaysBooking, refreshForUser]);
 
   useEffect(() => {
+    if (checkingAuthEnforcement) return;
     void reloadTodaysBooking();
   }, [
     reloadTodaysBooking,
+    checkingAuthEnforcement,
     pendingRow?.id,
     pendingRow?.status,
     activeShiftRow?.id,
@@ -487,7 +512,7 @@ export default function SitterDashboardPage() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !sitterId || loading) return;
+    if (!supabase || !sitterId || loading || checkingAuthEnforcement) return;
 
     const onSessionsChange = () => {
       void refreshForUser(supabase, sitterId);
@@ -510,14 +535,14 @@ export default function SitterDashboardPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [sitterId, loading, refreshForUser]);
+  }, [sitterId, loading, checkingAuthEnforcement, refreshForUser]);
 
   useEffect(() => {
-    if (pathname !== "/sitter/dashboard" || !sitterId) return;
+    if (pathname !== "/sitter/dashboard" || !sitterId || checkingAuthEnforcement) return;
     const supabase = getSupabaseBrowserClient();
     if (supabase) void refreshSitterProfileCardStatus(supabase, sitterId);
     setDashboardStatsRefreshKey((k) => k + 1);
-  }, [pathname, sitterId, refreshSitterProfileCardStatus]);
+  }, [pathname, sitterId, checkingAuthEnforcement, refreshSitterProfileCardStatus]);
 
   const handleLogout = async () => {
     const supabase = getSupabaseBrowserClient();
@@ -558,7 +583,6 @@ export default function SitterDashboardPage() {
       dismissCompletedSession(sid, "sitter");
       suppressCompletedSummaryIdRef.current = sid;
       
-      // איפוס קריטי ומוחלט של כל זכר למשמרת הישנה כדי להעלים את העיגול מיד
       applyCircleBooking(null);
       setCompletedSummaryRow(null);
       setPendingRow(null);
@@ -666,7 +690,7 @@ export default function SitterDashboardPage() {
       }
       setBanner(null);
       suppressCompletedSummaryIdRef.current = null;
-      applyCircleBooking(null); // איפוס הבוקינג בסיום מוצלח של משמרת
+      applyCircleBooking(null);
       await refreshForUser(auth.supabase, sitterId);
       await reloadTodaysBooking();
       router.refresh();
@@ -747,8 +771,8 @@ export default function SitterDashboardPage() {
   const isSessionPaidAndReadyForRating =
     sitterTerminalDbStatus === "paid" || sitterTerminalDbStatus === "completed" || gateBookingStatus === "completed";
 
-  const showLoading =
-    loading && !sitterBootstrapComplete && !(pendingRow || activeShiftRow || endConfirmRow);
+  // 🛡️ מסך טעינה מאובטח - רץ כל עוד אימות זיהוי הפרופיל מתבצע ברקע
+  const showLoading = checkingAuthEnforcement || (loading && !sitterBootstrapComplete && !(pendingRow || activeShiftRow || endConfirmRow));
 
   if (showLoading) {
     return (
@@ -756,7 +780,7 @@ export default function SitterDashboardPage() {
         className="mx-auto flex h-full min-h-0 w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10"
         dir="rtl"
       >
-        <p className="text-right text-sm text-slate-600">טוען…</p>
+        <p className="text-right text-sm text-slate-600 animate-pulse">בודק הרשאות גישה ומאמת פרופיל…</p>
       </main>
     );
   }
