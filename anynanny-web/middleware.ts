@@ -40,6 +40,17 @@ async function refreshSession(request: NextRequest): Promise<{
 }
 
 export async function middleware(request: NextRequest) {
+  // 🛡️ מחסום כניסה גלובלי - חוסם את כל האתר לכולם
+  if (process.env.NODE_ENV === 'production') {
+    const basicAuth = request.headers.get('authorization');
+    if (!basicAuth || basicAuth !== `Basic ${Buffer.from('admin:anynanny2026').toString('base64')}`) {
+      return new NextResponse('Auth Required', {
+        status: 401,
+        headers: { 'WWW-Authenticate': 'Basic realm="Secure Area"' },
+      });
+    }
+  }
+
   const { pathname, search } = request.nextUrl;
 
   if (isPublicAuthPath(pathname)) return NextResponse.next();
@@ -71,7 +82,7 @@ export async function middleware(request: NextRequest) {
       return applySupabaseCookies(response, NextResponse.redirect(login));
     }
 
-    // 🛡️ לוגיקת האכיפה החדשה
+    // 🛡️ לוגיקת אכיפת תפקידים ו-Onboarding
     const { data: profile } = await supabase
       .from("profiles")
       .select("role, onboarding_completed_at")
@@ -79,7 +90,7 @@ export async function middleware(request: NextRequest) {
       .single();
 
     if (profile) {
-      // 1. אכיפת Onboarding: אם לא סיים, חסום הכל חוץ מהשאלון שלו
+      // 1. אכיפת Onboarding
       if (!profile.onboarding_completed_at) {
         if (profile.role === 'parent' && !pathname.startsWith('/parent/onboarding')) {
           return NextResponse.redirect(new URL("/parent/onboarding", request.url));
