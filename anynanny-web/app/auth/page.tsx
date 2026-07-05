@@ -201,7 +201,7 @@ function AuthLandingInner() {
               התחברות
             </Link>
             <Link
-              href={`/auth/register${nextQuery}`}
+              href={`/auth/sign-up${nextQuery}`}
               suppressHydrationWarning
               className="flex flex-1 items-center justify-center rounded-2xl border border-navy-header/25 bg-white px-4 py-3.5 text-center text-sm font-semibold text-navy-header transition hover:bg-slate-50"
             >

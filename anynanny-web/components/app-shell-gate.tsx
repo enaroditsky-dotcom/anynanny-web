@@ -9,7 +9,7 @@ import { BottomNavigation } from "@/components/bottom-navigation";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
 import SessionProvider from "@/context/SessionContext";
 
-const CHROMELESS_PREFIXES = ["/auth/role-selection", "/auth/login", "/auth/register", "/terms"];
+const CHROMELESS_PREFIXES = ["/auth/role-selection", "/auth/login", "/auth/sign-up", "/terms"];
 
 /**
  * Screens that must lock to the device viewport with no page scroll (Fixed Viewport).

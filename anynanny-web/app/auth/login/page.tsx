@@ -202,7 +202,7 @@ function LoginInner() {
 
         <p className="mt-6 text-center text-sm text-slate-600">
           אין חשבון?{" "}
-          <Link href={`/auth/register${nextQuery}`} suppressHydrationWarning className="font-semibold text-navy-header underline">
+          <Link href={`/auth/sign-up${nextQuery}`} suppressHydrationWarning className="font-semibold text-navy-header underline">
             הרשמה
           </Link>
         </p>

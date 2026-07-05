@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { ADMIN_AUTH_COOKIE } from "@/lib/admin/auth";
-import { getRoleGateRedirect } from "@/lib/auth/post-auth-destination";
 import {
   applySupabaseCookies,
   createSupabaseMiddlewareClient
@@ -43,9 +42,7 @@ async function refreshSession(request: NextRequest): Promise<{
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
-  if (isPublicAuthPath(pathname)) {
-    return NextResponse.next();
-  }
+  if (isPublicAuthPath(pathname)) return NextResponse.next();
 
   if (pathname.startsWith("/api")) {
     const { response } = await refreshSession(request);
@@ -53,69 +50,66 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/admin")) {
-    if (pathname === "/admin/login") {
-      return NextResponse.next();
-    }
+    if (pathname === "/admin/login") return NextResponse.next();
     const hasAuthCookie = request.cookies.get(ADMIN_AUTH_COOKIE)?.value === "1";
-    if (hasAuthCookie) {
-      return NextResponse.next();
-    }
+    if (hasAuthCookie) return NextResponse.next();
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
 
-  if (!isProtectedAppPath(pathname)) {
-    return NextResponse.next();
-  }
+  if (!isProtectedAppPath(pathname)) return NextResponse.next();
 
   const { supabase, getResponse } = createSupabaseMiddlewareClient(request);
   const response = getResponse();
 
   try {
-    // 1. ננסה למשוך את ה-Session והמשתמש
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    // 🛡️ טיפול בבג שמחקת את החשבון ב-Supabase לייב:
-    if (sessionError || (session && !session.user)) {
-      throw new Error("User missing from auth backend");
-    }
+    if (sessionError || (session && !session.user)) throw new Error("User missing");
 
-    // אם אין סשן בכלל - זרוק ל-Login
     if (!session) {
       const login = new URL("/auth/login", request.url);
       login.searchParams.set("next", `${pathname}${search}`);
       return applySupabaseCookies(response, NextResponse.redirect(login));
     }
 
+    // 🛡️ לוגיקת האכיפה החדשה
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, onboarding_completed_at")
+      .eq("id", session.user.id)
+      .single();
+
+    if (profile) {
+      // 1. אכיפת Onboarding: אם לא סיים, חסום הכל חוץ מהשאלון שלו
+      if (!profile.onboarding_completed_at) {
+        if (profile.role === 'parent' && !pathname.startsWith('/parent/onboarding')) {
+          return NextResponse.redirect(new URL("/parent/onboarding", request.url));
+        }
+        if (profile.role === 'sitter' && !pathname.startsWith('/sitter/onboarding')) {
+          return NextResponse.redirect(new URL("/sitter/onboarding", request.url));
+        }
+      }
+
+      // 2. אכיפת הפרדה בין הורה לנני
+      if (profile.role === 'parent' && pathname.startsWith('/sitter')) {
+        return NextResponse.redirect(new URL("/parent/dashboard", request.url));
+      }
+      if (profile.role === 'sitter' && pathname.startsWith('/parent')) {
+        return NextResponse.redirect(new URL("/sitter/dashboard", request.url));
+      }
+    }
+
     return response;
 
   } catch (err) {
-    console.error("🎯 זיהוי חשבון מחוק או טוקן שבור - מנקים סשן ומנתבים מחדש:", err);
-    
-    // החשבון נמחק מאחורי הקלעים! ננקה את הקוקיז ונעיף אותו בצורה חלקה לעמוד הבית או לעמוד שגיאה
+    console.error("🎯 Middleware error:", err);
     const target = new URL("/auth/login", request.url);
-    target.searchParams.set("error", "account_deleted"); // נוסיף פרמטר קטן כדי שהיוזר יבין מה קרה
-    
     const redirectResponse = NextResponse.redirect(target);
-    
-    // מאפסים את טוקני ה-Auth המקומיים כדי לעצור את הלולאה וההבהוב מיד
     redirectResponse.cookies.set("sb-access-token", "", { maxAge: 0 });
     redirectResponse.cookies.set("sb-refresh-token", "", { maxAge: 0 });
-    
     return applySupabaseCookies(response, redirectResponse);
   }
 }
 
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/auth",
-    "/auth/:path*",
-    "/parent",
-    "/parent/:path*",
-    "/session",
-    "/session/:path*",
-    "/sitter",
-    "/sitter/:path*",
-    "/api/:path*"
-  ]
+  matcher: ["/admin/:path*", "/auth", "/auth/:path*", "/parent/:path*", "/session/:path*", "/sitter/:path*", "/api/:path*"]
 };
