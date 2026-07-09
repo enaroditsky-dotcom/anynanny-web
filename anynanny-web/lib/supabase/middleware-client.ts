@@ -2,41 +2,23 @@ import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-/**
- * Supabase middleware client (SSR cookie sync). Replaces legacy `createMiddlewareClient`
- * from auth-helpers — same responsibility: refresh session cookies on every matched request.
- */
 export function createSupabaseMiddlewareClient(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const supabaseUrl = "https://dqycvddpdhxawdgdatfe.supabase.co";
+  // וודא שזה ה-anon key שהעתקת מה-Legacy (הארוך שמתחיל ב-eyJ)
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxeWN2ZGRwZGh4YXdkZ2RhdGZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNDMzNTEsImV4cCI6MjA5MzgxOTM1MX0.1nIMudhzgs1j41tzA4VhtEQjdIhztFWMmDoFU1G69-I";
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value);
-          });
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
-          });
-        }
-      }
-    }
-  );
+  let response = NextResponse.next({ request: { headers: request.headers } });
+
+  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    cookies: {
+      getAll() { return request.cookies.getAll(); },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+      },
+    },
+  });
 
   return { supabase, getResponse: () => response };
-}
-
-/** Copy refreshed auth cookies onto another response (e.g. redirects). */
-export function applySupabaseCookies(from: NextResponse, to: NextResponse): NextResponse {
-  from.cookies.getAll().forEach(({ name, value }) => {
-    to.cookies.set(name, value);
-  });
-  return to;
 }

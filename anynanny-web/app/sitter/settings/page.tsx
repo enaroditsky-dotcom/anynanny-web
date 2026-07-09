@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DeleteAccountSection } from "@/components/account/delete-account-section";
+import { LogoutButton } from "@/components/account/logout-button";
 
 export default function SitterSettingsPage() {
   return (
@@ -15,6 +16,11 @@ export default function SitterSettingsPage() {
       >
         חזרה לדשבורד
       </Link>
+
+      <div className="mt-8 space-y-3">
+        <h2 className="text-right text-sm font-bold text-navy-header">חשבון</h2>
+        <LogoutButton />
+      </div>
 
       <div className="flex-1" aria-hidden />
 

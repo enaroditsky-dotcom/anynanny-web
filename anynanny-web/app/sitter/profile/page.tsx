@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LogoutButton } from "@/components/account/logout-button";
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
 import { SitterProfileForm } from "@/components/sitter/sitter-profile-form";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 export default function SitterProfilePage() {
   const router = useRouter();
@@ -32,6 +34,20 @@ export default function SitterProfilePage() {
         return;
       }
 
+      const { data: profile } = await supabase
+        .from(PROFILES_TABLE)
+        .select("role")
+        .eq("id", user.id)
+        .eq("role", "sitter")
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (!profile) {
+        router.replace("/auth/role-selection");
+        return;
+      }
+
       setUserId(user.id);
       setAuthReady(true);
     })();
@@ -47,6 +63,11 @@ export default function SitterProfilePage() {
       subtitle="עדכון אזורי השירות שלך — ההורים יראו אותך בחיפוש לפי הערים שבחרת."
     >
       {authReady ? <SitterProfileForm userId={userId} /> : null}
+      {authReady ? (
+        <div className="mt-8 border-t border-slate-100 pt-6">
+          <LogoutButton />
+        </div>
+      ) : null}
     </SitterPageShell>
   );
 }

@@ -15,19 +15,71 @@ export function pickProfileSerialId(row: unknown): number | null {
 
 export function formatParentPublicIdFromSerial(serialId: number | null | undefined): string | null {
   if (serialId == null || !Number.isFinite(Number(serialId)) || Number(serialId) < 1) return null;
-  return `P-${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
+  return `P_${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
 }
 
 export function formatSitterPublicIdFromSerial(serialId: number | null | undefined): string | null {
   if (serialId == null || !Number.isFinite(Number(serialId)) || Number(serialId) < 1) return null;
-  return `AN-${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
+  return `AN_${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
+}
+
+export function pickProfilePublicId(row: unknown, role: "parent" | "sitter"): string | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  const unified = r.public_id ?? r.publicId;
+  if (typeof unified === "string" && unified.trim()) return unified.trim();
+
+  if (role === "parent") {
+    const legacy = r.parent_public_id ?? r.parentPublicId;
+    if (typeof legacy === "string" && legacy.trim()) return legacy.trim();
+    return formatParentPublicIdFromSerial(pickProfileSerialId(r));
+  }
+
+  const nannyLegacy = r.nanny_public_id ?? r.nannyPublicId;
+  if (typeof nannyLegacy === "string" && nannyLegacy.trim()) return nannyLegacy.trim();
+  return formatSitterPublicIdFromSerial(pickProfileSerialId(r));
+}
+
+/** Loads role-scoped `profiles.public_id` for dashboard display. */
+export async function fetchProfilePublicId(
+  supabase: SupabaseClient,
+  userId: string,
+  expectedRole: "parent" | "sitter"
+): Promise<{ publicId: string | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from(PROFILES_TABLE)
+    .select("public_id, parent_public_id, nanny_public_id, serial_id, role")
+    .eq("id", userId)
+    .eq("role", expectedRole)
+    .maybeSingle();
+
+  if (error) {
+    if (
+      isPostgrestMissingColumnError(error.message, "public_id") ||
+      isPostgrestSchemaDriftError(error.message)
+    ) {
+      const fallback = await fetchProfileSerialId(supabase, userId, expectedRole);
+      if (fallback.error) return { publicId: null, error: fallback.error };
+      const publicId =
+        expectedRole === "parent"
+          ? formatParentPublicIdFromSerial(fallback.serialId)
+          : formatSitterPublicIdFromSerial(fallback.serialId);
+      return { publicId, error: null };
+    }
+    return { publicId: null, error: error.message };
+  }
+
+  return {
+    publicId: pickProfilePublicId(data, expectedRole),
+    error: null
+  };
 }
 
 export function readCachedParentDisplayId(): string | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(PARENT_DISPLAY_ID_STORAGE_KEY);
-    if (raw && /^P-\d+$/.test(raw)) return raw;
+    if (raw && (/^P[_-]\d+$/.test(raw) || /^P-\d+$/.test(raw))) return raw;
   } catch {
     /* ignore */
   }
@@ -64,13 +116,19 @@ type ProfileSerialRow = {
 /** Loads safe profile columns first; optionally reads serial_id in a second query (no RPC). */
 export async function fetchProfileSerialId(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  expectedRole?: "parent" | "sitter"
 ): Promise<{ serialId: number | null; role: string | null; error: string | null }> {
-  const { data: base, error: baseErr } = await supabase
+  let profileQuery = supabase
     .from(PROFILES_TABLE)
     .select("id, role, full_name")
-    .eq("id", userId)
-    .maybeSingle();
+    .eq("id", userId);
+
+  if (expectedRole) {
+    profileQuery = profileQuery.eq("role", expectedRole);
+  }
+
+  const { data: base, error: baseErr } = await profileQuery.maybeSingle();
 
   if (baseErr) {
     return { serialId: null, role: null, error: baseErr.message };
@@ -79,11 +137,13 @@ export async function fetchProfileSerialId(
   const baseRow = (base as ProfileBaseRow | null) ?? null;
   const role = baseRow?.role ?? null;
 
-  const { data: serialRow, error: serialErr } = await supabase
-    .from(PROFILES_TABLE)
-    .select("serial_id")
-    .eq("id", userId)
-    .maybeSingle();
+  let serialQuery = supabase.from(PROFILES_TABLE).select("serial_id").eq("id", userId);
+  const serialRole = role ?? expectedRole;
+  if (serialRole) {
+    serialQuery = serialQuery.eq("role", serialRole);
+  }
+
+  const { data: serialRow, error: serialErr } = await serialQuery.maybeSingle();
 
   if (serialErr) {
     if (

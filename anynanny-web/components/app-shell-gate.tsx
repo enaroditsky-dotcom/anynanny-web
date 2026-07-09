@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { AppShellHeader } from "@/components/app-shell-header";
 import { AppShellSessionHydration } from "@/components/app-shell-session-hydration";
 import { AppShellStableBoundary } from "@/components/app-shell-stable-boundary";
-import { BottomNavigation } from "@/components/bottom-navigation";
+import { BottomNav } from "@/components/bottom-nav";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
 import SessionProvider from "@/context/SessionContext";
 
@@ -44,6 +44,8 @@ export function isLandingGatewayPath(pathname: string): boolean {
   return pathname === "/";
 }
 
+const SHELL_BOTTOM_NAV_PADDING = "pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]";
+
 export function AppShellGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const chromeless = isChromelessAuthPath(pathname);
@@ -65,30 +67,30 @@ export function AppShellGate({ children }: { children: ReactNode }) {
       <AppShellSessionHydration />
       {mainLayout ? (
         <div className="mx-auto flex h-screen w-full min-w-0 max-w-md flex-col overflow-hidden md:my-4 md:rounded-[2rem] md:h-[calc(100dvh-2rem)]">
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className={`min-h-0 flex-1 overflow-hidden ${SHELL_BOTTOM_NAV_PADDING}`}>
             <AppShellStableBoundary>
               <RouteTransitionShell fill>{children}</RouteTransitionShell>
             </AppShellStableBoundary>
           </div>
-          <div className="flex-shrink-0">
-            <BottomNavigation />
-          </div>
+          <BottomNav />
         </div>
       ) : (
         <div className="mx-auto flex h-screen w-full min-w-0 max-w-md flex-col overflow-hidden bg-white shadow-soft md:my-4 md:rounded-[2rem] md:h-[calc(100dvh-2rem)]">
           <AppShellHeader />
           <div
             className={`relative min-h-0 min-w-0 flex-1 px-4 pt-4 ${
-              landingGateway ? "overflow-hidden overscroll-none pb-4" : "overflow-y-auto pb-28"
+              landingGateway
+                ? "overflow-hidden overscroll-none pb-4"
+                : fixedViewport
+                  ? `overflow-hidden overscroll-none ${SHELL_BOTTOM_NAV_PADDING}`
+                  : `overflow-y-auto ${SHELL_BOTTOM_NAV_PADDING}`
             }`}
           >
             <AppShellStableBoundary>
               <RouteTransitionShell fill={fixedViewport}>{children}</RouteTransitionShell>
             </AppShellStableBoundary>
           </div>
-          <div className="flex-shrink-0">
-            <BottomNavigation />
-          </div>
+          <BottomNav />
         </div>
       )}
     </SessionProvider>

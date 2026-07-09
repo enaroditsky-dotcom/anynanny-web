@@ -39,25 +39,25 @@ function parseGetCurrentUserRatingResponse(data: unknown): SitterDashboardStats 
 }
 
 type SitterDashboardHeaderProps = {
-  fullName?: string | null;
+  firstName?: string | null;
   nameLoading?: boolean;
   sitterId: string | null;
   refreshKey?: number;
-  showNannyId?: boolean;
-  /** Sequential AN-#### from profiles.serial_id (+ 1000), computed on the client. */
+  showPublicId?: boolean;
+  /** From profiles.public_id (e.g. AN_1001). */
   publicDisplayId?: string | null;
-  serialIdLoaded?: boolean;
+  publicIdLoaded?: boolean;
   children?: ReactNode;
 };
 
 export function SitterDashboardHeader({
-  fullName = null,
+  firstName = null,
   nameLoading = false,
   sitterId,
   refreshKey = 0,
-  showNannyId = false,
+  showPublicId = false,
   publicDisplayId = null,
-  serialIdLoaded = false,
+  publicIdLoaded = false,
   children
 }: SitterDashboardHeaderProps) {
   const [loadState, setLoadState] = useState<LoadState>("idle");
@@ -101,29 +101,34 @@ export function SitterDashboardHeader({
     };
   }, [sitterId, refreshKey]);
 
-  const greeting = buildDashboardGreetingTitle(fullName, nameLoading);
+  const greeting = buildDashboardGreetingTitle(firstName, nameLoading);
 
   const ratingLabel = `⭐ ${
     stats.avg_rating != null ? Number(stats.avg_rating).toFixed(1) : "אין דירוג"
   } (${stats.rating_count || 0} חוות דעת)`;
 
   const statsLoading = !sitterId || loadState === "loading" || loadState === "idle";
-  const showIdBadge = showNannyId && !!publicDisplayId;
-  const showIdSkeleton = showNannyId && serialIdLoaded && !publicDisplayId;
+  const showIdBadge = showPublicId && !!publicDisplayId;
+  const showIdSkeleton = showPublicId && publicIdLoaded && !publicDisplayId;
 
   return (
     <header className="text-right px-4" dir="rtl">
-      {/* 👑 שורה אחת אחידה בגודלה, ללא פסיק מיותר */}
-      <h1
-        className={`text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem] ${nameLoading ? "animate-pulse" : ""}`}
-      >
-        {greeting} מה תרצי לעשות היום?
-      </h1>
-
-      {/* 📊 קונטיינר אנכי אחיד ומדויק לפי ה-UI של ההורה */}
+      <div className="flex flex-wrap items-baseline justify-start gap-x-2 gap-y-1">
+        <h1
+          className={`text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem] ${nameLoading ? "animate-pulse" : ""}`}
+        >
+          {greeting}
+        </h1>
+        {showIdSkeleton ? (
+          <span className="inline-block h-6 w-24 animate-pulse rounded-lg bg-slate-100" aria-hidden />
+        ) : showIdBadge ? (
+          <span className={idBadgeClass} title="מזהה ציבורי">
+            <span className="rounded bg-purple-200 px-1 text-[10px] font-bold uppercase text-purple-800">ID</span>
+            {publicDisplayId}
+          </span>
+        ) : null}
+      </div>
       <div className="mt-2 flex flex-col items-start gap-1.5">
-        
-        {/* תג הדירוג הצהוב (ראשון) */}
         {statsLoading ? (
           <span className="inline-block h-7 w-36 animate-pulse rounded-full bg-amber-50/80" aria-hidden />
         ) : (
@@ -131,16 +136,6 @@ export function SitterDashboardHeader({
             {ratingLabel}
           </span>
         )}
-
-        {/* מזהה נני סגול (שני) */}
-        {showIdSkeleton ? (
-          <span className="inline-block h-7 w-28 animate-pulse rounded-full bg-slate-100" aria-hidden />
-        ) : showIdBadge ? (
-          <span className={idBadgeClass}>
-            <span className="text-[10px] bg-purple-200 text-purple-800 px-1 rounded uppercase font-bold">ID</span>
-            מזהה: {publicDisplayId}
-          </span>
-        ) : null}
       </div>
 
       {children}

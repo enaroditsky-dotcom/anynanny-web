@@ -7,7 +7,7 @@ import {
   SITTER_PROFILES_USER_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { selectProfileForRole } from "@/lib/supabase/profiles";
 import { pickGreetingDisplayName } from "@/lib/user/greeting-display-name";
 
 export type DashboardRole = "parent" | "sitter";
@@ -20,21 +20,21 @@ export function buildDashboardGreetingLine(fullName: string | null, nameLoading:
 }
 
 /** Title only (sitter header splits subtitle). */
-export function buildDashboardGreetingTitle(fullName: string | null, nameLoading: boolean): string {
+export function buildDashboardGreetingTitle(firstName: string | null, nameLoading: boolean): string {
   if (nameLoading) return "שלום!";
-  if (fullName) return `שלום, ${fullName}!`;
+  if (firstName) return `שלום, ${firstName}!`;
   return "שלום!";
 }
 
 /**
- * Resolves greeting name from Supabase `profiles.full_name` (and sitter_profiles for sitters).
- * Never falls back to email or email local-parts.
+ * Resolves greeting first name from Supabase `profiles.first_name` (role-scoped).
+ * Falls back to legacy full_name / sitter_profiles when needed.
  */
 export function useDashboardGreetingName(
   role: DashboardRole,
   userId: string | null,
   refreshKey = 0
-): { fullName: string | null; nameLoading: boolean } {
+): { firstName: string | null; fullName: string | null; nameLoading: boolean } {
   const { isLoading: authLoading, user } = useAuth();
   const [resolvedName, setResolvedName] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
@@ -68,7 +68,7 @@ export function useDashboardGreetingName(
               .eq(fk, userId)
               .maybeSingle()
           : Promise.resolve({ data: null, error: null }),
-        supabase.from(PROFILES_TABLE).select("full_name").eq("id", userId).maybeSingle()
+        selectProfileForRole(supabase, userId, role, "first_name, last_name").maybeSingle()
       ]);
 
       if (cancelled) return;
@@ -78,30 +78,33 @@ export function useDashboardGreetingName(
           ? (roleProfileRes.data as { full_name?: string | null }).full_name
           : null;
 
-      const profileFullName =
+      const profileRow =
         profilesRes.data && typeof profilesRes.data === "object"
-          ? (profilesRes.data as { full_name?: string | null }).full_name
+          ? (profilesRes.data as { first_name?: string | null; last_name?: string | null })
           : null;
 
-      const metaFullName =
-        typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
+      const profileFirstName = profileRow?.first_name?.trim() || null;
 
-      const name =
+      const metaFirstName =
+        typeof user?.user_metadata?.first_name === "string" ? user.user_metadata.first_name.trim() : null;
+
+      const firstName =
         role === "sitter"
-          ? pickGreetingDisplayName(userEmail, sitterFullName, profileFullName, metaFullName)
-          : pickGreetingDisplayName(userEmail, profileFullName, metaFullName);
+          ? pickGreetingDisplayName(userEmail, profileFirstName, sitterFullName?.split(" ")[0], metaFirstName)
+          : pickGreetingDisplayName(userEmail, profileFirstName, metaFirstName);
 
-      setResolvedName(name);
+      setResolvedName(firstName);
       setFetching(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [userId, role, userEmail, user?.user_metadata?.full_name, refreshKey]);
+  }, [userId, role, userEmail, user?.user_metadata?.first_name, refreshKey]);
 
   const nameLoading = authLoading || (!!userId && fetching);
+  const firstName = resolvedName;
   const fullName = resolvedName;
 
-  return { fullName, nameLoading };
+  return { firstName, fullName, nameLoading };
 }
