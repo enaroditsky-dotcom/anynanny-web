@@ -1,14 +1,19 @@
-import { type NextRequest, NextResponse } from 'next/server';
-import { createSupabaseMiddlewareClient } from '@/lib/supabase/middleware-client';
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
-  // חיבור מאובטח דרך הפונקציה שתיקנו
-  const { supabase, getResponse } = createSupabaseMiddlewareClient(request);
+export async function middleware(req: NextRequest) {
+  // יצירת Response חדש כדי שנוכל להעביר עוגיות מעודכנות מהשרת לדפדפן
+  const res = NextResponse.next();
   
-  // זה מבצע אימות סשן שמונע את שגיאת ה-500
+  // שימוש במימוש הרשמי של Supabase שמטפל בעוגיות בצורה בטוחה
+  const supabase = createMiddlewareClient({ req, res });
+
+  // בדיקת סשן - הפונקציה הזו יודעת להתמודד עם עוגיות בצורה פנימית בלי לזרוק שגיאות
   await supabase.auth.getSession();
-  
-  return getResponse();
+
+  // החזרת ה-Response עם העוגיות המעודכנות (במידת הצורך)
+  return res;
 }
 
 export const config = {

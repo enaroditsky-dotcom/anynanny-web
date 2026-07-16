@@ -12,6 +12,7 @@ import { computeLiveElapsedSecondsActive, formatElapsed } from "@/lib/session/pr
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 function billableStartMs(row: BillingSessionRow): number | null {
   const iso = row.start_time_confirmed_by_sitter;
@@ -178,24 +179,23 @@ export function useSitterBillingSession() {
     const channelName = trackedSessionId
       ? `sitter-billing-${sitterId}-${trackedSessionId}`
       : `sitter-billing-wide-${sitterId}`;
-    const channel = supabase.channel(channelName);
 
-    for (const ev of ["INSERT", "UPDATE", "DELETE"] as const) {
-      channel.on(
-        "postgres_changes",
-        trackedSessionId
-          ? { event: ev, schema: "public", table: SESSIONS_TABLE, filter: `id=eq.${trackedSessionId}` }
-          : { event: ev, schema: "public", table: SESSIONS_TABLE },
-        onSessionsChange
-      );
-    }
-
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") void refreshForUser(supabase, sitterId);
-    });
+    const channel = subscribePostgresChanges(
+      supabase,
+      channelName,
+      (["INSERT", "UPDATE", "DELETE"] as const).map((ev) => ({
+        event: ev,
+        table: SESSIONS_TABLE,
+        ...(trackedSessionId ? { filter: `id=eq.${trackedSessionId}` } : {}),
+        handler: onSessionsChange
+      })),
+      (status) => {
+        if (status === "SUBSCRIBED") void refreshForUser(supabase, sitterId);
+      }
+    );
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [sitterId, trackedSessionId, loading, refreshForUser]);
 

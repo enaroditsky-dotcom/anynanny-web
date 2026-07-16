@@ -24,6 +24,7 @@ import {
   useBillingSession,
 } from "@/lib/billing/session-billing";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { SessionRatingModal } from "@/components/session/session-rating-modal";
 
 type ParentActiveSessionProps = {
@@ -89,24 +90,17 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
 
-    const channel = supabase
-      .channel(`realtime:session:${sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'sessions',
-          filter: `id=eq.${sessionId}`,
-        },
-        () => {
-          refreshRef.current();
-        }
-      )
-      .subscribe();
+    const channel = subscribePostgresChanges(supabase, `realtime-session-${sessionId}`, {
+      event: 'UPDATE',
+      table: 'sessions',
+      filter: `id=eq.${sessionId}`,
+      handler: () => {
+        refreshRef.current();
+      }
+    });
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [sessionId]);
 

@@ -36,7 +36,7 @@ export function pickGreetingDisplayName(
   return null;
 }
 
-/** Auth metadata full_name when it is a real name (not an email local-part). */
+/** Auth metadata name when it is a real name (not an email local-part). */
 export function resolveFullNameFromAuthUser(user: {
   email?: string | null;
   user_metadata?: Record<string, unknown>;
@@ -44,9 +44,17 @@ export function resolveFullNameFromAuthUser(user: {
   const meta = user.user_metadata;
   if (!meta || typeof meta !== "object") return null;
 
-  const fullName = meta.full_name;
-  if (typeof fullName === "string") {
-    const sanitized = sanitizeGreetingDisplayName(fullName, user.email);
+  const first = typeof meta.first_name === "string" ? meta.first_name.trim() : "";
+  const last = typeof meta.last_name === "string" ? meta.last_name.trim() : "";
+  const combined = `${first} ${last}`.trim();
+  if (combined) {
+    const sanitized = sanitizeGreetingDisplayName(combined, user.email);
+    if (sanitized) return sanitized;
+  }
+
+  const legacyFull = meta.full_name;
+  if (typeof legacyFull === "string") {
+    const sanitized = sanitizeGreetingDisplayName(legacyFull, user.email);
     if (sanitized) return sanitized;
   }
 
@@ -57,4 +65,28 @@ export function resolveFullNameFromAuthUser(user: {
   }
 
   return null;
+}
+
+/** Split auth display name into first/last for profiles writes. */
+export function resolveNamePartsFromAuthUser(user: {
+  email?: string | null;
+  user_metadata?: Record<string, unknown>;
+}): { first_name?: string; last_name?: string } {
+  const meta = user.user_metadata;
+  if (meta && typeof meta === "object") {
+    const first = typeof meta.first_name === "string" ? meta.first_name.trim() : "";
+    const last = typeof meta.last_name === "string" ? meta.last_name.trim() : "";
+    if (first || last) {
+      return {
+        ...(first ? { first_name: first } : {}),
+        ...(last ? { last_name: last } : {})
+      };
+    }
+  }
+
+  const combined = resolveFullNameFromAuthUser(user);
+  if (!combined) return {};
+  const parts = combined.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return { first_name: parts[0] };
+  return { first_name: parts[0], last_name: parts.slice(1).join(" ") };
 }

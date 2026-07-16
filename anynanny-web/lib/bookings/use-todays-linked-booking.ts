@@ -23,6 +23,7 @@ import {
   type TodaysLinkedBookingView
 } from "@/lib/bookings/todays-linked-booking";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 export type TodaysLinkedBookingSyncPayload = {
   booking: TodaysLinkedBookingView | null;
@@ -238,6 +239,7 @@ export function useTodaysLinkedBooking(
       fetchError = linked.error;
 
       if (!nextBooking && gate?.id && !isSitterBookingAwaitingApprovalStatus(gate.status)) {
+        // Recover approved/in-progress shifts even if the date-scoped linked fetch missed them.
         nextBooking = await fetchLinkedBookingById(supabase, gate.id, role);
       }
     }
@@ -352,26 +354,24 @@ export function useTodaysLinkedBooking(
       applyRealtimePatch(payload);
     };
 
-    const channel = supabase
-      .channel(`todays-booking-${role}-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `${column}=eq.${userId}`
-        },
-        handleChange
-      )
-      .subscribe((status) => {
+    const channel = subscribePostgresChanges(
+      supabase,
+      `todays-booking-${role}-${userId}`,
+      {
+        event: "*",
+        table: BOOKINGS_TABLE,
+        filter: `${column}=eq.${userId}`,
+        handler: handleChange
+      },
+      (status) => {
         if (status === "SUBSCRIBED") {
           void reload();
         }
-      });
+      }
+    );
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [role, userId, reload, applyRealtimePatch, linkedBookingStatus, options?.freezeBookingRealtime]);
 

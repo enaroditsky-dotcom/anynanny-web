@@ -87,7 +87,9 @@ export default function ParentWalletClient() {
         body: JSON.stringify({ 
           amount: 0,
           parentId: user.id,
-          parentName: user.user_metadata?.full_name || "משתמש AnyNanny"
+          parentName:
+            `${user.user_metadata?.first_name ?? ""} ${user.user_metadata?.last_name ?? ""}`.trim() ||
+            "משתמש AnyNanny"
         }) 
       });
       const data = await res.json();
@@ -110,7 +112,9 @@ export default function ParentWalletClient() {
         body: JSON.stringify({ 
           amount: 100,
           parentId: user.id,
-          parentName: user.user_metadata?.full_name || "הורה AnyNanny"
+          parentName:
+            `${user.user_metadata?.first_name ?? ""} ${user.user_metadata?.last_name ?? ""}`.trim() ||
+            "הורה AnyNanny"
         }) 
       });
       const data = await res.json();

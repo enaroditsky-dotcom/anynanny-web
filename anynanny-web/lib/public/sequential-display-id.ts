@@ -26,6 +26,8 @@ export function formatSitterPublicIdFromSerial(serialId: number | null | undefin
 export function pickProfilePublicId(row: unknown, role: "parent" | "sitter"): string | null {
   if (!row || typeof row !== "object") return null;
   const r = row as Record<string, unknown>;
+
+  // Live DB uses unified `public_id`; role-scoped columns may be absent.
   const unified = r.public_id ?? r.publicId;
   if (typeof unified === "string" && unified.trim()) return unified.trim();
 
@@ -40,21 +42,24 @@ export function pickProfilePublicId(row: unknown, role: "parent" | "sitter"): st
   return formatSitterPublicIdFromSerial(pickProfileSerialId(r));
 }
 
-/** Loads role-scoped `profiles.public_id` for dashboard display. */
+/** Loads role-scoped public display id for dashboard badges. */
 export async function fetchProfilePublicId(
   supabase: SupabaseClient,
   userId: string,
   expectedRole: "parent" | "sitter"
 ): Promise<{ publicId: string | null; error: string | null }> {
+  // Production schema has unified `public_id` (+ optional `serial_id`).
+  // Do not select `parent_public_id` / `nanny_public_id` — they are missing in live DB.
   const { data, error } = await supabase
     .from(PROFILES_TABLE)
-    .select("public_id, parent_public_id, nanny_public_id, serial_id, role")
+    .select("public_id, serial_id, role")
     .eq("id", userId)
     .eq("role", expectedRole)
     .maybeSingle();
 
   if (error) {
     if (
+      isPostgrestMissingColumnError(error.message, "serial_id") ||
       isPostgrestMissingColumnError(error.message, "public_id") ||
       isPostgrestSchemaDriftError(error.message)
     ) {
@@ -106,7 +111,8 @@ export function resolveParentPublicDisplayId(serialId?: number | null): string |
 type ProfileBaseRow = {
   id?: string;
   role?: string | null;
-  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
 };
 
 type ProfileSerialRow = {
@@ -121,7 +127,7 @@ export async function fetchProfileSerialId(
 ): Promise<{ serialId: number | null; role: string | null; error: string | null }> {
   let profileQuery = supabase
     .from(PROFILES_TABLE)
-    .select("id, role, full_name")
+    .select("id, role, first_name, last_name")
     .eq("id", userId);
 
   if (expectedRole) {

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { buildDashboardGreetingTitle } from "@/lib/user/use-dashboard-greeting-name";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 type SitterDashboardStats = {
   nanny_id_number: string | null;
@@ -112,28 +113,21 @@ export function SitterDashboardHeader({
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
 
-    const channel = supabase
-      .channel(`realtime:sitter-earnings:${sitterId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'sessions',
-          filter: `sitter_id=eq.${sitterId}`,
-        },
-        (payload) => {
-          // בודקים אם הסטטוס השתנה ל-completed
-          if (payload.new.status === 'completed') {
-            setShowNotification(true);
-            setTimeout(() => setShowNotification(false), 10000); // נעלם אחרי 10 שניות
-          }
+    const channel = subscribePostgresChanges(supabase, `realtime-sitter-earnings-${sitterId}`, {
+      event: 'UPDATE',
+      table: 'sessions',
+      filter: `sitter_id=eq.${sitterId}`,
+      handler: (payload) => {
+        const next = payload.new as { status?: string };
+        if (next.status === 'completed') {
+          setShowNotification(true);
+          setTimeout(() => setShowNotification(false), 10000);
         }
-      )
-      .subscribe();
+      }
+    });
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [sitterId]);
 

@@ -74,69 +74,34 @@ export async function fetchUnacknowledgedParentBookingResponses(
   supabase: SupabaseClient,
   parentId: string
 ): Promise<{ notifications: ParentBookingResponseNotification[]; error: string | null }> {
-  const withColumn = safeSupabaseRead(
-    await supabase
-      .from(BOOKINGS_TABLE)
-      .select("id, booking_date, start_time, end_time, status, updated_at, parent_notified_at")
-      .eq("parent_id", parentId)
-      .in("status", RESPONSE_STATUSES)
-      .is("parent_notified_at", null)
-      .order("updated_at", { ascending: false }),
-    "parent booking response notifications"
-  );
-
-  if (!withColumn.error && withColumn.data) {
-    return {
-      notifications: filterUnacknowledgedRows(withColumn.data as ParentBookingResponseNotification[]),
-      error: null
-    };
-  }
-
-  if (!withColumn.schemaDrift) {
-    return { notifications: [], error: withColumn.error };
-  }
-
-  const fallback = safeSupabaseRead(
+  // Live DB does not have `parent_notified_at` — use base columns + localStorage ack only.
+  const result = safeSupabaseRead(
     await supabase
       .from(BOOKINGS_TABLE)
       .select("id, booking_date, start_time, end_time, status, updated_at")
       .eq("parent_id", parentId)
       .in("status", RESPONSE_STATUSES)
       .order("updated_at", { ascending: false }),
-    "parent booking response notifications fallback"
+    "parent booking response notifications"
   );
 
-  if (fallback.error || !fallback.data) {
-    return { notifications: [], error: fallback.error };
+  if (result.error || !result.data) {
+    return { notifications: [], error: result.error };
   }
 
   return {
-    notifications: filterUnacknowledgedRows(fallback.data as ParentBookingResponseNotification[]),
+    notifications: filterUnacknowledgedRows(result.data as ParentBookingResponseNotification[]),
     error: null
   };
 }
 
 export async function acknowledgeParentBookingResponse(
-  supabase: SupabaseClient,
-  parentId: string,
+  _supabase: SupabaseClient,
+  _parentId: string,
   bookingId: string
 ): Promise<{ ok: boolean; error: string | null }> {
   persistLocalParentBookingResponseAck(bookingId);
 
-  const { error } = await supabase
-    .from(BOOKINGS_TABLE)
-    .update({ parent_notified_at: new Date().toISOString() })
-    .eq("id", bookingId)
-    .eq("parent_id", parentId)
-    .in("status", RESPONSE_STATUSES);
-
-  if (error) {
-    const message = error.message ?? "ack failed";
-    if (message.includes("parent_notified_at") || message.includes("schema cache")) {
-      return { ok: true, error: null };
-    }
-    return { ok: false, error: message };
-  }
-
+  // Ack is local-only: `bookings.parent_notified_at` is not present in production.
   return { ok: true, error: null };
 }

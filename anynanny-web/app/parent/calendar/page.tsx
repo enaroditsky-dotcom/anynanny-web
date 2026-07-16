@@ -56,14 +56,15 @@ export default function ParentCalendarPage() {
       const sitterIds = [...new Set(bookings.map((b) => String((b as { sitter_id: string }).sitter_id)))];
       const { data: profiles } = await supabase
         .from(PROFILES_TABLE)
-        .select("id, full_name")
+        .select("id, first_name, last_name")
         .in("id", sitterIds);
 
       const nameBySitterId = new Map<string, string>();
       for (const profile of profiles ?? []) {
         if (!profile || typeof profile !== "object" || !("id" in profile)) continue;
         const id = String((profile as { id: string }).id);
-        const name = String((profile as { full_name?: string | null }).full_name ?? "").trim();
+        const row = profile as { first_name?: string | null; last_name?: string | null };
+        const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
         if (name) nameBySitterId.set(id, name);
       }
 
@@ -116,7 +117,7 @@ export default function ParentCalendarPage() {
 
         const { data: profile, error } = await supabase
           .from(PROFILES_TABLE)
-          .select("id, role, full_name")
+          .select("id, role, first_name, last_name")
           .eq("id", user.id)
           .maybeSingle();
 

@@ -28,7 +28,7 @@ export function buildDashboardGreetingTitle(firstName: string | null, nameLoadin
 
 /**
  * Resolves greeting first name from Supabase `profiles.first_name` (role-scoped).
- * Falls back to legacy full_name / sitter_profiles when needed.
+ * Falls back to sitter_profiles / auth metadata when needed.
  */
 export function useDashboardGreetingName(
   role: DashboardRole,

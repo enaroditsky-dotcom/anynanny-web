@@ -47,7 +47,7 @@ export async function fetchPendingBookingsForSitter(
   const parentIds = [...new Set(bookings.map((b) => b.parent_id))];
   const { data: profiles, error: profileError } = await supabase
     .from(PROFILES_TABLE)
-    .select("id, full_name")
+    .select("id, first_name, last_name")
     .in("id", parentIds);
 
   if (profileError) {
@@ -58,7 +58,8 @@ export async function fetchPendingBookingsForSitter(
   for (const p of profiles ?? []) {
     if (p && typeof p === "object" && "id" in p) {
       const id = String((p as { id: string }).id);
-      const name = String((p as { full_name?: string }).full_name ?? "").trim();
+      const row = p as { first_name?: string | null; last_name?: string | null };
+      const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
       if (name) nameByParentId.set(id, name);
     }
   }

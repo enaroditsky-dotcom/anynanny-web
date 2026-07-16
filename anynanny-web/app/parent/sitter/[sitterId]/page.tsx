@@ -31,6 +31,7 @@ export default function ParentSitterProfilePage() {
   const router = useRouter();
   const { isLoading, signedIn, effectiveRole } = useAuth();
   const [profile, setProfile] = useState<SitterProfilePublic | null>(null);
+  const [sitterDisplayName, setSitterDisplayName] = useState("בייביסיטר");
   const [reviews, setReviews] = useState<PublicSitterReview[]>([]);
   const [pageState, setPageState] = useState<"loading" | "missing" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -65,11 +66,20 @@ export default function ParentSitterProfilePage() {
     if (result.error || !result.profile) {
       setLoadError(result.error);
       setProfile(null);
+      setSitterDisplayName("בייביסיטר");
       setReviews([]);
       setPageState("missing");
       return;
     }
 
+    const { data: nameRow } = await supabase
+      .from("profiles")
+      .select("first_name, last_name")
+      .eq("id", sitterId)
+      .maybeSingle();
+
+    const fromProfiles = `${nameRow?.first_name ?? ""} ${nameRow?.last_name ?? ""}`.trim();
+    setSitterDisplayName(fromProfiles || result.profile.display_name?.trim() || "בייביסיטר");
     setProfile(result.profile);
     setReviews(result.reviews);
     setPageState("ready");
@@ -135,7 +145,7 @@ export default function ParentSitterProfilePage() {
             <div className="flex flex-row-reverse items-start justify-between gap-3">
               <div className="min-w-0 flex-1 text-right">
                 <h2 className="text-xl font-bold text-[#001F3F]">
-                  {profile.full_name || "בייביסיטר"}
+                  {sitterDisplayName}
                 </h2>
                 {profile.nanny_serial ? (
                   <p className="mt-0.5 text-xs font-medium text-slate-500">{profile.nanny_serial}</p>
@@ -173,7 +183,7 @@ export default function ParentSitterProfilePage() {
                 <p className="mb-3 text-right text-sm font-semibold text-navy-header">פעולות</p>
                 <SitterProfileActions
                   sitterId={profileId}
-                  sitterName={profile.full_name || "בייביסיטר"}
+                  sitterName={sitterDisplayName}
                 />
               </div>
             ) : null}

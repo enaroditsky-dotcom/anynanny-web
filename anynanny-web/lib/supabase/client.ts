@@ -10,23 +10,28 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
- * Cookie-backed browser client — must match middleware `createServerClient` so
- * sessions are visible on the server and login loops do not occur.
+ * Cookie-backed browser client
+ * התיקון: הוספנו הגדרה מפורשת שמונעת את השגיאות בפיענוח ה-Cookies
  */
 export function getSupabaseBrowserClient(): SupabaseClient | null {
   if (!isSupabaseConfigured()) return null;
   if (browserClient) return browserClient;
+
   browserClient = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        persistSession: true,
+        detectSessionInUrl: true,
+        // זה החלק החשוב ביותר למניעת שגיאות ה-JSON ב-Cookie
+        storageKey: 'anynanny_auth_token_v1', 
+      }
+    }
   );
   return browserClient;
 }
 
-/**
- * Calls `public.reload_schema()` when deployed (see sql/create_reload_schema_rpc.sql).
- * PostgREST then reloads its schema cache — fixes stale errors like missing `id` on `sitter_profiles`.
- */
 export async function reloadPostgrestSchema(client: SupabaseClient): Promise<boolean> {
   const { error } = await client.rpc("reload_schema");
   return !error;

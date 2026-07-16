@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { Zap } from "lucide-react";
 
 interface BroadcastAlertModalProps {
@@ -88,42 +89,42 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
     checkExistingAlerts();
 
     // פתיחת ערוצי האזנה
-    const channels = sitterCities.map((city) => {
-      const channel = supabase
-        .channel(`sitter-broadcast-room-${city}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "broadcast_alerts", filter: `city=eq.${city}` },
-          (payload) => {
-            if (payload.new && payload.new.status === "pending") {
-              // 🔥 בודקים שלא דחינו אותה בעבר
-              if (!dismissedAlertIdsRef.current.has(payload.new.id)) {
+    const channels = sitterCities.map((city) =>
+      subscribePostgresChanges(supabase, `sitter-broadcast-room-${city}`, [
+        {
+          event: "INSERT",
+          table: "broadcast_alerts",
+          filter: `city=eq.${city}`,
+          handler: (payload) => {
+            const next = payload.new as { id?: string; status?: string; city?: string; service_type?: string };
+            if (next && next.status === "pending") {
+              if (next.id && !dismissedAlertIdsRef.current.has(next.id)) {
                 setActiveAlert({
-                  id: payload.new.id,
-                  city: payload.new.city,
-                  service_type: payload.new.service_type
+                  id: next.id,
+                  city: next.city ?? city,
+                  service_type: next.service_type ?? ""
                 });
                 playAlertSound();
               }
             }
           }
-        )
-        .on(
-          "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "broadcast_alerts", filter: `city=eq.${city}` },
-          (payload) => {
-            if (payload.new.status === "expired" || payload.new.status === "filled") {
-              setActiveAlert((current) => (current?.id === payload.new.id ? null : current));
+        },
+        {
+          event: "UPDATE",
+          table: "broadcast_alerts",
+          filter: `city=eq.${city}`,
+          handler: (payload) => {
+            const next = payload.new as { id?: string; status?: string };
+            if (next.status === "expired" || next.status === "filled") {
+              setActiveAlert((current) => (current?.id === next.id ? null : current));
             }
           }
-        )
-        .subscribe();
-
-      return channel;
-    });
+        }
+      ])
+    );
 
     return () => {
-      channels.forEach((channel) => supabase.removeChannel(channel));
+      channels.forEach((channel) => removeRealtimeChannel(supabase, channel));
     };
     // 🔥 שים לב: הוצאנו את activeAlert?.id מה-Dependency Array! זה המפתח לעצירת הלופ!
   }, [sitterCities]);

@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { navigateAfterAuth } from "@/lib/auth/redirect-after-sign-in";
@@ -11,14 +10,7 @@ import {
   setReturningUserFlag,
   setUserRoleChoice
 } from "@/lib/auth/returning-user";
-// --- התיקון: אימפורט ישיר ---
-import { createBrowserClient } from "@supabase/ssr";
-
-// --- התיקון: הגדרה קבועה של הלקוח ---
-const supabase = createBrowserClient(
-  "https://dqycvddpdhxawdgdatfe.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxeWN2ZGRwZGh4YXdkZ2RhdGZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNDMzNTEsImV4cCI6MjA5MzgxOTM1MX0.1nIMudhzgs1j41tzA4VhtEQjdIhztFWMmDoFU1G69-I"
-);
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function formatLoginError(message: string): string {
   const m = message.trim();
@@ -28,24 +20,18 @@ function formatLoginError(message: string): string {
 
 function LoginInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const nextPath = searchParams.get("next");
   const emailFromQuery = searchParams.get("email");
   const roleFromQuery = searchParams.get("role");
 
   const [bypassLogin, setBypassLogin] = useState(false);
-
-  const nextQuery = useMemo(() => {
-    const params = new URLSearchParams();
-    if (nextPath) params.set("next", nextPath);
-    if (roleFromQuery === "parent" || roleFromQuery === "sitter") params.set("role", roleFromQuery);
-    const s = params.toString();
-    return s ? `?${s}` : "";
-  }, [nextPath, roleFromQuery]);
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const supabase = getSupabaseBrowserClient();
 
   useEffect(() => {
     const q = emailFromQuery?.trim();
@@ -63,8 +49,8 @@ function LoginInner() {
     }
   }, [roleFromQuery]);
 
-  // --- התיקון: שימוש בלקוח הישיר ---
   useEffect(() => {
+    if (!supabase) return;
     let cancelled = false;
 
     const redirectIfSignedIn = async () => {
@@ -89,7 +75,7 @@ function LoginInner() {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [nextPath]);
+  }, [nextPath, supabase]);
 
   if (bypassLogin) {
     return (
@@ -100,11 +86,9 @@ function LoginInner() {
   }
 
   const handleSubmit = async () => {
+    if (!supabase) { setMessage("שגיאת מערכת."); return; }
     const emailTrim = email.trim();
-    if (!emailTrim) {
-      setMessage("נא להזין כתובת אימייל.");
-      return;
-    }
+    if (!emailTrim) { setMessage("נא להזין כתובת אימייל."); return; }
 
     setBusy(true);
     setMessage("");
@@ -128,9 +112,15 @@ function LoginInner() {
     }
   };
 
-  // ... (השאר נשאר אותו דבר כמו בקוד המקורי שלך)
   return (
     <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>
+      <button 
+        onClick={() => router.back()} 
+        className="w-full max-w-md mt-4 pr-6 text-right text-sm text-stone-500 hover:text-stone-900"
+      >
+        ← חזרה
+      </button>
+
       <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft" suppressHydrationWarning>
         <h1 className="text-center text-2xl font-bold text-navy-header">התחברות</h1>
         <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }} noValidate>

@@ -201,7 +201,7 @@ export async function resolvePostAuthPath(
         return "/parent/onboarding";
       }
       const nextOk = allowedNextPath("parent", nextParam);
-      return nextOk ?? "/parent/search";
+      return nextOk ?? "/parent/dashboard";
     }
 
     return "/auth/role-selection";

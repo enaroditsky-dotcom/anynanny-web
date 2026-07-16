@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MainLayout } from "@components/layout/MainLayout";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { Zap, ShieldCheck, Star, Clock, AlertCircle, RefreshCw, ArrowRight, XCircle } from "lucide-react";
 
 interface RespondingSitter {
@@ -43,24 +44,18 @@ export default function BroadcastRadarPage() {
   useEffect(() => {
     if (!alertId || alertId === "null") return;
 
-    const alertChannel = supabase
-      .channel(`alert_status:${alertId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "broadcasts", // 🔥 סנכרון שם הטבלה המדויק שלך מבוסס ה-Table Editor
-          filter: `id=eq.${alertId}`
-        },
-        (payload) => {
-          console.log("Base alert updated in DB:", payload.new);
-          if (payload.new.status === "expired" || payload.new.status === "cancelled") {
-            setIsExpired(true);
-          }
+    const alertChannel = subscribePostgresChanges(supabase, `alert_status-${alertId}`, {
+      event: "UPDATE",
+      table: "broadcasts",
+      filter: `id=eq.${alertId}`,
+      handler: (payload) => {
+        console.log("Base alert updated in DB:", payload.new);
+        const next = payload.new as { status?: string };
+        if (next.status === "expired" || next.status === "cancelled") {
+          setIsExpired(true);
         }
-      )
-      .subscribe();
+      }
+    });
 
     // בדיקה ראשונית של הסטטוס הנוכחי למקרה שההורה רענן את העמוד
     const checkCurrentStatus = async () => {
@@ -85,7 +80,7 @@ export default function BroadcastRadarPage() {
     void checkCurrentStatus();
 
     return () => {
-      supabase.removeChannel(alertChannel);
+      removeRealtimeChannel(supabase, alertChannel);
     };
   }, [alertId, supabase]);
 
@@ -95,71 +90,79 @@ export default function BroadcastRadarPage() {
 
     console.log(`📡 Parent initialising Realtime channel for alert ID: ${alertId}`);
 
-    const channel = supabase
-      .channel(`radar:${alertId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "broadcast_responses",
-          filter: `alert_id=eq.${alertId}`
-        },
-        async (payload) => {
-          console.log("⚡ New response row detected in database!", payload.new);
-          const sitterId = payload.new.sitter_id;
-          
-          try {
-            const { data: sitterProfile, error: profileError } = await supabase
-              .from("sitter_profiles") 
-              .select("full_name, hourly_rate_nis, years_experience")
-              .eq("id", sitterId)
-              .maybeSingle();
+    const channel = subscribePostgresChanges(supabase, `radar-${alertId}`, {
+      event: "INSERT",
+      table: "broadcast_responses",
+      filter: `alert_id=eq.${alertId}`,
+      handler: async (payload) => {
+        console.log("⚡ New response row detected in database!", payload.new);
+        const next = payload.new as { sitter_id?: string };
+        const sitterId = next.sitter_id;
+        if (!sitterId) return;
 
-            if (profileError) {
-              console.error("❌ Supabase error fetching sitter profile:", profileError);
-              return;
-            }
+        try {
+          const [{ data: nameRow, error: nameError }, { data: sitterProfile, error: profileError }] =
+            await Promise.all([
+              supabase
+                .from("profiles")
+                .select("first_name, last_name")
+                .eq("id", sitterId)
+                .maybeSingle(),
+              supabase
+                .from("sitter_profiles")
+                .select("hourly_rate_nis, years_experience")
+                .eq("id", sitterId)
+                .maybeSingle()
+            ]);
 
-            if (!sitterProfile) {
-              setResponders((prev) => {
-                if (prev.some((r) => r.id === sitterId)) return prev;
-                return [
-                  ...prev,
-                  {
-                    id: sitterId,
-                    name: "מטפלת זמינה בסביבה",
-                    rating: 5.0,
-                    experience: 3,
-                    hourlyRate: 60
-                  }
-                ];
-              });
-              return;
-            }
+          if (nameError) {
+            console.error("❌ Supabase error fetching profile name:", nameError);
+          }
+          if (profileError) {
+            console.error("❌ Supabase error fetching sitter profile:", profileError);
+          }
 
+          const displayName =
+            `${nameRow?.first_name ?? ""} ${nameRow?.last_name ?? ""}`.trim() || "נני במערכת";
+
+          if (!sitterProfile) {
             setResponders((prev) => {
               if (prev.some((r) => r.id === sitterId)) return prev;
               return [
                 ...prev,
                 {
                   id: sitterId,
-                  name: sitterProfile.full_name || "נני במערכת",
-                  rating: 5.0, 
-                  experience: sitterProfile.years_experience ?? 0,
-                  hourlyRate: sitterProfile.hourly_rate_nis ?? 50
+                  name: displayName,
+                  rating: 5.0,
+                  experience: 3,
+                  hourlyRate: 60
                 }
               ];
             });
-          } catch (catchErr) {
-            console.error("❌ Catch error in realtime payload processing:", catchErr);
+            return;
           }
+
+          setResponders((prev) => {
+            if (prev.some((r) => r.id === sitterId)) return prev;
+            return [
+              ...prev,
+              {
+                id: sitterId,
+                name: displayName,
+                rating: 5.0,
+                experience: sitterProfile.years_experience ?? 0,
+                hourlyRate: sitterProfile.hourly_rate_nis ?? 50
+              }
+            ];
+          });
+        } catch (catchErr) {
+          console.error("❌ Catch error in realtime payload processing:", catchErr);
         }
-      )
-      .subscribe();
+      }
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [alertId, isExpired, supabase]);
 

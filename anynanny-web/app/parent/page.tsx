@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Parent home — search is the primary entry after role selection. */
+/** Parent home — dashboard is the primary entry after login. */
 export default function ParentIndexPage() {
-  redirect("/parent/search");
+  redirect("/parent/dashboard");
 }

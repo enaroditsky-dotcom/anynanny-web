@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel } from "@/lib/supabase/subscribe-postgres-changes";
 import { walletService } from "../services/walletService";
 
 /**
- * הוק חכם המאזין לשינויי ארנק בזמן אמת ומנהל את מצב ההתראה
+ * Realtime wallet badge. Subscribes once per userId; AppShellGate keeps BottomNav
+ * mounted across parent chrome routes so this effect is not re-armed on navigation.
  */
 export function useWalletNotification(userId: string | undefined) {
   const [hasWalletUpdate, setHasWalletUpdate] = useState(false);
@@ -10,17 +13,13 @@ export function useWalletNotification(userId: string | undefined) {
   useEffect(() => {
     if (!userId) return;
 
-    // הרשמה להאזנה בזמן אמת מול טבלת הפרופילים ב-Supabase
-    const unsubscribe = walletService.subscribeToBalanceChanges(userId, (newBalance) => {
-      console.log(`[Realtime Wallet Update] New balance detected: ${newBalance}`);
-      
-      // ברגע שהיתרה משתנה, נדליק את הנקודה האדומה בסרגל התחתון!
+    const supabase = getSupabaseBrowserClient();
+    const channel = walletService.subscribeToBalanceChanges(userId, () => {
       setHasWalletUpdate(true);
     });
 
-    // פונקציית ניקוי כאשר המשתמש עובר עמוד או מתנתק
     return () => {
-      unsubscribe();
+      removeRealtimeChannel(supabase, channel);
     };
   }, [userId]);
 

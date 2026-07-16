@@ -24,6 +24,7 @@ const parentItems: NavItem[] = [
 
 const sitterItems: NavItem[] = [
   { href: "/sitter/dashboard", label: "דשבורד", match: (p) => p === "/sitter/dashboard", Icon: LayoutDashboard },
+  { href: "/sitter/messages", label: "הודעות", match: (p) => p.startsWith("/sitter/messages"), Icon: MessageCircle, badgeKey: "messages" },
   { href: "/sitter/profile", label: "אזור אישי", match: (p) => p.startsWith("/sitter/profile") || p.startsWith("/sitter/personal"), Icon: User },
   { href: "/sitter/settings", label: "הגדרות", match: (p) => p.startsWith("/sitter/settings"), Icon: Settings }
 ];

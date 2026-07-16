@@ -73,7 +73,8 @@ export function useCircleBookingSync(role: "parent" | "sitter") {
 
   const syncFromLinkedBooking = useCallback(
     (booking: TodaysLinkedBookingView | null) => {
-      if (!booking) return applyCircleBooking(null);
+      // Keep existing circle when a reload briefly returns null — only clear via explicit terminal sync.
+      if (!booking) return false;
 
       return syncFromPayload({
         booking,
@@ -83,7 +84,7 @@ export function useCircleBookingSync(role: "parent" | "sitter") {
         liveFieldsChanged: true
       });
     },
-    [applyCircleBooking, syncFromPayload]
+    [syncFromPayload]
   );
 
   return {

@@ -9,6 +9,7 @@ import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
 import { fetchPendingBookingForParentSitter } from "@/lib/bookings/todays-linked-booking";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 export type SitterProfileActionsProps = {
@@ -102,33 +103,24 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
       applyBookingStatusFromPayload(payload, setBookingStatus);
     };
 
-    const channel = supabase
-      .channel(`booking-status-${pendingBookingId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `id=eq.${pendingBookingId}`
-        },
-        handleRealtimeChange
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `id=eq.${pendingBookingId}`
-        },
-        handleRealtimeChange
-      )
-      .subscribe();
+    const channel = subscribePostgresChanges(supabase, `booking-status-${pendingBookingId}`, [
+      {
+        event: "UPDATE",
+        table: BOOKINGS_TABLE,
+        filter: `id=eq.${pendingBookingId}`,
+        handler: handleRealtimeChange
+      },
+      {
+        event: "INSERT",
+        table: BOOKINGS_TABLE,
+        filter: `id=eq.${pendingBookingId}`,
+        handler: handleRealtimeChange
+      }
+    ]);
 
     return () => {
       cancelled = true;
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [pendingBookingId]);
 

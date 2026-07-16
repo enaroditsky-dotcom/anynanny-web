@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { removeRealtimeChannel, subscribePostgresChanges } from '@/lib/supabase/subscribe-postgres-changes';
 import { fetchBookingMessages, sendBookingMessage } from '@/lib/chat/booking-messages';
 
 interface MessageRow {
@@ -39,25 +40,21 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
     void loadInitialMessages();
 
     // 2. האזנה להודעות חדשות בזמן אמת דרך ערוץ הריל-טיים הרשמי
-    const channel = supabase
-      .channel(`chat:${bookingId}`)
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'messages',
-        filter: `booking_id=eq.${bookingId}` 
-      }, (payload) => {
+    const channel = subscribePostgresChanges(supabase, `chat-${bookingId}`, {
+      event: 'INSERT',
+      table: 'messages',
+      filter: `booking_id=eq.${bookingId}`,
+      handler: (payload) => {
         const incoming = payload.new as MessageRow;
-        // מניעת כפילות בסטייט המקומי אם זו הודעה שהקליינט הנוכחי כבר הוסיף
         setMessages((prev) => {
           if (prev.some((m) => m.id === incoming.id)) return prev;
           return [...prev, incoming];
         });
-      })
-      .subscribe();
+      }
+    });
 
-    return () => { 
-      void supabase.removeChannel(channel); 
+    return () => {
+      removeRealtimeChannel(supabase, channel);
     };
   }, [bookingId]);
 

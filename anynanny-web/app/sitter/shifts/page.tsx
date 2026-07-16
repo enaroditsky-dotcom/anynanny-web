@@ -147,7 +147,7 @@ export default function SitterShiftsPage() {
       if (parentIds.length > 0) {
         const { data: profileRows, error: profilesError } = await supabase
           .from(PROFILES_TABLE)
-          .select("id, full_name")
+          .select("id, first_name, last_name")
           .in("id", parentIds);
 
         if (profilesError) {
@@ -155,9 +155,7 @@ export default function SitterShiftsPage() {
         } else {
           for (const profile of profileRows ?? []) {
             const name =
-              typeof profile.full_name === "string" && profile.full_name.trim()
-                ? profile.full_name.trim()
-                : null;
+              `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || null;
             if (name) parentNameById.set(String(profile.id), name);
           }
         }
@@ -216,7 +214,7 @@ export default function SitterShiftsPage() {
       if (parentIds.length > 0) {
         const { data: profileRows, error: profilesError } = await supabase
           .from(PROFILES_TABLE)
-          .select("id, full_name")
+          .select("id, first_name, last_name")
           .in("id", parentIds);
 
         if (profilesError) {
@@ -224,9 +222,7 @@ export default function SitterShiftsPage() {
         } else {
           for (const profile of profileRows ?? []) {
             const name =
-              typeof profile.full_name === "string" && profile.full_name.trim()
-                ? profile.full_name.trim()
-                : null;
+              `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || null;
             if (name) parentNameById.set(String(profile.id), name);
           }
         }

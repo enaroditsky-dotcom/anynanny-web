@@ -22,6 +22,7 @@ import {
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 function applyRowToState(row: SupabaseSessionRow): SessionProtocolState | null {
   const mapped = mapSupabaseRowToProtocol(row);
@@ -119,7 +120,6 @@ export function useParentBillingSession() {
 
     const sid = sessionState.supabaseSessionId;
     const filter = sid ? `id=eq.${sid}` : `parent_id=eq.${parentUserId}`;
-    const channel = supabase.channel(`parent-billing-rt-${parentUserId}-${sid ?? "none"}`);
 
     const handler = (payload: { new?: Record<string, unknown>; old?: Record<string, unknown> }) => {
       const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
@@ -128,11 +128,15 @@ export function useParentBillingSession() {
       if (mapped) setSessionState(mapped);
     };
 
-    channel.on("postgres_changes", { event: "*", schema: "public", table: SESSIONS_TABLE, filter }, handler);
-    channel.subscribe();
+    const channel = subscribePostgresChanges(supabase, `parent-billing-rt-${parentUserId}-${sid ?? "none"}`, {
+      event: "*",
+      table: SESSIONS_TABLE,
+      filter,
+      handler
+    });
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [parentUserId, sessionState.supabaseSessionId]);
 

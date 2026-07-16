@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { BottomNav } from "@/components/bottom-nav";
 
 type MainLayoutProps = {
   children: ReactNode;
-  /** Optional class names for the scrollable main region. */
   mainClassName?: string;
 };
 
@@ -17,14 +17,13 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
           <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-slate-100">
             <Image
               src="/anynanny_clean.jpg"
-              alt=""
+              alt="AnyNanny Logo"
               fill
               className="object-cover object-center"
               sizes="44px"
               priority
             />
           </div>
-
           <h1 className="flex flex-row text-xl font-bold leading-none tracking-tight select-none">
             <span className="text-[#001F3F]">Any</span>
             <span className="text-[#00A86B]">Nanny</span>
@@ -37,6 +36,9 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
       >
         {children}
       </main>
+
+      {/* כאן הניווט יופיע תמיד */}
+      <BottomNav />
     </div>
   );
 }

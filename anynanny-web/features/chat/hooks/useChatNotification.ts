@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel } from "@/lib/supabase/subscribe-postgres-changes";
 import { chatService } from "../services/chatService";
 
 /**
- * הוק חכם המאזין להודעות חדשות בריל-טיים ומנהל את סטייט הנקודה האדומה בשבילך
+ * Realtime chat badge. Subscribes once per bookingId+userId; BottomNav stays mounted
+ * in AppShellGate so route transitions do not tear down / recreate the channel.
  */
 export function useChatNotification(bookingId: string | undefined, userId: string | undefined) {
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
@@ -10,14 +13,13 @@ export function useChatNotification(bookingId: string | undefined, userId: strin
   useEffect(() => {
     if (!bookingId || !userId) return;
 
-    // האזנה להודעות חדשות בתוך המשמרת הנוכחית
-    const unsubscribe = chatService.subscribeToNewMessages(bookingId, userId, () => {
-      console.log(`[Realtime Chat Update] New unread message detected for booking: ${bookingId}`);
+    const supabase = getSupabaseBrowserClient();
+    const channel = chatService.subscribeToNewMessages(bookingId, userId, () => {
       setHasUnreadMessages(true);
     });
 
     return () => {
-      unsubscribe();
+      removeRealtimeChannel(supabase, channel);
     };
   }, [bookingId, userId]);
 

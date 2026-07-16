@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Calendar, Loader2, ArrowRight, RefreshCw } from "lucide-react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { useRouter } from "next/navigation";
 
 type NannyShiftHistoryItem = {
@@ -28,7 +29,7 @@ export default function ParentHistoryPage() {
       setLoadingData(true);
       console.log("History: Sending safe wild-card fetch for Parent:", resolvedParentId);
 
-      // שולפים את האובייקט המלא של sitter_profiles בלי לנקוב בשם שדה ספציפי שיכול להקריס
+      // שולפים את האובייקט המלא של sitter_profiles + שם מ-profiles
       const { data, error } = await supabase
         .from("bookings")
         .select(`
@@ -36,7 +37,8 @@ export default function ParentHistoryPage() {
           sitter_id,
           booking_date,
           status,
-          sitter_profiles ( * )
+          sitter_profiles ( * ),
+          profiles:sitter_id ( first_name, last_name )
         `)
         .eq("parent_id", resolvedParentId);
 
@@ -62,6 +64,9 @@ export default function ParentHistoryPage() {
           
           // סריקה אוטומטית של השדות כדי למצוא את מזהה ה-AN הציבורי בלי לנחש שמות עמודות
           const profilesObj = booking.sitter_profiles;
+          const nameRow = Array.isArray(booking.profiles) ? booking.profiles[0] : booking.profiles;
+          const nannyName =
+            `${nameRow?.first_name ?? ""} ${nameRow?.last_name ?? ""}`.trim() || "שמרטפית AnyNanny";
           let publicNannyId = "";
 
           if (profilesObj) {
@@ -91,7 +96,7 @@ export default function ParentHistoryPage() {
           return {
             id: booking.id,
             nanny_id: publicNannyId,
-            nanny_name: profilesObj?.full_name || "שמרטפית AnyNanny",
+            nanny_name: nannyName,
             date: displayDate,
             raw_date: rawDateStr,
             status: statusLabel,
@@ -114,37 +119,32 @@ export default function ParentHistoryPage() {
     // שליפה ראשונית של המידע
     fetchShiftHistory(targetParentId);
   
-    // יצירת ערוץ עם הגדרות עמידות יותר לניתוקי דפדפן
-    const channel = supabase
-      .channel("history-realtime-v6", {
-        config: {
-          broadcast: { self: false },
-          presence: { key: targetParentId },
-        },
-      })
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "bookings", filter: `parent_id=eq.${targetParentId}` },
-        (payload) => {
+    // channel().on().subscribe() — chained on the same object (unique topic).
+    const channel = subscribePostgresChanges(
+      supabase,
+      `history-realtime-${targetParentId}`,
+      {
+        event: "*",
+        table: "bookings",
+        filter: `parent_id=eq.${targetParentId}`,
+        handler: () => {
           console.log("History Real-time: Verified update received from DB change.");
           fetchShiftHistory(targetParentId);
         }
-      );
-  
-    // הרשמה לערוץ בטיפול שקט בשגיאות חיבור
-    channel.subscribe((status, err) => {
-      if (status === "SUBSCRIBED") {
-        console.log("History Real-time: Channel connected securely.");
+      },
+      (status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("History Real-time: Channel connected securely.");
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`History Real-time Status Notice: ${status}`, err?.message || "");
+        }
       }
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        console.warn(`History Real-time Status Notice: ${status}`, err?.message || "");
-      }
-    });
-  
-    // ניקוי מלא ומניעת זליגות זיכרון/WebSocket שבור כשהדף לא אקטיבי
+    );
+
     return () => {
       console.log("History Real-time: Cleaning up channel subscription.");
-      supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [fetchShiftHistory, supabase]);
 

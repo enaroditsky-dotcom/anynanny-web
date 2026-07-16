@@ -92,13 +92,14 @@ async function enrichLinkedBookingView(
   const partnerId = String(booking[partnerColumn as keyof BookingRow]);
 
   const profileRead = safeSupabaseRead(
-    await supabase.from(PROFILES_TABLE).select("full_name").eq("id", partnerId).maybeSingle(),
-    "partner profile full_name"
+    await supabase.from(PROFILES_TABLE).select("first_name, last_name").eq("id", partnerId).maybeSingle(),
+    "partner profile name"
   );
 
   let partnerName =
-    profileRead.data && typeof profileRead.data === "object" && "full_name" in profileRead.data
-      ? String((profileRead.data as { full_name?: string }).full_name ?? "").trim() || null
+    profileRead.data && typeof profileRead.data === "object"
+      ? `${(profileRead.data as { first_name?: string | null }).first_name ?? ""} ${(profileRead.data as { last_name?: string | null }).last_name ?? ""}`.trim() ||
+        null
       : null;
 
   let partnerSitterCode: string | null = null;
@@ -291,14 +292,26 @@ async function fetchActiveShiftGateRow(
     .eq(participantColumn, userId)
     .eq("booking_date", today)
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(5);
 
-  if (error || !data) {
+  if (error || !data?.length) {
     return null;
   }
 
-  return data as TodayBookingShiftGate;
+  const rows = data as TodayBookingShiftGate[];
+  // Prefer a live/approved shift over a stale completed row from earlier today.
+  const livePreferred = rows.find((row) => {
+    const status = normalizeBookingStatus(row.status as BookingStatusInput) ?? row.status;
+    return (
+      status === "pending" ||
+      status === "approved" ||
+      status === "sitter_started" ||
+      status === "parent_started" ||
+      status === "sitter_ended"
+    );
+  });
+
+  return livePreferred ?? rows[0] ?? null;
 }
 
 function gateFromBooking(row: BookingRow): TodayBookingShiftGate {

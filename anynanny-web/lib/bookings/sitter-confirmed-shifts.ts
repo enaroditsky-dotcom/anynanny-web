@@ -31,13 +31,17 @@ export async function fetchConfirmedShiftsForSitter(
   }
 
   const parentIds = [...new Set(bookings.map((b) => b.parent_id))];
-  const { data: profiles } = await supabase.from(PROFILES_TABLE).select("id, full_name").in("id", parentIds);
+  const { data: profiles } = await supabase
+    .from(PROFILES_TABLE)
+    .select("id, first_name, last_name")
+    .in("id", parentIds);
 
   const nameByParentId = new Map<string, string>();
   for (const p of profiles ?? []) {
     if (p && typeof p === "object" && "id" in p) {
       const id = String((p as { id: string }).id);
-      const name = String((p as { full_name?: string }).full_name ?? "").trim();
+      const row = p as { first_name?: string | null; last_name?: string | null };
+      const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
       if (name) nameByParentId.set(id, name);
     }
   }

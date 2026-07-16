@@ -44,7 +44,7 @@ type SitterDashboardHeaderProps = {
   sitterId: string | null;
   refreshKey?: number;
   showPublicId?: boolean;
-  /** From profiles.public_id (e.g. AN_1001). */
+  /** From profiles (e.g. AN_1001 / P_1001 via serial / role scoped ids). */
   publicDisplayId?: string | null;
   publicIdLoaded?: boolean;
   children?: ReactNode;

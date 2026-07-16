@@ -1,4 +1,6 @@
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 /**
  * שירות ארנק דיגיטלי והתראות - מבודד לחלוטין מקוד הליבה
@@ -26,33 +28,28 @@ export const walletService = {
   },
 
   /**
-   * מנגנון האזנה בריל-טיים לשינויי יתרה בארנק
-   * הפונקציה מקשיבה לטבלת profiles ומפעילה Callback בכל פעם שהיתרה משתנה.
+   * מנגנון האזנה בריל-טיים לשינויי יתרה בארנק.
+   * Uses channel().on().subscribe() (never subscribe before on).
    */
-  subscribeToBalanceChanges(userId: string, onBalanceUpdate: (newBalance: number) => void) {
+  subscribeToBalanceChanges(
+    userId: string,
+    onBalanceUpdate: (newBalance: number) => void
+  ): RealtimeChannel | null {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) return () => {};
+    if (!supabase || !userId.trim()) return null;
 
-    const channel = supabase
-      .channel(`profile-balance-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "profiles",
-          filter: `id=eq.${userId}`,
-        },
-        (payload) => {
-          if (payload.new && typeof payload.new.balance !== "undefined") {
-            onBalanceUpdate(payload.new.balance);
-          }
+    return subscribePostgresChanges(supabase, `profile-balance-${userId}`, {
+      event: "UPDATE",
+      table: "profiles",
+      filter: `id=eq.${userId}`,
+      handler: (payload) => {
+        const next = payload.new as { balance?: unknown } | null;
+        if (next && typeof next.balance === "number") {
+          onBalanceUpdate(next.balance);
+        } else if (next && next.balance != null && Number.isFinite(Number(next.balance))) {
+          onBalanceUpdate(Number(next.balance));
         }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+      }
+    });
   }
 };

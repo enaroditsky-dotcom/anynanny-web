@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Calendar, Settings, Wallet } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import {
   HOURLY_RATE,
   SESSIONS_TABLE,
@@ -55,19 +56,21 @@ export default function SessionPage() {
 
         setUseSupabase(true);
 
-        // Register .on() handlers before .subscribe() (required by Supabase Realtime).
-        const channel = supabase.channel("sitter-sessions");
-        channel.on("postgres_changes", { event: "*", schema: "public", table: SESSIONS_TABLE }, (payload) => {
-          const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
-          if (!rowData || typeof rowData !== "object") return;
-          const mapped = mapSupabaseRowToProtocol(rowData);
-          if (!mapped) return;
-          persistSessionState(mapped);
-          setSessionState(mapped);
+        // channel().on().subscribe() — never reverse; unique topic via helper.
+        const channel = subscribePostgresChanges(supabase, "sitter-sessions", {
+          event: "*",
+          table: SESSIONS_TABLE,
+          handler: (payload) => {
+            const rowData = (payload.new ?? payload.old) as SupabaseSessionRow | undefined;
+            if (!rowData || typeof rowData !== "object") return;
+            const mapped = mapSupabaseRowToProtocol(rowData);
+            if (!mapped) return;
+            persistSessionState(mapped);
+            setSessionState(mapped);
+          }
         });
-        channel.subscribe();
         channelCleanup = () => {
-          void supabase.removeChannel(channel);
+          removeRealtimeChannel(supabase, channel);
         };
       })();
     }

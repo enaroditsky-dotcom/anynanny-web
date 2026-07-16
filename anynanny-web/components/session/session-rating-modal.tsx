@@ -62,8 +62,15 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
       const n = sp && typeof sp === "object" && "full_name" in sp ? String((sp as { full_name?: string }).full_name ?? "").trim() : "";
       setCounterpartyName(n || "הבייביסיטר");
     } else {
-      const { data: p } = await supabase.from(PROFILES_TABLE).select("full_name").eq("id", otherId).maybeSingle();
-      const n = p && typeof p === "object" && "full_name" in p ? String((p as { full_name?: string }).full_name ?? "").trim() : "";
+      const { data: p } = await supabase
+        .from(PROFILES_TABLE)
+        .select("first_name, last_name")
+        .eq("id", otherId)
+        .maybeSingle();
+      const n =
+        p && typeof p === "object"
+          ? `${(p as { first_name?: string | null }).first_name ?? ""} ${(p as { last_name?: string | null }).last_name ?? ""}`.trim()
+          : "";
       setCounterpartyName(n || "ההורה");
     }
   }, [role, sessionId]);
@@ -256,6 +263,142 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
                 onResolved();
               }}
               className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
+            >
+              דילוג
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
+            >
+              דילוג
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+  );
+}
+       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
+            >
+              דילוג
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+>
+  );
+}
+
+  );
+}
+       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
+            >
+              דילוג
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+/div>
+  );
+}
+>
+  );
+}
+
+  );
+}
+       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
+            >
+              דילוג
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+  </div>
+  );
+}
+/div>
+  );
+}
+>
+  );
+}
+
+  );
+}
+       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
+            >
+              דילוג
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+    </div>
+  );
+}
+  </div>
+  );
+}
+/div>
+  );
+}
+>
+  );
+}
+
+  );
+}
+       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
+            >
+              דילוג
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+v>
+    </div>
+  );
+}
+
+    </div>
+  );
+}
+  </div>
+  );
+}
+/div>
+  );
+}
+>
+  );
+}
+
+  );
+}
+       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
             >
               דילוג
             </button>

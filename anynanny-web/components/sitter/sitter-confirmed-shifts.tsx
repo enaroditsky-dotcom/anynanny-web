@@ -11,6 +11,7 @@ import {
   type ConfirmedShiftView
 } from "@/lib/bookings/sitter-confirmed-shifts";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 const CANCEL_SHIFT_CONFIRM_MESSAGE = "האם לבטל ולמחוק משמרת זו?";
@@ -172,24 +173,17 @@ export function SitterConfirmedShifts({
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
 
-    const channel = supabase
-      .channel(`sitter-confirmed-bookings-${effectiveSitterId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `sitter_id=eq.${effectiveSitterId}`
-        },
-        () => {
-          void load(effectiveSitterId);
-        }
-      )
-      .subscribe();
+    const channel = subscribePostgresChanges(supabase, `sitter-confirmed-bookings-${effectiveSitterId}`, {
+      event: "*",
+      table: BOOKINGS_TABLE,
+      filter: `sitter_id=eq.${effectiveSitterId}`,
+      handler: () => {
+        void load(effectiveSitterId);
+      }
+    });
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [disabled, effectiveSitterId, load]);
 

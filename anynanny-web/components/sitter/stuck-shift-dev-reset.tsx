@@ -5,7 +5,7 @@ import { resetStuckShiftsForParent } from "@/lib/bookings/parent-reset-stuck-shi
 import { resetStuckShiftsForSitter } from "@/lib/bookings/sitter-reset-stuck-shifts";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
-/** Rescue control — always visible on sitter/parent session screens (status-only Supabase writes). */
+/** Rescue control — always visible on sitter/parent session screens. */
 const SHOW_STUCK_SHIFT_RESET = true;
 
 type Props = {
@@ -28,51 +28,64 @@ export function StuckShiftDevResetButton({
   const handleReset = useCallback(async () => {
     if (
       !window.confirm(
-        "לאפס משמרת תקועה? פעולה זו תסגור sessions פתוחים ו-bookings פתוחים להיום (סטטוס בלבד)."
+        "לשחרר משמרת תקועה? פעולה זו תמחק sessions פתוחים ו-bookings פתוחים להיום מהמערכת."
       )
     ) {
-      return;
-    }
-
-    const auth = await resolveBrowserAuth();
-    if (!auth.ok) {
-      setMessage("יש להתחבר כדי לאפס משמרות.");
       return;
     }
 
     setBusy(true);
     setMessage(null);
 
-    const result =
-      role === "parent"
-        ? await resetStuckShiftsForParent(auth.supabase, auth.userId)
-        : await resetStuckShiftsForSitter(auth.supabase, auth.userId);
-    setBusy(false);
-
     try {
-      await onReset?.();
-    } catch (e) {
-      console.warn("[StuckShiftDevReset] onReset:", e);
-    }
+      const auth = await resolveBrowserAuth();
+      if (!auth.ok) {
+        setMessage("יש להתחבר כדי לשחרר משמרת.");
+        return;
+      }
 
-    if (result.error) {
-      setMessage(result.error);
-      return;
-    }
+      const result =
+        role === "parent"
+          ? await resetStuckShiftsForParent(auth.supabase, auth.userId)
+          : await resetStuckShiftsForSitter(auth.supabase, auth.userId);
 
-    const parts: string[] = [];
-    if (result.sessionsCompleted > 0) {
-      parts.push(`${result.sessionsCompleted} sessions הושלמו`);
+      if (result.error) {
+        setMessage(result.error);
+        return;
+      }
+
+      try {
+        await onReset?.();
+      } catch (resetErr) {
+        console.warn("[StuckShiftDevReset] onReset:", resetErr);
+      }
+
+      const parts: string[] = [];
+      if (result.sessionsDeleted > 0) {
+        parts.push(`${result.sessionsDeleted} sessions נמחקו`);
+      }
+      if (result.bookingsDeleted > 0) {
+        parts.push(`${result.bookingsDeleted} bookings נמחקו`);
+      }
+      setMessage(
+        parts.length > 0
+          ? `שוחרר בהצלחה: ${parts.join(" · ")}`
+          : "המסך שוחרר — אין משמרות פתוחות."
+      );
+    } catch (err) {
+      console.warn("[StuckShiftDevReset]", err);
+      setMessage(
+        err instanceof Error ? err.message : "שגיאה בשחרור המשמרת. נסו לרענן את המסך."
+      );
+
+      try {
+        await onReset?.();
+      } catch (resetErr) {
+        console.warn("[StuckShiftDevReset] onReset after failure:", resetErr);
+      }
+    } finally {
+      setBusy(false);
     }
-    if (result.sessionsCancelled > 0) {
-      parts.push(`${result.sessionsCancelled} sessions בוטלו`);
-    }
-    if (result.bookingsCompleted > 0) {
-      parts.push(`${result.bookingsCompleted} bookings נסגרו`);
-    }
-    setMessage(
-      parts.length > 0 ? `אופס בהצלחה: ${parts.join(" · ")}` : "המסך אופס — אין משמרות פתוחות."
-    );
   }, [onReset, role]);
 
   if (!SHOW_STUCK_SHIFT_RESET) {
@@ -91,7 +104,7 @@ export function StuckShiftDevResetButton({
             : "w-full rounded-xl border border-dashed border-amber-400 bg-amber-50/90 px-3 py-2.5 text-xs font-semibold text-amber-950 transition hover:bg-amber-100 disabled:opacity-60"
         }
       >
-        {busy ? "מאפס משמרת…" : "איפוס משמרת תקועה"}
+        {busy ? "משחרר משמרת…" : "שחרור משמרת תקועה"}
       </button>
       {message ? (
         <p

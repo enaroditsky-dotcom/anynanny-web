@@ -6,6 +6,7 @@ import { HOURLY_RATE, SESSIONS_TABLE, formatElapsed } from "@/lib/session/protoc
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 export type BillingSessionRow = {
   id: string;
@@ -441,8 +442,6 @@ export function useBillingSession({ sessionId, participantColumn, participantId 
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !sessionId) return;
 
-    const channel = supabase.channel(`billing-session-sync-${sessionId}`);
-
     const onRowChange = (payload: { eventType: string; new: unknown; old: unknown }) => {
       if (payload.eventType === "DELETE") {
         void fetchSession();
@@ -463,27 +462,22 @@ export function useBillingSession({ sessionId, participantColumn, participantId 
       void fetchSession();
     };
 
-    for (const event of ["INSERT", "UPDATE", "DELETE"] as const) {
-      channel.on(
-        "postgres_changes",
-        {
-          event,
-          schema: "public",
-          table: SESSIONS_TABLE,
-          filter: `id=eq.${sessionId}`
-        },
-        onRowChange
-      );
-    }
-
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        void fetchSession();
+    const channel = subscribePostgresChanges(
+      supabase,
+      `billing-session-sync-${sessionId}`,
+      (["INSERT", "UPDATE", "DELETE"] as const).map((event) => ({
+        event,
+        table: SESSIONS_TABLE,
+        filter: `id=eq.${sessionId}`,
+        handler: onRowChange
+      })),
+      (status) => {
+        if (status === "SUBSCRIBED") void fetchSession();
       }
-    });
+    );
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [fetchSession, replaceSessionRow, sessionId]);
 
@@ -654,34 +648,27 @@ export function useLinkedBillingSessionId(
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !userId) return;
 
-    const channel = supabase.channel(`linked-billing-session-id-${role}-${userId}`);
-
     const onChange = () => {
       if (fetchBlockedRef.current) return;
       void fetchSessionId();
     };
 
-    for (const event of ["INSERT", "UPDATE", "DELETE"] as const) {
-      channel.on(
-        "postgres_changes",
-        {
-          event,
-          schema: "public",
-          table: SESSIONS_TABLE,
-          filter: `${participantColumn}=eq.${userId}`
-        },
-        onChange
-      );
-    }
-
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        void fetchSessionId();
+    const channel = subscribePostgresChanges(
+      supabase,
+      `linked-billing-session-id-${role}-${userId}`,
+      (["INSERT", "UPDATE", "DELETE"] as const).map((event) => ({
+        event,
+        table: SESSIONS_TABLE,
+        filter: `${participantColumn}=eq.${userId}`,
+        handler: onChange
+      })),
+      (status) => {
+        if (status === "SUBSCRIBED") void fetchSessionId();
       }
-    });
+    );
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [fetchSessionId, participantColumn, role, userId]);
 

@@ -13,7 +13,7 @@ import {
 } from "@/lib/auth/post-auth-destination";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { ensureProfile } from "@/lib/auth/supabase-profile";
-import { resolveFullNameFromAuthUser } from "@/lib/user/greeting-display-name";
+import { resolveNamePartsFromAuthUser } from "@/lib/user/greeting-display-name";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { ensureSitterProfileRowForUser } from "@/lib/sitter/sitter-profile";
@@ -91,11 +91,11 @@ function RoleSelectionInner() {
           return;
         }
 
-        const fullName = resolveFullNameFromAuthUser(user);
+        const nameParts = resolveNamePartsFromAuthUser(user);
         const { error: profErr } = await ensureProfile(supabase, {
           id: user.id,
           role,
-          ...(fullName ? { full_name: fullName } : {})
+          ...nameParts
         });
         if (profErr) {
           setMessage(profErr);

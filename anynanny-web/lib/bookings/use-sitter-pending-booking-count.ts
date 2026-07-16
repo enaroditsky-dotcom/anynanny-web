@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import { fetchPendingBookingsForSitter } from "@/lib/bookings/sitter-pending-bookings";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 /** Live count of pending booking requests for the sitter dashboard badge. */
 export function useSitterPendingBookingCount(sitterId: string | null, enabled = true): number {
@@ -32,24 +33,17 @@ export function useSitterPendingBookingCount(sitterId: string | null, enabled = 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
 
-    const channel = supabase
-      .channel(`sitter-pending-count-${sitterId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `sitter_id=eq.${sitterId}`
-        },
-        () => {
-          void refresh();
-        }
-      )
-      .subscribe();
+    const channel = subscribePostgresChanges(supabase, `sitter-pending-count-${sitterId}`, {
+      event: "*",
+      table: BOOKINGS_TABLE,
+      filter: `sitter_id=eq.${sitterId}`,
+      handler: () => {
+        void refresh();
+      }
+    });
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [sitterId, enabled, refresh]);
 

@@ -29,17 +29,19 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, role, full_name, balance, role_selected)
+  insert into public.profiles (id, role, first_name, last_name, balance, role_selected)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'role', 'parent'),
-    nullif(trim(new.raw_user_meta_data->>'full_name'), ''),
+    nullif(trim(coalesce(new.raw_user_meta_data->>'first_name', '')), ''),
+    nullif(trim(coalesce(new.raw_user_meta_data->>'last_name', '')), ''),
     0,
     false
   )
   on conflict (id) do update
     set role = excluded.role,
-        full_name = coalesce(nullif(trim(excluded.full_name), ''), public.profiles.full_name),
+        first_name = coalesce(nullif(trim(excluded.first_name), ''), public.profiles.first_name),
+        last_name = coalesce(nullif(trim(excluded.last_name), ''), public.profiles.last_name),
         role_selected = public.profiles.role_selected,
         updated_at = now();
   return new;

@@ -38,7 +38,14 @@ export function normalizePublicSearchCard(raw: unknown): PublicSitterSearchCard 
 
   return {
     id,
-    full_name: pickString(row, "full_name", "fullName"),
+    full_name:
+      pickString(row, "full_name", "fullName") ??
+      (() => {
+        const first = pickString(row, "first_name", "firstName");
+        const last = pickString(row, "last_name", "lastName");
+        const combined = [first, last].filter(Boolean).join(" ").trim();
+        return combined || null;
+      })(),
     display_name: pickString(row, "display_name", "displayName") ?? null,
     email: pickString(row, "email"),
     nanny_serial: pickString(row, "nanny_serial", "nannySerial"),

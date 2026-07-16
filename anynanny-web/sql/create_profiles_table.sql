@@ -2,7 +2,8 @@
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
-  full_name text,
+  first_name text,
+  last_name text,
   role text not null check (role in ('parent', 'sitter')),
   balance numeric(12, 2) not null default 0,
   created_at timestamptz not null default now(),
@@ -37,16 +38,18 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, role, full_name, balance)
+  insert into public.profiles (id, role, first_name, last_name, balance)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'role', 'parent'),
-    nullif(trim(new.raw_user_meta_data->>'full_name'), ''),
+    nullif(trim(coalesce(new.raw_user_meta_data->>'first_name', '')), ''),
+    nullif(trim(coalesce(new.raw_user_meta_data->>'last_name', '')), ''),
     0
   )
   on conflict (id) do update
     set role = excluded.role,
-        full_name = coalesce(excluded.full_name, public.profiles.full_name),
+        first_name = coalesce(excluded.first_name, public.profiles.first_name),
+        last_name = coalesce(excluded.last_name, public.profiles.last_name),
         updated_at = now();
   return new;
 end;

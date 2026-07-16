@@ -5,17 +5,7 @@ import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/
 export type ProfileNameInput = {
   first_name?: string | null;
   last_name?: string | null;
-  full_name?: string | null;
 };
-
-function buildFullName(input: ProfileNameInput): string | null {
-  const first = (input.first_name ?? "").trim();
-  const last = (input.last_name ?? "").trim();
-  const combined = [first, last].filter(Boolean).join(" ").trim();
-  if (combined) return combined;
-  const legacy = (input.full_name ?? "").trim();
-  return legacy || null;
-}
 
 export async function upsertProfileOnSignup(
   supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
@@ -55,15 +45,14 @@ export async function ensureProfile(
   supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
   input: { id: string; role: ProfileRole } & ProfileNameInput
 ): Promise<{ error: string | null }> {
-  const full_name = buildFullName(input);
+  const first_name = input.first_name !== undefined ? input.first_name?.trim() || null : undefined;
+  const last_name = input.last_name !== undefined ? input.last_name?.trim() || null : undefined;
 
   const { data: existing } = await supabase.from(PROFILES_TABLE).select("id").eq("id", input.id).maybeSingle();
   if (existing) {
     const patch: Record<string, unknown> = { role: input.role };
-    if (input.first_name !== undefined) patch.first_name = input.first_name?.trim() || null;
-    if (input.last_name !== undefined) patch.last_name = input.last_name?.trim() || null;
-    if (full_name !== null) patch.full_name = full_name;
-    else if (input.full_name !== undefined) patch.full_name = input.full_name;
+    if (first_name !== undefined) patch.first_name = first_name;
+    if (last_name !== undefined) patch.last_name = last_name;
     const { error } = await supabase.from(PROFILES_TABLE).update(patch).eq("id", input.id);
     if (error) return { error: error.message };
     return { error: null };
@@ -72,9 +61,8 @@ export async function ensureProfile(
   const withRoleSelected: Record<string, unknown> = {
     id: input.id,
     role: input.role,
-    first_name: input.first_name?.trim() || null,
-    last_name: input.last_name?.trim() || null,
-    full_name,
+    first_name: first_name ?? null,
+    last_name: last_name ?? null,
     balance: 0,
     role_selected: false
   };
@@ -87,7 +75,6 @@ export async function ensureProfile(
       role: input.role,
       first_name: withRoleSelected.first_name,
       last_name: withRoleSelected.last_name,
-      full_name,
       balance: 0
     }));
   }
@@ -96,7 +83,6 @@ export async function ensureProfile(
     ({ error } = await supabase.from(PROFILES_TABLE).insert({
       id: input.id,
       role: input.role,
-      full_name,
       balance: 0
     }));
   }
@@ -124,8 +110,7 @@ export async function resolveRoleForUser(
       id: user.id,
       role: metaRole,
       first_name: typeof meta.first_name === "string" ? meta.first_name : undefined,
-      last_name: typeof meta.last_name === "string" ? meta.last_name : undefined,
-      full_name: typeof meta.full_name === "string" ? meta.full_name : undefined
+      last_name: typeof meta.last_name === "string" ? meta.last_name : undefined
     });
     if (r.error) console.warn("[auth] ensureProfile:", r.error);
     return metaRole;

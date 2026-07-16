@@ -8,7 +8,6 @@ export type ProfileRow = {
   id: string;
   first_name: string | null;
   last_name: string | null;
-  full_name: string | null;
   role: ProfileRole;
   balance: number;
   /** Unified public identifier (e.g. AN_1001 / P_1001). */
@@ -26,6 +25,15 @@ export type ProfileRow = {
 
 export function isProfileRole(v: string | null | undefined): v is ProfileRole {
   return v === "parent" || v === "sitter";
+}
+
+/** Join profiles.first_name + last_name for display (never reads a full_name column). */
+export function formatProfileDisplayName(
+  row: { first_name?: string | null; last_name?: string | null } | null | undefined
+): string | null {
+  if (!row || typeof row !== "object") return null;
+  const combined = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
+  return combined || null;
 }
 
 /** Role-scoped profile row fetch — always filters by user id and role. */

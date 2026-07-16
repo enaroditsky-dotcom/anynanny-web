@@ -20,6 +20,7 @@ import {
   SITTER_OVERLAP_APPROVE_MESSAGE
 } from "@/lib/bookings/sitter-shift-overlap";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 const NEW_BOOKING_TOAST_MS = 6000;
 
@@ -150,42 +151,29 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
       }
     };
 
-    const channel = supabase
-      .channel(`sitter-bookings-${sitterId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `sitter_id=eq.${sitterId}`
-        },
-        handleInsert
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `sitter_id=eq.${sitterId}`
-        },
-        handleUpdate
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: BOOKINGS_TABLE,
-          filter: `sitter_id=eq.${sitterId}`
-        },
-        handleDelete
-      )
-      .subscribe();
+    const channel = subscribePostgresChanges(supabase, `sitter-bookings-${sitterId}`, [
+      {
+        event: "INSERT",
+        table: BOOKINGS_TABLE,
+        filter: `sitter_id=eq.${sitterId}`,
+        handler: handleInsert
+      },
+      {
+        event: "UPDATE",
+        table: BOOKINGS_TABLE,
+        filter: `sitter_id=eq.${sitterId}`,
+        handler: handleUpdate
+      },
+      {
+        event: "DELETE",
+        table: BOOKINGS_TABLE,
+        filter: `sitter_id=eq.${sitterId}`,
+        handler: handleDelete
+      }
+    ]);
 
     return () => {
-      void supabase.removeChannel(channel);
+      removeRealtimeChannel(supabase, channel);
     };
   }, [sitterId, disabled, load]);
 

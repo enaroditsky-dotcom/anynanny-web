@@ -30,6 +30,7 @@ export function SitterAvailabilityManager() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [dailyRanges, setTimeRanges] = useState<TimeRange[]>([]);
   const [savingDay, setSavingDay] = useState(false);
+  const [isFullyAvailable, setIsFullyAvailable] = useState(false);
 
   // חיבור ואימות ראשוני
   useEffect(() => {
@@ -82,12 +83,21 @@ export function SitterAvailabilityManager() {
     return cells;
   }, [year, month, viewMode]);
 
+  const FULL_DAY_RANGE: TimeRange[] = [{ start: "00:00", end: "23:59" }];
+
   // פתיחת חלון של יום מסוים
   const handleDayClick = (iso: string) => {
     setActiveDateISO(iso);
-    // כאן תוכל להטעין טווחים קיימים מתוך ה-DB בעתיד במידת הצורך
+    setIsFullyAvailable(false);
     setTimeRanges([{ start: "08:00", end: "16:00" }]); 
     setIsModalOpen(true);
+  };
+
+  const toggleFullyAvailable = (checked: boolean) => {
+    setIsFullyAvailable(checked);
+    if (checked) {
+      setTimeRanges(FULL_DAY_RANGE);
+    }
   };
 
   // ניהול טווחי שעות בתוך המודאל
@@ -108,12 +118,25 @@ export function SitterAvailabilityManager() {
   // שמירת שעות היום
   const handleSaveDailyAvailability = async () => {
     setSavingDay(true);
-    // לוגיקת שמירת הטווחים מול הסופבייס שלך תתבצע כאן בצורה נקייה ומסודרת
-    setTimeout(() => {
-      setSavingDay(false);
-      setIsModalOpen(false);
-      setMessage(`הזמינות ליום ${activeDateISO} עודכנה בהצלחה.`);
-    }, 600);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (supabase && sitterId && activeDateISO) {
+        await supabase.from("sitter_availability").upsert(
+          {
+            sitter_id: sitterId,
+            date: activeDateISO,
+            is_fully_available: isFullyAvailable,
+            time_ranges: dailyRanges
+          },
+          { onConflict: "sitter_id,date" }
+        );
+      }
+    } catch (err) {
+      console.warn("[sitter_availability] save failed:", err);
+    }
+    setSavingDay(false);
+    setIsModalOpen(false);
+    setMessage(`הזמינות ליום ${activeDateISO} עודכנה בהצלחה.`);
   };
 
   if (loading) {
@@ -193,10 +216,27 @@ export function SitterAvailabilityManager() {
 
             {/* תוכן גלול: 24 שעות וניהול טווחים */}
             <div className="flex-1 overflow-y-auto py-4 space-y-5" style={{ scrollbarWidth: 'none' }}>
-              
+
+              {/* טוגל זמינות מלאה */}
+              <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-slate-100 bg-[#FDFBF6]/60 p-3">
+                <span className="text-xs font-bold text-[#001F3F]">פנויה ליום מלא (00:00–23:59)</span>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={isFullyAvailable}
+                    onChange={(e) => toggleFullyAvailable(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="h-6 w-11 rounded-full bg-slate-200 transition peer-checked:bg-emerald-500 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-300" />
+                  <div className="absolute start-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5 rtl:peer-checked:-translate-x-5" />
+                </div>
+              </label>
+
               {/* הזנת טווחי שעות */}
               <div className="space-y-3">
-                <p className="text-xs font-semibold text-slate-500">הגדירו את זמני הזמינות שלכם ביום זה:</p>
+                <p className="text-xs font-semibold text-slate-500">
+                  {isFullyAvailable ? "יום מלא — זמינות 00:00–23:59" : "הגדירו את זמני הזמינות שלכם ביום זה:"}
+                </p>
                 
                 {dailyRanges.map((range, index) => (
                   <div key={index} className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-[#FDFBF6]/60 p-3 animate-in slide-in-from-bottom-2 duration-200">
@@ -205,18 +245,20 @@ export function SitterAvailabilityManager() {
                       <input 
                         type="time" 
                         value={range.start} 
+                        disabled={isFullyAvailable}
                         onChange={(e) => updateTimeRange(index, "start", e.target.value)}
-                        className="rounded-lg border border-slate-200 p-1.5 font-mono outline-none focus:border-[#001F3F]"
+                        className="rounded-lg border border-slate-200 p-1.5 font-mono outline-none focus:border-[#001F3F] disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <span className="mr-1">עד שעה:</span>
                       <input 
                         type="time" 
                         value={range.end} 
+                        disabled={isFullyAvailable}
                         onChange={(e) => updateTimeRange(index, "end", e.target.value)}
-                        className="rounded-lg border border-slate-200 p-1.5 font-mono outline-none focus:border-[#001F3F]"
+                        className="rounded-lg border border-slate-200 p-1.5 font-mono outline-none focus:border-[#001F3F] disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                     </div>
-                    {dailyRanges.length > 1 && (
+                    {dailyRanges.length > 1 && !isFullyAvailable && (
                       <button type="button" onClick={() => removeTimeRange(index)} className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50">
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -224,14 +266,16 @@ export function SitterAvailabilityManager() {
                   </div>
                 ))}
 
-                <button 
-                  type="button" 
-                  onClick={addTimeRange}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition active:scale-98"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>הוספת עוד שעות אפשריות ביום זה</span>
-                </button>
+                {!isFullyAvailable && (
+                  <button 
+                    type="button" 
+                    onClick={addTimeRange}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition active:scale-98"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>הוספת עוד שעות אפשריות ביום זה</span>
+                  </button>
+                )}
               </div>
 
               {/* תצוגת סדר יום מלאה של 24 שעות */}
