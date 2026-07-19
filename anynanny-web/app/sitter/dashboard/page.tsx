@@ -372,65 +372,24 @@ export default function SitterDashboardPage() {
   }, [applyCircleBooking, setPendingRow, setActiveShiftRow, setEndConfirmRow, setCompletedSummaryRow]);
 
   const handleDevReset = useCallback(async () => {
-    if (
-      !window.confirm(
-        "לשחרר משמרת תקועה? פעולה זו תמחק sessions פתוחים ו-bookings פתוחים להיום מהמערכת."
-      )
-    ) {
-      return;
-    }
+    if (!window.confirm("לאפס את המשמרת?")) return;
 
     try {
       const auth = await resolveBrowserAuth();
-      if (!auth.ok) {
-        setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לשחרר משמרת.");
-        return;
-      }
-
-      const result = await resetStuckShiftsForSitter(auth.supabase, auth.userId);
+      if (auth.ok) await resetStuckShiftsForSitter(auth.supabase, auth.userId);
+      
+      // ניקוי ידני של ה-State המרכזי שגורם לבעיית ה-UI
+      setCompletedSummaryRow(null);
       clearSitterShiftUi();
-
-      if (sitterId) {
-        await refreshForUser(auth.supabase, sitterId);
-      }
-      await reloadTodaysBooking();
-      setDashboardStatsRefreshKey((k) => k + 1);
-
-      if (result.error) {
-        setBanner(result.error);
-        return;
-      }
-
-      const parts: string[] = [];
-      if (result.sessionsDeleted > 0) {
-        parts.push(`${result.sessionsDeleted} sessions נמחקו`);
-      }
-      if (result.bookingsDeleted > 0) {
-        parts.push(`${result.bookingsDeleted} bookings נמחקו`);
-      }
-      setBanner(
-        parts.length > 0
-          ? `שוחרר בהצלחה: ${parts.join(" · ")}`
-          : "המסך שוחרר — אין משמרות פתוחות."
-      );
+      
+      // ריענון הנתונים ללא טעינה מחדש של כל הדפדפן (Ponytail friendly)
+      router.refresh(); 
+      
     } catch (err) {
-      console.warn("[handleDevReset]", err);
-      clearSitterShiftUi();
-      try {
-        const supabase = getSupabaseBrowserClient();
-        if (supabase && sitterId) {
-          await refreshForUser(supabase, sitterId);
-        }
-        await reloadTodaysBooking();
-        setDashboardStatsRefreshKey((k) => k + 1);
-      } catch (reloadErr) {
-        console.warn("[handleDevReset] reload after failure:", reloadErr);
-      }
-      setBanner(
-        err instanceof Error ? err.message : "שגיאה בשחרור המשמרת. נסו לרענן את המסך."
-      );
+      console.error("Reset failed", err);
+      window.location.reload(); // פתרון גיבוי למקרה שהריענון לא הספיק
     }
-  }, [sitterId, refreshForUser, reloadTodaysBooking, clearSitterShiftUi]);
+  }, [sitterId, clearSitterShiftUi, router, setCompletedSummaryRow]);
 
   const liveElapsed = useMemo(() => {
     const row = endConfirmRow ?? activeShiftRow;
