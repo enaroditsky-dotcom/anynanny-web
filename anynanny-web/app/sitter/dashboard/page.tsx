@@ -477,7 +477,8 @@ export default function SitterDashboardPage() {
 
   const sitterTerminalDbStatus = sitterSessionStatusKey(completedSummaryRow);
   const showSitterAwaitingParentApproval = sitterTerminalDbStatus === "sitter_completed" && !sitterInFlightActive && !sessionUiBlockedByBooking;
-  const showSitterCompletedClosure = (sitterTerminalDbStatus === "payment_pending" || sitterTerminalDbStatus === "paid" || sitterTerminalDbStatus === "completed") && Boolean(completedSummaryRow) && !sitterInFlightActive && !showSitterAwaitingParentApproval;
+  const isTerminalPaymentState = ["payment_pending", "paid", "completed"].includes(sitterTerminalDbStatus);
+  const showSitterCompletedClosure = (sitterTerminalDbStatus === "paid" || sitterTerminalDbStatus === "completed") && Boolean(completedSummaryRow) && !sitterInFlightActive && !showSitterAwaitingParentApproval;
   const showSitterIdleWelcome =
     bookingGuardReady &&
     !sessionUiBlockedByBooking &&
