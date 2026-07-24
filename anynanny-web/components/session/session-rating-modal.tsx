@@ -58,8 +58,15 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
     }
     if (role === "parent") {
       const fk = SITTER_PROFILES_USER_COLUMN;
-      const { data: sp } = await supabase.from(SITTER_PROFILES_TABLE).select("full_name").eq(fk, otherId).maybeSingle();
-      const n = sp && typeof sp === "object" && "full_name" in sp ? String((sp as { full_name?: string }).full_name ?? "").trim() : "";
+      const { data: sp } = await supabase
+        .from(SITTER_PROFILES_TABLE)
+        .select("first_name, last_name")
+        .eq(fk, otherId)
+        .maybeSingle();
+      const n =
+        sp && typeof sp === "object"
+          ? `${(sp as { first_name?: string | null }).first_name ?? ""} ${(sp as { last_name?: string | null }).last_name ?? ""}`.trim()
+          : "";
       setCounterpartyName(n || "הבייביסיטר");
     } else {
       const { data: p } = await supabase
@@ -263,142 +270,6 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
                 onResolved();
               }}
               className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
-            >
-              דילוג
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
-            >
-              דילוג
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-  );
-}
-       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
-            >
-              דילוג
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
->
-  );
-}
-
-  );
-}
-       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
-            >
-              דילוג
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-/div>
-  );
-}
->
-  );
-}
-
-  );
-}
-       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
-            >
-              דילוג
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-  </div>
-  );
-}
-/div>
-  );
-}
->
-  );
-}
-
-  );
-}
-       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
-            >
-              דילוג
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-    </div>
-  );
-}
-  </div>
-  );
-}
-/div>
-  );
-}
->
-  );
-}
-
-  );
-}
-       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
-            >
-              דילוג
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-v>
-    </div>
-  );
-}
-
-    </div>
-  );
-}
-  </div>
-  );
-}
-/div>
-  );
-}
->
-  );
-}
-
-  );
-}
-       className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
             >
               דילוג
             </button>

@@ -3,18 +3,20 @@
 import { useEffect, useState, useRef } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
-import { Zap } from "lucide-react";
+import { Zap, CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface BroadcastAlertModalProps {
   sitterId: string;
 }
 
 export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps) {
+  const router = useRouter();
   const [activeAlert, setActiveAlert] = useState<{ id: string; city: string; service_type: string } | null>(null);
+  const [acceptedNotification, setAcceptedNotification] = useState<{ bookingId?: string } | null>(null);
   const [sitterCities, setSitterCities] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   
-  // 🔥 פתרון הלופ: נשמור רשימה של מזהי קריאות שהנני כבר לחצה עליהן "התעלם" בגרסת הריצה הנוכחית
   const dismissedAlertIdsRef = useRef<Set<string>>(new Set());
 
   // 1. שליפת מערך הערים של הנני
@@ -33,14 +35,16 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
       const profile = data && data.length > 0 ? data[0] : null;
       if (profile?.working_cities && Array.isArray(profile.working_cities)) {
         setSitterCities(profile.working_cities);
+      } else {
+        setSitterCities(["חיפה"]);
       }
     }
     loadSitterCities();
   }, [sitterId]);
 
-  // 2. טעינה ראשונית והאזנה בזמן אמת - מתוקן ללא לופים
+  // 2. בדיקה מקיפה עם מניעת הופעה חוזרת באמצעות sessionStorage
   useEffect(() => {
-    if (sitterCities.length === 0) return;
+    if (!sitterId || sitterCities.length === 0) return;
     const supabase = getSupabaseBrowserClient();
 
     const playAlertSound = () => {
@@ -61,34 +65,77 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
       }
     };
 
-    // בדיקה ראשונית חכמה
-    async function checkExistingAlerts() {
-      const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    const checkExistingBookingsAndAlerts = async () => {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
-      const { data, error } = await supabase
+      // שלב א': בדיקת הזמנה חדשה
+      const { data: recentBooking } = await supabase
+        .from("bookings")
+        .select("id, created_at")
+        .eq("sitter_id", sitterId)
+        .gte("created_at", tenMinutesAgo)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recentBooking) {
+        // 🔥 בדיקה האם ההזמנה הזו כבר אושרה/נסגרה על ידי הנני בדפדפן הנוכחי
+        const dismissedBookingId = sessionStorage.getItem("dismissed_booking_id");
+        if (dismissedBookingId !== recentBooking.id) {
+          setActiveAlert(null);
+          setAcceptedNotification({ bookingId: recentBooking.id });
+          return;
+        }
+      }
+
+      // שלב ב': בדיקת קריאות Broadcast פעילות
+      const { data: alertsData, error } = await supabase
         .from("broadcast_alerts")
         .select("id, city, service_type, status, created_at")
         .in("city", sitterCities)
-        .eq("status", "pending")
-        .gte("created_at", twentyMinutesAgo)
+        .eq("status", "active")
+        .gte("created_at", tenMinutesAgo)
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
-        // 🔥 בודקים שלא התעלמנו מהקריאה הזו כבר
-        const validAlert = data.find(alert => !dismissedAlertIdsRef.current.has(alert.id));
+      if (!error && alertsData && alertsData.length > 0) {
+        const validAlert = alertsData.find(alert => !dismissedAlertIdsRef.current.has(alert.id));
         if (validAlert) {
           setActiveAlert({
             id: validAlert.id,
             city: validAlert.city,
             service_type: validAlert.service_type
           });
+        } else {
+          setActiveAlert(null);
+        }
+      } else {
+        setActiveAlert(null);
+      }
+    };
+    
+    void checkExistingBookingsAndAlerts();
+
+    const pollInterval = setInterval(() => {
+      void checkExistingBookingsAndAlerts();
+    }, 3000);
+
+    const bookingChannel = subscribePostgresChanges(supabase, `sitter-accepted-booking-${sitterId}`, {
+      event: "INSERT",
+      table: "bookings",
+      filter: `sitter_id=eq.${sitterId}`,
+      handler: (payload) => {
+        const newBooking = payload.new as { id?: string };
+        if (newBooking && newBooking.id) {
+          const dismissedBookingId = sessionStorage.getItem("dismissed_booking_id");
+          if (dismissedBookingId !== newBooking.id) {
+            setActiveAlert(null);
+            setAcceptedNotification({ bookingId: newBooking.id });
+            playAlertSound();
+          }
         }
       }
-    }
-    
-    checkExistingAlerts();
+    });
 
-    // פתיחת ערוצי האזנה
     const channels = sitterCities.map((city) =>
       subscribePostgresChanges(supabase, `sitter-broadcast-room-${city}`, [
         {
@@ -97,7 +144,7 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
           filter: `city=eq.${city}`,
           handler: (payload) => {
             const next = payload.new as { id?: string; status?: string; city?: string; service_type?: string };
-            if (next && next.status === "pending") {
+            if (next && next.status === "active") {
               if (next.id && !dismissedAlertIdsRef.current.has(next.id)) {
                 setActiveAlert({
                   id: next.id,
@@ -115,8 +162,8 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
           filter: `city=eq.${city}`,
           handler: (payload) => {
             const next = payload.new as { id?: string; status?: string };
-            if (next.status === "expired" || next.status === "filled") {
-              setActiveAlert((current) => (current?.id === next.id ? null : current));
+            if (next && (next.status === "expired" || next.status === "filled" || next.status === "paused" || next.status === "cancelled")) {
+              setActiveAlert(null);
             }
           }
         }
@@ -124,10 +171,11 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
     );
 
     return () => {
+      clearInterval(pollInterval);
+      removeRealtimeChannel(supabase, bookingChannel);
       channels.forEach((channel) => removeRealtimeChannel(supabase, channel));
     };
-    // 🔥 שים לב: הוצאנו את activeAlert?.id מה-Dependency Array! זה המפתח לעצירת הלופ!
-  }, [sitterCities]);
+  }, [sitterCities, sitterId]);
 
   const handleAccept = async () => {
     if (!activeAlert) return;
@@ -135,31 +183,69 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
     const supabase = getSupabaseBrowserClient();
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert("שגיאת הזדהות, אנא התחבר מחדש.");
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase
         .from("broadcast_responses")
-        .insert([{ alert_id: activeAlert.id, sitter_id: sitterId }]);
+        .insert([{ alert_id: activeAlert.id, sitter_id: user.id }]);
 
-      if (error) {
-        if (error.code === "23505") alert("כבר אישרת את הקריאה הזו!");
-        else throw error;
+      if (error && error.code !== "23505") {
+        throw error;
       } else {
-        alert("אישור הזמינות נשלח בהצלחה!");
+        alert("אישור הזמינות נשלח בהצלחה להורה!");
       }
     } catch (err) {
-      alert("תקלה בשליחת האישור.");
+      console.error("Error accepting broadcast:", err);
     } finally {
       setLoading(false);
+      if (activeAlert) {
+        dismissedAlertIdsRef.current.add(activeAlert.id);
+      }
       setActiveAlert(null);
     }
   };
 
   const handleDismiss = () => {
     if (activeAlert) {
-      // 🔥 הוספת האיידי לרשימת המושתקים המקומית כדי שלא יקפוץ שוב בחיים
       dismissedAlertIdsRef.current.add(activeAlert.id);
     }
     setActiveAlert(null);
   };
+
+  if (acceptedNotification) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs" dir="rtl">
+        <div className="w-full max-w-sm rounded-3xl border border-emerald-100 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-center space-y-4">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md animate-bounce">
+            <CheckCircle2 className="h-7 w-7" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-black text-slate-800">🎉 יש לך התאמה מושלמת!</h3>
+            <p className="text-xs text-slate-600">ההורה בחר בך מתוך הראדאר ויצר משמרת חדשה.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (acceptedNotification.bookingId) {
+                // נשמור ב-sessionStorage שההודעה הזו כבר טופלה
+                sessionStorage.setItem("dismissed_booking_id", acceptedNotification.bookingId);
+              }
+              setAcceptedNotification(null);
+              router.refresh();
+            }}
+            className="w-full rounded-2xl bg-emerald-600 py-3.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 active:scale-[0.97]"
+          >
+            אישור ומעבר לדשבורד
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!activeAlert) return null;
 

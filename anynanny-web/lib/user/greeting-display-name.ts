@@ -52,12 +52,6 @@ export function resolveFullNameFromAuthUser(user: {
     if (sanitized) return sanitized;
   }
 
-  const legacyFull = meta.full_name;
-  if (typeof legacyFull === "string") {
-    const sanitized = sanitizeGreetingDisplayName(legacyFull, user.email);
-    if (sanitized) return sanitized;
-  }
-
   const name = meta.name;
   if (typeof name === "string") {
     const sanitized = sanitizeGreetingDisplayName(name, user.email);

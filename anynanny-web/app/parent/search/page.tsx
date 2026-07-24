@@ -1,12 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState, Suspense } from "react";
 import { Search, Baby, Sparkles, Moon } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { MainLayout } from "@components/layout/MainLayout";
 import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filters";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client"; 
 import {
   defaultParentSearchFilters,
   normalizeParentSearchFilters,
@@ -57,8 +56,9 @@ function buildResultsSearchParams(filters: ParentSearchFilters, serviceType: Ser
   return query ? `/parent/search/results?${query}` : "/parent/search/results";
 }
 
-export default function ParentSearchPage() {
+function ParentSearchContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isLoading, signedIn, effectiveRole, user } = useAuth();
   const [draftFilters, setDraftFilters] = useState<ParentSearchFilters>(() => defaultParentSearchFilters());
   const [serviceType, setServiceType] = useState<ServiceType>("sitter");
@@ -185,5 +185,13 @@ export default function ParentSearchPage() {
         ) : null}
       </div>
     </MainLayout>
+  );
+}
+
+export default function ParentSearchPage() {
+  return (
+    <Suspense fallback={<MainLayout><div className="p-4 text-right text-sm text-slate-600">טוען…</div></MainLayout>}>
+      <ParentSearchContent />
+    </Suspense>
   );
 }

@@ -19,6 +19,7 @@ export async function upsertProfileOnSignup(
   const first_name = input.first_name.trim();
   const last_name = input.last_name.trim();
 
+  // שים לב: איננו שולחים שדות serial לכאן, כדי שהמסד והטריגר ייצרו את ה-AN-1001 / P-1001 באופן אוטומטי
   const row: Record<string, unknown> = {
     id: input.id,
     role: input.role,

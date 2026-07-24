@@ -90,12 +90,15 @@ export function normalizeSitterProfilePublic(
   raw: Record<string, unknown>,
   fallbackId: string
 ): SitterProfilePublic {
-  const full_name = pickString(raw, "full_name", "fullName");
-  const display_name = pickString(raw, "display_name", "displayName");
-  const years_of_experience = pickNumber(
+  const first_name = pickString(raw, "first_name", "firstName");
+  const last_name = pickString(raw, "last_name", "lastName");
+  const display_name =
+    pickString(raw, "display_name", "displayName") ??
+    (`${first_name ?? ""} ${last_name ?? ""}`.trim() || null);
+  const years_experience = pickNumber(
     raw,
-    "years_of_experience",
     "years_experience",
+    "yearsOfExperience",
     "yearsExperience"
   );
   const transportation_mode = pickString(raw, "transportation_mode", "transport_mode", "transportMode");
@@ -106,13 +109,13 @@ export function normalizeSitterProfilePublic(
 
   return {
     id: pickString(raw, "id") ?? fallbackId,
-    full_name,
+    first_name,
+    last_name,
     nanny_serial: pickString(raw, "nanny_serial", "nannySerial", "nanny_id_number"),
     display_name,
     age_years: pickNumber(raw, "age_years", "ageYears"),
     languages: pickString(raw, "languages"),
-    years_experience: years_of_experience,
-    years_of_experience,
+    years_experience,
     transportation_mode,
     bio: pickString(raw, "bio"),
     hourly_rate_nis: pickNumber(raw, "hourly_rate_nis", "hourly_rate", "hourlyRateNis"),
@@ -166,7 +169,7 @@ async function fetchSitterProfileDirect(
 ): Promise<SitterProfilePublic | null> {
   const fk = SITTER_PROFILES_USER_COLUMN;
   const fullSelect =
-    "id, full_name, show_full_name, bio, hourly_rate_nis, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages, working_cities";
+    "id, first_name, last_name, bio, hourly_rate_nis, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages, working_cities";
 
   let read = safeSupabaseRead(
     await supabase
@@ -182,7 +185,7 @@ async function fetchSitterProfileDirect(
     read = safeSupabaseRead(
       await supabase
         .from(SITTER_PROFILES_TABLE)
-        .select("id, full_name, bio, hourly_rate_nis, years_experience, is_public, updated_at")
+        .select("id, first_name, last_name, bio, hourly_rate_nis, years_experience, is_public, updated_at")
         .eq(fk, sitterId)
         .eq("is_public", true)
         .maybeSingle(),
@@ -250,10 +253,10 @@ export async function fetchParentSitterProfile(
   return { profile, reviews, error: null };
 }
 
-/** @deprecated Use profile.full_name in UI when available. */
+/** Prefer joined first/last, then RPC display_name. */
 export function resolveParentSitterDisplayName(profile: SitterProfilePublic): string {
-  const full = profile.full_name?.trim();
-  if (full) return full;
+  const combined = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+  if (combined) return combined;
   const display = profile.display_name?.trim();
   if (display && display.toLowerCase() !== "user") return display;
   return "בייביסיטר";

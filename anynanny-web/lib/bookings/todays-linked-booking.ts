@@ -109,7 +109,7 @@ async function enrichLinkedBookingView(
     let sitterProfileRead = safeSupabaseRead(
       await supabase
         .from(SITTER_PROFILES_TABLE)
-        .select("full_name, nanny_serial, nanny_id_number")
+        .select("first_name, last_name, nanny_serial, nanny_id_number")
         .eq(fk, partnerId)
         .maybeSingle(),
       "sitter profile enrich"
@@ -121,8 +121,12 @@ async function enrichLinkedBookingView(
         isPostgrestMissingColumnError(sitterProfileRead.error, "nanny_id_number"))
     ) {
       sitterProfileRead = safeSupabaseRead(
-        await supabase.from(SITTER_PROFILES_TABLE).select("full_name").eq(fk, partnerId).maybeSingle(),
-        "sitter profile full_name fallback"
+        await supabase
+          .from(SITTER_PROFILES_TABLE)
+          .select("first_name, last_name")
+          .eq(fk, partnerId)
+          .maybeSingle(),
+        "sitter profile name fallback"
       );
     }
 
@@ -130,7 +134,7 @@ async function enrichLinkedBookingView(
       const sp = sitterProfileRead.data as Record<string, unknown>;
       partnerSitterCode = pickSitterCode(sp);
       if (!partnerName) {
-        const fromSitter = String(sp.full_name ?? "").trim();
+        const fromSitter = `${sp.first_name ?? ""} ${sp.last_name ?? ""}`.trim();
         if (fromSitter) partnerName = fromSitter;
       }
     }

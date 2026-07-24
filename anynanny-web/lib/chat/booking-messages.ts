@@ -65,13 +65,14 @@ async function fetchBookingsWithMessagesForUser(
   if (role === "parent") {
     const { data: profiles } = await supabase
       .from("sitter_profiles")
-      .select("id, full_name")
+      .select("id, first_name, last_name")
       .in("id", partnerIds);
 
     for (const profile of profiles ?? []) {
       if (profile && typeof profile === "object" && "id" in profile) {
         const id = String((profile as { id: string }).id);
-        const name = String((profile as { full_name?: string }).full_name ?? "").trim();
+        const row = profile as { first_name?: string | null; last_name?: string | null };
+        const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
         if (name) nameByPartnerId.set(id, name);
       }
     }
@@ -199,13 +200,14 @@ export async function verifyBookingChatParticipant(
   if (userId === parentId) {
     const { data: profile } = await supabase
       .from("sitter_profiles")
-      .select("full_name")
+      .select("first_name, last_name")
       .eq("id", partnerId)
       .maybeSingle();
 
     const partnerName =
-      profile && typeof profile === "object" && "full_name" in profile
-        ? String((profile as { full_name?: string }).full_name ?? "").trim() || null
+      profile && typeof profile === "object"
+        ? `${(profile as { first_name?: string | null }).first_name ?? ""} ${(profile as { last_name?: string | null }).last_name ?? ""}`.trim() ||
+          null
         : null;
 
     return { allowed: true, partnerName, error: null };

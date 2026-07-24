@@ -378,16 +378,13 @@ export default function SitterDashboardPage() {
       const auth = await resolveBrowserAuth();
       if (auth.ok) await resetStuckShiftsForSitter(auth.supabase, auth.userId);
       
-      // ניקוי ידני של ה-State המרכזי שגורם לבעיית ה-UI
       setCompletedSummaryRow(null);
       clearSitterShiftUi();
-      
-      // ריענון הנתונים ללא טעינה מחדש של כל הדפדפן (Ponytail friendly)
       router.refresh(); 
       
     } catch (err) {
       console.error("Reset failed", err);
-      window.location.reload(); // פתרון גיבוי למקרה שהריענון לא הספיק
+      window.location.reload(); 
     }
   }, [sitterId, clearSitterShiftUi, router, setCompletedSummaryRow]);
 
@@ -654,8 +651,9 @@ export default function SitterDashboardPage() {
               ) : null}
             </div>
             {onboardingPending ? (
-              <div className="absolute inset-0 z-20 flex items-center justify-center px-4 py-6">
-                <div className="w-full max-w-sm">
+              // התיקון המדויק כאן: שינוי ל-items-start והוספת overflow-y-auto כדי לאפשר גלילה מלאה
+              <div className="absolute inset-0 z-20 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
+                <div className="w-full max-w-sm my-auto">
                   <SitterOnboardingWizard onSaved={handleOnboardingSaved} />
                 </div>
               </div>

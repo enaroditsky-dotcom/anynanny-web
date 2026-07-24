@@ -64,7 +64,7 @@ export function useDashboardGreetingName(
         role === "sitter"
           ? supabase
               .from(SITTER_PROFILES_TABLE)
-              .select("full_name")
+              .select("first_name, last_name")
               .eq(fk, userId)
               .maybeSingle()
           : Promise.resolve({ data: null, error: null }),
@@ -73,10 +73,11 @@ export function useDashboardGreetingName(
 
       if (cancelled) return;
 
-      const sitterFullName =
+      const sitterRow =
         roleProfileRes.data && typeof roleProfileRes.data === "object"
-          ? (roleProfileRes.data as { full_name?: string | null }).full_name
+          ? (roleProfileRes.data as { first_name?: string | null; last_name?: string | null })
           : null;
+      const sitterFirstName = sitterRow?.first_name?.trim() || null;
 
       const profileRow =
         profilesRes.data && typeof profilesRes.data === "object"
@@ -90,7 +91,7 @@ export function useDashboardGreetingName(
 
       const firstName =
         role === "sitter"
-          ? pickGreetingDisplayName(userEmail, profileFirstName, sitterFullName?.split(" ")[0], metaFirstName)
+          ? pickGreetingDisplayName(userEmail, profileFirstName, sitterFirstName, metaFirstName)
           : pickGreetingDisplayName(userEmail, profileFirstName, metaFirstName);
 
       setResolvedName(firstName);

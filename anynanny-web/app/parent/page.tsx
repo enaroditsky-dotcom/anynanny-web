@@ -1,6 +1,3 @@
-import { redirect } from "next/navigation";
+import ParentDashboardPage from "./dashboard/parent-dashboard-page";
 
-/** Parent home — dashboard is the primary entry after login. */
-export default function ParentIndexPage() {
-  redirect("/parent/dashboard");
-}
+export default ParentDashboardPage;

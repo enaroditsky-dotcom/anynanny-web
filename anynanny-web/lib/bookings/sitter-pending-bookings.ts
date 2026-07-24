@@ -79,9 +79,12 @@ export async function updateBookingStatus(
   bookingId: string,
   status: Extract<BookingStatus, "approved" | "rejected">
 ): Promise<{ row: BookingRow | null; error: string | null }> {
+  // המרת "approved" לסטטוס "confirmed" כך שדשבורד המערכת והכפתור העגול יזהו את המשמרת מיד
+  const dbStatus = status === "approved" ? "confirmed" : "rejected";
+
   const { data, error } = await supabase
     .from(BOOKINGS_TABLE)
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({ status: dbStatus, updated_at: new Date().toISOString() })
     .eq("id", bookingId)
     .eq("sitter_id", sitterId)
     .eq("status", "pending")
@@ -96,5 +99,5 @@ export async function updateBookingStatus(
     return { row: null, error: "הבקשה כבר טופלה או שאינה זמינה" };
   }
 
-  return { row: data as BookingRow, error: null };
+  return { row: { ...(data as BookingRow), status: status } as BookingRow, error: null };
 }

@@ -31,18 +31,9 @@ export function DashboardWelcomeHeader({
         {greeting}
       </h1>
       
-      {/* 👑 קונטיינר אנכי משותף להורה ולנני שמסדר את המזהים תמיד בדיוק מעל הדירוג */}
+      {/* 👑 קונטיינר אנכי משותף (מותאם לנני בלבד או לפי הצורך) */}
       <div className="mt-2 flex flex-col items-start gap-1.5">
-        
-        {/* 🆔 הצגת מזהה הורה במידה וקיים */}
-        {parentPublicId && (
-          <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs font-semibold px-2.5 py-1 rounded-lg border border-purple-100 shadow-sm animate-in fade-in duration-200">
-            <span className="text-[10px] bg-purple-200 text-purple-800 px-1 rounded uppercase font-bold">ID</span>
-            מזהה: {parentPublicId}
-          </span>
-        )}
-
-        {/* ⭐️ תג הדירוג (ואם זו נני, המזהה שלה יתלבש כאן או בתוך ה-Badge בהתאם להגדרות ה-RatingBadge שלך) */}
+        {/* ⭐️ תג הדירוג */}
         <CurrentUserRatingBadge showNannyId={showNannyId} />
       </div>
 

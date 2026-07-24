@@ -102,7 +102,6 @@ function ParentSearchResultsInner() {
     [searchParams]
   );
 
-  /** Stable identity for the current filter set — cache key for the RPC results. */
   const searchKey = useMemo(
     () => JSON.stringify(normalizeParentSearchFilters(filters)),
     [filters]
@@ -112,7 +111,6 @@ function ParentSearchResultsInner() {
   const [listLoading, setListLoading] = useState(true);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  /** Filter key of the last successful load — guards against duplicate/spurious refetches. */
   const loadedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -136,17 +134,11 @@ function ParentSearchResultsInner() {
         return;
       }
 
-      /**
-       * Cache hit: these exact filters were already loaded. Skip the refetch so a
-       * spurious re-render (e.g. auth/context churn on tab focus) can't blank the
-       * list or flash the loader — the "re-hydration blink".
-       */
       const alreadyLoaded = loadedKeyRef.current === searchKey;
       if (alreadyLoaded && !opts?.force) return;
 
       const normalized = normalizeParentSearchFilters(filters);
 
-      /** New filters → show the loader. Forced refresh of the same filters → keep stale cards visible. */
       if (!alreadyLoaded) setListLoading(true);
       setSearchError(null);
 

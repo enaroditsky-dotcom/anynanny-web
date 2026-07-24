@@ -118,7 +118,8 @@ export async function PUT(request: Request) {
 
     const merged: Partial<SitterProfileRow> = {
       ...prev,
-      full_name: body.full_name !== undefined ? body.full_name : prev.full_name ?? null,
+      first_name: body.first_name !== undefined ? body.first_name : prev.first_name ?? null,
+      last_name: body.last_name !== undefined ? body.last_name : prev.last_name ?? null,
       show_full_name:
         body.show_full_name !== undefined ? Boolean(body.show_full_name) : Boolean(prev.show_full_name),
       id_number: body.id_number !== undefined ? body.id_number : prev.id_number ?? null,

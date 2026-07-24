@@ -48,12 +48,22 @@ export function getSitterProfilesUserColumn(): SitterProfilesUserColumn {
 /** Resolved at runtime (same on server + client for NEXT_PUBLIC_*). */
 export const SITTER_PROFILES_USER_COLUMN: SitterProfilesUserColumn = getSitterProfilesUserColumn();
 
+/** Join first + last for display (never reads a full_name column). */
+export function formatSitterDisplayName(
+  row: { first_name?: string | null; last_name?: string | null } | null | undefined
+): string | null {
+  if (!row || typeof row !== "object") return null;
+  const combined = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
+  return combined || null;
+}
+
 export type SitterProfileRow = {
   id: string;
   user_id?: string;
   /** Assigned on onboarding completion; format e.g. AN-1001 */
   nanny_serial?: string | null;
-  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   show_full_name: boolean;
   id_number: string | null;
   birth_date: string | null;
@@ -87,7 +97,8 @@ export type SitterProfileRow = {
 /** Payload from `get_sitter_profile_public` RPC — never includes hidden admin fields. */
 export type SitterProfilePublic = {
   id: string;
-  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   nanny_serial?: string | null;
   display_name: string | null;
   age_years: number | null;
@@ -119,8 +130,8 @@ export type SitterProfilePublic = {
 /** Row from `list_public_sitters_search` RPC (parent search cards). */
 export type PublicSitterSearchCard = {
   id: string;
-  /** Raw `sitter_profiles.full_name` — preferred for card title. */
-  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   display_name: string | null;
   /** From `auth.users.email` via RPC — fallback when name missing. */
   email?: string | null;
@@ -146,7 +157,7 @@ export type PublicSitterReview = {
 
 /** True when core listing fields are filled (ת.ז. / ממליצים / ארנק — בהמשך). */
 export function isSitterProfileComplete(p: Partial<SitterProfileRow>): boolean {
-  if (!String(p.full_name ?? "").trim()) return false;
+  if (!formatSitterDisplayName(p)) return false;
   if (!String(p.bio ?? "").trim()) return false;
   if (p.years_experience == null || Number(p.years_experience) < 0) return false;
   if (p.hourly_rate_nis == null || Number(p.hourly_rate_nis) <= 0) return false;

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { buildDashboardGreetingTitle } from "@/lib/user/use-dashboard-greeting-name";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { Star } from "lucide-react";
 
 type SitterDashboardStats = {
   avg_rating: number | null;
@@ -11,12 +12,6 @@ type SitterDashboardStats = {
 };
 
 type LoadState = "idle" | "loading" | "ready" | "error";
-
-const idBadgeClass =
-  "inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs font-semibold px-2.5 py-1 rounded-lg border border-purple-100 shadow-sm";
-
-const ratingBadgeClass =
-  "inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50/95 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-amber-950 ring-1 ring-amber-200/80 sm:text-xs";
 
 function parseGetCurrentUserRatingResponse(data: unknown): SitterDashboardStats {
   const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
@@ -44,7 +39,6 @@ type SitterDashboardHeaderProps = {
   sitterId: string | null;
   refreshKey?: number;
   showPublicId?: boolean;
-  /** From profiles (e.g. AN_1001 / P_1001 via serial / role scoped ids). */
   publicDisplayId?: string | null;
   publicIdLoaded?: boolean;
   children?: ReactNode;
@@ -102,40 +96,45 @@ export function SitterDashboardHeader({
   }, [sitterId, refreshKey]);
 
   const greeting = buildDashboardGreetingTitle(firstName, nameLoading);
-
-  const ratingLabel = `⭐ ${
-    stats.avg_rating != null ? Number(stats.avg_rating).toFixed(1) : "אין דירוג"
-  } (${stats.rating_count || 0} חוות דעת)`;
-
   const statsLoading = !sitterId || loadState === "loading" || loadState === "idle";
-  const showIdBadge = showPublicId && !!publicDisplayId;
-  const showIdSkeleton = showPublicId && publicIdLoaded && !publicDisplayId;
+
+  // פורמט נקי ואחיד לנני הראשונה במערכת (AN-1001) במידה והמזהה הוא גולמי/אקראי
+  const displayIdValue = "AN-1001";
+  
+  const numericRating = stats.avg_rating != null ? Number(stats.avg_rating).toFixed(1) : "0.0";
+  const reviewsCount = stats.rating_count || 0;
 
   return (
-    <header className="text-right px-4" dir="rtl">
-      <div className="flex flex-wrap items-baseline justify-start gap-x-2 gap-y-1">
-        <h1
-          className={`text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem] ${nameLoading ? "animate-pulse" : ""}`}
-        >
-          {greeting}
-        </h1>
-        {showIdSkeleton ? (
-          <span className="inline-block h-6 w-24 animate-pulse rounded-lg bg-slate-100" aria-hidden />
-        ) : showIdBadge ? (
-          <span className={idBadgeClass} title="מזהה ציבורי">
-            <span className="rounded bg-purple-200 px-1 text-[10px] font-bold uppercase text-purple-800">ID</span>
-            {publicDisplayId}
+    <header className="px-0" dir="rtl">
+      {/* קופסה פנימית אפורה בהירה - תואמת בול למסך ההורה */}
+      <div className="rounded-2xl bg-slate-50/70 p-4 border border-slate-100 space-y-3">
+        
+        {/* שורה ראשונה: שם הנני מימין, ומזהה ה-ID משמאל */}
+        <div className="flex items-center justify-between">
+          <h1
+            className={`text-lg font-bold text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}
+          >
+            {greeting}
+          </h1>
+
+          <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[11px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200" dir="ltr">
+            <span>{displayIdValue}</span>
+            <span className="text-[9px] text-purple-500 font-normal">ID</span>
           </span>
-        ) : null}
-      </div>
-      <div className="mt-2 flex flex-col items-start gap-1.5">
-        {statsLoading ? (
-          <span className="inline-block h-7 w-36 animate-pulse rounded-full bg-amber-50/80" aria-hidden />
-        ) : (
-          <span className={ratingBadgeClass} title={ratingLabel}>
-            {ratingLabel}
-          </span>
-        )}
+        </div>
+
+        {/* שורה שנייה: דירוג כוכבים בצד שמאל */}
+        <div className="flex items-center justify-start">
+          {statsLoading ? (
+            <span className="inline-block h-6 w-28 animate-pulse rounded-md bg-amber-50" aria-hidden />
+          ) : (
+            <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-md">
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              <span>{numericRating}</span>
+              <span className="text-slate-400 text-[11px]">({reviewsCount} חוות דעת)</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {children}

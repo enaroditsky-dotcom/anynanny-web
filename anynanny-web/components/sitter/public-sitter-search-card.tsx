@@ -35,23 +35,26 @@ export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSea
             <p className="mt-0.5 text-xs font-medium text-slate-500">{sitter.nanny_serial}</p>
           ) : null}
           <div className="mt-2 flex flex-wrap justify-end gap-1.5">
-            <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80">
+            <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80" dir="rtl">
               {experienceBadgeLabel(sitter.years_experience)}
             </span>
             <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-900 ring-1 ring-violet-200/80">
               {transportBadgeLabel(sitter.has_car)}
             </span>
           </div>
-          <p className="mt-1.5 text-xs text-slate-600">
+          <p className="mt-1.5 text-xs text-slate-600 unicode-bidi-isolate" dir="rtl">
             <span className="font-semibold text-slate-700">אזורי שירות: </span>
-            {serviceAreas}
+            <span>{serviceAreas}</span>
           </p>
           <p
             className={`mt-1.5 text-sm font-semibold ${rateLabel === "מחיר לא צוין" ? "text-slate-500" : "text-navy-800"}`}
+            dir="rtl"
           >
             {rateLabel}
           </p>
-          <p className="mt-2 line-clamp-3 text-sm leading-snug text-slate-700">{bioExcerpt(sitter.bio) || "—"}</p>
+          <p className="mt-2 line-clamp-3 text-sm leading-snug text-slate-700" dir="rtl">
+            {bioExcerpt(sitter.bio) || "—"}
+          </p>
         </div>
         <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-2xl bg-amber-50 px-3 py-2 ring-1 ring-amber-200/80">
           <Star className="h-5 w-5 fill-amber-400 text-amber-500" aria-hidden />

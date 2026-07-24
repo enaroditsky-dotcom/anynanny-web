@@ -6,11 +6,15 @@ export async function middleware(req: NextRequest) {
   // יצירת Response חדש כדי שנוכל להעביר עוגיות מעודכנות מהשרת לדפדפן
   const res = NextResponse.next();
   
-  // שימוש במימוש הרשמי של Supabase שמטפל בעוגיות בצורה בטוחה
-  const supabase = createMiddlewareClient({ req, res });
+  try {
+    // שימוש במימוש הרשמי של Supabase שמטפל בעוגיות בצורה בטוחה
+    const supabase = createMiddlewareClient({ req, res });
 
-  // בדיקת סשן - הפונקציה הזו יודעת להתמודד עם עוגיות בצורה פנימית בלי לזרוק שגיאות
-  await supabase.auth.getSession();
+    // בדיקת סשן - עטוף ב-try/catch כדי לבלוע שגיאות טוקן פגום באופן שקט
+    await supabase.auth.getSession();
+  } catch (err) {
+    // מתעלם בשקט משגיאות טוקן ישנות בזמן טעינת עמודים ציבוריים
+  }
 
   // החזרת ה-Response עם העוגיות המעודכנות (במידת הצורך)
   return res;

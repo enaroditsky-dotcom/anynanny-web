@@ -1,279 +1,190 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ParentActiveSession } from "@/components/billing/ParentActiveSession";
+import { useCallback, useEffect, useState } from "react";
+import { ParentOnboardingWizard } from "@/components/parent/parent-onboarding-wizard";
 import type { ParentBusySlot, ParentPreferences } from "@/lib/parent/types";
-import type { NannyProfile } from "@/lib/ratings/types";
-import { useLinkedBillingSessionId } from "@/lib/billing/session-billing";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
-
-type Suggestion = {
-  date: string;
-  message: string;
-  suggestedSitters: string[];
-};
-
-const CALENDAR_PRIVACY_HINT =
-  "אנחנו רק מחפשים חלונות זמן פנויים. שמות האירועים והפרטים האישיים שלך נשארים פרטיים ולעולם לא נשמרים אצלנו.";
-
-/** Evening suggestion dates derived locally from free/busy only — never sent to server as event metadata. */
-function extractEveningSuggestionDates(slots: ParentBusySlot[], nowMs: number): string[] {
-  const now = new Date(nowMs);
-  const dates = new Set<string>();
-  for (const slot of slots) {
-    const start = new Date(slot.startsAt);
-    if (Number.isNaN(start.getTime()) || start <= now) continue;
-    if (start.getHours() >= 18) dates.add(slot.startsAt.slice(0, 10));
-  }
-  return [...dates];
-}
-
-function fmtNis(value: number) {
-  return `₪${value.toFixed(2)}`;
-}
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { Calendar, Wallet, History, LogOut, Search, Zap, CheckCircle2, Clock, Star } from "lucide-react";
 
 export function ParentDashboardClient({
-  initialProfiles,
   initialPreferences,
-  initialBusySlots
+  initialActiveBooking
 }: {
-  initialProfiles: NannyProfile[];
-  initialPreferences: ParentPreferences;
+  initialProfiles: any[];
+  initialPreferences: ParentPreferences & { parentSerial?: string };
   initialBusySlots: ParentBusySlot[];
+  initialActiveBooking?: any;
 }) {
   const [prefs, setPrefs] = useState(initialPreferences);
-  const [busySlots, setBusySlots] = useState(initialBusySlots);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [message, setMessage] = useState("");
-  const [parentId, setParentId] = useState<string | null>(null);
-  const [authState, setAuthState] = useState<"loading" | "ready" | "error">("loading");
-  const [selectedSitter, setSelectedSitter] = useState(initialProfiles[0]?.nannyName ?? "demo-sitter-1");
-  /** Optional note visible only on device — never POSTed */
-  const [newBusy, setNewBusy] = useState({ startsAt: "", endsAt: "", localNote: "" });
-  const [searchTerm, setSearchTerm] = useState("");
+  const [parentSerial, setParentSerial] = useState<string>(initialPreferences.parentSerial || "P-1001");
+  const [profileCardStatus] = useState<"loading" | "complete" | "incomplete">("complete");
+  const [activeBooking] = useState(initialActiveBooking);
 
-  const { sessionId: billingSessionId, loading: billingSessionLoading } =
-    useLinkedBillingSessionId("parent", parentId);
+  const refreshParentOnboardingStatus = useCallback(async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("first_name, last_name, parent_serial")
+      .eq("id", uid)
+      .maybeSingle();
+
+    if (error) return;
+
+    if (data?.first_name) {
+      setPrefs((prev) => ({
+        ...prev,
+        parentName: `${data.first_name} ${data.last_name || ""}`.trim()
+      }));
+    }
+
+    if (data?.parent_serial) {
+      setParentSerial(data.parent_serial);
+    } else {
+      const { data: parentExtra } = await supabase
+        .from("parent_profiles")
+        .select("parent_serial")
+        .eq("id", uid)
+        .maybeSingle();
+      
+      if (parentExtra?.parent_serial) {
+        setParentSerial(parentExtra.parent_serial);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     void (async () => {
       const auth = await resolveBrowserAuth();
-      if (!auth.ok) {
-        setAuthState("error");
-        return;
+      if (!auth.ok) return;
+      if (auth.supabase) {
+        await refreshParentOnboardingStatus(auth.supabase, auth.userId);
       }
-      setParentId(auth.userId);
-      setAuthState("ready");
     })();
-  }, []);
+  }, [refreshParentOnboardingStatus]);
 
-  const filteredProfiles = useMemo(
-    () =>
-      initialProfiles.filter((profile) => {
-        const q = searchTerm.trim().toLowerCase();
-        if (q && !profile.nannyName.toLowerCase().includes(q) && !profile.anyNannyId.toLowerCase().includes(q)) return false;
-        if (profile.hourlyRateNis < prefs.minRate || profile.hourlyRateNis > prefs.maxRate) return false;
-        if (prefs.preferredGender !== "all" && profile.gender !== prefs.preferredGender) return false;
-        if (profile.age < prefs.minAge) return false;
-        if (profile.experienceYears < prefs.minExperienceYears) return false;
-        if (profile.reputationScore < prefs.minRating) return false;
-        return true;
-      }),
-    [initialProfiles, prefs, searchTerm]
-  );
-
-  const refreshBusySlots = useCallback(async (parentNameOverride?: string) => {
-    const name = parentNameOverride ?? prefs.parentName;
-    const response = await fetch(`/api/parent/calendar-events?parentName=${encodeURIComponent(name)}`);
-    if (!response.ok) return;
-    const data = (await response.json()) as { busySlots: ParentBusySlot[] };
-    setBusySlots(data.busySlots);
-  }, [prefs.parentName]);
-
-  const requestSuggestionsFromServer = useCallback(async (eveningDates: string[]) => {
-    if (eveningDates.length === 0) {
-      setSuggestions([]);
-      return;
-    }
-    const response = await fetch("/api/parent/calendar-suggestion", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ parentName: prefs.parentName, eveningDates })
-    });
-    if (!response.ok) return;
-    const data = (await response.json()) as { suggestions: Suggestion[] };
-    setSuggestions(data.suggestions ?? []);
-  }, [prefs.parentName]);
-
-  const savePreferences = async (next: ParentPreferences) => {
-    setPrefs(next);
-    const response = await fetch("/api/parent/preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next)
-    });
-    setMessage(response.ok ? "העדפות נשמרו." : "שמירת העדפות נכשלה.");
-    if (response.ok) await refreshBusySlots(next.parentName);
+  const handleOnboardingSaved = async () => {
+    window.location.reload();
   };
 
-  const addBusySlot = async () => {
-    if (!newBusy.startsAt || !newBusy.endsAt) return;
-    const response = await fetch("/api/parent/calendar-events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        parentName: prefs.parentName,
-        startsAt: new Date(newBusy.startsAt).toISOString(),
-        endsAt: new Date(newBusy.endsAt).toISOString()
-      })
-    });
-    if (response.ok) {
-      setNewBusy({ startsAt: "", endsAt: "", localNote: "" });
-      setMessage("חלון תפוס נשמר (זמנים בלבד — ללא פרטי אירוע).");
-      await refreshBusySlots();
-    }
-  };
-
-  useEffect(() => {
-    const eveningDates = extractEveningSuggestionDates(busySlots, Date.now());
-    const handle = window.setTimeout(() => void requestSuggestionsFromServer(eveningDates), 320);
-    return () => window.clearTimeout(handle);
-  }, [busySlots, requestSuggestionsFromServer]);
+  const onboardingPending = profileCardStatus === "incomplete";
+  const firstName = prefs.parentName ? prefs.parentName.trim().split(" ")[0] : "הורה";
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-4 md:p-8" dir="rtl">
-      <header className="rounded-2xl bg-white p-4 shadow-sm">
-        <h1 className="text-2xl font-semibold text-navy-900">דשבורד הורה</h1>
-        <p className="mt-1 text-sm text-navy-700">ניהול סינונים, אישורי סשן כפולים, יומן אישי וחישוב עלות מדויק בדקות.</p>
-      </header>
-
-      <section className="grid grid-cols-2 gap-3 rounded-2xl bg-white p-4 shadow-sm md:grid-cols-4">
-        <div className="rounded-xl bg-navy-50 p-3 text-sm">📅 יומן אישי</div>
-        <div className="rounded-xl bg-navy-50 p-3 text-sm">📍 מיקום: {prefs.locationLabel}</div>
-        <div className="rounded-xl bg-navy-50 p-3 text-sm">🚗 הגעה: {prefs.transportMode === "taxi" ? "מונית" : prefs.transportMode === "self" ? "עצמי" : "ללא מונית"}</div>
-        <div className="rounded-xl bg-navy-50 p-3 text-sm">🎓 סינונים חכמים</div>
-      </section>
-
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold text-navy-900">העדפות וסינונים</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="text-sm">שם הורה<input className="mt-1 w-full rounded-lg border p-2" value={prefs.parentName} onChange={(e) => setPrefs({ ...prefs, parentName: e.target.value })} /></label>
-          <label className="text-sm">AnyNanny ID מועדף
-            <input
-              className="mt-1 w-full rounded-lg border p-2"
-              value={prefs.favoriteSitterId}
-              onChange={(e) => setPrefs({ ...prefs, favoriteSitterId: e.target.value })}
-              placeholder="ANN-..."
-            />
-          </label>
-          <label className="text-sm">מיקום<input className="mt-1 w-full rounded-lg border p-2" value={prefs.locationLabel} onChange={(e) => setPrefs({ ...prefs, locationLabel: e.target.value })} /></label>
-          <label className="text-sm">מינימום ₪<input type="number" className="mt-1 w-full rounded-lg border p-2" value={prefs.minRate} onChange={(e) => setPrefs({ ...prefs, minRate: Number(e.target.value) })} /></label>
-          <label className="text-sm">מקסימום ₪<input type="number" className="mt-1 w-full rounded-lg border p-2" value={prefs.maxRate} onChange={(e) => setPrefs({ ...prefs, maxRate: Number(e.target.value) })} /></label>
-          <label className="text-sm">מגדר
-            <select className="mt-1 w-full rounded-lg border p-2" value={prefs.preferredGender} onChange={(e) => setPrefs({ ...prefs, preferredGender: e.target.value as ParentPreferences["preferredGender"] })}>
-              <option value="all">הכל</option><option value="female">אישה</option><option value="male">גבר</option>
-            </select>
-          </label>
-          <label className="text-sm">הגעה
-            <select className="mt-1 w-full rounded-lg border p-2" value={prefs.transportMode} onChange={(e) => setPrefs({ ...prefs, transportMode: e.target.value as ParentPreferences["transportMode"] })}>
-              <option value="taxi">מונית</option><option value="self">עצמי</option><option value="no_taxi">ללא מונית</option>
-            </select>
-          </label>
-          <label className="text-sm">גיל מינימלי<input type="number" min={18} className="mt-1 w-full rounded-lg border p-2" value={prefs.minAge} onChange={(e) => setPrefs({ ...prefs, minAge: Number(e.target.value) })} /></label>
-          <label className="text-sm">ניסיון מינימלי (שנים)<input type="number" min={0} className="mt-1 w-full rounded-lg border p-2" value={prefs.minExperienceYears} onChange={(e) => setPrefs({ ...prefs, minExperienceYears: Number(e.target.value) })} /></label>
-          <label className="text-sm">דירוג מינימלי<input type="number" min={0} max={5} step={0.1} className="mt-1 w-full rounded-lg border p-2" value={prefs.minRating} onChange={(e) => setPrefs({ ...prefs, minRating: Number(e.target.value) })} /></label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={prefs.reassurancePingEnabled} onChange={(e) => setPrefs({ ...prefs, reassurancePingEnabled: e.target.checked })} /> פינג הרגעה שעתי</label>
-          <div className="md:col-span-2 rounded-xl border border-navy-100 bg-navy-50/60 p-3">
-            <p className="mb-2 text-xs font-medium text-navy-900" title="גישת קריאה בלבד (זמינות / תפוס)">
-              סנכרון יומן — הרשאת קריאה בלבד (Free/Busy)
-            </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={prefs.calendarSyncGoogle} onChange={(e) => setPrefs({ ...prefs, calendarSyncGoogle: e.target.checked })} /> סנכרון Google Calendar
-            </label>
-            <label className="mt-2 flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={prefs.calendarSyncPhone} onChange={(e) => setPrefs({ ...prefs, calendarSyncPhone: e.target.checked })} /> סנכרון יומן טלפון
-            </label>
-            <p className="mt-2 text-xs leading-relaxed text-navy-600">{CALENDAR_PRIVACY_HINT}</p>
+    <main className="relative mx-auto max-w-md space-y-4 p-4 pb-32 overflow-y-auto min-h-screen" dir="rtl">
+      {onboardingPending ? (
+        <div className="absolute inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
+          <div className="w-full max-w-sm my-auto">
+            <ParentOnboardingWizard onSaved={handleOnboardingSaved} />
           </div>
         </div>
-        <button className="mt-3 rounded-xl bg-navy-800 px-4 py-2 text-sm font-medium text-white" onClick={() => void savePreferences(prefs)}>שמירת העדפות</button>
-      </section>
+      ) : null}
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold text-navy-900">סיטרים זמינים לפי פילטר</h2>
-        <input
-          className="mb-3 w-full rounded-lg border border-navy-200 p-2 text-sm"
-          placeholder="חיפוש לפי שם סיטר/ית או AnyNanny ID"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <div className="space-y-2">
-          {filteredProfiles.map((profile) => (
-            <div key={profile.nannyName} className="flex items-center justify-between rounded-lg border p-3 text-sm">
-              <span>
-                {profile.nannyName} · {profile.anyNannyId} · ₪{profile.hourlyRateNis} · {profile.gender === "female" ? "אישה" : "גבר"} · ⭐{profile.reputationScore}
+      <div className={`space-y-4 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
+        
+        {/* מעטפת ראשית נקייה */}
+        <div className="mx-auto max-w-sm rounded-3xl bg-white p-5 shadow-sm border border-slate-200/80 space-y-4">
+          
+          {/* קופסה פנימית אפורה בהירה */}
+          <div className="rounded-2xl bg-slate-50/70 p-4 border border-slate-100 space-y-3">
+            
+            {/* שורה ראשונה: שם ההורה מימין, ומזהה ID משמאל */}
+            <div className="flex items-center justify-between">
+              <h1 className="text-lg font-bold text-slate-900">שלום, {firstName}!</h1>
+              <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[11px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200" dir="ltr">
+                <span>{parentSerial}</span>
+                <span className="text-[9px] text-purple-500 font-normal">ID</span>
               </span>
-              <button className="rounded-lg border px-3 py-1" onClick={() => setSelectedSitter(profile.nannyName)}>בחירה</button>
             </div>
-          ))}
-          {filteredProfiles.length === 0 ? <p className="text-sm text-navy-700">לא נמצאו תוצאות לסינון.</p> : null}
-        </div>
-      </section>
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold text-navy-900">Double-Shake: ניהול סשן</h2>
-        <p className="text-sm text-navy-700">
-          מצב המשמרת נקבע אך ורק לפי <code className="text-xs">session_status</code> מ-Supabase — ללא ניחושים מקומיים.
-        </p>
-        {authState === "loading" || billingSessionLoading ? (
-          <p className="mt-4 text-sm text-slate-600">טוען סשן חיוב…</p>
-        ) : authState === "error" || !parentId ? (
-          <p className="mt-4 text-sm text-rose-700">יש להתחבר כדי לנהל משמרת פעילה.</p>
-        ) : billingSessionId ? (
-          <div className="mt-3 max-h-[min(22rem,52dvh)] overflow-hidden">
-            <ParentActiveSession sessionId={billingSessionId} parentId={parentId} />
+            {/* שורה שנייה: דירוג כוכבים בצד שמאל */}
+            <div className="flex items-center justify-start">
+              <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-md">
+                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                <span>0.0</span>
+                <span className="text-slate-400 text-[11px]">(0 חוות דעת)</span>
+              </div>
+            </div>
+
+            {/* 3 כפתורי ניווט עליונים */}
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <Link href="/parent/calendar" className="flex flex-col items-center justify-center rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs transition hover:bg-slate-50">
+                <Calendar className="h-5 w-5 text-emerald-600 mb-1" />
+                <span className="text-xs font-semibold text-slate-800">סידור עבודה</span>
+              </Link>
+              <Link href="/parent/wallet" className="flex flex-col items-center justify-center rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs transition hover:bg-slate-50">
+                <Wallet className="h-5 w-5 text-emerald-600 mb-1" />
+                <span className="text-xs font-semibold text-slate-800">ארנק ותשלומים</span>
+              </Link>
+              <Link href="/parent/history" className="flex flex-col items-center justify-center rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs transition hover:bg-slate-50">
+                <History className="h-5 w-5 text-[#001F3F] mb-1" />
+                <span className="text-xs font-semibold text-slate-800">המשמרות שלי</span>
+              </Link>
+            </div>
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-slate-600">אין משמרת פעילה כרגע.</p>
-        )}
-      </section>
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold text-navy-900">סנכרון יומן והצעות חכמות</h2>
-        <p className="mb-3 text-xs text-navy-600">
-          זיהוי ערב מתבצע במכשיר שלך מתוך חלונות &quot;תפוס&quot; בלבד. לשרת נשלחות רק תאריכי ערב (ללא שם אירוע או פרטים).
-        </p>
-        <div className="grid gap-2 md:grid-cols-3">
-          <input
-            className="rounded-lg border p-2 text-sm"
-            placeholder="הערה לעצמך (לא נשמרת בשרת)"
-            value={newBusy.localNote}
-            onChange={(e) => setNewBusy({ ...newBusy, localNote: e.target.value })}
-          />
-          <input className="rounded-lg border p-2 text-sm" type="datetime-local" value={newBusy.startsAt} onChange={(e) => setNewBusy({ ...newBusy, startsAt: e.target.value })} />
-          <input className="rounded-lg border p-2 text-sm" type="datetime-local" value={newBusy.endsAt} onChange={(e) => setNewBusy({ ...newBusy, endsAt: e.target.value })} />
-        </div>
-        <button className="mt-2 rounded-lg bg-navy-800 px-3 py-2 text-sm text-white" onClick={() => void addBusySlot()}>
-          שמירת חלון תפוס (Free/Busy)
-        </button>
-        <div className="mt-3 space-y-2 text-sm">
-          {suggestions.map((s) => (
-            <div key={s.date} className="rounded-lg border p-3">
-              <p>{s.message}</p>
-              {s.suggestedSitters[0] ? (
-                <Link className="mt-1 inline-block text-navy-800 underline" href={`/parent/sitter/${encodeURIComponent(s.suggestedSitters[0])}/calendar`}>
-                  מעבר ליומן זמינות של {s.suggestedSitters[0]}
-                </Link>
+          {/* סטטוס משמרת פעילה */}
+          {activeBooking ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 text-center space-y-2">
+              {activeBooking.status === "confirmed" || activeBooking.status === "active" ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <p className="text-sm font-bold text-emerald-900">המשמרת אומתה ואושרה!</p>
+                </div>
               ) : (
-                <p className="text-xs text-slate-600">אין כרגע סיטרים זמינים בתאריך זה.</p>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                    <Clock className="h-5 w-5" />
+                  </div>
+                  <p className="text-sm font-bold text-amber-900">בקשה נשלחה וממתינה לאישור</p>
+                </div>
               )}
             </div>
-          ))}
-          {busySlots.length === 0 ? <p className="text-sm text-slate-600">אין חלונות תפוסים שמורים — הוסיפו זמני התחלה וסיום בלבד.</p> : null}
+          ) : null}
+
+          {/* כפתורי פעולה ייחודיים להורה בלבד */}
+          <div className="space-y-2 pt-1">
+            <Link
+              href="/parent/broadcast"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-3.5 px-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700"
+            >
+              <Zap className="h-4 w-4 fill-white" />
+              <span>ANYNANNY NOW!</span>
+            </Link>
+            <Link
+              href="/parent/search"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-[#001F3F] py-3 px-2 text-xs font-bold text-white shadow-md transition hover:bg-[#001F3F]/90"
+            >
+              <Search className="h-4 w-4" />
+              חיפוש נני
+            </Link>
+          </div>
+
+          {/* כפתורי תחתית אחידים */}
+          <div className="pt-2 flex flex-col gap-2">
+            <button 
+              onClick={() => alert("שחרור משמרת תקופה")}
+              className="w-full rounded-xl border border-amber-300 bg-amber-50/50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 shadow-2xs"
+            >
+              שחרור משמרת תקופה
+            </button>
+            <button 
+              onClick={() => {
+                const supabase = getSupabaseBrowserClient();
+                if (supabase) void supabase.auth.signOut().then(() => window.location.href = "/login");
+              }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50/30 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 shadow-2xs"
+            >
+              <LogOut className="h-4 w-4" />
+              התנתקות
+            </button>
+          </div>
+
         </div>
-      </section>
-      {message ? <p className="text-sm text-navy-700">{message}</p> : null}
+
+      </div>
     </main>
   );
 }
