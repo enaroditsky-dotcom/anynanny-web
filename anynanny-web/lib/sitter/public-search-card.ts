@@ -80,11 +80,11 @@ export function resolveSitterCardTitle(card: PublicSitterSearchCard): string {
   return "בייביסיטר ללא שם";
 }
 
-export const PARENT_PLATFORM_FEE_MULTIPLIER = 1.1;
+export const PARENT_PLATFORM_FEE_MULTIPLIER = 1;
 
 export function parentFacingHourlyRateNis(rate: number | null | undefined): number | null {
   if (rate == null || !Number.isFinite(rate) || rate <= 0) return null;
-  return Math.round(rate * PARENT_PLATFORM_FEE_MULTIPLIER);
+  return Math.round(rate);
 }
 
 export function formatHourlyRateNis(rate: number | null | undefined): string {
@@ -93,9 +93,9 @@ export function formatHourlyRateNis(rate: number | null | undefined): string {
 }
 
 export function formatParentFacingHourlyRateNis(rate: number | null | undefined): string {
-  const withFee = parentFacingHourlyRateNis(rate);
-  if (withFee == null) return "מחיר לא צוין";
-  return `₪${withFee} / שעה`;
+  const baseRate = parentFacingHourlyRateNis(rate);
+  if (baseRate == null) return "מחיר לא צוין";
+  return `₪${baseRate} / שעה`;
 }
 
 export function experienceBadgeLabel(years: number | null | undefined): string {

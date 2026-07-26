@@ -47,6 +47,14 @@ export function isParentBookingApprovalStatus(status: BookingStatusInput): boole
   return normalizeBookingStatus(status) === "approved";
 }
 
+/**
+ * Parent may confirm sitter arrival / start the live timer only after the sitter
+ * explicitly marked arrival (`sitter_started`). Never from bare `approved`.
+ */
+export function isParentArrivalConfirmableStatus(status: BookingStatusInput): boolean {
+  return normalizeBookingStatus(status) === "sitter_started";
+}
+
 /** Sitter must explicitly approve before any shift circle UI (`requested` → `pending`). */
 export function isSitterBookingAwaitingApprovalStatus(status: BookingStatusInput): boolean {
   return normalizeBookingStatus(status) === "pending";

@@ -1,42 +1,60 @@
+/**
+ * Hyp Pay hosted checkout wrapper.
+ *
+ * Uses official APISign (Masof + KEY + PassP). Dynamic SuccessUrl/ErrorUrl are
+ * intentionally NOT sent by default — unregistered origins cause CCode=902.
+ * Configure return URLs on the Hyp terminal to:
+ *   {APP_ORIGIN}/parent/checkout/complete?checkout=success
+ */
+
+import {
+  createHypTransaction,
+  getHypCredentials,
+  isHypConfigured,
+  HYP_DASHBOARD_API_CREDENTIALS
+} from "@/lib/billing/hyp/create-transaction";
+
 export type HypCheckoutParams = {
-    bookingId: string;
-    amountNis: number;
-    successUrl: string;
-    paymentMethod: string;
-    description: string;
-  };
-  
-  export async function createHypCheckoutSession(params: HypCheckoutParams) {
-    const payload = {
-      TerminalNumber: process.env.HYP_TERMINAL_ID,
-      ApiPass: process.env.HYP_PASSP,
-      Amount: params.amountNis,
-      Currency: "1",
-      MoreData: params.bookingId,
-      UrlSuccess: params.successUrl,
-      UrlCancel: params.successUrl.replace("success", "cancel"),
-      Description: params.description,
-    };
-  
-    const response = await fetch("https://sandbox.hyp.co.il/api/v1/payment/create", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.HYP_API_KEY}` 
-      },
-      body: JSON.stringify(payload),
-    });
-  
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error("[Hyp] API Error:", errorData);
-      throw new Error(`Hyp payment initiation failed: ${response.statusText}`);
-    }
-  
-    const data = await response.json();
-    
-    return {
-      sessionId: data.TransactionId || Date.now().toString(),
-      checkoutUrl: data.Url 
-    };
+  bookingId: string;
+  amountNis: number;
+  successUrl: string;
+  paymentMethod: string;
+  description: string;
+  shiftSessionId?: string | null;
+  cancelUrl?: string | null;
+};
+
+export type HypCheckoutSession = {
+  sessionId: string;
+  checkoutUrl: string;
+};
+
+export { getHypCredentials, isHypConfigured, HYP_DASHBOARD_API_CREDENTIALS };
+
+export function resolveHypPayBaseUrl(): string {
+  try {
+    return getHypCredentials().payBaseUrl;
+  } catch {
+    return "https://pay.hyp.co.il/p/";
   }
+}
+
+export async function createHypCheckoutSession(
+  params: HypCheckoutParams
+): Promise<HypCheckoutSession> {
+  // Pass amount/booking only. Return URLs stay in the Hyp terminal settings so
+  // APISign does not fail with CCode=902 (origin mismatch).
+  const result = await createHypTransaction({
+    amountNis: params.amountNis,
+    bookingId: params.bookingId,
+    shiftSessionId: params.shiftSessionId,
+    description: params.description,
+    paymentMethod: params.paymentMethod,
+    pageLang: "HEB"
+  });
+
+  return {
+    sessionId: result.sessionId,
+    checkoutUrl: result.checkoutUrl
+  };
+}

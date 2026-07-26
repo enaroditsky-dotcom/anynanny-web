@@ -5,6 +5,7 @@ import { Calendar, CheckCircle2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { createBooking } from "@/lib/bookings/create-booking";
+import { dispatchNewBookingCreated } from "@/lib/bookings/new-booking-reset";
 import { PARENT_SEARCH_HOUR_OPTIONS } from "@/lib/sitter/parent-search-filters";
 import {
   BOOK_SHIFT_MINUTE_OPTIONS,
@@ -101,6 +102,11 @@ export function BookShiftModal({ open, sitterId, sitterName, onClose, onSuccess 
     }
 
     setSuccess(true);
+    dispatchNewBookingCreated({
+      bookingId: booking.id,
+      parentId: user.id,
+      sitterId
+    });
     onSuccess?.(booking.id);
   };
 

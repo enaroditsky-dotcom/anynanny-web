@@ -140,6 +140,10 @@ function ParentDoubleShakeIdleCircleInner({
 
   const handleConfirmStart = () => {
     if (busy || sessionActive) return;
+    // Hard gate: never start from approved / pre-arrival statuses.
+    if (normalizeBookingStatus(booking?.status as BookingStatusInput) !== "sitter_started") {
+      return;
+    }
     onStartShift();
   };
 
@@ -205,15 +209,12 @@ function ParentDoubleShakeIdleCircleInner({
       );
     }
 
+    // approved (or any pre-arrival status): never offer parent start before sitter Arrived.
     return (
-      <ActivationCircleSlot
-        liveKey={liveKey}
-        justActivated={justActivated}
-        onStartShift={handleConfirmStart}
-        isUpcoming={isUpcoming}
-        active={active}
-        busy={busy}
-        bookingId={booking.id}
+      <DoubleShakeCircleButton
+        label="ממתינים להגעת הבייביסיטר"
+        variant="waiting-navy"
+        presentational
       />
     );
   }
@@ -221,7 +222,7 @@ function ParentDoubleShakeIdleCircleInner({
   if (status === "approved") {
     return (
       <DoubleShakeCircleButton
-        label="המשמרת אושרה — ממתין לשעת ההתחלה"
+        label="ממתינים להגעת הבייביסיטר"
         variant="waiting-navy"
         presentational
       />

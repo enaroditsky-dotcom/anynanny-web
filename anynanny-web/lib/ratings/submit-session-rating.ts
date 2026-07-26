@@ -58,7 +58,7 @@ export async function submitSessionRating(
   if (!isParent && !isSitter) {
     return { ok: false, error: "אין הרשאה לדרג משמרת זו." };
   }
-  const ratableStatuses = new Set(["completed", "payment_pending"]);
+  const ratableStatuses = new Set(["completed", "payment_pending", "paid"]);
   if (!ratableStatuses.has(String(sessionRow.status))) {
     return { ok: false, error: "ניתן לדרג רק משמרת שהסתיימה." };
   }

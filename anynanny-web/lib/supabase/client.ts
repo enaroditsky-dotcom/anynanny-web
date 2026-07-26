@@ -10,8 +10,10 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
- * Cookie-backed browser client
- * התיקון: הוספנו הגדרה מפורשת שמונעת את השגיאות בפיענוח ה-Cookies
+ * Cookie-backed browser client via `@supabase/ssr`.
+ * Uses default cookie encoding (`base64url`) so session cookies match the
+ * server/middleware clients — do not JSON.parse those cookie strings manually;
+ * use `safeParseSupabaseCookieJson` from `@/lib/supabase/cookie-value` if needed.
  */
 export function getSupabaseBrowserClient(): SupabaseClient | null {
   if (!isSupabaseConfigured()) return null;
@@ -19,15 +21,7 @@ export function getSupabaseBrowserClient(): SupabaseClient | null {
 
   browserClient = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: {
-        persistSession: true,
-        detectSessionInUrl: true,
-        // זה החלק החשוב ביותר למניעת שגיאות ה-JSON ב-Cookie
-        storageKey: 'anynanny_auth_token_v1', 
-      }
-    }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
   return browserClient;
 }

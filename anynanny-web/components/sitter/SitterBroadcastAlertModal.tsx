@@ -19,7 +19,6 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
   
   const dismissedAlertIdsRef = useRef<Set<string>>(new Set());
 
-  // 1. שליפת מערך הערים של הנני
   useEffect(() => {
     if (!sitterId) return;
     const supabase = getSupabaseBrowserClient();
@@ -42,7 +41,6 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
     loadSitterCities();
   }, [sitterId]);
 
-  // 2. בדיקה מקיפה עם מניעת הופעה חוזרת באמצעות sessionStorage
   useEffect(() => {
     if (!sitterId || sitterCities.length === 0) return;
     const supabase = getSupabaseBrowserClient();
@@ -68,8 +66,9 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
     const checkExistingBookingsAndAlerts = async () => {
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
-      // שלב א': בדיקת הזמנה חדשה
-      const { data: recentBooking } = await supabase
+      // Broadcast-origin column is optional (not on all schemas) — never select it or we 400.
+      // Regular calendar bookings must not open the broadcast accept modal.
+      const { error: recentBookingError } = await supabase
         .from("bookings")
         .select("id, created_at")
         .eq("sitter_id", sitterId)
@@ -78,14 +77,8 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
         .limit(1)
         .maybeSingle();
 
-      if (recentBooking) {
-        // 🔥 בדיקה האם ההזמנה הזו כבר אושרה/נסגרה על ידי הנני בדפדפן הנוכחי
-        const dismissedBookingId = sessionStorage.getItem("dismissed_booking_id");
-        if (dismissedBookingId !== recentBooking.id) {
-          setActiveAlert(null);
-          setAcceptedNotification({ bookingId: recentBooking.id });
-          return;
-        }
+      if (recentBookingError) {
+        console.warn("[sitter broadcast] bookings poll:", recentBookingError.message);
       }
 
       // שלב ב': בדיקת קריאות Broadcast פעילות
@@ -118,23 +111,6 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
     const pollInterval = setInterval(() => {
       void checkExistingBookingsAndAlerts();
     }, 3000);
-
-    const bookingChannel = subscribePostgresChanges(supabase, `sitter-accepted-booking-${sitterId}`, {
-      event: "INSERT",
-      table: "bookings",
-      filter: `sitter_id=eq.${sitterId}`,
-      handler: (payload) => {
-        const newBooking = payload.new as { id?: string };
-        if (newBooking && newBooking.id) {
-          const dismissedBookingId = sessionStorage.getItem("dismissed_booking_id");
-          if (dismissedBookingId !== newBooking.id) {
-            setActiveAlert(null);
-            setAcceptedNotification({ bookingId: newBooking.id });
-            playAlertSound();
-          }
-        }
-      }
-    });
 
     const channels = sitterCities.map((city) =>
       subscribePostgresChanges(supabase, `sitter-broadcast-room-${city}`, [
@@ -172,7 +148,6 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
 
     return () => {
       clearInterval(pollInterval);
-      removeRealtimeChannel(supabase, bookingChannel);
       channels.forEach((channel) => removeRealtimeChannel(supabase, channel));
     };
   }, [sitterCities, sitterId]);
@@ -230,17 +205,26 @@ export function SitterBroadcastAlertModal({ sitterId }: BroadcastAlertModalProps
           </div>
           <button
             type="button"
-            onClick={() => {
+            disabled={loading}
+            onClick={async () => {
               if (acceptedNotification.bookingId) {
-                // נשמור ב-sessionStorage שההודעה הזו כבר טופלה
+                setLoading(true);
+                const supabase = getSupabaseBrowserClient();
+                await supabase
+                  .from("bookings")
+                  .update({ status: "approved" })
+                  .eq("id", acceptedNotification.bookingId);
+
                 sessionStorage.setItem("dismissed_booking_id", acceptedNotification.bookingId);
+                setLoading(false);
               }
               setAcceptedNotification(null);
+              router.push("/sitter/dashboard");
               router.refresh();
             }}
-            className="w-full rounded-2xl bg-emerald-600 py-3.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 active:scale-[0.97]"
+            className="w-full rounded-2xl bg-emerald-600 py-3.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 active:scale-[0.97] disabled:opacity-50"
           >
-            אישור ומעבר לדשבורד
+            {loading ? "מעדכן מערכת..." : "אישור ומעבר לדשבורד"}
           </button>
         </div>
       </div>

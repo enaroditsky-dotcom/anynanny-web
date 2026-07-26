@@ -12,22 +12,41 @@ export async function fetchConfirmedShiftsForSitter(
   supabase: SupabaseClient,
   sitterId: string
 ): Promise<{ shifts: ConfirmedShiftView[]; error: string | null }> {
-  const { data: rows, error } = await supabase
+  const selectFull =
+    "id, parent_id, sitter_id, booking_date, start_time, end_time, status, actual_start_time, created_at, updated_at";
+  const selectCore =
+    "id, parent_id, sitter_id, booking_date, start_time, end_time, status, created_at, updated_at";
+
+  let rows: BookingRow[] | null = null;
+  let errorMessage: string | null = null;
+
+  const full = await supabase
     .from(BOOKINGS_TABLE)
-    .select(
-      "id, parent_id, sitter_id, booking_date, start_time, end_time, status, actual_start_time, created_at, updated_at"
-    )
+    .select(selectFull)
     .eq("sitter_id", sitterId)
     .in("status", ["approved", "sitter_started", "parent_started", "sitter_ended"])
     .order("start_time", { ascending: true });
 
-  if (error) {
-    return { shifts: [], error: error.message };
+  if (full.error) {
+    errorMessage = full.error.message;
+    const core = await supabase
+      .from(BOOKINGS_TABLE)
+      .select(selectCore)
+      .eq("sitter_id", sitterId)
+      .in("status", ["approved", "sitter_started", "parent_started", "sitter_ended"])
+      .order("start_time", { ascending: true });
+    if (core.error) {
+      return { shifts: [], error: core.error.message };
+    }
+    rows = (core.data as BookingRow[] | null) ?? [];
+    errorMessage = null;
+  } else {
+    rows = (full.data as BookingRow[] | null) ?? [];
   }
 
-  const bookings = (rows ?? []) as BookingRow[];
+  const bookings = rows ?? [];
   if (bookings.length === 0) {
-    return { shifts: [], error: null };
+    return { shifts: [], error: errorMessage };
   }
 
   const parentIds = [...new Set(bookings.map((b) => b.parent_id))];

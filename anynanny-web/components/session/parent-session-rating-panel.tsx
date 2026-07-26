@@ -11,7 +11,7 @@ type ParentSessionRatingPanelProps = {
   onSubmitRating: (rating: number) => void | Promise<void>;
 };
 
-/** Parent post-payment rating step inside the shift settlement view. */
+/** Parent post-shift rating step (required before HYP payment). */
 export function ParentSessionRatingPanel({
   sitterName,
   busy = false,

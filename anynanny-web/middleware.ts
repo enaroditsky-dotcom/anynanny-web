@@ -1,25 +1,19 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { createSupabaseMiddlewareClient } from "@/lib/supabase/middleware-client";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 export async function middleware(req: NextRequest) {
-  // יצירת Response חדש כדי שנוכל להעביר עוגיות מעודכנות מהשרת לדפדפן
-  const res = NextResponse.next();
-  
   try {
-    // שימוש במימוש הרשמי של Supabase שמטפל בעוגיות בצורה בטוחה
-    const supabase = createMiddlewareClient({ req, res });
-
-    // בדיקת סשן - עטוף ב-try/catch כדי לבלוע שגיאות טוקן פגום באופן שקט
-    await supabase.auth.getSession();
-  } catch (err) {
-    // מתעלם בשקט משגיאות טוקן ישנות בזמן טעינת עמודים ציבוריים
+    // `@supabase/ssr` correctly decodes `base64-...` auth cookies (auth-helpers does not).
+    const { supabase, getResponse } = createSupabaseMiddlewareClient(req);
+    await supabase.auth.getUser();
+    return getResponse();
+  } catch {
+    // Ignore corrupt/legacy token noise on public pages; continue the request.
+    return NextResponse.next({ request: { headers: req.headers } });
   }
-
-  // החזרת ה-Response עם העוגיות המעודכנות (במידת הצורך)
-  return res;
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"]
 };

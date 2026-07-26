@@ -22,7 +22,13 @@ export type PaymentExecutorParams = {
 };
 
 export type PaymentExecutorResult =
-  | { success: true; paymentSplit: ParentPaymentSplit }
+  | {
+      success: true;
+      paymentSplit: ParentPaymentSplit;
+      /** Hyp hosted checkout URL for iframe / redirect. */
+      checkoutUrl: string;
+      hypSessionId: string;
+    }
   | { success: false; error: string };
 
 /** Parent-facing total = sitter base × 1.1 (flat 10% platform fee). */
@@ -59,17 +65,33 @@ export function usePaymentExecutor() {
 
         if (!result.ok) {
           const message = formatParentCheckoutError(result.error);
+          console.error("[usePaymentExecutor] checkout failed:", result.status, result.error);
           setError(message);
           return { success: false, error: message };
         }
 
-        if (result.status !== "succeeded" && !result.mock) {
-          const message = "התשלום לא הושלם. נסו שוב.";
+        // Never accept mock / inline success — session finalizes only after Hyp sandbox.
+        if (result.mock || result.gateway === "mock" || result.status === "succeeded") {
+          const message =
+            "תשלום מדומה אינו זמין. יש להשלים תשלום דרך HYP Sandbox.";
+          console.error("[usePaymentExecutor] rejected mock checkout:", result);
           setError(message);
           return { success: false, error: message };
         }
 
-        return { success: true, paymentSplit };
+        const checkoutUrl = String(result.url ?? "").trim();
+        if (!checkoutUrl) {
+          const message = "לא התקבל קישור לתשלום מ-HYP. נסו שוב.";
+          setError(message);
+          return { success: false, error: message };
+        }
+
+        return {
+          success: true,
+          paymentSplit,
+          checkoutUrl,
+          hypSessionId: String(result.sessionId)
+        };
       } catch (e) {
         console.error("[usePaymentExecutor]", e);
         const message = "שגיאה בעיבוד התשלום. נסו שוב.";

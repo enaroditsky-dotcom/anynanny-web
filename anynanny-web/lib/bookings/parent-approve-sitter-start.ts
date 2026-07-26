@@ -4,6 +4,7 @@ import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 
 /**
  * Parent confirms sitter arrival — advances booking to `parent_started` so sitter realtime syncs.
+ * Only allowed when the booking is already `sitter_started` (sitter clicked Arrived first).
  */
 export async function parentApproveSitterStart(
   supabase: SupabaseClient,
@@ -47,6 +48,13 @@ export async function parentApproveSitterStart(
 
   if (existing && String(existing.status) === "parent_started") {
     return { row: existing as BookingRow, error: null };
+  }
+
+  if (existing && String(existing.status) !== "sitter_started") {
+    return {
+      row: null,
+      error: "ניתן לאשר הגעה רק לאחר שהבייביסיטר סימנה שהגיעה."
+    };
   }
 
   return {

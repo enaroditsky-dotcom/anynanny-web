@@ -1,13 +1,17 @@
 import { handleParentCheckout } from "@/lib/billing/parent-checkout-handler";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-/** Cardcom checkout alias — same handler as `/api/checkout`. */
+/** Cardcom checkout alias — same handler as `/api/checkout` (Hyp-aware with mock fallback). */
 export async function POST(request: Request) {
   try {
-    const supabase = await createSupabaseServerClient(request);
+    const supabase = createServerClient();
+    if (!supabase) {
+      return NextResponse.json({ error: "Server client initialization failed." }, { status: 500 });
+    }
+
     const {
       data: { user }
     } = await supabase.auth.getUser();

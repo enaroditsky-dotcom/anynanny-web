@@ -99,10 +99,6 @@ function resolveNextBooking(
 ): TodaysLinkedBookingView | null {
   const normalized = normalizeBookingRow(row);
 
-  if (role === "sitter" && isSitterBookingAwaitingApprovalStatus(normalized.status)) {
-    return prev?.id === normalized.id ? null : prev;
-  }
-
   if (isBookingTerminalStatus(normalized.status)) {
     return prev?.id === normalized.id ? null : prev;
   }
@@ -238,14 +234,27 @@ export function useTodaysLinkedBooking(
       gate = gateRow;
       fetchError = linked.error;
 
-      if (!nextBooking && gate?.id && !isSitterBookingAwaitingApprovalStatus(gate.status)) {
-        // Recover approved/in-progress shifts even if the date-scoped linked fetch missed them.
-        nextBooking = await fetchLinkedBookingById(supabase, gate.id, role);
+      if (!nextBooking) {
+        // Linked statuses include pending, but also fall back to an explicit pending fetch
+        // so a just-inserted request is never missed on soft navigation.
+        const pendingResult = await fetchTodaysPendingBookingRequest(supabase, userId, "sitter");
+        if (pendingResult.booking) {
+          nextBooking = pendingResult.booking;
+          gate = shiftGateFromRow(pendingResult.booking);
+        } else if (gate?.id) {
+          // Recover approved/in-progress shifts even if the date-scoped linked fetch missed them.
+          nextBooking = await fetchLinkedBookingById(supabase, gate.id, role);
+        }
+      } else if (!gate) {
+        gate = shiftGateFromRow(nextBooking);
       }
     }
     const nextStatus = normalizeBookingStatus(nextBooking?.status as BookingStatusInput);
     if (nextStatus === "completed") {
       completedRealtimeFrozenRef.current = true;
+    } else {
+      // Idle / pending / live — keep realtime open for the next request.
+      completedRealtimeFrozenRef.current = false;
     }
 
     setBooking((prev) => (circleBookingsEqual(prev, nextBooking) ? prev : nextBooking));
@@ -277,18 +286,28 @@ export function useTodaysLinkedBooking(
           nextBooking = prev?.id === row.id ? null : prev;
           return nextBooking;
         });
-        setShiftGate((prev) => (prev === null ? prev : null));
+        setShiftGate((prev) => (prev?.id === row.id ? null : prev));
+        if (!nextBooking) {
+          completedRealtimeFrozenRef.current = false;
+        }
         emitLiveSnapshot(nextBooking, null, null, "realtime");
+        void reloadRef.current();
         return;
       }
 
       if (!isBookingRowForUser(row, role, userId)) return;
-      if (!isBookingRelevantForLiveSync(row)) return;
 
       const incomingStatus = normalizeBookingStatus(row.status as BookingStatusInput);
+
+      // New / revived pending asks must always unfreeze realtime and surface.
+      if (incomingStatus === "pending" || isSitterBookingAwaitingApprovalStatus(incomingStatus)) {
+        completedRealtimeFrozenRef.current = false;
+      }
+
+      if (!isBookingRelevantForLiveSync(row)) return;
+
       if (incomingStatus === "completed") {
-        if (completedRealtimeFrozenRef.current) return;
-        completedRealtimeFrozenRef.current = true;
+        // Freeze only this completed shift — do not kill the channel for future inserts.
         const gate = shiftGateFromRow(row);
         setBooking((prev) => (prev?.id === row.id ? null : prev));
         setShiftGate((prev) => (shiftGateEqual(prev, gate) ? prev : gate));
@@ -296,19 +315,18 @@ export function useTodaysLinkedBooking(
         return;
       }
 
-      if (completedRealtimeFrozenRef.current || optionsRef.current?.freezeBookingRealtime) {
+      if (optionsRef.current?.freezeBookingRealtime) {
         return;
       }
+
+      // Clear freeze once a non-completed live booking arrives for this user.
+      completedRealtimeFrozenRef.current = false;
 
       const gate = shiftGateFromRow(row);
       let nextBooking: TodaysLinkedBookingView | null = null;
       const liveFieldsChanged = didBookingLiveFieldsChange(liveSnapshotRef.current, row);
 
       setBooking((prev) => {
-        if (role === "sitter" && isSitterBookingAwaitingApprovalStatus(row.status)) {
-          nextBooking = prev?.id === row.id ? null : prev;
-          return nextBooking;
-        }
         const resolved = resolveNextBooking(prev, row, role);
         nextBooking = circleBookingsEqual(prev, resolved) ? prev : resolved;
         return nextBooking;
@@ -317,7 +335,8 @@ export function useTodaysLinkedBooking(
       setShiftGate((prev) => (shiftGateEqual(prev, gate) ? prev : gate));
       emitLiveSnapshot(nextBooking, gate, row, "realtime");
 
-      if (liveFieldsChanged && incomingStatus !== "completed") {
+      // Reload to enrich partner name/schedule; optimistic pending row already shown above.
+      if (liveFieldsChanged || incomingStatus === "pending") {
         void reloadRef.current();
       }
     },
@@ -327,8 +346,11 @@ export function useTodaysLinkedBooking(
   const linkedBookingStatus = normalizeBookingStatus(booking?.status as BookingStatusInput) ?? "";
 
   useEffect(() => {
+    // Only freeze while the *current* linked booking is completed — idle unfreezes.
     if (linkedBookingStatus === "completed") {
       completedRealtimeFrozenRef.current = true;
+    } else if (!linkedBookingStatus) {
+      completedRealtimeFrozenRef.current = false;
     }
   }, [linkedBookingStatus]);
 
@@ -339,9 +361,6 @@ export function useTodaysLinkedBooking(
 
   useEffect(() => {
     if (!userId) return;
-    if (completedRealtimeFrozenRef.current || linkedBookingStatus === "completed") {
-      return;
-    }
     if (optionsRef.current?.freezeBookingRealtime) {
       return;
     }
@@ -354,6 +373,8 @@ export function useTodaysLinkedBooking(
       applyRealtimePatch(payload);
     };
 
+    // Always keep a live channel for this sitter/parent — never tear it down after a
+    // completed shift or new pending inserts will require a manual refresh.
     const channel = subscribePostgresChanges(
       supabase,
       `todays-booking-${role}-${userId}`,
@@ -373,7 +394,7 @@ export function useTodaysLinkedBooking(
     return () => {
       removeRealtimeChannel(supabase, channel);
     };
-  }, [role, userId, reload, applyRealtimePatch, linkedBookingStatus, options?.freezeBookingRealtime]);
+  }, [role, userId, reload, applyRealtimePatch, options?.freezeBookingRealtime]);
 
   return { booking, shiftGate, ready, reload };
 }

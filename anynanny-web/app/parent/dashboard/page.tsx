@@ -73,12 +73,18 @@ export default async function ParentDashboardPage() {
       }
     }
 
-    // שליפת המשמרת הפעילה או המאושרת האחרונה
+    // שליפת המשמרת הפעילה / ממתינה לאישור הגעה / בזמן ריצה
     const { data: bookingData } = await supabase
       .from("bookings")
-      .select("id, sitter_id, status, booking_date, start_time, end_time")
+      .select("id, parent_id, sitter_id, status, booking_date, start_time, end_time, created_at, updated_at")
       .eq("parent_id", parentId)
-      .in("status", ["confirmed", "active", "in_progress", "pending"])
+      .in("status", [
+        "pending",
+        "approved",
+        "sitter_started",
+        "parent_started",
+        "sitter_ended"
+      ])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();

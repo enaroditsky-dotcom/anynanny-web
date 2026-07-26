@@ -13,7 +13,6 @@ export const LIVE_BOOKING_STATUSES_FOR_SESSION_UI = new Set([
   "approved",
   "sitter_started",
   "parent_started",
-  "in_progress",
   "sitter_ended"
 ]);
 
@@ -33,7 +32,8 @@ export const SESSIONS_PROTOCOL_SELECT_CORE =
 /** Safe `.select()` after INSERT/UPDATE — never references missing legacy columns. */
 export const SESSIONS_INSERT_RETURN_SELECT = SESSIONS_PROTOCOL_SELECT_MINIMAL;
 
-const SESSION_SELECT_FALLBACK_CHAIN = [
+/** Select lists tried in order when optional session columns are missing (avoids PostgREST 400). */
+export const SESSION_SELECT_FALLBACK_CHAIN = [
   SESSIONS_PROTOCOL_SELECT_MINIMAL,
   SESSIONS_PROTOCOL_SELECT_CORE
 ] as const;
@@ -108,10 +108,17 @@ async function selectSessionMaybeSingle(
     }
 
     lastError = read.error;
+    // Any missing-column / schema-drift 400 → try a narrower select instead of aborting.
     if (
+      read.schemaDrift ||
       isPostgrestMissingColumnError(read.error, "user_id") ||
       isPostgrestMissingColumnError(read.error, "booking_id") ||
-      isPostgrestMissingColumnError(read.error, "sitter_end_confirmed_at")
+      isPostgrestMissingColumnError(read.error, "sitter_end_confirmed_at") ||
+      isPostgrestMissingColumnError(read.error, "start_confirmed") ||
+      isPostgrestMissingColumnError(read.error, "parent_end_requested_at") ||
+      isPostgrestMissingColumnError(read.error, "final_elapsed_seconds") ||
+      isPostgrestMissingColumnError(read.error, "final_amount_nis") ||
+      /column|schema cache|could not find/i.test(String(read.error))
     ) {
       continue;
     }
@@ -325,9 +332,11 @@ async function querySessionsByParticipants(
       .eq("sitter_id", sitterId);
     request = applySessionFilters(request, query);
     if (!wantsCompleted) {
+      // PostgREST `.or()` values with `:` must be double-quoted or the filter 400s.
+      const quoted = `"${recentStartIso}"`;
       request = request
         .neq("status", "completed")
-        .or(`start_time.is.null,start_time.gte.${recentStartIso}`);
+        .or(`start_time.is.null,start_time.gte.${quoted}`);
     }
     return request.order(orderColumn, { ascending: query.ascending ?? false }).limit(1);
   });

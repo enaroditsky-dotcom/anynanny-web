@@ -11,8 +11,18 @@ const BOOKING_STATUS_ALIASES: Record<string, BookingStatus> = {
 };
 
 function coerceBookingStatus(raw: string): BookingStatus | undefined {
-  const normalized = BOOKING_STATUS_ALIASES[raw] ?? raw;
-  return normalized as BookingStatus;
+  const mapped = BOOKING_STATUS_ALIASES[raw] ?? raw;
+  const allowed: BookingStatus[] = [
+    "pending",
+    "approved",
+    "rejected",
+    "cancelled",
+    "sitter_started",
+    "parent_started",
+    "sitter_ended",
+    "completed"
+  ];
+  return (allowed as string[]).includes(mapped) ? (mapped as BookingStatus) : undefined;
 }
 
 /** Normalize Supabase/plain status values — realtime may send `{ name: "approved" }`. */

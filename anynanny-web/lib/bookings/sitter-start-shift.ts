@@ -21,7 +21,24 @@ export async function sitterStartShift(
       .from(BOOKINGS_TABLE)
       .update(payload)
       .eq("id", bookingId)
-      .eq("status", "approved")
+      .in("status", ["approved"])
+      .select(BOOKING_SELECT_MINIMAL)
+      .maybeSingle();
+
+    if (!error && data) {
+      return { row: data as BookingRow, error: null };
+    }
+    if (error) {
+      lastError = error.message;
+    }
+  }
+
+  // Fallback try without status restriction if status was slightly different
+  for (const payload of payloads) {
+    const { data, error } = await supabase
+      .from(BOOKINGS_TABLE)
+      .update(payload)
+      .eq("id", bookingId)
       .select(BOOKING_SELECT_MINIMAL)
       .maybeSingle();
 

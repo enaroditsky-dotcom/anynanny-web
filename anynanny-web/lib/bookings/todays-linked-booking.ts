@@ -24,8 +24,13 @@ export const TODAYS_LINKED_BOOKING_STATUSES: BookingStatus[] = [
   "sitter_ended"
 ];
 
-/** Sitter linked booking — pending requests use the approval card, not the shift circle. */
+/**
+ * Sitter linked booking statuses — includes `pending` so new parent requests
+ * hydrate immediately (approval card) without a hard refresh.
+ * Pending rows stay out of the Double-Shake circle via UI gates.
+ */
 export const SITTER_TODAYS_LINKED_BOOKING_STATUSES: BookingStatus[] = [
+  "pending",
   "approved",
   "sitter_started",
   "parent_started",
@@ -254,7 +259,15 @@ async function fetchLinkedBookingRow(
     .maybeSingle();
 
   if (todayError) {
-    return { row: null, error: todayError.message };
+    // Date filter/select failed — fall back to status-only so the dashboard still hydrates.
+    console.warn("[todays-linked-booking] today-scoped fetch:", todayError.message);
+    const crossMidnight = await fetchInFlightLinkedBooking(
+      supabase,
+      userId,
+      role,
+      linkedStatuses
+    );
+    return { row: crossMidnight, error: crossMidnight ? null : todayError.message };
   }
 
   if (todayRow) {
@@ -395,10 +408,8 @@ export async function fetchTodaysLinkedBooking(
   }
 
   if (!row) {
-    if (role === "parent") {
-      return fetchTodaysPendingBookingRequest(supabase, userId, role);
-    }
-    return { booking: null, error: null };
+    // Parent and sitter: fall back to today's pending request so live inserts are not missed.
+    return fetchTodaysPendingBookingRequest(supabase, userId, role);
   }
 
   const booking = await enrichLinkedBookingView(supabase, row, role);

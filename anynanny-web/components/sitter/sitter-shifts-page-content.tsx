@@ -71,10 +71,16 @@ export function SitterShiftsPageContent() {
     syncFromLinkedBooking
   ]);
 
-  const gateStatus = normalizeBookingStatus(todayBookingShiftGate?.status) ?? "";
-  const showSitterApprovalStage = isSitterBookingAwaitingApprovalStatus(gateStatus);
+  const showSitterApprovalStage =
+    isSitterBookingAwaitingApprovalStatus(todayBookingShiftGate?.status ?? null) ||
+    isSitterBookingAwaitingApprovalStatus(todaysBooking?.status ?? null);
 
   useEffect(() => {
+    if (todaysBooking && isSitterBookingAwaitingApprovalStatus(todaysBooking.status)) {
+      setPendingApprovalBooking(todaysBooking);
+      return;
+    }
+
     if (!sitterId || !bookingGuardReady || !showSitterApprovalStage) {
       setPendingApprovalBooking(null);
       return;
@@ -94,7 +100,14 @@ export function SitterShiftsPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [sitterId, bookingGuardReady, showSitterApprovalStage, todayBookingShiftGate?.id, todayBookingShiftGate?.updated_at]);
+  }, [
+    sitterId,
+    bookingGuardReady,
+    showSitterApprovalStage,
+    todaysBooking,
+    todayBookingShiftGate?.id,
+    todayBookingShiftGate?.status
+  ]);
 
   const activeCircleBooking = showSitterApprovalStage ? null : circleBooking ?? todaysBooking;
 
