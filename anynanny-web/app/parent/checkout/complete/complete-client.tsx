@@ -7,11 +7,17 @@ import {
   clearHypPendingCheckout,
   readHypPendingCheckout
 } from "@/lib/billing/hyp/pending-checkout";
+import {
+  finalizeHypCheckoutFromClient,
+  postHypCheckoutMessageToOpener,
+  HYP_CANCEL_MESSAGE_TYPE,
+  HYP_SUCCESS_MESSAGE_TYPE
+} from "@/lib/billing/hyp/finalize-client";
 
 /**
  * Hyp success/cancel return target.
  * Finalizes payment against Supabase *before* returning to the dashboard,
- * then breaks out of the iframe if needed.
+ * notifies the parent iframe host via postMessage, then breaks out if needed.
  */
 export default function ParentCheckoutCompleteClient() {
   const router = useRouter();
@@ -32,55 +38,55 @@ export default function ParentCheckoutCompleteClient() {
       const pending = readHypPendingCheckout();
 
       const bookingId = hyp.bookingId || pending?.bookingId || null;
-      const sessionId = hyp.sessionId || pending?.sessionId || null;
 
-      if (checkout === "success" && bookingId && hyp.isSuccess) {
-        try {
-          const res = await fetch("/api/hyp/complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify({
-              bookingId,
-              sessionId: sessionId ?? undefined,
-              hypApprovalId: hyp.approvalId ?? undefined,
-              amountPaid: hyp.amount ?? undefined,
-              cCode: hyp.cCode ?? undefined,
-              hypQuery: params.toString(),
-              Info: params.get("Info") ?? undefined,
-              MoreData: params.get("MoreData") ?? undefined,
-              Order: params.get("Order") ?? undefined,
-              Id: params.get("Id") ?? undefined,
-              Amount: params.get("Amount") ?? undefined,
-              CCode: params.get("CCode") ?? undefined
-            })
-          });
-          if (!res.ok) {
-            const json = (await res.json().catch(() => ({}))) as { error?: string };
-            console.error("[checkout/complete] finalize failed:", json.error ?? res.status);
-            if (!cancelled) {
-              setMessage(json.error ?? "לא ניתן לשמור את אישור התשלום. מעבירים לדשבורד…");
-            }
-          } else {
-            clearHypPendingCheckout();
-            params.set("paid", "1");
+      if (checkout === "cancel") {
+        postHypCheckoutMessageToOpener({
+          type: HYP_CANCEL_MESSAGE_TYPE,
+          search: params.toString()
+        });
+      } else if (checkout === "success" && bookingId && hyp.isSuccess) {
+        const result = await finalizeHypCheckoutFromClient({
+          search: params,
+          bookingId,
+          sessionId: hyp.sessionId || pending?.sessionId
+        });
+
+        if (!result.ok) {
+          console.error("[checkout/complete] finalize failed:", result.error);
+          if (!cancelled) {
+            setMessage(result.error ?? "לא ניתן לשמור את אישור התשלום. מעבירים לדשבורד…");
           }
-        } catch (e) {
-          console.error("[checkout/complete] finalize error:", e);
-          if (!cancelled) setMessage("שגיאה בסגירת התשלום. מעבירים לדשבורד…");
+        } else {
+          clearHypPendingCheckout();
+          params.set("paid", "1");
+          postHypCheckoutMessageToOpener({
+            type: HYP_SUCCESS_MESSAGE_TYPE,
+            search: params.toString()
+          });
         }
       } else if (checkout === "success" && !bookingId) {
         console.warn("[checkout/complete] success return missing booking id", {
           hasInfo: Boolean(params.get("Info")),
           hasPending: Boolean(pending)
         });
+        // Still notify parent frame — it may finalize from pending stash.
+        postHypCheckoutMessageToOpener({
+          type: HYP_SUCCESS_MESSAGE_TYPE,
+          search: params.toString()
+        });
       }
 
       const target = `/parent/dashboard?${params.toString()}`;
 
       if (typeof window !== "undefined" && window.top && window.top !== window.self) {
-        window.top.location.href = target;
-        return;
+        try {
+          window.top.location.href = target;
+          return;
+        } catch {
+          // Cross-origin top — postMessage already sent; stay on complete page briefly.
+          if (!cancelled) setMessage("התשלום נשמר. ניתן לסגור חלון זה.");
+          return;
+        }
       }
 
       router.replace(target);

@@ -1,10 +1,10 @@
 /**
  * Hyp Pay hosted checkout wrapper.
  *
- * Uses official APISign (Masof + KEY + PassP). Dynamic SuccessUrl/ErrorUrl are
- * intentionally NOT sent by default — unregistered origins cause CCode=902.
- * Configure return URLs on the Hyp terminal to:
- *   {APP_ORIGIN}/parent/checkout/complete?checkout=success
+ * Tries SuccessUrl/ErrorUrl pointing at /parent/checkout/complete so Supabase
+ * finalizes after pay. If the terminal rejects dynamic URLs (CCode=902),
+ * APISign retries without them and the iframe client finalizes from the
+ * pending-checkout stash when Hyp's demo Thank You page appears.
  */
 
 import {
@@ -42,15 +42,15 @@ export function resolveHypPayBaseUrl(): string {
 export async function createHypCheckoutSession(
   params: HypCheckoutParams
 ): Promise<HypCheckoutSession> {
-  // Pass amount/booking only. Return URLs stay in the Hyp terminal settings so
-  // APISign does not fail with CCode=902 (origin mismatch).
   const result = await createHypTransaction({
     amountNis: params.amountNis,
     bookingId: params.bookingId,
     shiftSessionId: params.shiftSessionId,
     description: params.description,
     paymentMethod: params.paymentMethod,
-    pageLang: "HEB"
+    pageLang: "HEB",
+    successUrl: params.successUrl,
+    cancelUrl: params.cancelUrl
   });
 
   return {

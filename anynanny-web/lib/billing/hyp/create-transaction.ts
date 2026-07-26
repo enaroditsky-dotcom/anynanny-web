@@ -1,7 +1,14 @@
+import {
+  HYP_SANDBOX_RECOMMENDED_AMOUNT_NIS,
+  HYP_SANDBOX_SUCCESS_CARD,
+  isHypTestTerminalMasof
+} from "@/lib/billing/hyp/sandbox-test-cards";
+
 /**
  * Hyp Pay APISign integration (official Pay Page API).
  *
  * Spec: https://developers.hyp.co.il/pay/getting-started/creating-a-payment-page
+ * Sandbox cards: https://developers.hyp.co.il/pay/getting-started/testing-environments
  *
  * Wire auth fields (only these are valid for APISign):
  *   Masof = terminal id
@@ -14,6 +21,9 @@
  *
  * Configure success/fail URLs in the Hyp terminal dashboard to:
  *   {APP_ORIGIN}/parent/checkout/complete?checkout=success
+ *
+ * Sandbox happy-path card (NOT 4580…4580 — that card is intentionally declined):
+ *   5253360311315452 · exp 12/29 · CVV 493 · ID 890108558 · ~10 NIS
  */
 
 export type HypCredentials = {
@@ -36,12 +46,18 @@ export type HypCreateTransactionInput = {
   description?: string;
   paymentMethod?: string;
   pageLang?: "HEB" | "ENG";
+  /** Israeli ID — prefilled with Hyp sandbox success-card ID in test mode. */
+  userId?: string | null;
+  clientName?: string | null;
+  clientLastName?: string | null;
   /**
    * Only sent when HYP_ALLOW_DYNAMIC_RETURN_URLS=true AND the domain is
    * whitelisted on the Hyp terminal. Otherwise omit (configure in dashboard).
    */
   successUrl?: string | null;
   cancelUrl?: string | null;
+  /** Internal: retry without SuccessUrl/ErrorUrl after CCode=902. */
+  omitReturnUrls?: boolean;
 };
 
 export type HypCreateTransactionResult = {
@@ -137,6 +153,25 @@ export function isHypConfigured(): boolean {
   try {
     const c = getHypCredentials();
     return Boolean(c.masof && c.key && c.passP);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sandbox/test mode: dedicated test Masof (00100…), explicit env flag, or
+ * the shared demo credentials shipped for local integration.
+ */
+export function isHypSandboxMode(creds?: HypCredentials): boolean {
+  if (envFlag("HYP_TEST_MODE") || envFlag("HYP_SANDBOX")) return true;
+  try {
+    const c = creds ?? getHypCredentials();
+    if (isHypTestTerminalMasof(c.masof)) return true;
+    // Shared demo terminal used in this project (PassP=hyp1234).
+    if (c.masof === HYP_DASHBOARD_API_CREDENTIALS.masof && c.passP === HYP_DASHBOARD_API_CREDENTIALS.passP) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -252,6 +287,33 @@ export function buildHypApiSignEntries(
     ["Tash", "1"]
   );
 
+  // Prefill Israeli ID in sandbox so the payment page matches the success test card.
+  // (Hyp requires this ID with the approved sandbox Mastercard.)
+  const sandbox = isHypSandboxMode(creds);
+  const userId =
+    input.userId?.trim() ||
+    (sandbox ? HYP_SANDBOX_SUCCESS_CARD.israeliId : "") ||
+    "";
+  if (userId) {
+    entries.push(["UserId", userId]);
+  }
+  if (input.clientName?.trim()) {
+    entries.push(["ClientName", input.clientName.trim().slice(0, 50)]);
+  } else if (sandbox) {
+    entries.push(["ClientName", "AnyNanny"]);
+  }
+  if (input.clientLastName?.trim()) {
+    entries.push(["ClientLName", input.clientLastName.trim().slice(0, 50)]);
+  } else if (sandbox) {
+    entries.push(["ClientLName", "Sandbox"]);
+  }
+
+  if (sandbox && Number(amount) > HYP_SANDBOX_RECOMMENDED_AMOUNT_NIS * 5) {
+    console.warn(
+      `[Hyp] Sandbox amount ${amount} NIS is high — official guidance is ~${HYP_SANDBOX_RECOMMENDED_AMOUNT_NIS} NIS with the shared test card.`
+    );
+  }
+
   const shiftSessionId = input.shiftSessionId?.trim();
   if (shiftSessionId) {
     // Echoed on return so /api/hyp/complete can mark the correct sessions row paid.
@@ -262,7 +324,14 @@ export function buildHypApiSignEntries(
     entries.push(["Fild1", input.description.trim().slice(0, 100)]);
   }
 
-  if (allowDynamicReturns) {
+  // Prefer app return URLs so finalize runs. May 902 if origin isn't whitelisted —
+  // createHypTransaction retries without these fields.
+  const includeReturns =
+    allowDynamicReturns ||
+    envFlag("HYP_FORCE_RETURN_URLS") ||
+    (isHypSandboxMode(creds) && Boolean(input.successUrl?.trim()));
+
+  if (includeReturns && !input.omitReturnUrls) {
     if (input.successUrl?.trim()) entries.push(["SuccessUrl", input.successUrl.trim()]);
     if (input.cancelUrl?.trim()) {
       entries.push(["ErrorUrl", input.cancelUrl.trim()]);
@@ -320,28 +389,58 @@ export async function createHypTransaction(
 ): Promise<HypCreateTransactionResult> {
   const creds = getHypCredentials();
   const order = hypOrderFromBookingId(input.bookingId);
-  const entries = buildHypApiSignEntries(creds, input, order);
-  const formBody = encodeHypForm(entries);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HYP_FETCH_TIMEOUT_MS);
 
-  try {
-    // Official docs use GET; many production integrations use POST. Try GET first.
+  async function signOnce(omitReturnUrls: boolean): Promise<string> {
+    const entries = buildHypApiSignEntries(
+      creds,
+      { ...input, omitReturnUrls },
+      order
+    );
+    const formBody = encodeHypForm(entries);
     let raw = "";
     let lastError: unknown = null;
 
     for (const method of ["GET", "POST"] as const) {
       try {
         raw = await requestApiSign(creds.payBaseUrl, formBody, method, controller.signal);
-        if (isHypSignSuccessBody(raw)) break;
+        if (isHypSignSuccessBody(raw)) return raw.trim().replace(/^\?/, "");
         lastError = new Error(authFailureMessage(raw.trim()));
+        // 902 with SuccessUrl → caller may retry without return URLs.
+        if (readCCode(raw) === "902") {
+          throw lastError;
+        }
       } catch (error) {
         lastError = error;
       }
     }
 
-    const signedQuery = raw.trim().replace(/^\?/, "");
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(authFailureMessage(raw.trim()));
+  }
+
+  try {
+    let signedQuery = "";
+    let usedReturnUrls = Boolean(input.successUrl?.trim()) && !input.omitReturnUrls;
+
+    try {
+      signedQuery = await signOnce(Boolean(input.omitReturnUrls));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (usedReturnUrls && /CCode=902|origin does not match/i.test(message)) {
+        console.warn(
+          "[Hyp] APISign CCode=902 with SuccessUrl — retrying without dynamic return URLs (terminal demo thank-you may load; client will finalize)."
+        );
+        signedQuery = await signOnce(true);
+        usedReturnUrls = false;
+      } else {
+        throw error;
+      }
+    }
+
     if (!isHypSignSuccessBody(signedQuery)) {
       console.error("[Hyp] APISign failed", {
         masof: creds.masof,
@@ -349,15 +448,12 @@ export async function createHypTransaction(
         keyLen: creds.key.length,
         keyPrefix: creds.key.slice(0, 8),
         passPLen: creds.passP.length,
-        dynamicReturns: envFlag("HYP_ALLOW_DYNAMIC_RETURN_URLS"),
+        dynamicReturns: usedReturnUrls,
         body: signedQuery.slice(0, 400)
       });
-      throw lastError instanceof Error
-        ? lastError
-        : new Error(authFailureMessage(signedQuery));
+      throw new Error(authFailureMessage(signedQuery));
     }
 
-    // Docs: append the SIGN response as-is (preserve order); drop KEY/PassP only.
     const safeQuery = stripSecretsPreserveOrder(signedQuery);
     const checkoutUrl = `${creds.payBaseUrl}?${safeQuery}`;
 
@@ -365,7 +461,8 @@ export async function createHypTransaction(
       payBase: creds.payBaseUrl,
       masof: creds.masof,
       order,
-      bookingId: input.bookingId
+      bookingId: input.bookingId,
+      returnUrls: usedReturnUrls
     });
 
     return {

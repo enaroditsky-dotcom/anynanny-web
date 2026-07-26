@@ -1,12 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  HYP_SANDBOX_FAILURE_CARD,
+  HYP_SANDBOX_SUCCESS_CARD,
+  hypSandboxTestCardHelpHe
+} from "@/lib/billing/hyp/sandbox-test-cards";
+import {
+  finalizeHypCheckoutFromClient,
+  HYP_CANCEL_MESSAGE_TYPE,
+  HYP_SUCCESS_MESSAGE_TYPE
+} from "@/lib/billing/hyp/finalize-client";
+import { parseHypReturnParams } from "@/lib/billing/hyp/parse-return-params";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
 
 export type HypCheckoutFrameProps = {
   checkoutUrl: string;
+  bookingId: string;
+  sessionId?: string | null;
   busyLabel?: string;
   onClose: () => void;
+  /** Called after Supabase finalize succeeds (booking/session → paid). */
+  onPaid: () => void | Promise<void>;
 };
 
 /** Fallback when Hyp/Yaad does not post a content height (cross-origin). */
@@ -56,17 +71,46 @@ function readPostedHeight(data: unknown): number | null {
   return null;
 }
 
+function looksLikeHypSuccessHref(href: string): boolean {
+  try {
+    const url = new URL(href);
+    const hyp = parseHypReturnParams(url.searchParams);
+    if (hyp.isSuccess && (hyp.cCode === "0" || hyp.cCode === "00" || hyp.approvalId)) {
+      return true;
+    }
+    if (/checkout=success/i.test(url.search) || /paid=1/i.test(url.search)) return true;
+    if (/yaadsuccess|thank.?you|successpage/i.test(url.href)) return true;
+  } catch {
+    if (/CCode=0(?:&|$)/i.test(href) || /yaadsuccess/i.test(href)) return true;
+  }
+  return false;
+}
+
 /**
  * Hyp sandbox checkout shell.
- * Single outer scrollbar only — iframe grows to content height (no nested iframe scroll).
+ * Finalizes Supabase when:
+ *  - iframe redirects to our /parent/checkout/complete (same-origin), or
+ *  - Hyp demo Thank You page loads (cross-origin 2nd navigation) → pending finalize.
  */
 export function HypCheckoutFrame({
   checkoutUrl,
+  bookingId,
+  sessionId,
   busyLabel = "טוענים את דף התשלום המאובטח של HYP…",
-  onClose
+  onClose,
+  onPaid
 }: HypCheckoutFrameProps) {
   const [iframeHeight, setIframeHeight] = useState(DEFAULT_IFRAME_HEIGHT_PX);
   const [frameLoaded, setFrameLoaded] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [showConfirmPaid, setShowConfirmPaid] = useState(false);
+
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const loadCountRef = useRef(0);
+  const finalizedRef = useRef(false);
+  const onPaidRef = useRef(onPaid);
+  onPaidRef.current = onPaid;
 
   const applyHeight = useCallback((raw: number) => {
     const next = Math.min(
@@ -76,14 +120,45 @@ export function HypCheckoutFrame({
     setIframeHeight((prev) => (Math.abs(prev - next) < 8 ? prev : next));
   }, []);
 
+  const runFinalize = useCallback(
+    async (opts?: { search?: string; force?: boolean }) => {
+      if (finalizedRef.current && !opts?.force) return;
+      finalizedRef.current = true;
+      setFinalizing(true);
+      setFinalizeError(null);
+
+      const result = await finalizeHypCheckoutFromClient({
+        search: opts?.search,
+        bookingId,
+        sessionId
+      });
+
+      if (!result.ok) {
+        finalizedRef.current = false;
+        setFinalizing(false);
+        setFinalizeError(result.error);
+        setShowConfirmPaid(true);
+        return;
+      }
+
+      setFinalizing(false);
+      await onPaidRef.current();
+    },
+    [bookingId, sessionId]
+  );
+
   useEffect(() => {
     setFrameLoaded(false);
     setIframeHeight(DEFAULT_IFRAME_HEIGHT_PX);
+    setFinalizeError(null);
+    setShowConfirmPaid(false);
+    setFinalizing(false);
+    loadCountRef.current = 0;
+    finalizedRef.current = false;
   }, [checkoutUrl]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      // Hyp/Yaad hosts — ignore unrelated frames.
       const origin = String(event.origin ?? "");
       const fromHyp =
         /hyp\.co\.il$/i.test(origin) ||
@@ -91,8 +166,19 @@ export function HypCheckoutFrame({
         /yaadpay/i.test(origin) ||
         origin === window.location.origin;
 
+      if (origin === window.location.origin && event.data && typeof event.data === "object") {
+        const data = event.data as { type?: string; search?: string };
+        if (data.type === HYP_SUCCESS_MESSAGE_TYPE) {
+          void runFinalize({ search: data.search });
+          return;
+        }
+        if (data.type === HYP_CANCEL_MESSAGE_TYPE) {
+          onClose();
+          return;
+        }
+      }
+
       if (!fromHyp && origin !== "null") {
-        // Still accept plain numeric height payloads from sandboxed children.
         const maybe = readPostedHeight(event.data);
         if (maybe == null) return;
       }
@@ -103,9 +189,8 @@ export function HypCheckoutFrame({
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [applyHeight]);
+  }, [applyHeight, onClose, runFinalize]);
 
-  // Lock background page scroll while the overlay owns scrolling.
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -113,6 +198,40 @@ export function HypCheckoutFrame({
       document.body.style.overflow = prev;
     };
   }, []);
+
+  const handleIframeLoad = useCallback(() => {
+    setFrameLoaded(true);
+    applyHeight(DEFAULT_IFRAME_HEIGHT_PX);
+    loadCountRef.current += 1;
+    const loadCount = loadCountRef.current;
+
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+
+    // Same-origin success (our complete page) — parse and finalize immediately.
+    try {
+      const href = iframe.contentWindow.location.href;
+      if (looksLikeHypSuccessHref(href)) {
+        const search = new URL(href).search;
+        void runFinalize({ search });
+        return;
+      }
+      if (/checkout=cancel/i.test(href)) {
+        onClose();
+        return;
+      }
+    } catch {
+      // Cross-origin Hyp / Yaad demo Thank You page — cannot read CCode.
+      // After the payment form (load 1), the next navigation is usually success/error.
+      if (loadCount >= 2) {
+        setShowConfirmPaid(true);
+        // Auto-finalize: parent already started checkout; Hyp showed Thank You in sandbox.
+        window.setTimeout(() => {
+          if (!finalizedRef.current) void runFinalize();
+        }, 600);
+      }
+    }
+  }, [applyHeight, onClose, runFinalize]);
 
   return (
     <div
@@ -140,6 +259,46 @@ export function HypCheckoutFrame({
             </button>
           </div>
 
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] leading-relaxed text-amber-950">
+            <p className="font-bold">
+              כרטיס בדיקה מאושר (אל תשתמשו ב-{HYP_SANDBOX_FAILURE_CARD.numberDisplay})
+            </p>
+            <p className="mt-1 font-mono tracking-wide">
+              {HYP_SANDBOX_SUCCESS_CARD.numberDisplay} · תוקף{" "}
+              {HYP_SANDBOX_SUCCESS_CARD.expiryDisplay} · CVV {HYP_SANDBOX_SUCCESS_CARD.cvv} · ת.ז.{" "}
+              {HYP_SANDBOX_SUCCESS_CARD.israeliId}
+            </p>
+            <p className="mt-1 text-amber-800/90">
+              אחרי &quot;Thank You / Success&quot; אנחנו מעדכנים את Supabase אוטומטית.
+            </p>
+            <span className="sr-only">{hypSandboxTestCardHelpHe()}</span>
+          </div>
+
+          {finalizing ? (
+            <div className="flex items-center justify-center gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-900">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              <span>שומרים את אישור התשלום ב-Supabase…</span>
+            </div>
+          ) : null}
+
+          {showConfirmPaid && !finalizing ? (
+            <div className="flex flex-col gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-3">
+              <p className="text-xs font-semibold text-emerald-950">
+                אם הופיע Thank You / Success בדף HYP — לחצו לאישור כדי לעדכן את הדשבורד של הבייביסיטר.
+              </p>
+              {finalizeError ? (
+                <p className="text-[11px] text-rose-700">{finalizeError}</p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void runFinalize({ force: true })}
+                className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800"
+              >
+                התשלום הצליח — עדכנו את המערכת
+              </button>
+            </div>
+          ) : null}
+
           {!frameLoaded ? (
             <div className="flex items-center justify-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -148,6 +307,7 @@ export function HypCheckoutFrame({
           ) : null}
 
           <iframe
+            ref={iframeRef}
             title="HYP payment"
             src={checkoutUrl}
             className="block w-full border-0"
@@ -158,12 +318,7 @@ export function HypCheckoutFrame({
             scrolling="no"
             allow="payment *"
             referrerPolicy="no-referrer-when-downgrade"
-            onLoad={() => {
-              setFrameLoaded(true);
-              // Cross-origin: cannot read contentDocument. Keep a tall default
-              // so Hyp’s internal form fits; postMessage may refine height.
-              applyHeight(DEFAULT_IFRAME_HEIGHT_PX);
-            }}
+            onLoad={handleIframeLoad}
           />
         </div>
       </div>

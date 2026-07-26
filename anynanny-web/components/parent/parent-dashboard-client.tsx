@@ -28,6 +28,7 @@ import {
   readHypPendingCheckout,
   saveHypPendingCheckout
 } from "@/lib/billing/hyp/pending-checkout";
+import { finalizeHypCheckoutFromClient } from "@/lib/billing/hyp/finalize-client";
 import {
   parentTotalFromSitterBaseNis,
   usePaymentExecutor
@@ -1085,37 +1086,18 @@ export function ParentDashboardClient({
 
       // complete-client may have already finalized — still call (idempotent) unless paid=1.
       if (!alreadyPaidFlag) {
-        try {
-          const res = await fetch("/api/hyp/complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify({
-              bookingId: String(bookingId),
-              sessionId: sessionId ? String(sessionId) : undefined,
-              hypApprovalId: hyp.approvalId ?? params.get("Id"),
-              amountPaid: hyp.amount ?? params.get("Amount"),
-              cCode: hyp.cCode ?? undefined,
-              hypQuery: params.toString(),
-              Info: params.get("Info") ?? undefined,
-              MoreData: params.get("MoreData") ?? undefined,
-              Order: params.get("Order") ?? undefined,
-              Id: params.get("Id") ?? undefined,
-              Amount: params.get("Amount") ?? undefined,
-              CCode: params.get("CCode") ?? undefined
-            })
-          });
-          const json = (await res.json().catch(() => ({}))) as { error?: string };
-          if (!res.ok) {
-            if (!cancelled) {
-              setShiftError(json.error ?? "לא ניתן לסגור את התשלום אחרי HYP.");
-            }
-            cleanUrl();
-            return;
+        const result = await finalizeHypCheckoutFromClient({
+          search: params,
+          bookingId: String(bookingId),
+          sessionId: sessionId ? String(sessionId) : undefined,
+          hypApprovalId: hyp.approvalId ?? params.get("Id"),
+          amountPaid: hyp.amount ?? params.get("Amount"),
+          cCode: hyp.cCode
+        });
+        if (!result.ok) {
+          if (!cancelled) {
+            setShiftError(result.error ?? "לא ניתן לסגור את התשלום אחרי HYP.");
           }
-        } catch (e) {
-          console.error("[checkout=success]", e);
-          if (!cancelled) setShiftError("שגיאה בסגירת התשלום אחרי HYP.");
           cleanUrl();
           return;
         }
@@ -1396,13 +1378,26 @@ export function ParentDashboardClient({
         </div>
       </div>
 
-      {hypCheckoutUrl ? (
+      {hypCheckoutUrl && activeBooking?.id ? (
         <HypCheckoutFrame
           checkoutUrl={hypCheckoutUrl}
+          bookingId={String(activeBooking.id)}
+          sessionId={activeSession?.id ? String(activeSession.id) : null}
           onClose={() => {
             setHypCheckoutUrl(null);
             setShiftError("התשלום לא הושלם. ניתן לנסות שוב.");
             lockSettlement("payment");
+          }}
+          onPaid={async () => {
+            const sid = activeSessionRef.current?.id
+              ? String(activeSessionRef.current.id)
+              : null;
+            if (sid) clearParentSessionRatedLocally(sid);
+            clearHypPendingCheckout();
+            clearToIdleDashboard();
+            setHypCheckoutUrl(null);
+            setShiftError(null);
+            if (parentId) await refreshLiveShiftState(parentId);
           }}
         />
       ) : null}
