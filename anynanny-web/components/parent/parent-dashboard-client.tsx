@@ -1338,22 +1338,25 @@ export function ParentDashboardClient({
             </div>
           ) : null}
 
-          <div className="space-y-2 pt-1">
-            <Link
-              href="/parent/broadcast"
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-3.5 px-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700"
-            >
-              <Zap className="h-4 w-4 fill-white" />
-              <span>ANYNANNY NOW!</span>
-            </Link>
-            <Link
-              href="/parent/search"
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-[#001F3F] py-3 px-2 text-xs font-bold text-white shadow-md transition hover:bg-[#001F3F]/90"
-            >
-              <Search className="h-4 w-4" />
-              חיפוש נני
-            </Link>
-          </div>
+          {/* Broadcast/search only when idle — never alongside an active shift circle/card. */}
+          {!showShiftCard ? (
+            <div className="space-y-2 pt-1">
+              <Link
+                href="/parent/broadcast"
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-3.5 px-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700"
+              >
+                <Zap className="h-4 w-4 fill-white" />
+                <span>ANYNANNY NOW!</span>
+              </Link>
+              <Link
+                href="/parent/search"
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-[#001F3F] py-3 px-2 text-xs font-bold text-white shadow-md transition hover:bg-[#001F3F]/90"
+              >
+                <Search className="h-4 w-4" />
+                חיפוש נני
+              </Link>
+            </div>
+          ) : null}
 
           <div className="pt-2 flex flex-col gap-2">
             <button
