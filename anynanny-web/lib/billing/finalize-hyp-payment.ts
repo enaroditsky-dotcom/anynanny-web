@@ -180,5 +180,19 @@ export async function finalizeHypPaymentSuccess(
     hypApprovalId: input.hypApprovalId ?? null
   });
 
+  // Wallet credit is primarily handled by DB triggers on sessions/bookings.
+  // Best-effort explicit credit when the RPC exists (service role / elevated clients).
+  try {
+    const { creditSitterWalletForBooking, creditSitterWalletForSession } = await import(
+      "@/lib/wallet/sitter-wallet"
+    );
+    await creditSitterWalletForBooking(supabase, bookingId);
+    for (const sid of paidSessionIds) {
+      await creditSitterWalletForSession(supabase, sid);
+    }
+  } catch (err) {
+    console.warn("[finalizeHypPaymentSuccess] sitter wallet credit skipped:", err);
+  }
+
   return { ok: true, bookingId, sessionIds: [...paidSessionIds] };
 }

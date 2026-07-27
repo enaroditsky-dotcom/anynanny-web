@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { buildDashboardGreetingTitle } from "@/lib/user/use-dashboard-greeting-name";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { Star } from "lucide-react";
 
 type SitterDashboardStats = {
@@ -79,13 +80,38 @@ export function SitterDashboardHeader({
       const { data, error } = await supabase.rpc("get_current_user_rating");
       if (cancelled) return;
 
-      if (error) {
-        console.warn("[SitterDashboardHeader] get_current_user_rating:", error.message);
-        setLoadState("error");
+      if (!error) {
+        const { avg_rating, rating_count } = parseGetCurrentUserRatingResponse(data);
+        setStats({ avg_rating, rating_count });
+        setLoadState("ready");
         return;
       }
 
-      const { avg_rating, rating_count } = parseGetCurrentUserRatingResponse(data);
+      // Soft-fail missing RPC (404 / PGRST202) — fall back to ratings table aggregate.
+      const msg = error.message ?? "";
+      const missingRpc =
+        error.code === "PGRST202" ||
+        /could not find the function/i.test(msg) ||
+        /404/.test(msg);
+      if (!missingRpc) {
+        console.warn("[SitterDashboardHeader] get_current_user_rating:", msg);
+      }
+
+      const { data: rows, error: ratingsErr } = await supabase
+        .from(RATINGS_TABLE)
+        .select("rating")
+        .eq("to_user_id", sitterId);
+      if (cancelled) return;
+      if (ratingsErr) {
+        setLoadState("error");
+        return;
+      }
+      const ratings = (rows ?? [])
+        .map((r) => Number((r as { rating?: unknown }).rating))
+        .filter((n) => Number.isFinite(n));
+      const rating_count = ratings.length;
+      const avg_rating =
+        rating_count > 0 ? ratings.reduce((a, b) => a + b, 0) / rating_count : null;
       setStats({ avg_rating, rating_count });
       setLoadState("ready");
     })();
@@ -97,46 +123,37 @@ export function SitterDashboardHeader({
 
   const greeting = buildDashboardGreetingTitle(firstName, nameLoading);
   const statsLoading = !sitterId || loadState === "loading" || loadState === "idle";
-
-  // פורמט נקי ואחיד לנני הראשונה במערכת (AN-1001) במידה והמזהה הוא גולמי/אקראי
   const displayIdValue = "AN-1001";
-  
   const numericRating = stats.avg_rating != null ? Number(stats.avg_rating).toFixed(1) : "0.0";
   const reviewsCount = stats.rating_count || 0;
 
   return (
     <header className="px-0" dir="rtl">
-      {/* קופסה פנימית אפורה בהירה - תואמת בול למסך ההורה */}
-      <div className="rounded-2xl bg-slate-50/70 p-4 border border-slate-100 space-y-3">
-        
-        {/* שורה ראשונה: שם הנני מימין, ומזהה ה-ID משמאל */}
+      <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
         <div className="flex items-center justify-between">
-          <h1
-            className={`text-lg font-bold text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}
-          >
+          <h1 className={`text-lg font-bold text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}>
             {greeting}
           </h1>
-
-          <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[11px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200" dir="ltr">
+          <span
+            className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-[11px] font-bold text-purple-800"
+            dir="ltr"
+          >
             <span>{displayIdValue}</span>
-            <span className="text-[9px] text-purple-500 font-normal">ID</span>
+            <span className="text-[9px] font-normal text-purple-500">ID</span>
           </span>
         </div>
-
-        {/* שורה שנייה: דירוג כוכבים בצד שמאל */}
         <div className="flex items-center justify-start">
           {statsLoading ? (
             <span className="inline-block h-6 w-28 animate-pulse rounded-md bg-amber-50" aria-hidden />
           ) : (
-            <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-md">
+            <div className="inline-flex items-center gap-1 rounded-md border border-amber-200/60 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
               <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
               <span>{numericRating}</span>
-              <span className="text-slate-400 text-[11px]">({reviewsCount} חוות דעת)</span>
+              <span className="text-[11px] text-slate-400">({reviewsCount} חוות דעת)</span>
             </div>
           )}
         </div>
       </div>
-
       {children}
     </header>
   );

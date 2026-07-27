@@ -75,7 +75,7 @@ export default function ParentBroadcastSetupPage() {
           </div>
           
           <div className="space-y-1">
-            <h1 className="text-xl font-black text-[#001F3F]">ANYNANNY NOW!</h1>
+            <h1 dir="ltr" className="text-xl font-black text-[#001F3F]">ANYNANNY NOW!</h1>
             <p className="text-xs text-slate-500 font-medium">שידור חירום מהיר: בחר עיר ושגר קריאה לכל המטפלות הפנויות באזור</p>
           </div>
 

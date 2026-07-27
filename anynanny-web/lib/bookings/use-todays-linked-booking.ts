@@ -343,6 +343,9 @@ export function useTodaysLinkedBooking(
     [role, userId, emitLiveSnapshot]
   );
 
+  const applyRealtimePatchRef = useRef(applyRealtimePatch);
+  applyRealtimePatchRef.current = applyRealtimePatch;
+
   const linkedBookingStatus = normalizeBookingStatus(booking?.status as BookingStatusInput) ?? "";
 
   useEffect(() => {
@@ -369,12 +372,9 @@ export function useTodaysLinkedBooking(
 
     const column = role === "parent" ? "parent_id" : "sitter_id";
 
-    const handleChange = (payload: RealtimePostgresChangesPayload<BookingRow>) => {
-      applyRealtimePatch(payload);
-    };
-
     // Always keep a live channel for this sitter/parent — never tear it down after a
     // completed shift or new pending inserts will require a manual refresh.
+    // Handlers use refs so this effect does not remount on every reload identity change.
     const channel = subscribePostgresChanges(
       supabase,
       `todays-booking-${role}-${userId}`,
@@ -382,11 +382,16 @@ export function useTodaysLinkedBooking(
         event: "*",
         table: BOOKINGS_TABLE,
         filter: `${column}=eq.${userId}`,
-        handler: handleChange
+        handler: (payload) => {
+          applyRealtimePatchRef.current(
+            payload as RealtimePostgresChangesPayload<BookingRow>
+          );
+        }
       },
       (status) => {
-        if (status === "SUBSCRIBED") {
-          void reload();
+        // Avoid reload thrash on every reconnect / remount.
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          void reloadRef.current();
         }
       }
     );
@@ -394,7 +399,7 @@ export function useTodaysLinkedBooking(
     return () => {
       removeRealtimeChannel(supabase, channel);
     };
-  }, [role, userId, reload, applyRealtimePatch, options?.freezeBookingRealtime]);
+  }, [role, userId, options?.freezeBookingRealtime]);
 
   return { booking, shiftGate, ready, reload };
 }

@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { CreditCard, Plus, ArrowUpRight, ArrowDownLeft, Loader2, RefreshCw, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Link from "next/link";
 
 type Transaction = {
@@ -18,7 +18,7 @@ type Transaction = {
 
 export default function ParentWalletClient() {
   const { user, isLoading: authLoading } = useAuth();
-  const supabase = createClientComponentClient<any>();
+  const supabase = getSupabaseBrowserClient();
 
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -26,7 +26,7 @@ export default function ParentWalletClient() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const fetchWalletData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!supabase || !user?.id) return;
     setLoadingData(true);
 
     // 1. שליפת יתרה מוגנת

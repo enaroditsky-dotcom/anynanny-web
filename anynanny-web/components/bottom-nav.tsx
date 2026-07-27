@@ -35,7 +35,7 @@ export function BottomNav() {
   const { signedIn, currentRole, user } = useAuth();
 
   const { hasWalletUpdate, clearWalletNotification } = useWalletNotification(user?.id);
-  const { hasUnreadMessages, clearChatNotification } = useChatNotification("global-chat-channel", user?.id);
+  const { hasUnreadMessages, clearChatNotification } = useChatNotification(user?.id);
 
   if (!signedIn) return null;
   if (!pathname.startsWith("/parent/") && !pathname.startsWith("/sitter/")) return null;

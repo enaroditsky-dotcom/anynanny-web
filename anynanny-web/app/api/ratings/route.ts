@@ -1,6 +1,5 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
 
@@ -8,21 +7,11 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    // Next 15: await cookies first; auth-helpers' adapter calls `cookies()` synchronously and expects `.get()`.
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({
-      cookies: () => cookieStore as unknown as ReturnType<typeof cookies>
-    });
-
-    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
-    const session = sessionData.session;
-    console.log("[api/ratings] auth snapshot", {
-      hasSession: Boolean(session),
-      sessionUserId: session?.user?.id ?? null,
-      sessionError: sessionErr?.message ?? null,
-      cookieCount: cookieStore.getAll().length,
-      cookieNames: cookieStore.getAll().map((c) => c.name)
-    });
+    // Use @supabase/ssr — auth-helpers crashes on `base64-...` session cookies.
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) {
+      return NextResponse.json({ error: "Supabase unavailable" }, { status: 500 });
+    }
 
     const {
       data: { user },
@@ -34,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "Unauthorized",
-          detail: authErr?.message ?? (!session ? "No Supabase session on server." : "getUser failed."),
+          detail: authErr?.message ?? "No Supabase session on server.",
           code: "AUTH_MISSING_OR_INVALID"
         },
         { status: 401 }

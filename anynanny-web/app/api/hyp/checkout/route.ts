@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   if (!supabase) {
     return NextResponse.json({ error: "Server client initialization failed." }, { status: 500 });
   }

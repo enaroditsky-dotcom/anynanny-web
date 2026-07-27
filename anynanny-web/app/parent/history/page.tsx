@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Calendar, Loader2, ArrowRight, RefreshCw } from "lucide-react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { useRouter } from "next/navigation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type NannyShiftHistoryItem = {
   id: string;
@@ -16,7 +16,7 @@ type NannyShiftHistoryItem = {
 };
 
 export default function ParentHistoryPage() {
-  const supabase = createClientComponentClient<any>();
+  const supabase = getSupabaseBrowserClient();
   const router = useRouter();
 
   const [shifts, setShifts] = useState<NannyShiftHistoryItem[]>([]);
@@ -25,6 +25,7 @@ export default function ParentHistoryPage() {
   const [loadingData, setLoadingData] = useState<boolean>(true);
 
   const fetchShiftHistory = useCallback(async (resolvedParentId: string) => {
+    if (!supabase) return;
     try {
       setLoadingData(true);
       console.log("History: Sending safe wild-card fetch for Parent:", resolvedParentId);
@@ -114,6 +115,8 @@ export default function ParentHistoryPage() {
   }, [supabase]);
 
   useEffect(() => {
+    if (!supabase) return;
+
     const targetParentId = "1b4b958c-9013-481f-a8df-6ac0419aab83";
     
     // שליפה ראשונית של המידע

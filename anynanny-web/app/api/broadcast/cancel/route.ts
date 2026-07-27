@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   try {
@@ -10,11 +9,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "broadcastId is required." }, { status: 400 });
     }
 
-    // שימוש בקליינט הבטוח של ה-Cookies של Next.js כדי למנוע בעיות של Service Role מקומי
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    // Use @supabase/ssr — auth-helpers JSON.parses `base64-...` cookies and crashes.
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) {
+      return NextResponse.json({ error: "Supabase unavailable" }, { status: 500 });
+    }
 
-    // 🔥 עדכון הסטטוס בטבלה הנכונה מתוכה הראדאר מאזין: broadcast_alerts
     const { error } = await supabase
       .from("broadcast_alerts")
       .update({ status: "cancelled" })

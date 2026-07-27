@@ -1,9 +1,13 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+﻿import type { SupabaseClient } from "@supabase/supabase-js";
 import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 
 export const PUBLIC_DISPLAY_ID_BASE = 1000;
 export const PARENT_DISPLAY_ID_STORAGE_KEY = "anynanny_parent_display_id";
+
+const PARENT_SERIAL_RE = /^P-\d+$/i;
+const SITTER_SERIAL_RE = /^AN-\d+$/i;
 
 export function pickProfileSerialId(row: unknown): number | null {
   if (!row || typeof row !== "object") return null;
@@ -13,95 +17,174 @@ export function pickProfileSerialId(row: unknown): number | null {
   return Math.floor(n);
 }
 
+/** Canonical parent display id: P-1001 */
 export function formatParentPublicIdFromSerial(serialId: number | null | undefined): string | null {
   if (serialId == null || !Number.isFinite(Number(serialId)) || Number(serialId) < 1) return null;
-  return `P_${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
+  return `P-${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
 }
 
+/** Canonical sitter display id: AN-1001 */
 export function formatSitterPublicIdFromSerial(serialId: number | null | undefined): string | null {
   if (serialId == null || !Number.isFinite(Number(serialId)) || Number(serialId) < 1) return null;
-  return `AN_${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
+  return `AN-${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
+}
+
+function normalizeParentSerial(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  if (!v) return null;
+  if (PARENT_SERIAL_RE.test(v)) return `P-${v.slice(2)}`;
+  if (/^P_\d+$/i.test(v)) return `P-${v.slice(2)}`;
+  if (/^\d+$/.test(v)) return `P-${v}`;
+  return null;
+}
+
+function normalizeSitterSerial(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  if (!v) return null;
+  if (SITTER_SERIAL_RE.test(v)) return `AN-${v.slice(3)}`;
+  if (/^AN_\d+$/i.test(v)) return `AN-${v.slice(3)}`;
+  if (/^\d+$/.test(v)) return `AN-${v}`;
+  return null;
 }
 
 export function pickProfilePublicId(row: unknown, role: "parent" | "sitter"): string | null {
   if (!row || typeof row !== "object") return null;
   const r = row as Record<string, unknown>;
 
-  // Live DB uses unified `public_id`; role-scoped columns may be absent.
-  const unified = r.public_id ?? r.publicId;
-  if (typeof unified === "string" && unified.trim()) return unified.trim();
-
   if (role === "parent") {
-    const legacy = r.parent_public_id ?? r.parentPublicId;
-    if (typeof legacy === "string" && legacy.trim()) return legacy.trim();
-    return formatParentPublicIdFromSerial(pickProfileSerialId(r));
+    return (
+      normalizeParentSerial(r.parent_public_id) ||
+      normalizeParentSerial(r.parent_serial) ||
+      normalizeParentSerial(r.parentSerial) ||
+      normalizeParentSerial(r.public_id) ||
+      normalizeParentSerial(r.publicId) ||
+      formatParentPublicIdFromSerial(pickProfileSerialId(r))
+    );
   }
 
-  const nannyLegacy = r.nanny_public_id ?? r.nannyPublicId;
-  if (typeof nannyLegacy === "string" && nannyLegacy.trim()) return nannyLegacy.trim();
-  return formatSitterPublicIdFromSerial(pickProfileSerialId(r));
+  return (
+    normalizeSitterSerial(r.nanny_serial) ||
+    normalizeSitterSerial(r.nanny_id_number) ||
+    normalizeSitterSerial(r.nanny_public_id) ||
+    normalizeSitterSerial(r.nannyPublicId) ||
+    normalizeSitterSerial(r.public_id) ||
+    normalizeSitterSerial(r.publicId) ||
+    formatSitterPublicIdFromSerial(pickProfileSerialId(r))
+  );
 }
 
-/** Loads role-scoped public display id for dashboard badges. */
+async function rpcText(supabase: SupabaseClient, fn: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc(fn);
+  if (error) {
+    // Missing RPC (PGRST202 / 404) is a soft no-op — callers fall back to table reads.
+    const msg = error.message ?? "";
+    if (
+      error.code === "PGRST202" ||
+      /could not find the function/i.test(msg) ||
+      /404/.test(msg)
+    ) {
+      return null;
+    }
+    return null;
+  }
+  if (typeof data === "string" && data.trim()) return data.trim();
+  return null;
+}
+
+/** Loads role-scoped public display id for dashboard badges (AN-#### / P-####). */
 export async function fetchProfilePublicId(
   supabase: SupabaseClient,
   userId: string,
   expectedRole: "parent" | "sitter"
 ): Promise<{ publicId: string | null; error: string | null }> {
-  // Production schema has unified `public_id` (+ optional `serial_id`).
-  // Do not select `parent_public_id` / `nanny_public_id` — they are missing in live DB.
-  const { data, error } = await supabase
-    .from(PROFILES_TABLE)
-    .select("public_id, serial_id, role")
-    .eq("id", userId)
-    .eq("role", expectedRole)
-    .maybeSingle();
+  if (expectedRole === "sitter") {
+    // Prefer a direct profile read first — avoids a console 404 when the RPC
+    // migration has not been applied on the remote project yet.
+    const { data, error } = await supabase
+      .from(SITTER_PROFILES_TABLE)
+      .select("nanny_serial, nanny_id_number")
+      .eq(SITTER_PROFILES_USER_COLUMN, userId)
+      .maybeSingle();
 
-  if (error) {
-    if (
-      isPostgrestMissingColumnError(error.message, "serial_id") ||
-      isPostgrestMissingColumnError(error.message, "public_id") ||
-      isPostgrestSchemaDriftError(error.message)
-    ) {
-      const fallback = await fetchProfileSerialId(supabase, userId, expectedRole);
-      if (fallback.error) return { publicId: null, error: fallback.error };
-      const publicId =
-        expectedRole === "parent"
-          ? formatParentPublicIdFromSerial(fallback.serialId)
-          : formatSitterPublicIdFromSerial(fallback.serialId);
-      return { publicId, error: null };
+    if (!error && data) {
+      const id =
+        normalizeSitterSerial((data as { nanny_serial?: string }).nanny_serial) ||
+        normalizeSitterSerial((data as { nanny_id_number?: string }).nanny_id_number);
+      if (id) return { publicId: id, error: null };
     }
-    return { publicId: null, error: error.message };
+
+    const ensured = normalizeSitterSerial(await rpcText(supabase, "ensure_sitter_nanny_serial"));
+    if (ensured) return { publicId: ensured, error: null };
+  } else {
+    const ensured = normalizeParentSerial(await rpcText(supabase, "ensure_parent_public_id"));
+    if (ensured) {
+      cacheParentDisplayId(ensured);
+      return { publicId: ensured, error: null };
+    }
   }
 
-  return {
-    publicId: pickProfilePublicId(data, expectedRole),
-    error: null
-  };
+  const selectAttempts = [
+    "public_id, parent_public_id, parent_serial, serial_id, role",
+    "parent_public_id, parent_serial, serial_id, role",
+    "parent_serial, serial_id, role",
+    "public_id, serial_id, role",
+    "serial_id, role"
+  ];
+
+  let lastError: string | null = null;
+  for (const select of selectAttempts) {
+    const { data, error } = await supabase
+      .from(PROFILES_TABLE)
+      .select(select)
+      .eq("id", userId)
+      .eq("role", expectedRole)
+      .maybeSingle();
+
+    if (error) {
+      lastError = error.message;
+      if (
+        isPostgrestMissingColumnError(error.message, "parent_public_id") ||
+        isPostgrestMissingColumnError(error.message, "parent_serial") ||
+        isPostgrestMissingColumnError(error.message, "public_id") ||
+        isPostgrestMissingColumnError(error.message, "serial_id") ||
+        isPostgrestSchemaDriftError(error.message)
+      ) {
+        continue;
+      }
+      return { publicId: null, error: error.message };
+    }
+
+    const publicId = pickProfilePublicId(data, expectedRole);
+    if (expectedRole === "parent" && publicId) cacheParentDisplayId(publicId);
+    return { publicId, error: null };
+  }
+
+  return { publicId: null, error: lastError };
 }
 
 export function readCachedParentDisplayId(): string | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(PARENT_DISPLAY_ID_STORAGE_KEY);
-    if (raw && (/^P[_-]\d+$/.test(raw) || /^P-\d+$/.test(raw))) return raw;
+    return normalizeParentSerial(raw);
   } catch {
-    /* ignore */
+    return null;
   }
-  return null;
 }
 
 export function cacheParentDisplayId(id: string | null | undefined): void {
   if (typeof window === "undefined") return;
   try {
-    if (id) localStorage.setItem(PARENT_DISPLAY_ID_STORAGE_KEY, id);
+    const normalized = normalizeParentSerial(id);
+    if (normalized) localStorage.setItem(PARENT_DISPLAY_ID_STORAGE_KEY, normalized);
     else localStorage.removeItem(PARENT_DISPLAY_ID_STORAGE_KEY);
   } catch {
     /* ignore */
   }
 }
 
-/** P- id for UI: cached dashboard value first, then optional serial from memory (no extra DB column). */
 export function resolveParentPublicDisplayId(serialId?: number | null): string | null {
   const cached = readCachedParentDisplayId();
   if (cached) return cached;
@@ -119,7 +202,6 @@ type ProfileSerialRow = {
   serial_id?: number | null;
 };
 
-/** Loads safe profile columns first; optionally reads serial_id in a second query (no RPC). */
 export async function fetchProfileSerialId(
   supabase: SupabaseClient,
   userId: string,

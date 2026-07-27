@@ -26,6 +26,7 @@ type UsePostgresChangesArgs = {
  * React-safe postgres_changes subscription.
  * Handler updates via ref so re-renders do not tear down / recreate the channel.
  * Re-subscribes only when topic/table/filter/enabled identity changes.
+ * CHANNEL_ERROR / 1006 reconnect is handled inside subscribePostgresChanges.
  */
 export function usePostgresChanges({
   supabase,

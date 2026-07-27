@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SitterProfileForm } from "@/components/sitter/sitter-profile-form";
+import { SitterBankDetailsSection } from "@/components/sitter/SitterBankDetailsSection";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function SitterPersonalPage() {
@@ -75,8 +76,16 @@ export default function SitterPersonalPage() {
           >
             המשמרות שלי
           </Link>
+          <Link
+            href="/sitter/wallet"
+            className="rounded-lg border border-navy-header/15 bg-[#FDFBF6] px-3 py-1.5 font-semibold text-navy-header transition hover:bg-white"
+          >
+            ארנק
+          </Link>
         </div>
       </section>
+
+      {authReady && userId ? <SitterBankDetailsSection sitterId={userId} /> : null}
 
       {authReady ? <SitterProfileForm userId={userId} className="mt-1" /> : null}
     </main>

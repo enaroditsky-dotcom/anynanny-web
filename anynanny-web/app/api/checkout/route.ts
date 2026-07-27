@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  */
 export async function POST(request: Request) {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     if (!supabase) {
       return NextResponse.json({ error: "Server client initialization failed." }, { status: 500 });
     }

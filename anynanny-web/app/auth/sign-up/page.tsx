@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { User, Baby } from 'lucide-react';
 import { upsertProfileOnSignup } from '@/lib/auth/supabase-profile';
 import { isProfileRole } from '@/lib/supabase/profiles';
 
 export default function SignUpPage() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseBrowserClient();
 
   const [role, setRole] = useState<'parent' | 'sitter' | null>(null);
   const [firstName, setFirstName] = useState('');
@@ -24,6 +24,7 @@ export default function SignUpPage() {
 
   useEffect(() => {
     const checkUser = async () => {
+      if (!supabase) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const userRole = session.user.user_metadata?.role;

@@ -151,13 +151,16 @@ export function isBookingLiveAcrossMidnight(
   return isNowWithinBookingWindow(booking, nowMs);
 }
 
-/** Realtime/booking sync — accept today's rows, pending requests, and cross-midnight in-flight. */
+/** Realtime/booking sync — accept pending + approved (scheduled) and cross-midnight in-flight. */
 export function isBookingRelevantForLiveSync(
   booking: Pick<BookingRow, "booking_date" | "start_time" | "end_time" | "status">
 ): boolean {
   const status = normalizeBookingStatus(booking.status);
   // Pending requests must always surface (any booking_date) so sitters see new asks live.
   if (status === "pending") return true;
+  // Approved can be scheduled far in the future: still surface so UI updates instantly,
+  // while live/timer UI remains gated by the activation window.
+  if (status === "approved") return true;
   if (!booking.booking_date) return isInFlightBookingStatus(booking.status);
   if (isBookingDateToday(booking.booking_date)) return true;
   return isBookingLiveAcrossMidnight(booking);

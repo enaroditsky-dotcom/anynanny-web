@@ -1,4 +1,5 @@
 import type { BookingRow, BookingStatus } from "@/lib/bookings/constants";
+import { isBookingDateToday } from "@/lib/bookings/booking-date-utils";
 import { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
 import {
   normalizeBookingStatus,
@@ -100,6 +101,63 @@ export function isBookingEligibleForLiveShiftUi(
   }
 
   return false;
+}
+
+type ParentShiftScheduleFields = Pick<
+  BookingRow,
+  "status" | "booking_date" | "start_time" | "end_time"
+>;
+
+/**
+ * Parent dashboard active-shift card (arrival wait / confirm / timer).
+ * In-progress statuses always qualify. Pending/approved only qualify on the
+ * booking's calendar day (or inside the activation window when date is missing).
+ * Future/long-term approved bookings must NOT open arrival/timer UI.
+ */
+export function isBookingDueForParentActiveShiftUi(
+  booking: ParentShiftScheduleFields,
+  nowMs = Date.now()
+): boolean {
+  const status = normalizeBookingStatus(booking.status);
+  if (!status || isBookingTerminalStatus(status)) return false;
+
+  if (
+    status === "sitter_started" ||
+    status === "parent_started" ||
+    status === "sitter_ended"
+  ) {
+    return true;
+  }
+
+  if (status === "pending" || status === "approved") {
+    const date = booking.booking_date ? String(booking.booking_date) : "";
+    if (date && isBookingDateToday(date)) return true;
+    // No reliable future date → only wake near scheduled start.
+    return isNowWithinShiftActivationWindow(booking, nowMs);
+  }
+
+  return false;
+}
+
+/** Pending/approved booking scheduled beyond today — calendar/schedule, not live shift. */
+export function isFutureScheduledBooking(
+  booking: ParentShiftScheduleFields,
+  nowMs = Date.now()
+): boolean {
+  const status = normalizeBookingStatus(booking.status);
+  if (status !== "pending" && status !== "approved") return false;
+  return !isBookingDueForParentActiveShiftUi(booking, nowMs);
+}
+
+/** Sitter already accepted a future/long-term booking. */
+export function isFutureConfirmedScheduleBooking(
+  booking: ParentShiftScheduleFields,
+  nowMs = Date.now()
+): boolean {
+  return (
+    normalizeBookingStatus(booking.status) === "approved" &&
+    isFutureScheduledBooking(booking, nowMs)
+  );
 }
 
 /** True when an early finish or cancellation should block session timer UI for today. */

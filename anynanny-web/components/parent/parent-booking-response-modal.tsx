@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck2, CalendarX2 } from "lucide-react";
+import { CalendarCheck2, CalendarX2, X } from "lucide-react";
 import type { ParentBookingResponseNotification } from "@/lib/bookings/parent-booking-response-notifications";
 import { parentBookingResponseMessage } from "@/lib/bookings/parent-booking-response-notifications";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
@@ -31,10 +31,20 @@ export function ParentBookingResponseModal({
       aria-describedby="parent-booking-response-body"
     >
       <div
-        className={`w-full max-w-sm rounded-3xl border-2 bg-[#FDFBF6] p-6 text-right shadow-2xl shadow-navy-header/15 ${
+        className={`relative w-full max-w-sm rounded-3xl border-2 bg-[#FDFBF6] p-6 text-right shadow-2xl shadow-navy-header/15 ${
           isSuccess ? "border-emerald-300/80" : "border-rose-300/80"
         }`}
       >
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onAcknowledge}
+          aria-label="סגור"
+          className="absolute left-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </button>
+
         <div className="flex flex-row-reverse items-start gap-3">
           <div
             className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-sm ring-1 ${
@@ -50,7 +60,7 @@ export function ParentBookingResponseModal({
             )}
           </div>
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 pl-8">
             <h2
               id="parent-booking-response-title"
               className={`text-lg font-bold leading-snug ${
@@ -70,7 +80,7 @@ export function ParentBookingResponseModal({
             <p className="mt-2 text-xs font-medium tabular-nums text-slate-600">{scheduleLabel}</p>
             {isSuccess ? (
               <p className="mt-1 text-xs leading-snug text-slate-500">
-                המשמרת תופיע ביומן המשמרות שלך.
+                המשמרת תופיע ביומן שלך.
               </p>
             ) : (
               <p className="mt-1 text-xs leading-snug text-slate-500">

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Calendar, History, Wallet } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Calendar, History, Wallet, X } from "lucide-react";
+import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name";
 import { SitterMandatoryRatingPanel } from "@/components/session/sitter-mandatory-rating-panel";
 import { resetStuckShiftsForSitter } from "@/lib/bookings/sitter-reset-stuck-shifts";
@@ -142,6 +143,10 @@ export default function SitterDashboardPage() {
   const [sitterClosureError, setSitterClosureError] = useState<string | null>(null);
   const [loading, setLoading] = useState(() => !sitterBootstrapComplete);
   const [banner, setBanner] = useState<string | null>(null);
+  const [bookingRealtimeToast, setBookingRealtimeToast] = useState<string | null>(null);
+  const [bookingRealtimeToastTone, setBookingRealtimeToastTone] = useState<"emerald" | "amber" | "rose">("amber");
+  const [statusPanelCollapsed, setStatusPanelCollapsed] = useState(false);
+  const [statusPanelDismissedKey, setStatusPanelDismissedKey] = useState<string | null>(null);
   const [forceEndToast, setForceEndToast] = useState<string | null>(null);
   const [endShiftBusy, setEndShiftBusy] = useState(false);
   const [profileCardStatus, setProfileCardStatus] = useState<"loading" | "complete" | "incomplete">("loading");
@@ -150,10 +155,54 @@ export default function SitterDashboardPage() {
   const [sitterSerialLoaded, setSitterSerialLoaded] = useState(false);
   const [pendingApprovalBooking, setPendingApprovalBooking] = useState<TodaysLinkedBookingView | null>(null);
   const [checkingAuthEnforcement, setCheckingAuthEnforcement] = useState(true);
+  const lastBookingToastKeyRef = useRef<string | null>(null);
+  const lastRealtimeToastAtRef = useRef<number>(0);
   const handleBookingLiveSync = useCallback((payload: TodaysLinkedBookingSyncPayload) => {
     syncFromPayload(payload);
     if (payload.booking) { syncFromLinkedBooking(payload.booking); }
+
+    // Instant UI signal on realtime INSERT/UPDATE so the sitter never needs refresh.
+    if (payload.source !== "realtime") return;
+    if (!payload.liveFieldsChanged) return;
+    const row = payload.row ?? payload.booking;
+    const bookingId = row?.id ? String(row.id) : null;
+    const status = row?.status ? normalizeBookingStatus(row.status as any) : undefined;
+    if (!bookingId || !status) return;
+
+    const toastKey = `${bookingId}:${status}`;
+    if (lastBookingToastKeyRef.current === toastKey) return;
+    lastBookingToastKeyRef.current = toastKey;
+
+    const now = Date.now();
+    if (now - lastRealtimeToastAtRef.current < 1200) return;
+
+    if (status === "pending") {
+      setBookingRealtimeToast("התקבלה בקשה חדשה — נוספה לרשימה למעלה");
+      setBookingRealtimeToastTone("amber");
+      lastRealtimeToastAtRef.current = now;
+      return;
+    }
+
+    if (status === "approved") {
+      setBookingRealtimeToast("הבקשה אושרה — תתעדכן כאן מיד");
+      setBookingRealtimeToastTone("emerald");
+      lastRealtimeToastAtRef.current = now;
+      return;
+    }
+
+    if (status === "rejected" || status === "cancelled") {
+      setBookingRealtimeToast("הבקשה עודכנה — תתעדכן כאן מיד");
+      setBookingRealtimeToastTone("rose");
+      lastRealtimeToastAtRef.current = now;
+      return;
+    }
   }, [syncFromPayload, syncFromLinkedBooking]);
+
+  useEffect(() => {
+    if (!bookingRealtimeToast) return;
+    const t = window.setTimeout(() => setBookingRealtimeToast(null), 6500);
+    return () => window.clearTimeout(t);
+  }, [bookingRealtimeToast]);
 
   const { firstName, nameLoading: greetingNameLoading } = useDashboardGreetingName("sitter", sitterId, dashboardStatsRefreshKey);
 
@@ -471,67 +520,144 @@ export default function SitterDashboardPage() {
     return () => { cancelled = true; };
   }, [sitterId]);
 
+  // Keep handlers in refs so Realtime channel identity stays stable across
+  // reloadTodaysBooking / refreshForUser identity changes (avoids CHANNEL_ERROR 1006 thrash).
+  const reloadTodaysBookingRef = useRef(reloadTodaysBooking);
+  const refreshForUserRef = useRef(refreshForUser);
+  const lastNotificationReloadRef = useRef<number>(0);
+  reloadTodaysBookingRef.current = reloadTodaysBooking;
+  refreshForUserRef.current = refreshForUser;
+
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !sitterId || loading || checkingAuthEnforcement) return;
-    const refreshSitterBookingState = () => {
-      void reloadTodaysBooking();
-      void refreshForUser(supabase, sitterId);
-      setDashboardStatsRefreshKey((k) => k + 1);
+
+    let statsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshSitterLiveState = () => {
+      void reloadTodaysBookingRef.current();
+      void refreshForUserRef.current(supabase, sitterId);
+      // Debounce rating/header RPC — avoid spam on every row change / reconnect.
+      if (statsRefreshTimer) clearTimeout(statsRefreshTimer);
+      statsRefreshTimer = setTimeout(() => {
+        setDashboardStatsRefreshKey((k) => k + 1);
+      }, 2500);
     };
+
+    // Single channel for bookings + sessions — fewer sockets, less 1006 drop risk.
     const channel = subscribePostgresChanges(
       supabase,
-      `sitter-dashboard-bookings-${sitterId}`,
-      {
-        event: "*",
-        table: BOOKINGS_TABLE,
-        filter: `sitter_id=eq.${sitterId}`,
-        handler: refreshSitterBookingState
-      },
+      `sitter-dashboard-live-${sitterId}`,
+      [
+        {
+          event: "*",
+          table: BOOKINGS_TABLE,
+          filter: `sitter_id=eq.${sitterId}`,
+          handler: refreshSitterLiveState
+        },
+        {
+          event: "*",
+          table: SESSIONS_TABLE,
+          filter: `sitter_id=eq.${sitterId}`,
+          handler: refreshSitterLiveState
+        }
+      ],
       (status, err) => {
-        if (status === "SUBSCRIBED") refreshSitterBookingState();
+        // Do not refresh on SUBSCRIBED — reconnects were thrashing UI + RPC calls.
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn("[sitter-dashboard] bookings realtime:", status, err?.message);
-          // Soft recover — poll path still runs; force one reload now.
-          refreshSitterBookingState();
+          console.warn("[sitter-dashboard] realtime:", status, err?.message);
+          refreshSitterLiveState();
         }
       }
     );
+
+    return () => {
+      if (statsRefreshTimer) clearTimeout(statsRefreshTimer);
+      removeRealtimeChannel(supabase, channel);
+    };
+  }, [sitterId, loading, checkingAuthEnforcement]);
+
+  // Notifications (shift_request inserts/updates) can arrive even when booking rows
+  // are filtered out; use them as the immediate UX signal for the sitter.
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !sitterId || loading || checkingAuthEnforcement) return;
+
+    const handler = (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+      if (payload.eventType !== "INSERT") return;
+      const newRow = (payload as { new?: Record<string, unknown> | null }).new;
+      if (!newRow) return;
+
+      const createdAt =
+        typeof newRow.created_at === "string"
+          ? newRow.created_at
+          : typeof newRow.createdAt === "string"
+            ? newRow.createdAt
+            : null;
+      if (createdAt) {
+        const ageMs = Date.now() - Date.parse(createdAt);
+        // Ignore stale/replayed rows — toasts only for genuine fresh inserts.
+        if (Number.isFinite(ageMs) && ageMs > 45_000) return;
+      }
+
+      const kind = typeof newRow.kind === "string" ? newRow.kind : "";
+      const title = typeof newRow.title === "string" ? newRow.title : "";
+      const body = typeof newRow.body === "string" ? newRow.body : "";
+
+      const msg = title || body || "עדכון חדש";
+      const tone: "emerald" | "amber" | "rose" =
+        kind.includes("approved")
+          ? "emerald"
+          : kind.includes("rejected") || kind.includes("cancelled")
+            ? "rose"
+            : "amber";
+
+      // Avoid spamming the toast for duplicate realtime events.
+      const notifId = typeof newRow.id === "string" ? newRow.id : null;
+      const toastKey = notifId ? `${notifId}:${kind}` : `${msg}:${Date.now()}`;
+      if (lastBookingToastKeyRef.current === toastKey) return;
+      lastBookingToastKeyRef.current = toastKey;
+
+      setBookingRealtimeToast(msg);
+      setBookingRealtimeToastTone(tone);
+      lastRealtimeToastAtRef.current = Date.now();
+
+      const now = Date.now();
+      if (now - lastNotificationReloadRef.current > 800) {
+        lastNotificationReloadRef.current = now;
+        void reloadTodaysBookingRef.current();
+        void refreshForUserRef.current(supabase, sitterId);
+      }
+    };
+
+    const channel = subscribePostgresChanges(
+      supabase,
+      `sitter-notifications-${sitterId}`,
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${sitterId}`,
+        handler
+      },
+      (status, err) => {
+        if (status === "SUBSCRIBED") {
+          // no-op; immediate UX only on insert
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[sitter-dashboard] notifications realtime:", status, err?.message);
+        }
+      }
+    );
+
     return () => {
       removeRealtimeChannel(supabase, channel);
     };
-  }, [sitterId, loading, checkingAuthEnforcement, reloadTodaysBooking, refreshForUser]);
+  }, [sitterId, loading, checkingAuthEnforcement]);
 
   useEffect(() => {
     if (checkingAuthEnforcement) return;
     void reloadTodaysBooking();
   }, [reloadTodaysBooking, checkingAuthEnforcement, pendingRow?.id, pendingRow?.status, activeShiftRow?.id, activeShiftRow?.status, endConfirmRow?.id, endConfirmRow?.status, completedSummaryRow?.id, completedSummaryRow?.status]);
-
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase || !sitterId || loading || checkingAuthEnforcement) return;
-    const onSessionsChange = () => {
-      void refreshForUser(supabase, sitterId);
-      void reloadTodaysBooking();
-      setDashboardStatsRefreshKey((k) => k + 1);
-    };
-    const channel = subscribePostgresChanges(
-      supabase,
-      `sitter-sessions-realtime-global-${sitterId}`,
-      {
-        event: "*",
-        table: SESSIONS_TABLE,
-        filter: `sitter_id=eq.${sitterId}`,
-        handler: onSessionsChange
-      },
-      (status) => {
-        if (status === "SUBSCRIBED") onSessionsChange();
-      }
-    );
-    return () => {
-      removeRealtimeChannel(supabase, channel);
-    };
-  }, [sitterId, loading, checkingAuthEnforcement, refreshForUser, reloadTodaysBooking]);
 
   // Polling fallback — always while dashboard is open so idle sitters still see new asks
   // even if a realtime event is missed.
@@ -802,6 +928,44 @@ export default function SitterDashboardPage() {
     showSitterBookingApproval ||
     (sitterHasLiveBooking && isCircleShiftWithinActivationWindow && !sessionUiBlockedByBooking);
 
+  const sitterStatusPanelKey = pendingApprovalBooking?.id
+    ? `approve:${pendingApprovalBooking.id}:${String(pendingApprovalBooking.status ?? "")}`
+    : activeShiftRow?.id
+      ? `active:${activeShiftRow.id}`
+      : pendingRow?.id
+        ? `pending:${pendingRow.id}`
+        : endConfirmRow?.id
+          ? `end:${endConfirmRow.id}`
+          : completedSummaryRow?.id
+            ? `done:${completedSummaryRow.id}:${sitterTerminalDbStatus}`
+            : showSitterBookingApproval
+              ? "booking-approval"
+              : null;
+  const showSitterStatusPanel =
+    showDoubleShakeShiftPanel &&
+    !onboardingPending &&
+    (!sitterStatusPanelKey || statusPanelDismissedKey !== sitterStatusPanelKey);
+  const sitterStatusCollapsedSummary = showSitterAwaitingParentApproval
+    ? "ממתין לאישור הורה — לחצו להרחבה"
+    : showSitterWaitingForPayment
+      ? "ממתינים לתשלום — לחצו להרחבה"
+      : isSessionPaidAndReadyForRating
+        ? "תשלום התקבל — דרגו את המשפחה"
+        : endConfirmRow
+          ? "בקשת סיום משמרת — לחצו להרחבה"
+          : pendingRow
+            ? "ממתין לאישור התחלה — לחצו להרחבה"
+            : activeShiftRow
+              ? `משמרת פעילה · ${liveTimerText}`
+              : showSitterBookingApproval
+                ? "בקשת משמרת ממתינה — לחצו להרחבה"
+                : "סטטוס משמרת — לחצו להרחבה";
+
+  useEffect(() => {
+    // Reset sitter status panel collapse when the active status identity changes.
+    setStatusPanelCollapsed(false);
+  }, [sitterStatusPanelKey]);
+
   const showLoading = checkingAuthEnforcement || (loading && !sitterBootstrapComplete && !(pendingRow || activeShiftRow || endConfirmRow));
 
   if (showLoading) {
@@ -913,10 +1077,53 @@ export default function SitterDashboardPage() {
             publicIdLoaded={sitterSerialLoaded}
           />
         </div>
-          {forceEndToast ? (<p role="status" aria-live="polite" className="shrink-0 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-right text-sm font-semibold text-emerald-900">{forceEndToast}</p>) : null}
+          {forceEndToast ? (
+            <div role="status" aria-live="polite" className="flex shrink-0 flex-row-reverse items-center justify-between gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-right text-sm font-semibold text-emerald-900">
+              <button type="button" aria-label="סגור" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-800/70 transition hover:bg-emerald-100 hover:text-emerald-950" onClick={() => setForceEndToast(null)}>
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+              <p className="min-w-0 flex-1">{forceEndToast}</p>
+            </div>
+          ) : null}
+          {bookingRealtimeToast ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className={`flex shrink-0 flex-row-reverse items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-right text-sm font-semibold shadow-sm ${
+                bookingRealtimeToastTone === "emerald"
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                  : bookingRealtimeToastTone === "rose"
+                    ? "border-rose-300 bg-rose-50 text-rose-900"
+                    : "border-amber-300 bg-amber-50 text-amber-900"
+              }`}
+            >
+              <button
+                type="button"
+                aria-label="סגור"
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-white/70 ${
+                  bookingRealtimeToastTone === "emerald"
+                    ? "text-emerald-800/70 hover:text-emerald-950"
+                    : bookingRealtimeToastTone === "rose"
+                      ? "text-rose-800/70 hover:text-rose-950"
+                      : "text-amber-800/70 hover:text-amber-950"
+                }`}
+                onClick={() => setBookingRealtimeToast(null)}
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+              <p className="min-w-0 flex-1 leading-snug">{bookingRealtimeToast}</p>
+            </div>
+          ) : null}
           {banner ? (
-            <div role="status" className="flex shrink-0 flex-row-reverse items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-950">
-              <button type="button" className="shrink-0 font-semibold text-amber-900 underline decoration-amber-700/60" onClick={() => setBanner(null)}>סגור</button>
+            <div role="status" className="flex shrink-0 flex-row-reverse items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-950">
+              <button
+                type="button"
+                aria-label="סגור"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-amber-900/70 transition hover:bg-amber-100 hover:text-amber-950"
+                onClick={() => setBanner(null)}
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
               <p className="min-w-0 flex-1 leading-snug">{banner}</p>
             </div>
           ) : null}
@@ -933,9 +1140,28 @@ export default function SitterDashboardPage() {
               ) : null}
               <section className="shrink-0 rounded-3xl bg-white p-3 shadow-soft sm:p-4">
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                  <Link href="/sitter/availability" className="group flex min-h-[6rem] flex-row-reverse items-center justify-between gap-4 rounded-2xl border border-emerald-600/15 bg-emerald-50/40 p-4 text-right text-navy-header shadow-sm transition hover:border-emerald-600/30 hover:shadow-md active:scale-[0.98] sm:flex-col sm:items-end sm:justify-between sm:min-h-[6.5rem]">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10"><Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden /></span>
-                    <div className="flex flex-col text-right sm:w-full"><span className="text-sm font-bold sm:text-sm">סידור עבודה</span><span className="text-[11px] text-slate-500 sm:hidden">ניהול ימי ושעות פעילות</span></div>
+                  <Link
+                    href="/sitter/availability"
+                    aria-label={
+                      pendingBookingCount > 0 || showSitterBookingApproval
+                        ? "יומן — יש בקשות ממתינות לאישור"
+                        : "יומן"
+                    }
+                    className="group flex min-h-[6rem] flex-row-reverse items-center justify-between gap-4 rounded-2xl border border-emerald-600/15 bg-emerald-50/40 p-4 text-right text-navy-header shadow-sm transition hover:border-emerald-600/30 hover:shadow-md active:scale-[0.98] sm:flex-col sm:items-end sm:justify-between sm:min-h-[6.5rem]"
+                  >
+                    <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
+                      <Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                      {pendingBookingCount > 0 || showSitterBookingApproval ? (
+                        <span
+                          className="absolute right-0 top-0 h-2.5 w-2.5 -translate-y-0.5 translate-x-0.5 rounded-full bg-rose-500 ring-2 ring-white"
+                          aria-hidden
+                        />
+                      ) : null}
+                    </span>
+                    <div className="flex flex-col text-right sm:w-full">
+                      <span className="text-sm font-bold sm:text-sm">יומן</span>
+                      <span className="text-[11px] text-slate-500 sm:hidden">ניהול ימי ושעות פעילות</span>
+                    </div>
                   </Link>
                   <div className="grid grid-cols-2 gap-2.5 sm:col-span-2 sm:grid-cols-2">
                     <Link href="/sitter/wallet" className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]">
@@ -952,12 +1178,32 @@ export default function SitterDashboardPage() {
                   </div>
                 </div>
               </section>
-              {showDoubleShakeShiftPanel ? (
-                <DoubleShakeShiftPanel className="min-h-0 flex-1">
-                  <div id="sitter-shift-panel" className="flex min-h-0 flex-1 flex-col">
-                    {sessionSection}
-                  </div>
-                </DoubleShakeShiftPanel>
+              {showSitterStatusPanel ? (
+                <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+                  <DashboardStatusCard
+                    collapsedSummary={sitterStatusCollapsedSummary}
+                    collapsed={statusPanelCollapsed}
+                    onToggleCollapse={() => setStatusPanelCollapsed((v) => !v)}
+                    onDismiss={() => {
+                      if (sitterStatusPanelKey) setStatusPanelDismissedKey(sitterStatusPanelKey);
+                      setStatusPanelCollapsed(false);
+                    }}
+                    tone={
+                      endConfirmRow || showSitterAwaitingParentApproval
+                        ? "rose"
+                        : showSitterBookingApproval || pendingRow
+                          ? "amber"
+                          : "emerald"
+                    }
+                    className="min-h-0"
+                  >
+                    <DoubleShakeShiftPanel className="min-h-0">
+                      <div id="sitter-shift-panel" className="flex min-h-0 flex-col">
+                        {sessionSection}
+                      </div>
+                    </DoubleShakeShiftPanel>
+                  </DashboardStatusCard>
+                </div>
               ) : null}
             </div>
             {onboardingPending ? (
@@ -974,8 +1220,10 @@ export default function SitterDashboardPage() {
               <LogoutButton />
             </div>
           ) : null}
-          {/* מציגים את מודל ה-Broadcast אך ורק אם אין כרגע בקשת משמרת ממתינה שמחכה לאישור של הנני במסך המרכזי */}
-          {sitterId && !showSitterBookingApproval && <SitterBroadcastAlertModal sitterId={sitterId} />}
+          {/* Keep mounted so dismiss state / channels survive approval UI toggles. */}
+          {sitterId ? (
+            <SitterBroadcastAlertModal sitterId={sitterId} paused={showSitterBookingApproval} />
+          ) : null}
         </div>
       </main>
   );

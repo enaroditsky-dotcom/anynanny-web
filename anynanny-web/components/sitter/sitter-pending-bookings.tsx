@@ -269,12 +269,18 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
               : "border-rose-300 bg-rose-50 text-rose-900"
           }`}
         >
+          <button
+            type="button"
+            aria-label="סגור"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md opacity-70 transition hover:bg-white/70 hover:opacity-100"
+            onClick={() => setRespondToast(null)}
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
           {respondToastApproved ? (
             <Check className="h-4 w-4 shrink-0" aria-hidden />
-          ) : (
-            <X className="h-4 w-4 shrink-0" aria-hidden />
-          )}
-          <span>{respondToast}</span>
+          ) : null}
+          <span className="min-w-0 flex-1">{respondToast}</span>
         </div>
       ) : null}
 

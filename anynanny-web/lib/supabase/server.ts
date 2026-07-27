@@ -1,9 +1,9 @@
-import { createServerClient as createSupabaseServerClient } from "@supabase/ssr";
+import { createServerClient as createSsrServerClient } from "@supabase/ssr";
 import { safeParseSupabaseCookieJson } from "@/lib/supabase/cookie-value";
 
 export { decodeSupabaseCookieValue, safeParseSupabaseCookieJson } from "@/lib/supabase/cookie-value";
 
-export function createServerClient() {
+export async function createServerClient() {
   // בדיקה אם הקוד רץ בדפדפן - אם כן, נמנע מייבוא קוקיז של שרת שיגרמו לקריסה
   if (typeof window !== "undefined") {
     return null;
@@ -11,9 +11,9 @@ export function createServerClient() {
 
   // ייבוא דינמי של הקוקיז רק כאשר אנחנו בטוחים ב-100% שאנחנו על השרת
   const { cookies } = require("next/headers");
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
 
-  return createSupabaseServerClient(
+  return createSsrServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -34,6 +34,9 @@ export function createServerClient() {
     }
   );
 }
+
+/** Alias used by API routes (`await createSupabaseServerClient()`). */
+export { createServerClient as createSupabaseServerClient };
 
 /**
  * Split a raw `Cookie` header into name/value pairs.

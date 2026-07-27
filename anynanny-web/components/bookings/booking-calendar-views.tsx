@@ -173,7 +173,7 @@ function bookingStatusLabel(status: BookingStatus): string {
     case "pending":
       return "ממתין לאישור";
     case "approved":
-      return "מאושר";
+      return "מתוזמן";
     case "sitter_started":
       return "הבייביסיטר התחילה";
     case "parent_started":

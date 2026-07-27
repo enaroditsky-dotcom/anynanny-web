@@ -14,6 +14,12 @@ import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 import { parentApproveSitterStart } from "@/lib/bookings/parent-approve-sitter-start";
 import { isParentArrivalConfirmableStatus } from "@/lib/bookings/booking-realtime-handler";
 import {
+  isBookingDueForParentActiveShiftUi,
+  isFutureConfirmedScheduleBooking,
+  isFutureScheduledBooking
+} from "@/lib/bookings/booking-shift-ui";
+import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
+import {
   ANYNANNY_NEW_BOOKING_EVENT,
   bookingAllowsSettlementClosureUi,
   consumeNewBookingMarker,
@@ -34,6 +40,7 @@ import {
   usePaymentExecutor
 } from "@/lib/billing/use-payment-executor";
 import type { ParentBusySlot, ParentPreferences } from "@/lib/parent/types";
+import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import {
   clearParentSessionRatedLocally,
   markParentSessionRatedLocally,
@@ -58,10 +65,11 @@ import {
   removeRealtimeChannel,
   subscribePostgresChanges
 } from "@/lib/supabase/subscribe-postgres-changes";
-import { Calendar, Wallet, History, LogOut, Search, Zap, CheckCircle2, Clock, Star } from "lucide-react";
+import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
+import { Calendar, Wallet, History, LogOut, Search, Zap, CheckCircle2, Clock, Star, X } from "lucide-react";
 
 const BOOKING_LIVE_SELECT =
-  "id, parent_id, sitter_id, status, start_time, end_time, created_at, updated_at";
+  "id, parent_id, sitter_id, status, booking_date, start_time, end_time, created_at, updated_at";
 
 /** Only values allowed by `bookings_status_check` — invalid enums cause PostgREST 400. */
 const LIVE_BOOKING_FETCH_STATUSES = [
@@ -97,6 +105,32 @@ const POLL_MS = 5000;
 
 type SettlementStep = "payment" | "rating";
 
+const DISMISSED_SCHEDULED_STATUS_KEY = "anynanny_dismissed_scheduled_status_v1";
+
+function readDismissedScheduledBookingIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.sessionStorage.getItem(DISMISSED_SCHEDULED_STATUS_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === "string" && id.trim().length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
+function persistDismissedScheduledBookingId(bookingId: string): void {
+  if (!bookingId.trim() || typeof window === "undefined") return;
+  try {
+    const next = readDismissedScheduledBookingIds();
+    next.add(bookingId);
+    window.sessionStorage.setItem(DISMISSED_SCHEDULED_STATUS_KEY, JSON.stringify([...next]));
+  } catch {
+    /* ignore */
+  }
+}
+
 function normalizeStatus(status: unknown): string {
   return String(status ?? "").trim().toLowerCase();
 }
@@ -120,17 +154,20 @@ function pickParentDashboardBooking(
 ): BookingRow | null {
   if (!rows.length) return null;
 
-  // Fresh / in-progress shifts always win — never inherit a prior closure booking.
+  const dueLive = rows.filter((b) => isBookingDueForParentActiveShiftUi(b));
+
+  // Fresh / in-progress shifts that are due now always win.
   for (const status of LIVE_BOOKING_STATUS_PRIORITY) {
-    const hit = rows.find((b) => normalizeStatus(b.status) === status);
+    const hit = dueLive.find((b) => normalizeStatus(b.status) === status);
     if (hit) return hit;
   }
 
   const preferId = opts?.preferBookingId ? String(opts.preferBookingId) : null;
   if (preferId) {
     const preferred = rows.find((b) => String(b.id) === preferId);
-    // Live rows already returned above — sticky id is only for settlement recovery.
-    if (preferred) return preferred;
+    if (preferred && (isBookingDueForParentActiveShiftUi(preferred) || isUnpaidCompletedBooking(preferred))) {
+      return preferred;
+    }
   }
 
   if (opts?.settlementLocked) {
@@ -140,7 +177,14 @@ function pickParentDashboardBooking(
 
   const unpaidCompleted = rows.find(isUnpaidCompletedBooking);
   if (unpaidCompleted) return unpaidCompleted;
-  return rows[0] ?? null;
+
+  // Future/long-term pending or approved — keep for scheduled confirmation UI.
+  const futureConfirmed = rows.find((b) => isFutureConfirmedScheduleBooking(b));
+  if (futureConfirmed) return futureConfirmed;
+  const futurePending = rows.find((b) => isFutureScheduledBooking(b));
+  if (futurePending) return futurePending;
+
+  return dueLive[0] ?? null;
 }
 
 function sessionMatchesBookingSitter(
@@ -170,8 +214,12 @@ function isConfirmableBooking(status: unknown): boolean {
   return isParentArrivalConfirmableStatus(status as BookingRow["status"]);
 }
 
-function isWaitingForSitterArrival(status: unknown): boolean {
-  return normalizeStatus(status) === "approved";
+function isWaitingForSitterArrival(booking: BookingRow | null | undefined): boolean {
+  if (!booking) return false;
+  return (
+    normalizeStatus(booking.status) === "approved" &&
+    isBookingDueForParentActiveShiftUi(booking)
+  );
 }
 
 function sessionRequestsEnd(session: SupabaseSessionRow | null): boolean {
@@ -256,7 +304,10 @@ export function ParentDashboardClient({
   const { executePayment, busy: paymentBusy, error: paymentError, clearError: clearPaymentError } =
     usePaymentExecutor();
   const [prefs, setPrefs] = useState(initialPreferences);
-  const [parentSerial, setParentSerial] = useState<string>(initialPreferences.parentSerial || "P-1001");
+  const [parentSerial, setParentSerial] = useState<string>(initialPreferences.parentSerial || "");
+  const [statusCardCollapsed, setStatusCardCollapsed] = useState(false);
+  const [dismissedStatusKey, setDismissedStatusKey] = useState<string | null>(null);
+  const [dismissedScheduledBookingIds, setDismissedScheduledBookingIds] = useState<Set<string>>(() => readDismissedScheduledBookingIds());
   const [parentId, setParentId] = useState<string | null>(
     initialActiveBooking?.parent_id ? String(initialActiveBooking.parent_id) : null
   );
@@ -273,6 +324,9 @@ export function ParentDashboardClient({
   const [ratingBusy, setRatingBusy] = useState(false);
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [hypCheckoutUrl, setHypCheckoutUrl] = useState<string | null>(null);
+  const [sitterAcceptedToast, setSitterAcceptedToast] = useState<string | null>(null);
+  const lastSitterAcceptedToastKeyRef = useRef<string | null>(null);
+  const bookingStatusWatchRef = useRef<{ id: string; status: string } | null>(null);
   const refreshInFlightRef = useRef(false);
   const refreshQueuedRef = useRef(false);
   /** Once set, polls/realtime cannot clear settlement back to an active timer. */
@@ -294,34 +348,22 @@ export function ParentDashboardClient({
 
   const refreshParentOnboardingStatus = useCallback(
     async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
+      // Avoid selecting missing columns / querying non-existent parent_profiles (404).
       const { data, error } = await supabase
         .from("profiles")
-        .select("first_name, last_name, parent_serial")
+        .select("first_name, last_name")
         .eq("id", uid)
         .maybeSingle();
 
-      if (error) return;
-
-      if (data?.first_name) {
+      if (!error && data?.first_name) {
         setPrefs((prev) => ({
           ...prev,
           parentName: `${data.first_name} ${data.last_name || ""}`.trim()
         }));
       }
 
-      if (data?.parent_serial) {
-        setParentSerial(data.parent_serial);
-      } else {
-        const { data: parentExtra } = await supabase
-          .from("parent_profiles")
-          .select("parent_serial")
-          .eq("id", uid)
-          .maybeSingle();
-
-        if (parentExtra?.parent_serial) {
-          setParentSerial(parentExtra.parent_serial);
-        }
-      }
+      const { publicId } = await fetchProfilePublicId(supabase, uid, "parent");
+      if (publicId) setParentSerial(publicId);
     },
     []
   );
@@ -393,7 +435,14 @@ export function ParentDashboardClient({
         const bookingSitterId =
           booking?.sitter_id != null ? String(booking.sitter_id) : null;
         const bookingStatus = normalizeStatus(booking?.status);
-        const hasLiveBooking = Boolean(booking && isLiveInFlightBooking(bookingStatus));
+        const dueForActiveShift = Boolean(
+          booking && isBookingDueForParentActiveShiftUi(booking)
+        );
+        const futureScheduled = Boolean(booking && isFutureScheduledBooking(booking));
+        // Only same-day / in-progress bookings drive arrival + timer UI.
+        const hasLiveBooking = Boolean(
+          booking && isLiveInFlightBooking(bookingStatus) && dueForActiveShift
+        );
         const hasUnpaidCompleted = Boolean(booking && isUnpaidCompletedBooking(booking));
         const liveClosureRequested = bookingStatus === "sitter_ended";
         const isFreshLiveShift =
@@ -487,6 +536,16 @@ export function ParentDashboardClient({
               continue;
             }
           }
+          // Future/long-term approved (or pending) — keep as scheduled, no arrival/timer.
+          if (booking && futureScheduled) {
+            setActiveBooking(booking);
+            activeBookingRef.current = booking;
+            setActiveSession(null);
+            activeSessionRef.current = null;
+            clearSettlementLock();
+            continue;
+          }
+
           clearToIdleDashboard();
           continue;
         }
@@ -726,6 +785,29 @@ export function ParentDashboardClient({
       void refreshLiveShiftState(parentId);
     };
 
+    const handleBookingRealtime = (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+      bump();
+
+      const next = (payload as { new?: Record<string, unknown> }).new;
+      const prev = (payload as { old?: Record<string, unknown> }).old;
+      const nextStatus = normalizeStatus(next?.status);
+      const prevStatus = normalizeStatus(prev?.status);
+      const bookingId = next?.id != null ? String(next.id) : "";
+
+      // Instant non-blocking toast when sitter accepts a pending request.
+      if (
+        payload.eventType === "UPDATE" &&
+        nextStatus === "approved" &&
+        (prevStatus === "pending" || prevStatus === "" || prevStatus === "requested")
+      ) {
+        const toastKey = `${bookingId}:approved`;
+        if (lastSitterAcceptedToastKeyRef.current !== toastKey) {
+          lastSitterAcceptedToastKeyRef.current = toastKey;
+          setSitterAcceptedToast("הבייביסיטר אישרה את המשמרת!");
+        }
+      }
+    };
+
     const bookingsChannel = subscribePostgresChanges(
       supabase,
       `parent-dash-bookings:${parentId}`,
@@ -733,7 +815,7 @@ export function ParentDashboardClient({
         event: "*",
         table: BOOKINGS_TABLE,
         filter: `parent_id=eq.${parentId}`,
-        handler: (_payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => bump()
+        handler: handleBookingRealtime
       },
       (status) => {
         if (status === "SUBSCRIBED") bump();
@@ -759,6 +841,32 @@ export function ParentDashboardClient({
       removeRealtimeChannel(supabase, sessionsChannel);
     };
   }, [parentId, refreshLiveShiftState]);
+
+  useEffect(() => {
+    // sitterAcceptedToast auto-dismiss
+    if (!sitterAcceptedToast) return;
+    const t = window.setTimeout(() => setSitterAcceptedToast(null), 7000);
+    return () => window.clearTimeout(t);
+  }, [sitterAcceptedToast]);
+
+  useEffect(() => {
+    // Watch booking status transitions for accept toast (polling / missed realtime old-row).
+    const id = activeBooking?.id ? String(activeBooking.id) : null;
+    const status = normalizeStatus(activeBooking?.status);
+    const prev = bookingStatusWatchRef.current;
+    if (id && status === "approved" && prev && prev.id === id && prev.status === "pending") {
+      const toastKey = `${id}:approved`;
+      if (lastSitterAcceptedToastKeyRef.current !== toastKey) {
+        lastSitterAcceptedToastKeyRef.current = toastKey;
+        setSitterAcceptedToast("הבייביסיטר אישרה את המשמרת!");
+      }
+    }
+    if (id && status) {
+      bookingStatusWatchRef.current = { id, status };
+    } else if (!id) {
+      bookingStatusWatchRef.current = null;
+    }
+  }, [activeBooking?.id, activeBooking?.status]);
 
   // Polling fallback — while any shift UI is mounted. Empty DB must clear ghost timers.
   useEffect(() => {
@@ -1125,14 +1233,29 @@ export function ParentDashboardClient({
     !["pending", "approved", "sitter_started", "parent_started"].includes(
       normalizeStatus(activeBooking?.status)
     );
-  // Timer requires a live DB booking — never render from orphaned session state alone.
+  const dueForActiveShiftUi = Boolean(
+    activeBooking && isBookingDueForParentActiveShiftUi(activeBooking)
+  );
+  const isScheduledConfirmed = Boolean(
+    activeBooking && isFutureConfirmedScheduleBooking(activeBooking)
+  );
+  const isScheduledPending = Boolean(
+    activeBooking &&
+      isFutureScheduledBooking(activeBooking) &&
+      !isScheduledConfirmed
+  );
+  // Timer requires a live DB booking due now — never from future scheduled or orphan session.
   const showLiveTimer =
-    Boolean(activeBooking) &&
+    dueForActiveShiftUi &&
     isLiveTimerBooking(activeBooking?.status) &&
     isActiveSessionRow(activeSession) &&
     !awaitingEndApproval &&
     !inSettlement;
   const bookingStatus = normalizeStatus(activeBooking?.status);
+  const scheduledLabel =
+    activeBooking?.booking_date && activeBooking?.start_time && activeBooking?.end_time
+      ? formatBookingSchedule(activeBooking)
+      : null;
 
   const liveElapsedSeconds = useMemo(() => {
     const row = activeSession;
@@ -1168,8 +1291,68 @@ export function ParentDashboardClient({
 
   const onboardingPending = profileCardStatus === "incomplete";
   const firstName = prefs.parentName ? prefs.parentName.trim().split(" ")[0] : "הורה";
-  const showShiftCard =
-    Boolean(activeBooking) || showLiveTimer || awaitingEndApproval || inSettlement;
+  // Live shift UI only for due bookings; future approved shows as scheduled confirmation.
+  const showLiveShiftCard =
+    (dueForActiveShiftUi && Boolean(activeBooking)) ||
+    showLiveTimer ||
+    awaitingEndApproval ||
+    inSettlement;
+  const showScheduledCard = isScheduledConfirmed || isScheduledPending;
+  const showShiftCard = showLiveShiftCard || showScheduledCard;
+  const statusCardKey = activeBooking?.id
+    ? `${String(activeBooking.id)}:${bookingStatus || "none"}`
+    : inSettlement
+      ? `settlement:${settlementStep ?? "open"}`
+      : null;
+  const scheduledBookingId = activeBooking?.id ? String(activeBooking.id) : null;
+  const scheduledBannerDismissed = Boolean(
+    scheduledBookingId &&
+      (isScheduledConfirmed || isScheduledPending) &&
+      dismissedScheduledBookingIds.has(scheduledBookingId)
+  );
+  const statusCardVisible =
+    showShiftCard &&
+    !scheduledBannerDismissed &&
+    (!statusCardKey || dismissedStatusKey !== statusCardKey);
+
+  const dismissScheduledStatusBanner = () => {
+    if (scheduledBookingId && (isScheduledConfirmed || isScheduledPending)) {
+      persistDismissedScheduledBookingId(scheduledBookingId);
+      setDismissedScheduledBookingIds((prev) => {
+        const next = new Set(prev);
+        next.add(scheduledBookingId);
+        return next;
+      });
+    }
+    if (statusCardKey) setDismissedStatusKey(statusCardKey);
+    setStatusCardCollapsed(false);
+  };
+  const statusCollapsedSummary = inSettlement
+    ? settlementStep === "payment"
+      ? "תשלום ממתין — לחצו להרחבה"
+      : "דירוג ממתין — לחצו להרחבה"
+    : awaitingEndApproval
+      ? "ממתין לאישור סיום משמרת"
+      : showLiveTimer
+        ? `משמרת פעילה · ${liveTimerText}`
+        : isScheduledConfirmed
+          ? "המשמרת נקבעה — לחצו להרחבה"
+          : isScheduledPending
+            ? "בקשה עתידית ממתינה — לחצו להרחבה"
+            : isWaitingForSitterArrival(activeBooking)
+              ? "ממתינים להגעת הבייביסיטר"
+              : "סטטוס משמרת — לחצו להרחבה";
+  const statusCardTone =
+    awaitingEndApproval || (inSettlement && settlementStep === "payment")
+      ? "rose"
+      : isScheduledPending || isWaitingForSitterArrival(activeBooking)
+        ? "amber"
+        : "emerald";
+
+  useEffect(() => {
+    // Reset collapse when the active status identity changes.
+    setStatusCardCollapsed(false);
+  }, [statusCardKey]);
 
   return (
     <main className="relative mx-auto max-w-md space-y-4 p-4 pb-32 overflow-y-auto min-h-screen" dir="rtl">
@@ -1203,13 +1386,35 @@ export function ParentDashboardClient({
               </div>
             </div>
 
+            {sitterAcceptedToast ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex flex-row-reverse items-center justify-between gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-right text-xs font-semibold text-emerald-900 shadow-sm"
+              >
+                <button
+                  type="button"
+                  aria-label="סגור"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-emerald-800/70 transition hover:bg-emerald-100 hover:text-emerald-950"
+                  onClick={() => setSitterAcceptedToast(null)}
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </button>
+                <div className="flex min-w-0 flex-1 flex-row-reverse items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+                  <p className="min-w-0 flex-1 leading-snug">{sitterAcceptedToast}</p>
+                </div>
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-3 gap-2 pt-1">
               <Link
                 href="/parent/calendar"
+                onClick={dismissScheduledStatusBanner}
                 className="flex flex-col items-center justify-center rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs transition hover:bg-slate-50"
               >
                 <Calendar className="h-5 w-5 text-emerald-600 mb-1" />
-                <span className="text-xs font-semibold text-slate-800">סידור עבודה</span>
+                <span className="text-xs font-semibold text-slate-800">יומן</span>
               </Link>
               <Link
                 href="/parent/wallet"
@@ -1228,8 +1433,14 @@ export function ParentDashboardClient({
             </div>
           </div>
 
-          {showShiftCard ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 text-center space-y-3">
+          {statusCardVisible ? (
+            <DashboardStatusCard
+              collapsedSummary={statusCollapsedSummary}
+              collapsed={statusCardCollapsed}
+              onToggleCollapse={() => setStatusCardCollapsed((v) => !v)}
+              onDismiss={dismissScheduledStatusBanner}
+              tone={statusCardTone}
+            >
               {shiftError ? (
                 <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                   {shiftError}
@@ -1292,7 +1503,9 @@ export function ParentDashboardClient({
                     סכום שנצבר: ₪{liveEarned} · ₪{HOURLY_RATE}/שעה
                   </p>
                 </div>
-              ) : activeBooking && isConfirmableBooking(activeBooking.status) ? (
+              ) : dueForActiveShiftUi &&
+                activeBooking &&
+                isConfirmableBooking(activeBooking.status) ? (
                 <div className="flex flex-col items-center gap-3">
                   <p className="text-sm font-bold text-emerald-900">
                     הבייביסיטר הגיעה — אשר/י הגעה להתחלת השעון
@@ -1304,7 +1517,7 @@ export function ParentDashboardClient({
                     onClick={handleParentConfirmStart}
                   />
                 </div>
-              ) : activeBooking && isWaitingForSitterArrival(activeBooking.status) ? (
+              ) : isWaitingForSitterArrival(activeBooking) ? (
                 <div className="flex flex-col items-center gap-2">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700">
                     <Clock className="h-5 w-5" />
@@ -1314,7 +1527,46 @@ export function ParentDashboardClient({
                     אישור ההתחלה יופיע רק אחרי שהבייביסיטר תלחץ &quot;הגעתי&quot;.
                   </p>
                 </div>
-              ) : activeBooking && isLiveTimerBooking(activeBooking.status) ? (
+              ) : isScheduledConfirmed ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <p className="text-sm font-bold text-emerald-900">המשמרת נקבעה בהצלחה</p>
+                  <p className="text-xs text-emerald-800/80">
+                    ההזמנה אושרה על ידי הבייביסיטר ותופיע ביומן שלך.
+                  </p>
+                  {scheduledLabel ? (
+                    <p className="text-xs font-semibold text-emerald-900">{scheduledLabel}</p>
+                  ) : null}
+                  <Link
+                    href="/parent/calendar"
+                    onClick={dismissScheduledStatusBanner}
+                    className="mt-1 text-xs font-bold text-emerald-700 underline underline-offset-2"
+                  >
+                    מעבר ליומן
+                  </Link>
+                </div>
+              ) : isScheduledPending ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                    <Clock className="h-5 w-5" />
+                  </div>
+                  <p className="text-sm font-bold text-amber-900">בקשה עתידית ממתינה לאישור</p>
+                  {scheduledLabel ? (
+                    <p className="text-xs font-medium text-amber-900/80">{scheduledLabel}</p>
+                  ) : null}
+                  <Link
+                    href="/parent/calendar"
+                    onClick={dismissScheduledStatusBanner}
+                    className="mt-1 text-xs font-bold text-amber-800 underline underline-offset-2"
+                  >
+                    מעבר ליומן
+                  </Link>
+                </div>
+              ) : dueForActiveShiftUi &&
+                activeBooking &&
+                isLiveTimerBooking(activeBooking.status) ? (
                 <div className="flex flex-col items-center gap-2">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
                     <CheckCircle2 className="h-5 w-5" />
@@ -1324,7 +1576,7 @@ export function ParentDashboardClient({
                     ממתין לסנכרון שעון החיוב… הטיימר יופיע כאן אוטומטית כשהמשמרת פעילה.
                   </p>
                 </div>
-              ) : activeBooking ? (
+              ) : dueForActiveShiftUi && activeBooking ? (
                 <div className="flex flex-col items-center gap-2">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700">
                     <Clock className="h-5 w-5" />
@@ -1335,18 +1587,17 @@ export function ParentDashboardClient({
                   ) : null}
                 </div>
               ) : null}
-            </div>
+            </DashboardStatusCard>
           ) : null}
 
-          {/* Broadcast/search only when idle — never alongside an active shift circle/card. */}
-          {!showShiftCard ? (
-            <div className="space-y-2 pt-1">
+          {/* Always available — status cards are non-blocking. */}
+          <div className="space-y-2 pt-1">
               <Link
                 href="/parent/broadcast"
                 className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-3.5 px-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700"
               >
                 <Zap className="h-4 w-4 fill-white" />
-                <span>ANYNANNY NOW!</span>
+                <span dir="ltr">ANYNANNY NOW!</span>
               </Link>
               <Link
                 href="/parent/search"
@@ -1356,7 +1607,6 @@ export function ParentDashboardClient({
                 חיפוש נני
               </Link>
             </div>
-          ) : null}
 
           <div className="pt-2 flex flex-col gap-2">
             <button
