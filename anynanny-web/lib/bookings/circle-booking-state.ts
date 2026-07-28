@@ -64,7 +64,8 @@ export function bookingRowToCircleView(
     partner_user_id:
       prev?.partner_user_id ?? (role === "parent" ? row.sitter_id : row.parent_id),
     partner_full_name: prev?.partner_full_name ?? null,
-    partner_sitter_code: prev?.partner_sitter_code ?? null
+    partner_sitter_code: prev?.partner_sitter_code ?? null,
+    partner_address: prev?.partner_address ?? null
   };
 }
 
@@ -83,7 +84,8 @@ function mergeCircleBookingView(
     schedule_label: next.schedule_label || prev.schedule_label,
     partner_user_id: next.partner_user_id || prev.partner_user_id,
     partner_full_name: next.partner_full_name ?? prev.partner_full_name,
-    partner_sitter_code: next.partner_sitter_code ?? prev.partner_sitter_code
+    partner_sitter_code: next.partner_sitter_code ?? prev.partner_sitter_code,
+    partner_address: next.partner_address ?? prev.partner_address
   };
 }
 

@@ -105,7 +105,8 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
           last_name: lastName.trim(),
           birth_date: birthDate || null,
           address: {
-            city: selectedCity[0]?.name || "",
+            // IsraelCity is a plain string (e.g. "חיפה"), not an object with `.name`.
+            city: selectedCity[0] || "",
             street: street.trim(),
             houseNumber: houseNumber.trim()
           },

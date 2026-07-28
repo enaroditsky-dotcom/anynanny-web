@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Clock } from "lucide-react";
+import { Clock, MapPin } from "lucide-react";
 import type { BookingStatus } from "@/lib/bookings/constants";
 import { resolveBookingWindowMs, todayDateISO } from "@/lib/bookings/booking-date-utils";
 
@@ -10,6 +10,7 @@ export type CalendarShift = {
   id: string;
   partnerId: string;
   partnerName: string;
+  partnerAddress?: string;
   bookingDate: string;
   startTime: string;
   endTime: string;
@@ -269,6 +270,12 @@ function ShiftCard({
           <p className={`truncate font-bold text-[#001F3F] ${compact ? "text-xs" : "text-sm"}`}>
             {shift.partnerName}
           </p>
+          {shift.partnerAddress?.trim() ? (
+            <p className="mt-0.5 inline-flex max-w-full flex-row-reverse items-start gap-1 text-[11px] font-medium leading-snug text-slate-700">
+              <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" aria-hidden />
+              <span className="min-w-0 text-right">{shift.partnerAddress.trim()}</span>
+            </p>
+          ) : null}
           <p className="mt-0.5 text-[11px] font-medium text-slate-600 tabular-nums">{shift.scheduleLabel}</p>
         </div>
       </div>

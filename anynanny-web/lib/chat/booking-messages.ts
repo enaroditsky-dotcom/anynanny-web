@@ -2,6 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { MESSAGES_TABLE, type MessageRow } from "@/lib/chat/constants";
+import { pickProfilePublicId } from "@/lib/public/sequential-display-id";
+import {
+  SITTER_PROFILES_TABLE,
+  SITTER_PROFILES_USER_COLUMN
+} from "@/lib/sitter/sitter-profile";
+import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 
 export const CHAT_ELIGIBLE_BOOKING_STATUSES: BookingStatus[] = [
   "pending",
@@ -15,9 +22,111 @@ export type BookingChatInboxRow = {
   booking_id: string;
   partner_user_id: string;
   partner_name: string | null;
+  /** Public display id (AN-#### for sitters, P-#### for parents). */
+  partner_public_id: string | null;
   schedule_label: string;
   last_message_at: string;
 };
+
+type PartnerDetails = {
+  name: string | null;
+  publicId: string | null;
+};
+
+async function loadSitterPartnerDetailsByIds(
+  supabase: SupabaseClient,
+  partnerIds: string[]
+): Promise<Map<string, PartnerDetails>> {
+  const byId = new Map<string, PartnerDetails>();
+  if (partnerIds.length === 0) return byId;
+
+  const fk = SITTER_PROFILES_USER_COLUMN;
+  const selectAttempts = [
+    `${fk}, first_name, last_name, nanny_serial, nanny_id_number`,
+    `${fk}, first_name, last_name, nanny_serial`,
+    `${fk}, first_name, last_name, nanny_id_number`,
+    `${fk}, first_name, last_name`
+  ];
+
+  for (const select of selectAttempts) {
+    const { data, error } = await supabase.from(SITTER_PROFILES_TABLE).select(select).in(fk, partnerIds);
+    if (error) {
+      if (
+        isPostgrestMissingColumnError(error.message, "nanny_serial") ||
+        isPostgrestMissingColumnError(error.message, "nanny_id_number") ||
+        isPostgrestSchemaDriftError(error.message)
+      ) {
+        continue;
+      }
+      console.warn("[chat-inbox] sitter partner profiles:", error.message);
+      return byId;
+    }
+
+    for (const profile of data ?? []) {
+      if (!profile || typeof profile !== "object") continue;
+      const row = profile as Record<string, unknown>;
+      const id = String(row[fk] ?? "").trim();
+      if (!id) continue;
+      const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || null;
+      byId.set(id, {
+        name,
+        publicId: pickProfilePublicId(row, "sitter")
+      });
+    }
+    return byId;
+  }
+
+  return byId;
+}
+
+async function loadParentPartnerDetailsByIds(
+  supabase: SupabaseClient,
+  partnerIds: string[]
+): Promise<Map<string, PartnerDetails>> {
+  const byId = new Map<string, PartnerDetails>();
+  if (partnerIds.length === 0) return byId;
+
+  const selectAttempts = [
+    "id, first_name, last_name, parent_public_id, parent_serial, public_id, serial_id",
+    "id, first_name, last_name, parent_public_id, parent_serial, serial_id",
+    "id, first_name, last_name, parent_serial, serial_id",
+    "id, first_name, last_name, public_id, serial_id",
+    "id, first_name, last_name, serial_id",
+    "id, first_name, last_name"
+  ];
+
+  for (const select of selectAttempts) {
+    const { data, error } = await supabase.from(PROFILES_TABLE).select(select).in("id", partnerIds);
+    if (error) {
+      if (
+        isPostgrestMissingColumnError(error.message, "parent_public_id") ||
+        isPostgrestMissingColumnError(error.message, "parent_serial") ||
+        isPostgrestMissingColumnError(error.message, "public_id") ||
+        isPostgrestMissingColumnError(error.message, "serial_id") ||
+        isPostgrestSchemaDriftError(error.message)
+      ) {
+        continue;
+      }
+      console.warn("[chat-inbox] parent partner profiles:", error.message);
+      return byId;
+    }
+
+    for (const profile of data ?? []) {
+      if (!profile || typeof profile !== "object") continue;
+      const row = profile as Record<string, unknown>;
+      const id = String(row.id ?? "").trim();
+      if (!id) continue;
+      const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || null;
+      byId.set(id, {
+        name,
+        publicId: pickProfilePublicId(row, "parent")
+      });
+    }
+    return byId;
+  }
+
+  return byId;
+}
 
 async function fetchBookingsWithMessagesForUser(
   supabase: SupabaseClient,
@@ -58,39 +167,19 @@ async function fetchBookingsWithMessagesForUser(
     }
   }
 
-  // 2. שולפים את מזהי השותפים מתוך כל המשמרות המורשות (גם אם אין להן הודעות עדיין)
-  const partnerIds = [...new Set(bookings.map((b) => String((b as Record<string, string>)[partnerColumn])))];
-  const nameByPartnerId = new Map<string, string>();
+  // 2. שולפים שם + מזהה ציבורי של השותפים מתוך כל המשמרות המורשות
+  const partnerIds = [
+    ...new Set(
+      bookings
+        .map((b) => String((b as Record<string, string>)[partnerColumn] ?? "").trim())
+        .filter(Boolean)
+    )
+  ];
 
-  if (role === "parent") {
-    const { data: profiles } = await supabase
-      .from("sitter_profiles")
-      .select("id, first_name, last_name")
-      .in("id", partnerIds);
-
-    for (const profile of profiles ?? []) {
-      if (profile && typeof profile === "object" && "id" in profile) {
-        const id = String((profile as { id: string }).id);
-        const row = profile as { first_name?: string | null; last_name?: string | null };
-        const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
-        if (name) nameByPartnerId.set(id, name);
-      }
-    }
-  } else {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, first_name, last_name")
-      .in("id", partnerIds);
-
-    for (const profile of profiles ?? []) {
-      if (profile && typeof profile === "object" && "id" in profile) {
-        const id = String((profile as { id: string }).id);
-        const row = profile as { first_name?: string | null; last_name?: string | null };
-        const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
-        if (name) nameByPartnerId.set(id, name);
-      }
-    }
-  }
+  const partnerDetails =
+    role === "parent"
+      ? await loadSitterPartnerDetailsByIds(supabase, partnerIds)
+      : await loadParentPartnerDetailsByIds(supabase, partnerIds);
 
   // 3. מיפוי כל המשמרות המורשות לרשימת חלוניות השיחה (שיחה ללא הודעות תקבל את זמן עדכון המשמרת כברירת מחדל)
   const rows = bookings
@@ -106,10 +195,12 @@ async function fetchBookingsWithMessagesForUser(
       };
       const bookingId = String(row.id);
       const partnerUserId = String(row[partnerColumn as keyof typeof row]);
+      const details = partnerDetails.get(partnerUserId);
       return {
         booking_id: bookingId,
         partner_user_id: partnerUserId,
-        partner_name: nameByPartnerId.get(partnerUserId) ?? null,
+        partner_name: details?.name ?? null,
+        partner_public_id: details?.publicId ?? null,
         schedule_label: formatBookingSchedule(row),
         last_message_at: lastMessageAt.get(bookingId) ?? row.updated_at
       };

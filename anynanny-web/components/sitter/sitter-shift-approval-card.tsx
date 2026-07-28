@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X } from "lucide-react";
+import { Check, MapPin, X } from "lucide-react";
 import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
 import {
   resolveShiftTimeWindow,
@@ -81,6 +81,8 @@ export function SitterShiftApprovalCard({ sitterId, booking, onResponded, onErro
     onResponded?.({ status, booking: respondedBooking });
   };
 
+  const parentAddress = booking.partner_address?.trim() || null;
+
   return (
     <div className="flex w-full max-w-[20rem] flex-col items-stretch gap-4 text-right">
       <div className="space-y-1">
@@ -88,6 +90,12 @@ export function SitterShiftApprovalCard({ sitterId, booking, onResponded, onErro
         <p className="text-base font-bold text-[#001F3F]">
           {booking.partner_full_name ?? "הורה"}
         </p>
+        {parentAddress ? (
+          <p className="inline-flex max-w-full flex-row-reverse items-start gap-1.5 text-sm font-medium leading-snug text-slate-700">
+            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+            <span className="min-w-0 text-right">{parentAddress}</span>
+          </p>
+        ) : null}
         <p className="text-sm font-medium text-slate-600 tabular-nums">
           {booking.schedule_label || formatBookingSchedule(booking)}
         </p>

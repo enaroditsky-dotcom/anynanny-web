@@ -88,7 +88,8 @@ function minimalLinkedBooking(
     schedule_label: "",
     partner_user_id: role === "parent" ? normalized.sitter_id : normalized.parent_id,
     partner_full_name: null,
-    partner_sitter_code: null
+    partner_sitter_code: null,
+    partner_address: null
   };
 }
 
@@ -113,7 +114,8 @@ function resolveNextBooking(
       schedule_label: prev.schedule_label,
       partner_user_id: prev.partner_user_id,
       partner_full_name: prev.partner_full_name,
-      partner_sitter_code: prev.partner_sitter_code
+      partner_sitter_code: prev.partner_sitter_code,
+      partner_address: prev.partner_address
     };
   }
 

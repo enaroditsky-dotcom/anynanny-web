@@ -43,12 +43,53 @@ export type TodaysLinkedBookingView = BookingRow & {
   partner_full_name: string | null;
   /** Public nanny serial (e.g. AN-1004) when partner is the sitter. */
   partner_sitter_code: string | null;
+  /** Formatted parent address from `profiles.address` when partner is the parent. */
+  partner_address: string | null;
 };
 
 function pickSitterCode(raw: Record<string, unknown> | null | undefined): string | null {
   if (!raw) return null;
   const serial = String(raw.nanny_serial ?? raw.nanny_id_number ?? raw.nannySerial ?? "").trim();
   return serial.length > 0 ? serial : null;
+}
+
+function readAddressCity(raw: unknown): string {
+  if (typeof raw === "string") return raw.trim();
+  if (!raw || typeof raw !== "object") return "";
+  const row = raw as Record<string, unknown>;
+  // Prefer explicit city fields; also accept nested `{ name: "חיפה" }` leftovers.
+  const candidates = [row.city, row.cityName, row.city_name, row.locality];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+    if (candidate && typeof candidate === "object") {
+      const nested = candidate as Record<string, unknown>;
+      const name = nested.name ?? nested.label ?? nested.value;
+      if (typeof name === "string" && name.trim()) return name.trim();
+    }
+  }
+  return "";
+}
+
+/** Formats parent `profiles.address` as `רחוב מספר, עיר` (e.g. "הנס 41, חיפה"). */
+export function formatParentProfileAddress(raw: unknown): string | null {
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    return trimmed || null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+
+  const address = raw as Record<string, unknown>;
+  const city = readAddressCity(address);
+  const street = String(address.street ?? address.streetName ?? address.street_name ?? "").trim();
+  const houseNumber = String(
+    address.houseNumber ?? address.house_number ?? address.number ?? address.house ?? ""
+  ).trim();
+
+  const streetLine = [street, houseNumber].filter(Boolean).join(" ").trim();
+  if (streetLine && city) return `${streetLine}, ${city}`;
+  if (streetLine) return streetLine;
+  if (city) return city;
+  return null;
 }
 
 export function formatParentShiftStartButtonLabel(
@@ -96,15 +137,36 @@ async function enrichLinkedBookingView(
 
   const partnerId = String(booking[partnerColumn as keyof BookingRow]);
 
-  const profileRead = safeSupabaseRead(
-    await supabase.from(PROFILES_TABLE).select("first_name, last_name").eq("id", partnerId).maybeSingle(),
+  let profileRead = safeSupabaseRead(
+    await supabase
+      .from(PROFILES_TABLE)
+      .select(role === "sitter" ? "first_name, last_name, address" : "first_name, last_name")
+      .eq("id", partnerId)
+      .maybeSingle(),
     "partner profile name"
   );
+
+  if (
+    role === "sitter" &&
+    profileRead.error &&
+    (isPostgrestMissingColumnError(profileRead.error, "address") ||
+      /column|schema cache|could not find/i.test(String(profileRead.error)))
+  ) {
+    profileRead = safeSupabaseRead(
+      await supabase.from(PROFILES_TABLE).select("first_name, last_name").eq("id", partnerId).maybeSingle(),
+      "partner profile name fallback"
+    );
+  }
 
   let partnerName =
     profileRead.data && typeof profileRead.data === "object"
       ? `${(profileRead.data as { first_name?: string | null }).first_name ?? ""} ${(profileRead.data as { last_name?: string | null }).last_name ?? ""}`.trim() ||
         null
+      : null;
+
+  const partnerAddress =
+    role === "sitter" && profileRead.data && typeof profileRead.data === "object"
+      ? formatParentProfileAddress((profileRead.data as { address?: unknown }).address)
       : null;
 
   let partnerSitterCode: string | null = null;
@@ -150,7 +212,8 @@ async function enrichLinkedBookingView(
     schedule_label: formatBookingSchedule(booking),
     partner_user_id: partnerId,
     partner_full_name: partnerName,
-    partner_sitter_code: partnerSitterCode
+    partner_sitter_code: partnerSitterCode,
+    partner_address: partnerAddress
   };
 }
 

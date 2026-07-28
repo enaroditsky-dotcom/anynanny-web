@@ -3,17 +3,15 @@ import type Stripe from "stripe";
 
 import { getStripe } from "@/lib/stripe/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  BILLING_TRANSACTIONS_TABLE,
+  creditParentWalletDeposit
+} from "@/lib/wallet/billing-transactions";
 
 export const runtime = "nodejs";
 
-const PARENT_WALLET_BALANCES_TABLE = "parent_wallet_balances" as const;
-const BILLING_TRANSACTIONS_TABLE = "billing_transactions" as const;
 const WALLET_DEPOSIT_PURPOSE = "wallet_deposit" as const;
 const DEPOSIT_DESCRIPTION = "טעינת כסף לארנק הדיגיטלי" as const;
-
-type WalletBalanceRow = {
-  balance: number | string | null;
-};
 
 function paymentIntentAmountIls(paymentIntent: Stripe.PaymentIntent): number {
   const minorUnits =
@@ -57,44 +55,16 @@ async function handleWalletDeposit(paymentIntent: Stripe.PaymentIntent): Promise
     return;
   }
 
-  const { data: walletRow, error: walletReadError } = await supabase
-    .from(PARENT_WALLET_BALANCES_TABLE)
-    .select("balance")
-    .eq("parent_id", userId)
-    .maybeSingle();
-
-  if (walletReadError) {
-    console.error("[billing webhook] wallet balance lookup failed:", walletReadError.message);
-    throw new Error(walletReadError.message);
-  }
-
-  const currentBalance = Number((walletRow as WalletBalanceRow | null)?.balance ?? 0);
-  const newBalance = (Number.isFinite(currentBalance) ? currentBalance : 0) + depositAmount;
-  const { error: walletUpsertError } = await supabase.from(PARENT_WALLET_BALANCES_TABLE).upsert(
-    {
-      parent_id: userId,
-      balance: newBalance
-    },
-    { onConflict: "parent_id" }
-  );
-
-  if (walletUpsertError) {
-    console.error("[billing webhook] wallet balance upsert failed:", walletUpsertError.message);
-    throw new Error(walletUpsertError.message);
-  }
-
-  const { error: txnInsertError } = await supabase.from(BILLING_TRANSACTIONS_TABLE).insert({
-    parent_id: userId,
-    type: "deposit",
+  const credit = await creditParentWalletDeposit(supabase, {
+    parentId: userId,
     amount: depositAmount,
-    status: "succeeded",
     description: DEPOSIT_DESCRIPTION,
-    stripe_payment_intent_id: paymentIntent.id
+    stripePaymentIntentId: paymentIntent.id
   });
 
-  if (txnInsertError) {
-    console.error("[billing webhook] billing transaction insert failed:", txnInsertError.message);
-    throw new Error(txnInsertError.message);
+  if (credit.error) {
+    console.error("[billing webhook] creditParentWalletDeposit failed:", credit.error);
+    throw new Error(credit.error);
   }
 }
 

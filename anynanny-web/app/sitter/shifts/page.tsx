@@ -14,8 +14,11 @@ import {
   SITTER_OVERLAP_APPROVE_MESSAGE
 } from "@/lib/bookings/sitter-shift-overlap";
 import { formatBookingSchedule, updateBookingStatus } from "@/lib/bookings/sitter-pending-bookings";
+import { formatParentProfileAddress } from "@/lib/bookings/todays-linked-booking";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { MapPin } from "lucide-react";
 
 /** DB may store legacy `confirmed`; normalized in app as `approved`. */
 const SITTER_CALENDAR_CONFIRMED_STATUSES = ["approved", "confirmed"] as const;
@@ -95,6 +98,55 @@ function statusBadge(status: string, viewType: ViewType): { label: string; class
   return { label: "עתידית", className: "bg-amber-50 text-amber-700" };
 }
 
+async function loadParentDetailsByIds(
+  supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
+  parentIds: string[]
+): Promise<{ names: Map<string, string>; addresses: Map<string, string> }> {
+  const names = new Map<string, string>();
+  const addresses = new Map<string, string>();
+  if (parentIds.length === 0) return { names, addresses };
+
+  let profileRows: Array<Record<string, unknown>> | null = null;
+
+  const withAddress = await supabase
+    .from(PROFILES_TABLE)
+    .select("id, first_name, last_name, address")
+    .in("id", parentIds);
+
+  if (withAddress.error) {
+    if (
+      isPostgrestMissingColumnError(withAddress.error.message, "address") ||
+      /column|schema cache|could not find/i.test(withAddress.error.message)
+    ) {
+      const fallback = await supabase
+        .from(PROFILES_TABLE)
+        .select("id, first_name, last_name")
+        .in("id", parentIds);
+      if (fallback.error) {
+        console.warn("Could not load parent profiles for shifts:", fallback.error.message);
+        return { names, addresses };
+      }
+      profileRows = (fallback.data as Array<Record<string, unknown>> | null) ?? [];
+    } else {
+      console.warn("Could not load parent profiles for shifts:", withAddress.error.message);
+      return { names, addresses };
+    }
+  } else {
+    profileRows = (withAddress.data as Array<Record<string, unknown>> | null) ?? [];
+  }
+
+  for (const profile of profileRows) {
+    const id = String(profile.id ?? "");
+    if (!id) continue;
+    const name = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+    if (name) names.set(id, name);
+    const address = formatParentProfileAddress(profile.address);
+    if (address) addresses.set(id, address);
+  }
+
+  return { names, addresses };
+}
+
 export default function SitterShiftsPage() {
   const { user, isLoading: authLoading } = useAuth();
 
@@ -124,7 +176,7 @@ export default function SitterShiftsPage() {
       }
 
       let query = supabase
-        .from("bookings")
+        .from(BOOKINGS_TABLE)
         .select("id, parent_id, booking_date, start_time, end_time, status")
         .eq("sitter_id", sitterId);
 
@@ -142,24 +194,10 @@ export default function SitterShiftsPage() {
 
       const bookingRows = (data ?? []) as BookingRow[];
       const parentIds = [...new Set(bookingRows.map((row) => row.parent_id).filter(Boolean))];
-
-      const parentNameById = new Map<string, string>();
-      if (parentIds.length > 0) {
-        const { data: profileRows, error: profilesError } = await supabase
-          .from(PROFILES_TABLE)
-          .select("id, first_name, last_name")
-          .in("id", parentIds);
-
-        if (profilesError) {
-          console.warn("Could not load parent names for shifts:", profilesError.message);
-        } else {
-          for (const profile of profileRows ?? []) {
-            const name =
-              `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || null;
-            if (name) parentNameById.set(String(profile.id), name);
-          }
-        }
-      }
+      const { names: parentNameById, addresses: parentAddressById } = await loadParentDetailsByIds(
+        supabase,
+        parentIds
+      );
 
       const formattedShifts: Shift[] = bookingRows.map((b) => ({
         id: b.id,
@@ -170,7 +208,7 @@ export default function SitterShiftsPage() {
         booking_date: b.booking_date,
         start_time: b.start_time,
         end_time: b.end_time,
-        address: "הכתובת תיטען בהמשך מחשבון ההורה..."
+        address: parentAddressById.get(b.parent_id) ?? ""
       }));
 
       setShifts(formattedShifts);
@@ -209,30 +247,17 @@ export default function SitterShiftsPage() {
 
       const bookingRows = (data ?? []) as BookingRow[];
       const parentIds = [...new Set(bookingRows.map((row) => row.parent_id).filter(Boolean))];
-
-      const parentNameById = new Map<string, string>();
-      if (parentIds.length > 0) {
-        const { data: profileRows, error: profilesError } = await supabase
-          .from(PROFILES_TABLE)
-          .select("id, first_name, last_name")
-          .in("id", parentIds);
-
-        if (profilesError) {
-          console.warn("Could not load parent names for calendar:", profilesError.message);
-        } else {
-          for (const profile of profileRows ?? []) {
-            const name =
-              `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || null;
-            if (name) parentNameById.set(String(profile.id), name);
-          }
-        }
-      }
+      const { names: parentNameById, addresses: parentAddressById } = await loadParentDetailsByIds(
+        supabase,
+        parentIds
+      );
 
       setCalendarShifts(
         bookingRows.map((row) => ({
           id: row.id,
           partnerId: row.parent_id,
           partnerName: parentNameById.get(row.parent_id) ?? "הורה AnyNanny",
+          partnerAddress: parentAddressById.get(row.parent_id) ?? "",
           bookingDate: row.booking_date,
           startTime: row.start_time,
           endTime: row.end_time,
@@ -384,9 +409,17 @@ export default function SitterShiftsPage() {
                   key={shift.id}
                   className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex flex-col space-y-4"
                 >
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-gray-800">{shift.parent_name}</span>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badge.className}`}>
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <span className="block text-lg font-bold text-gray-800">{shift.parent_name}</span>
+                      {shift.address ? (
+                        <p className="inline-flex max-w-full flex-row-reverse items-start gap-1.5 text-sm font-medium leading-snug text-slate-700">
+                          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                          <span className="min-w-0 text-right">{shift.address}</span>
+                        </p>
+                      ) : null}
+                    </div>
+                    <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${badge.className}`}>
                       {badge.label}
                     </span>
                   </div>

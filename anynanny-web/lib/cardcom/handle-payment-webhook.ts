@@ -1,4 +1,5 @@
 import { readExpectedCardcomTerminalNumber } from "@/lib/cardcom/config";
+import { creditParentWalletDeposit } from "@/lib/wallet/billing-transactions";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -107,45 +108,15 @@ async function creditParentWallet(params: {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data: currentWallet, error: walletError } = await supabaseAdmin
-    .from("parent_wallet_balances")
-    .select("balance")
-    .eq("parent_id", params.parentId)
-    .maybeSingle();
-
-  if (walletError) {
-    console.error("[Cardcom Webhook] Failed to fetch wallet balance:", walletError);
-    return NextResponse.json({ error: "Database error." }, { status: 500 });
-  }
-
-  const currentBalance = (currentWallet as { balance?: number } | null)?.balance ?? 0;
-  const newBalance = currentBalance + params.amount;
-
-  const { error: updateError } = await supabaseAdmin.from("parent_wallet_balances").upsert(
-    {
-      parent_id: params.parentId,
-      balance: newBalance,
-      updated_at: new Date().toISOString()
-    },
-    { onConflict: "parent_id" }
-  );
-
-  if (updateError) {
-    console.error("[Cardcom Webhook] Failed to update wallet balance:", updateError);
-    return NextResponse.json({ error: "Update failed." }, { status: 500 });
-  }
-
-  const { error: txError } = await supabaseAdmin.from("billing_transactions").insert({
-    parent_id: params.parentId,
-    type: "deposit",
+  const credit = await creditParentWalletDeposit(supabaseAdmin, {
+    parentId: params.parentId,
     amount: params.amount,
-    description: `טעינת ארנק מוצלח (Cardcom #${params.transactionId ?? "0"})`,
-    status: "succeeded",
-    created_at: new Date().toISOString()
+    description: `טעינת ארנק מוצלח (Cardcom #${params.transactionId ?? "0"})`
   });
 
-  if (txError) {
-    console.error("[Cardcom Webhook] Failed to log billing transaction:", txError);
+  if (credit.error) {
+    console.error("[Cardcom Webhook] Failed to credit wallet:", credit.error);
+    return NextResponse.json({ error: "Update failed." }, { status: 500 });
   }
 
   return NextResponse.json({ status: "success", message: "Wallet updated successfully." }, { status: 200 });

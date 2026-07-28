@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { creditParentWalletDeposit } from "@/lib/wallet/billing-transactions";
 
 // שימוש ב-Admin Client כדי לעקוף חוקי RLS ולאפשר לשרת לעדכן את היתרה בצורה אמינה
 const supabaseAdmin = createClient(
@@ -51,49 +52,15 @@ export async function POST(request: Request) {
 
     console.log(`Processing successful Israeli payment. Parent: ${parentId}, Amount: ₪${amount}`);
 
-    // 4. שליפת היתרה הנוכחית של ההורה
-    const { data: currentWallet, error: walletError } = await supabaseAdmin
-      .from("parent_wallet_balances")
-      .select("balance")
-      .eq("parent_id", parentId)
-      .maybeSingle();
+    const credit = await creditParentWalletDeposit(supabaseAdmin, {
+      parentId: String(parentId),
+      amount,
+      description: `טעינת ארנק מוצלח (Hyp #${cardcomInvoiceNumber})`
+    });
 
-    if (walletError) {
-      console.error("Failed to fetch balance during webhook:", walletError);
-      return NextResponse.json({ error: "Database error" }, { status: 500 });
-    }
-
-    const currentBalance = currentWallet?.balance || 0;
-    const newBalance = currentBalance + amount;
-
-    // 5. עדכון היתרה החדשה (Upsert)
-    const { error: updateError } = await supabaseAdmin
-      .from("parent_wallet_balances")
-      .upsert({
-        parent_id: parentId,
-        balance: newBalance,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "parent_id" });
-
-    if (updateError) {
-      console.error("Failed to update wallet balance:", updateError);
+    if (credit.error) {
+      console.error("Failed to credit wallet during webhook:", credit.error);
       return NextResponse.json({ error: "Update failed" }, { status: 500 });
-    }
-
-    // 6. תיעוד הפעולה בטבלת היסטוריית התנועות (billing_transactions)
-    const { error: txError } = await supabaseAdmin
-      .from("billing_transactions")
-      .insert({
-        parent_id: parentId,
-        type: "deposit",
-        amount: amount,
-        description: `טעינת ארנק מוצלח (Hyp #${cardcomInvoiceNumber})`,
-        status: "succeeded",
-        created_at: new Date().toISOString(),
-      });
-
-    if (txError) {
-      console.error("Failed to log billing transaction:", txError);
     }
 
     return NextResponse.json({ status: "success", message: "Wallet updated successfully" }, { status: 200 });

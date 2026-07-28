@@ -4,6 +4,10 @@ import {
   parseHypReturnParams
 } from "@/lib/billing/hyp/parse-return-params";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import {
+  creditParentWalletDeposit,
+  parseHypWalletDepositParentId
+} from "@/lib/wallet/billing-transactions";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -37,23 +41,22 @@ export async function POST(request: Request) {
   const amount = parsed.amount;
   const bookingId = parsed.bookingId;
   const sessionId = parsed.sessionId;
+  const infoRaw = params.get("Info") ?? params.get("info") ?? parsed.raw.Info ?? parsed.raw.info ?? "";
+  const moreDataRaw =
+    params.get("MoreData") ?? params.get("moredata") ?? parsed.raw.MoreData ?? parsed.raw.moredata ?? "";
+  const walletParentId =
+    parseHypWalletDepositParentId(infoRaw) || parseHypWalletDepositParentId(moreDataRaw);
 
   if (!isHypSuccessCCode(parsed.cCode)) {
     console.warn(`[Hyp Webhook] Ignoring non-success CCode=${parsed.cCode}`, {
       bookingId,
-      approvalNumber
+      approvalNumber,
+      walletParentId
     });
     return new NextResponse("IGNORED", {
       status: 200,
       headers: { "Content-Type": "text/plain" }
     });
-  }
-
-  if (!bookingId || !approvalNumber) {
-    return NextResponse.json(
-      { error: "Missing required Hyp transaction parameters (Info/booking + Id)." },
-      { status: 400 }
-    );
   }
 
   let supabase;
@@ -64,6 +67,40 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Server misconfigured (SUPABASE_SERVICE_ROLE_KEY)." },
       { status: 500 }
+    );
+  }
+
+  // Parent wallet top-up (Info = WalletDeposit_<parentUuid>) — not a shift booking.
+  if (walletParentId) {
+    const depositAmount = Number(amount);
+    if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
+      return NextResponse.json({ error: "Invalid wallet deposit amount." }, { status: 400 });
+    }
+
+    const credit = await creditParentWalletDeposit(supabase, {
+      parentId: walletParentId,
+      amount: depositAmount,
+      description: `טעינת ארנק מוצלח (Hyp #${approvalNumber ?? "0"})`
+    });
+
+    if (credit.error) {
+      console.error("[Hyp Webhook] Wallet deposit failed:", credit.error, {
+        walletParentId,
+        approvalNumber
+      });
+      return NextResponse.json({ error: credit.error }, { status: 500 });
+    }
+
+    console.log(
+      `[Hyp Webhook] Wallet deposit ok parent=${walletParentId} amount=${depositAmount} approval=${approvalNumber}`
+    );
+    return new NextResponse("OK", { status: 200, headers: { "Content-Type": "text/plain" } });
+  }
+
+  if (!bookingId || !approvalNumber) {
+    return NextResponse.json(
+      { error: "Missing required Hyp transaction parameters (Info/booking + Id)." },
+      { status: 400 }
     );
   }
 

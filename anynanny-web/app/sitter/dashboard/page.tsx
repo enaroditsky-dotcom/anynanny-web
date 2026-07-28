@@ -909,6 +909,11 @@ export default function SitterDashboardPage() {
     Boolean(completedSummaryRow) &&
     !sitterInFlightActive &&
     !showSitterAwaitingParentApproval;
+  const showReleaseStuckShiftButton =
+    sitterInFlightActive ||
+    showSitterAwaitingParentApproval ||
+    showSitterWaitingForPayment ||
+    showSitterCompletedClosure;
   
   const showSitterIdleWelcome =
     bookingGuardReady &&
@@ -1144,8 +1149,8 @@ export default function SitterDashboardPage() {
                     href="/sitter/availability"
                     aria-label={
                       pendingBookingCount > 0 || showSitterBookingApproval
-                        ? "יומן — יש בקשות ממתינות לאישור"
-                        : "יומן"
+                        ? "סידור עבודה — יש בקשות ממתינות לאישור"
+                        : "סידור עבודה"
                     }
                     className="group flex min-h-[6rem] flex-row-reverse items-center justify-between gap-4 rounded-2xl border border-emerald-600/15 bg-emerald-50/40 p-4 text-right text-navy-header shadow-sm transition hover:border-emerald-600/30 hover:shadow-md active:scale-[0.98] sm:flex-col sm:items-end sm:justify-between sm:min-h-[6.5rem]"
                   >
@@ -1159,7 +1164,7 @@ export default function SitterDashboardPage() {
                       ) : null}
                     </span>
                     <div className="flex flex-col text-right sm:w-full">
-                      <span className="text-sm font-bold sm:text-sm">יומן</span>
+                      <span className="text-sm font-bold sm:text-sm">סידור עבודה</span>
                       <span className="text-[11px] text-slate-500 sm:hidden">ניהול ימי ושעות פעילות</span>
                     </div>
                   </Link>
@@ -1216,7 +1221,9 @@ export default function SitterDashboardPage() {
           </div>
           {sitterBootstrapComplete && sitterId && !onboardingPending ? (
             <div className="flex w-full shrink-0 flex-col gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3 rounded-b-3xl">
-              <button type="button" onClick={() => void handleDevReset()} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-[0.97]"><span>שחרור משמרת תקועה</span></button>
+              {showReleaseStuckShiftButton ? (
+                <button type="button" onClick={() => void handleDevReset()} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-[0.97]"><span>שחרור משמרת תקועה</span></button>
+              ) : null}
               <LogoutButton />
             </div>
           ) : null}

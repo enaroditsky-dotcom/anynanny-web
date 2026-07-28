@@ -1609,13 +1609,15 @@ export function ParentDashboardClient({
             </div>
 
           <div className="pt-2 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => alert("שחרור משמרת תקופה")}
-              className="w-full rounded-xl border border-amber-300 bg-amber-50/50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 shadow-2xs"
-            >
-              שחרור משמרת תקופה
-            </button>
+            {showLiveShiftCard ? (
+              <button
+                type="button"
+                onClick={() => alert("שחרור משמרת תקועה")}
+                className="w-full rounded-xl border border-amber-300 bg-amber-50/50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 shadow-2xs"
+              >
+                שחרור משמרת תקועה
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => {
