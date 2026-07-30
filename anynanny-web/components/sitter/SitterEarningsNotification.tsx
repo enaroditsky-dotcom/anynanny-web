@@ -4,6 +4,12 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { buildDashboardGreetingTitle } from "@/lib/user/use-dashboard-greeting-name";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { RATINGS_TABLE } from "@/lib/ratings/constants";
+import {
+  isMissingRpcError,
+  isRpcKnownMissing,
+  markRpcMissing
+} from "@/lib/supabase/rpc-availability";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 type SitterDashboardStats = {
@@ -88,17 +94,42 @@ export function SitterDashboardHeader({
     setLoadState("loading");
 
     void (async () => {
-      const { data, error } = await supabase.rpc("get_current_user_rating");
-      if (cancelled) return;
+      const rpcName = "get_current_user_rating";
+      if (!isRpcKnownMissing(rpcName)) {
+        const { data, error } = await supabase.rpc(rpcName);
+        if (cancelled) return;
 
-      if (error) {
-        console.warn("[SitterDashboardHeader] get_current_user_rating:", error.message);
+        if (!error) {
+          const { nanny_id_number, avg_rating, rating_count } = parseGetCurrentUserRatingResponse(data);
+          setStats({ nanny_id_number, avg_rating, rating_count });
+          setLoadState("ready");
+          return;
+        }
+
+        if (isMissingRpcError(error)) {
+          markRpcMissing(rpcName);
+        } else {
+          console.warn("[SitterEarningsNotification] get_current_user_rating:", error.message);
+        }
+      }
+
+      // Soft fallback — rating aggregate without the missing RPC.
+      const { data: rows, error: ratingsErr } = await supabase
+        .from(RATINGS_TABLE)
+        .select("rating")
+        .eq("to_user_id", sitterId);
+      if (cancelled) return;
+      if (ratingsErr) {
         setLoadState("error");
         return;
       }
-
-      const { nanny_id_number, avg_rating, rating_count } = parseGetCurrentUserRatingResponse(data);
-      setStats({ nanny_id_number, avg_rating, rating_count });
+      const ratings = (rows ?? [])
+        .map((r) => Number((r as { rating?: unknown }).rating))
+        .filter((n) => Number.isFinite(n));
+      const rating_count = ratings.length;
+      const avg_rating =
+        rating_count > 0 ? ratings.reduce((a, b) => a + b, 0) / rating_count : null;
+      setStats({ nanny_id_number: null, avg_rating, rating_count });
       setLoadState("ready");
     })();
 

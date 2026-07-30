@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Calendar, Loader2, ArrowRight, RefreshCw } from "lucide-react";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { useRouter } from "next/navigation";
@@ -15,13 +15,44 @@ type NannyShiftHistoryItem = {
   status: string;
 };
 
+type DateFilterMode = "last_week" | "last_month" | "last_year" | "custom";
+
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function startOfLocalDay(isoDate: string): number {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  if (!y || !m || !d) return Number.NaN;
+  return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+}
+
+function endOfLocalDay(isoDate: string): number {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  if (!y || !m || !d) return Number.NaN;
+  return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+}
+
+function resolvePresetRange(mode: Exclude<DateFilterMode, "custom">): { start: string; end: string } {
+  const end = new Date();
+  const start = new Date();
+  if (mode === "last_week") start.setDate(end.getDate() - 7);
+  else if (mode === "last_month") start.setMonth(end.getMonth() - 1);
+  else start.setFullYear(end.getFullYear() - 1);
+  return { start: toIsoDate(start), end: toIsoDate(end) };
+}
+
 export default function ParentHistoryPage() {
   const supabase = getSupabaseBrowserClient();
   const router = useRouter();
 
   const [shifts, setShifts] = useState<NannyShiftHistoryItem[]>([]);
-  const [startDate, setStartDate] = useState<string>(""); 
-  const [endDate, setEndDate] = useState<string>("");     
+  const [filterMode, setFilterMode] = useState<DateFilterMode>("last_month");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
   const [loadingData, setLoadingData] = useState<boolean>(true);
 
   const fetchShiftHistory = useCallback(async (resolvedParentId: string) => {
@@ -55,14 +86,14 @@ export default function ParentHistoryPage() {
         const formatted = data.map((booking: any) => {
           let displayDate = "ללא תאריך";
           let rawDateStr = booking.booking_date || "";
-          
+
           if (booking.booking_date) {
             const parts = booking.booking_date.split("-");
             if (parts.length === 3) {
               displayDate = `${parts[2]}/${parts[1]}/${parts[0].slice(-2)}`;
             }
           }
-          
+
           // סריקה אוטומטית של השדות כדי למצוא את מזהה ה-AN הציבורי בלי לנחש שמות עמודות
           const profilesObj = booking.sitter_profiles;
           const nameRow = Array.isArray(booking.profiles) ? booking.profiles[0] : booking.profiles;
@@ -73,9 +104,12 @@ export default function ParentHistoryPage() {
           if (profilesObj) {
             // מחפש שדה שמכיל באופן ישיר את המזהה הציבורי (למשל ערך כמו AN-1004 או מספר קוד)
             const foundKey = Object.keys(profilesObj).find(
-              key => String(profilesObj[key]).startsWith("AN-") || key.includes("code") || key.includes("display")
+              (key) =>
+                String(profilesObj[key]).startsWith("AN-") ||
+                key.includes("code") ||
+                key.includes("display")
             );
-            
+
             if (foundKey) {
               publicNannyId = String(profilesObj[foundKey]);
             } else if (profilesObj.id) {
@@ -85,8 +119,8 @@ export default function ParentHistoryPage() {
           }
 
           if (!publicNannyId) {
-            publicNannyId = booking.sitter_id 
-              ? `AN-${booking.sitter_id.substring(0, 4).toUpperCase()}` 
+            publicNannyId = booking.sitter_id
+              ? `AN-${booking.sitter_id.substring(0, 4).toUpperCase()}`
               : "AN-Unknown";
           }
 
@@ -100,7 +134,7 @@ export default function ParentHistoryPage() {
             nanny_name: nannyName,
             date: displayDate,
             raw_date: rawDateStr,
-            status: statusLabel,
+            status: statusLabel
           };
         });
         setShifts(formatted);
@@ -118,10 +152,10 @@ export default function ParentHistoryPage() {
     if (!supabase) return;
 
     const targetParentId = "1b4b958c-9013-481f-a8df-6ac0419aab83";
-    
+
     // שליפה ראשונית של המידע
     fetchShiftHistory(targetParentId);
-  
+
     // channel().on().subscribe() — chained on the same object (unique topic).
     const channel = subscribePostgresChanges(
       supabase,
@@ -151,19 +185,30 @@ export default function ParentHistoryPage() {
     };
   }, [fetchShiftHistory, supabase]);
 
-  const filteredShifts = shifts.filter((shift) => {
-    if (!shift.raw_date) return true;
-    const shiftTime = new Date(shift.raw_date).getTime();
-    if (startDate) {
-      const startTime = new Date(startDate).getTime();
-      if (shiftTime < startTime) return false;
+  const activeRange = useMemo(() => {
+    if (filterMode === "custom") {
+      return { start: startDate, end: endDate };
     }
-    if (endDate) {
-      const endTime = new Date(endDate).getTime();
-      if (shiftTime > endTime) return false;
-    }
-    return true;
-  });
+    return resolvePresetRange(filterMode);
+  }, [filterMode, startDate, endDate]);
+
+  const filteredShifts = useMemo(() => {
+    return shifts.filter((shift) => {
+      if (!shift.raw_date) return filterMode === "custom" && !startDate && !endDate;
+      const shiftTime = startOfLocalDay(shift.raw_date.slice(0, 10));
+      if (!Number.isFinite(shiftTime)) return false;
+
+      if (activeRange.start) {
+        const startTime = startOfLocalDay(activeRange.start);
+        if (Number.isFinite(startTime) && shiftTime < startTime) return false;
+      }
+      if (activeRange.end) {
+        const endTime = endOfLocalDay(activeRange.end);
+        if (Number.isFinite(endTime) && shiftTime > endTime) return false;
+      }
+      return true;
+    });
+  }, [shifts, filterMode, startDate, endDate, activeRange.start, activeRange.end]);
 
   return (
     <div className="w-full px-4 pt-2 pb-4 space-y-4" dir="rtl">
@@ -176,8 +221,9 @@ export default function ParentHistoryPage() {
           <ArrowRight className="h-4 w-4" />
           <span>חזרה לדשבורד</span>
         </button>
-        <button 
-          onClick={() => fetchShiftHistory("1b4b958c-9013-481f-a8df-6ac0419aab83")} 
+        <button
+          type="button"
+          onClick={() => fetchShiftHistory("1b4b958c-9013-481f-a8df-6ac0419aab83")}
           className="p-1 text-slate-400 hover:text-slate-600"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -185,7 +231,7 @@ export default function ParentHistoryPage() {
       </div>
 
       <div className="text-center">
-        <h1 className="text-sm font-extrabold text-navy-header">היסטוריית שמרטפות</h1>
+        <h1 className="text-sm font-extrabold text-navy-header">היסטוריית משמרות</h1>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 p-3 shadow-sm max-w-sm mx-auto space-y-2">
@@ -193,28 +239,60 @@ export default function ParentHistoryPage() {
           <Calendar className="h-3 w-3" />
           <span>סינון לפי טווח תאריכים</span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-[9px] text-slate-400 block mb-0.5 pr-1">מתאריך</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-1.5 px-2 text-[11px] text-slate-700 text-center"
-              style={{ direction: "ltr" }}
-            />
-          </div>
-          <div>
-            <label className="text-[9px] text-slate-400 block mb-0.5 pr-1">עד תאריך</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-1.5 px-2 text-[11px] text-slate-700 text-center"
-              style={{ direction: "ltr" }}
-            />
+
+        <div>
+          <label htmlFor="history-date-filter" className="text-[9px] text-slate-400 block mb-0.5 pr-1">
+            בחירת טווח
+          </label>
+          <div className="relative">
+            <select
+              id="history-date-filter"
+              value={filterMode}
+              onChange={(e) => setFilterMode(e.target.value as DateFilterMode)}
+              className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 py-2 pr-3 pl-8 text-[11px] font-semibold text-slate-700"
+            >
+              <option value="last_week">שבוע אחרון</option>
+              <option value="last_month">חודש אחרון</option>
+              <option value="last_year">שנה אחרונה</option>
+              <option value="custom">בין התאריכים</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <svg className="h-3.5 w-3.5 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+              </svg>
+            </div>
           </div>
         </div>
+
+        {filterMode === "custom" ? (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-slate-400 block mb-0.5 pr-1">מתאריך</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-1.5 px-2 text-[11px] text-slate-700 text-center"
+                style={{ direction: "ltr" }}
+              />
+            </div>
+            <div>
+              <label className="text-[9px] text-slate-400 block mb-0.5 pr-1">עד תאריך</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-1.5 px-2 text-[11px] text-slate-700 text-center"
+                style={{ direction: "ltr" }}
+              />
+            </div>
+          </div>
+        ) : (
+          <p className="text-[10px] text-slate-500 pr-1 tabular-nums">
+            מציג משמרות מ-{activeRange.start.split("-").reverse().join("/")} עד{" "}
+            {activeRange.end.split("-").reverse().join("/")}
+          </p>
+        )}
       </div>
 
       <section className="bg-white rounded-2xl border border-slate-100 shadow-soft overflow-hidden px-3 py-1">
@@ -232,30 +310,41 @@ export default function ParentHistoryPage() {
               <p className="text-[11px]">טוען נתונים...</p>
             </div>
           ) : filteredShifts.length === 0 ? (
-            <div className="py-10 text-center text-xs text-slate-400">
-              לא נמצאו משמרות בטווח שנבחר
-            </div>
+            <div className="py-10 text-center text-xs text-slate-400">לא נמצאו משמרות בטווח שנבחר</div>
           ) : (
             filteredShifts.map((shift) => (
-              <div key={shift.id} className="grid grid-cols-12 gap-2 py-3 items-center text-xs text-slate-700 font-medium px-1">
+              <div
+                key={shift.id}
+                className="grid grid-cols-12 gap-2 py-3 items-center text-xs text-slate-700 font-medium px-1"
+              >
                 <div className="col-span-5 text-right min-w-0">
                   <div className="font-bold text-slate-800 truncate">{shift.nanny_name}</div>
-                  <div className="text-[9px] text-slate-400 font-mono tabular-nums mt-0.5">ID: {shift.nanny_id}</div>
+                  <div className="text-[9px] text-slate-400 font-mono tabular-nums mt-0.5">
+                    ID: {shift.nanny_id}
+                  </div>
                 </div>
                 <div className="col-span-3 text-center text-slate-500 tabular-nums">{shift.date}</div>
                 <div className="col-span-2 text-center">
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap ${
-                    shift.status === "שולם" 
-                      ? "bg-green-50 text-green-600" 
-                      : shift.status === "ממתין לאישור"
-                      ? "bg-blue-50 text-blue-600"
-                      : "bg-amber-50 text-amber-600"
-                  }`}>
+                  <span
+                    className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap ${
+                      shift.status === "שולם"
+                        ? "bg-green-50 text-green-600"
+                        : shift.status === "ממתין לאישור"
+                          ? "bg-blue-50 text-blue-600"
+                          : "bg-amber-50 text-amber-600"
+                    }`}
+                  >
                     {shift.status}
                   </span>
                 </div>
                 <div className="col-span-2 text-left">
-                  <button onClick={() => alert(`משמרת מס׳ ${shift.id}`)} className="text-blue-600 font-bold hover:underline">צפייה</button>
+                  <button
+                    type="button"
+                    onClick={() => alert(`משמרת מס׳ ${shift.id}`)}
+                    className="text-blue-600 font-bold hover:underline"
+                  >
+                    צפייה
+                  </button>
                 </div>
               </div>
             ))

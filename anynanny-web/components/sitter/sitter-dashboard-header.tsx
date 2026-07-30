@@ -5,6 +5,11 @@ import { useEffect, useState } from "react";
 import { buildDashboardGreetingTitle } from "@/lib/user/use-dashboard-greeting-name";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
+import {
+  isMissingRpcError,
+  isRpcKnownMissing,
+  markRpcMissing
+} from "@/lib/supabase/rpc-availability";
 import { Star } from "lucide-react";
 
 type SitterDashboardStats = {
@@ -13,6 +18,8 @@ type SitterDashboardStats = {
 };
 
 type LoadState = "idle" | "loading" | "ready" | "error";
+
+const GET_CURRENT_USER_RATING_RPC = "get_current_user_rating";
 
 function parseGetCurrentUserRatingResponse(data: unknown): SitterDashboardStats {
   const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
@@ -77,24 +84,20 @@ export function SitterDashboardHeader({
     setLoadState("loading");
 
     void (async () => {
-      const { data, error } = await supabase.rpc("get_current_user_rating");
-      if (cancelled) return;
+      if (!isRpcKnownMissing(GET_CURRENT_USER_RATING_RPC)) {
+        const { data, error } = await supabase.rpc(GET_CURRENT_USER_RATING_RPC);
+        if (cancelled) return;
 
-      if (!error) {
-        const { avg_rating, rating_count } = parseGetCurrentUserRatingResponse(data);
-        setStats({ avg_rating, rating_count });
-        setLoadState("ready");
-        return;
-      }
+        if (!error) {
+          const { avg_rating, rating_count } = parseGetCurrentUserRatingResponse(data);
+          setStats({ avg_rating, rating_count });
+          setLoadState("ready");
+          return;
+        }
 
-      // Soft-fail missing RPC (404 / PGRST202) — fall back to ratings table aggregate.
-      const msg = error.message ?? "";
-      const missingRpc =
-        error.code === "PGRST202" ||
-        /could not find the function/i.test(msg) ||
-        /404/.test(msg);
-      if (!missingRpc) {
-        console.warn("[SitterDashboardHeader] get_current_user_rating:", msg);
+        if (isMissingRpcError(error)) {
+          markRpcMissing(GET_CURRENT_USER_RATING_RPC);
+        }
       }
 
       const { data: rows, error: ratingsErr } = await supabase
@@ -123,7 +126,8 @@ export function SitterDashboardHeader({
 
   const greeting = buildDashboardGreetingTitle(firstName, nameLoading);
   const statsLoading = !sitterId || loadState === "loading" || loadState === "idle";
-  const displayIdValue = "AN-1001";
+  const displayIdValue = (publicDisplayId ?? "").trim() || null;
+  const showIdPill = showPublicId && (publicIdLoaded ? Boolean(displayIdValue) : Boolean(displayIdValue));
   const numericRating = stats.avg_rating != null ? Number(stats.avg_rating).toFixed(1) : "0.0";
   const reviewsCount = stats.rating_count || 0;
 
@@ -134,13 +138,17 @@ export function SitterDashboardHeader({
           <h1 className={`text-lg font-bold text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}>
             {greeting}
           </h1>
-          <span
-            className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-[11px] font-bold text-purple-800"
-            dir="ltr"
-          >
-            <span>{displayIdValue}</span>
-            <span className="text-[9px] font-normal text-purple-500">ID</span>
-          </span>
+          {showIdPill && displayIdValue ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-[11px] font-bold text-purple-800"
+              dir="ltr"
+            >
+              <span>{displayIdValue}</span>
+              <span className="text-[9px] font-normal text-purple-500">ID</span>
+            </span>
+          ) : showPublicId && !publicIdLoaded ? (
+            <span className="inline-block h-5 w-16 animate-pulse rounded-md bg-purple-100/80" aria-hidden />
+          ) : null}
         </div>
         <div className="flex items-center justify-start">
           {statsLoading ? (

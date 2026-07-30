@@ -56,8 +56,15 @@ export function getSupabaseBrowserClient(): SupabaseClient | null {
 
 export async function reloadPostgrestSchema(client: SupabaseClient): Promise<boolean> {
   try {
+    const { isRpcKnownMissing, isMissingRpcError, markRpcMissing } = await import(
+      "@/lib/supabase/rpc-availability"
+    );
+    if (isRpcKnownMissing("reload_schema")) return false;
     const { error } = await client.rpc("reload_schema");
-    // Missing RPC should not surface as a hard console failure.
+    if (error && isMissingRpcError(error)) {
+      markRpcMissing("reload_schema");
+      return false;
+    }
     return !error;
   } catch {
     return false;

@@ -9,7 +9,13 @@ import {
   parseCurrentUserRating,
   type CurrentUserRating
 } from "@/lib/ratings/current-user-rating";
+import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  isMissingRpcError,
+  isRpcKnownMissing,
+  markRpcMissing
+} from "@/lib/supabase/rpc-availability";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -25,14 +31,35 @@ type CurrentUserRatingBadgeProps = {
   showNannyId?: boolean;
 };
 
+const GET_CURRENT_USER_RATING_RPC = "get_current_user_rating";
+
+async function loadRatingFromTable(
+  supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
+  userId: string
+): Promise<CurrentUserRating> {
+  const { data: rows, error } = await supabase
+    .from(RATINGS_TABLE)
+    .select("rating")
+    .eq("to_user_id", userId);
+  if (error) return EMPTY_CURRENT_USER_RATING;
+
+  const ratings = (rows ?? [])
+    .map((r) => Number((r as { rating?: unknown }).rating))
+    .filter((n) => Number.isFinite(n));
+  const rating_count = ratings.length;
+  const avg_rating =
+    rating_count > 0 ? ratings.reduce((a, b) => a + b, 0) / rating_count : null;
+  return { avg_rating, rating_count, nanny_id_number: null };
+}
+
 export function CurrentUserRatingBadge({ className = "", showNannyId = false }: CurrentUserRatingBadgeProps) {
-  const { signedIn, isLoading: authLoading } = useAuth();
+  const { signedIn, isLoading: authLoading, user } = useAuth();
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [rating, setRating] = useState<CurrentUserRating>(EMPTY_CURRENT_USER_RATING);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!signedIn) {
+    if (!signedIn || !user?.id) {
       setLoadState("idle");
       setRating(EMPTY_CURRENT_USER_RATING);
       return;
@@ -46,20 +73,30 @@ export function CurrentUserRatingBadge({ className = "", showNannyId = false }: 
     }
 
     setLoadState("loading");
-    void supabase.rpc("get_current_user_rating").then(({ data, error }) => {
-      if (cancelled) return;
-      if (error) {
-        setLoadState("error");
-        return;
+    void (async () => {
+      if (!isRpcKnownMissing(GET_CURRENT_USER_RATING_RPC)) {
+        const { data, error } = await supabase.rpc(GET_CURRENT_USER_RATING_RPC);
+        if (cancelled) return;
+        if (!error) {
+          setRating(parseCurrentUserRating(data));
+          setLoadState("ready");
+          return;
+        }
+        if (isMissingRpcError(error)) {
+          markRpcMissing(GET_CURRENT_USER_RATING_RPC);
+        }
       }
-      setRating(parseCurrentUserRating(data));
+
+      const fallback = await loadRatingFromTable(supabase, user.id);
+      if (cancelled) return;
+      setRating(fallback);
       setLoadState("ready");
-    });
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [signedIn, authLoading]);
+  }, [signedIn, authLoading, user?.id]);
 
   if (!signedIn || authLoading) {
     return (

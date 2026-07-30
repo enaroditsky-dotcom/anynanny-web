@@ -9,6 +9,7 @@ import {
 } from "@/lib/sitter/sitter-profile";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
+import { getCachedWorkingSelect, setCachedWorkingSelect } from "@/lib/supabase/rpc-availability";
 
 export const CHAT_ELIGIBLE_BOOKING_STATUSES: BookingStatus[] = [
   "pending",
@@ -41,12 +42,15 @@ async function loadSitterPartnerDetailsByIds(
   if (partnerIds.length === 0) return byId;
 
   const fk = SITTER_PROFILES_USER_COLUMN;
+  const cacheKey = `chat-inbox:sitter-partners`;
+  const cached = getCachedWorkingSelect(cacheKey);
   const selectAttempts = [
+    ...(cached ? [cached] : []),
     `${fk}, first_name, last_name, nanny_serial, nanny_id_number`,
     `${fk}, first_name, last_name, nanny_serial`,
     `${fk}, first_name, last_name, nanny_id_number`,
     `${fk}, first_name, last_name`
-  ];
+  ].filter((s, i, arr) => arr.indexOf(s) === i);
 
   for (const select of selectAttempts) {
     const { data, error } = await supabase.from(SITTER_PROFILES_TABLE).select(select).in(fk, partnerIds);
@@ -62,6 +66,7 @@ async function loadSitterPartnerDetailsByIds(
       return byId;
     }
 
+    setCachedWorkingSelect(cacheKey, select);
     for (const profile of data ?? []) {
       if (!profile || typeof profile !== "object") continue;
       const row = profile as Record<string, unknown>;
@@ -86,14 +91,17 @@ async function loadParentPartnerDetailsByIds(
   const byId = new Map<string, PartnerDetails>();
   if (partnerIds.length === 0) return byId;
 
+  const cacheKey = `chat-inbox:parent-partners`;
+  const cached = getCachedWorkingSelect(cacheKey);
   const selectAttempts = [
+    ...(cached ? [cached] : []),
     "id, first_name, last_name, parent_public_id, parent_serial, public_id, serial_id",
     "id, first_name, last_name, parent_public_id, parent_serial, serial_id",
     "id, first_name, last_name, parent_serial, serial_id",
     "id, first_name, last_name, public_id, serial_id",
     "id, first_name, last_name, serial_id",
     "id, first_name, last_name"
-  ];
+  ].filter((s, i, arr) => arr.indexOf(s) === i);
 
   for (const select of selectAttempts) {
     const { data, error } = await supabase.from(PROFILES_TABLE).select(select).in("id", partnerIds);
@@ -111,6 +119,7 @@ async function loadParentPartnerDetailsByIds(
       return byId;
     }
 
+    setCachedWorkingSelect(cacheKey, select);
     for (const profile of data ?? []) {
       if (!profile || typeof profile !== "object") continue;
       const row = profile as Record<string, unknown>;

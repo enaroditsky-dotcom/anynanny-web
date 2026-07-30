@@ -71,12 +71,12 @@ export default async function ParentDashboardPage() {
   let initialProfiles: NannyProfile[] = [];
 
   if (parentId) {
-    // Resilient profile read — never hit non-existent parent_profiles (404).
+    // Prefer lean selects first to avoid 400 spam when optional columns are absent.
     const profileSelectAttempts = [
-      "first_name, last_name, address, parent_serial, parent_public_id",
-      "first_name, last_name, address, parent_serial",
       "first_name, last_name, address",
-      "first_name, last_name"
+      "first_name, last_name",
+      "first_name, last_name, address, parent_serial",
+      "first_name, last_name, address, parent_serial, parent_public_id"
     ];
 
     for (const select of profileSelectAttempts) {

@@ -1428,7 +1428,7 @@ export function ParentDashboardClient({
                 className="flex flex-col items-center justify-center rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs transition hover:bg-slate-50"
               >
                 <History className="h-5 w-5 text-[#001F3F] mb-1" />
-                <span className="text-xs font-semibold text-slate-800">המשמרות שלי</span>
+                <span className="text-xs font-semibold text-slate-800">היסטוריית משמרות</span>
               </Link>
             </div>
           </div>
