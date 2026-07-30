@@ -27,7 +27,7 @@ export function SitterPageShell({ title, subtitle, children }: Props) {
         <h1 className="text-lg font-bold text-navy-header">{title}</h1>
       </div>
       {subtitle ? <p className="shrink-0 px-1 text-right text-sm text-slate-600">{subtitle}</p> : null}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">{children}</div>
     </main>
   );
 }

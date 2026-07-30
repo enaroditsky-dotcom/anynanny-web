@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogoutButton } from "@/components/account/logout-button";
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
-import { SitterProfileForm } from "@/components/sitter/sitter-profile-form";
+import { SitterPersonalArea } from "@/components/sitter/sitter-personal-area";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
@@ -59,12 +59,12 @@ export default function SitterProfilePage() {
 
   return (
     <SitterPageShell
-      title="פרופיל מקצועי"
-      subtitle="עדכון אזורי השירות שלך — ההורים יראו אותך בחיפוש לפי הערים שבחרת."
+      title="אזור אישי"
+      subtitle="כל פרטי השאלון והפרופיל המקצועי — ניתן לערוך ולשמור בכל עת."
     >
-      {authReady ? <SitterProfileForm userId={userId} /> : null}
+      {authReady ? <SitterPersonalArea userId={userId} /> : null}
       {authReady ? (
-        <div className="mt-8 border-t border-slate-100 pt-6">
+        <div className="mt-4 shrink-0 border-t border-slate-100 pt-4">
           <LogoutButton />
         </div>
       ) : null}
