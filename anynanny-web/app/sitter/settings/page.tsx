@@ -1,13 +1,17 @@
 import Link from "next/link";
 import { DeleteAccountSection } from "@/components/account/delete-account-section";
 import { LogoutButton } from "@/components/account/logout-button";
+import { NotificationSettingsSection } from "@/components/settings/notification-settings-section";
 
 export default function SitterSettingsPage() {
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-md flex-col bg-[#FDFBF6] py-2 pb-8" dir="rtl">
+    <main
+      className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-md flex-col bg-[#FDFBF6] py-2 pb-8"
+      dir="rtl"
+    >
       <header className="text-right">
         <h1 className="text-xl font-bold text-[#001F3F]">הגדרות חשבון</h1>
-        <p className="mt-1 text-sm text-slate-600">העדפות חשבון והתראות — בקרוב.</p>
+        <p className="mt-1 text-sm text-slate-600">ניהול חשבון, פרטיות והתראות</p>
       </header>
 
       <Link
@@ -16,6 +20,10 @@ export default function SitterSettingsPage() {
       >
         חזרה לדשבורד
       </Link>
+
+      <div className="mt-6">
+        <NotificationSettingsSection />
+      </div>
 
       <div className="mt-8 space-y-3">
         <h2 className="text-right text-sm font-bold text-navy-header">חשבון</h2>

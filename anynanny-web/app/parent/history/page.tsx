@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { Calendar, Loader2, ArrowRight, RefreshCw } from "lucide-react";
+import { Calendar, Loader2, ArrowRight, RefreshCw, Clock3, WalletCards, UserRound } from "lucide-react";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { pickProfilePublicId } from "@/lib/public/sequential-display-id";
+import { HOURLY_RATE } from "@/lib/session/protocol";
 
 type NannyShiftHistoryItem = {
   id: string;
@@ -12,7 +14,27 @@ type NannyShiftHistoryItem = {
   nanny_name: string;
   date: string;
   raw_date: string;
+  time_range: string;
+  total_cost: number | null;
   status: string;
+};
+
+type HistorySessionRow = {
+  id: string;
+  booking_id?: string | null;
+  sitter_id?: string | null;
+  created_at?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  start_time_confirmed_by_sitter?: string | null;
+  end_time_confirmed_by_parent?: string | null;
+  final_elapsed_seconds?: number | null;
+  total_minutes?: number | null;
+  billing_rate_per_minute?: number | null;
+  hourly_rate?: number | null;
+  total_amount_charged?: number | null;
+  final_amount_nis?: number | null;
+  total_amount?: number | null;
 };
 
 type DateFilterMode = "last_week" | "last_month" | "last_year" | "custom";
@@ -36,6 +58,133 @@ function endOfLocalDay(isoDate: string): number {
   return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
 }
 
+function formatShiftTime(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const raw = value.trim();
+  const timeOnly = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (timeOnly) return `${timeOnly[1].padStart(2, "0")}:${timeOnly[2]}`;
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Intl.DateTimeFormat("he-IL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(parsed);
+}
+
+function formatNis(amount: number | null): string {
+  if (amount == null || !Number.isFinite(amount)) return "טרם נקבע";
+  return new Intl.NumberFormat("he-IL", {
+    style: "currency",
+    currency: "ILS",
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+}
+
+function finiteNonNegative(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function timestampMs(value: unknown): number | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function bookingDateTimeMs(date: unknown, time: unknown): number | null {
+  if (typeof date !== "string" || typeof time !== "string" || !date || !time) return null;
+  const direct = timestampMs(time);
+  if (direct != null) return direct;
+  return timestampMs(`${date.slice(0, 10)}T${time}`);
+}
+
+function localDateKey(value: unknown): string | null {
+  const ms = timestampMs(value);
+  return ms == null ? null : toIsoDate(new Date(ms));
+}
+
+function sessionStartValue(session: HistorySessionRow): string | null {
+  return session.start_time || session.start_time_confirmed_by_sitter || session.created_at || null;
+}
+
+function sessionEndValue(session: HistorySessionRow): string | null {
+  return session.end_time || session.end_time_confirmed_by_parent || null;
+}
+
+function resolveSessionForBooking(
+  booking: { id: string; sitter_id?: string | null; booking_date?: string | null; start_time?: string | null },
+  sessions: HistorySessionRow[]
+): HistorySessionRow | undefined {
+  const directlyLinked = sessions.find((session) => session.booking_id === booking.id || session.id === booking.id);
+  if (directlyLinked) return directlyLinked;
+
+  const sameSitter = sessions.filter(
+    (session) => booking.sitter_id && session.sitter_id === booking.sitter_id
+  );
+  if (sameSitter.length === 0) return undefined;
+
+  const bookingDate = booking.booking_date?.slice(0, 10);
+  const sameDate = sameSitter.find((session) => localDateKey(sessionStartValue(session)) === bookingDate);
+  if (sameDate) return sameDate;
+
+  const scheduledStart = bookingDateTimeMs(booking.booking_date, booking.start_time);
+  if (scheduledStart == null) return sameSitter[0];
+  return sameSitter.reduce((closest, session) => {
+    const currentStart = timestampMs(sessionStartValue(session));
+    const closestStart = timestampMs(sessionStartValue(closest));
+    if (currentStart == null) return closest;
+    if (closestStart == null) return session;
+    return Math.abs(currentStart - scheduledStart) < Math.abs(closestStart - scheduledStart)
+      ? session
+      : closest;
+  });
+}
+
+function resolveCompletedShiftAmount(params: {
+  session?: HistorySessionRow;
+  bookingStart: unknown;
+  bookingEnd: unknown;
+  bookingDate: unknown;
+  sitterHourlyRate: unknown;
+  allowCalculation: boolean;
+}): number | null {
+  const { session } = params;
+  const storedAmount =
+    finiteNonNegative(session?.total_amount_charged) ??
+    finiteNonNegative(session?.total_amount) ??
+    finiteNonNegative(session?.final_amount_nis);
+  if (storedAmount != null) return storedAmount;
+  if (!params.allowCalculation) return null;
+
+  const elapsedSeconds =
+    finiteNonNegative(session?.final_elapsed_seconds) ??
+    (() => {
+      const minutes = finiteNonNegative(session?.total_minutes);
+      return minutes == null ? null : minutes * 60;
+    })() ??
+    (() => {
+      const start = timestampMs(session ? sessionStartValue(session) : null)
+        ?? bookingDateTimeMs(params.bookingDate, params.bookingStart);
+      const end = timestampMs(session ? sessionEndValue(session) : null)
+        ?? bookingDateTimeMs(params.bookingDate, params.bookingEnd);
+      return start != null && end != null && end >= start ? (end - start) / 1000 : null;
+    })();
+
+  if (elapsedSeconds == null) return null;
+  const ratePerMinute = finiteNonNegative(session?.billing_rate_per_minute);
+  const hourlyRate =
+    (ratePerMinute != null && ratePerMinute > 0 ? ratePerMinute * 60 : null) ??
+    finiteNonNegative(session?.hourly_rate) ??
+    finiteNonNegative(params.sitterHourlyRate) ??
+    HOURLY_RATE;
+
+  return Math.round(((elapsedSeconds / 3600) * hourlyRate) * 100) / 100;
+}
+
 function resolvePresetRange(mode: Exclude<DateFilterMode, "custom">): { start: string; end: string } {
   const end = new Date();
   const start = new Date();
@@ -54,25 +203,51 @@ export default function ParentHistoryPage() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [loadingData, setLoadingData] = useState<boolean>(true);
+  const [parentId, setParentId] = useState<string | null>(null);
 
   const fetchShiftHistory = useCallback(async (resolvedParentId: string) => {
     if (!supabase) return;
     try {
       setLoadingData(true);
-      console.log("History: Sending safe wild-card fetch for Parent:", resolvedParentId);
 
-      // שולפים את האובייקט המלא של sitter_profiles + שם מ-profiles
-      const { data, error } = await supabase
+      const bookingsResult = await supabase
         .from("bookings")
         .select(`
           id,
           sitter_id,
           booking_date,
+          start_time,
+          end_time,
           status,
-          sitter_profiles ( * ),
-          profiles:sitter_id ( first_name, last_name )
+          sitter_profiles ( nanny_serial, nanny_id_number, hourly_rate_nis ),
+          profiles:sitter_id ( first_name )
         `)
-        .eq("parent_id", resolvedParentId);
+        .eq("parent_id", resolvedParentId)
+        .order("booking_date", { ascending: false });
+
+      const sessionSelectAttempts = [
+        "id, booking_id, sitter_id, created_at, start_time, end_time, start_time_confirmed_by_sitter, end_time_confirmed_by_parent, final_elapsed_seconds, total_minutes, billing_rate_per_minute, hourly_rate, total_amount_charged, final_amount_nis, total_amount",
+        "id, booking_id, sitter_id, created_at, start_time, end_time, final_elapsed_seconds, billing_rate_per_minute, total_amount_charged, final_amount_nis",
+        "id, booking_id, sitter_id, created_at, start_time_confirmed_by_sitter, end_time_confirmed_by_parent, total_minutes, hourly_rate, total_amount",
+        "id, booking_id, sitter_id, created_at, start_time, end_time"
+      ];
+      let sessionRows: HistorySessionRow[] = [];
+      let sessionReadError: string | null = null;
+      for (const select of sessionSelectAttempts) {
+        const result = await supabase
+          .from("sessions")
+          .select(select)
+          .eq("parent_id", resolvedParentId)
+          .order("created_at", { ascending: false });
+        if (!result.error) {
+          sessionRows = (result.data ?? []) as unknown as HistorySessionRow[];
+          sessionReadError = null;
+          break;
+        }
+        sessionReadError = result.error.message;
+      }
+
+      const { data, error } = bookingsResult;
 
       if (error) {
         console.warn("History: DB Response Error:", error.message);
@@ -80,7 +255,9 @@ export default function ParentHistoryPage() {
         return;
       }
 
-      console.log("History: Safe DB Data Received:", data);
+      if (sessionReadError) {
+        console.warn("History: Could not load session totals:", sessionReadError);
+      }
 
       if (data && data.length > 0) {
         const formatted = data.map((booking: any) => {
@@ -94,35 +271,23 @@ export default function ParentHistoryPage() {
             }
           }
 
-          // סריקה אוטומטית של השדות כדי למצוא את מזהה ה-AN הציבורי בלי לנחש שמות עמודות
-          const profilesObj = booking.sitter_profiles;
+          const profilesObj = Array.isArray(booking.sitter_profiles)
+            ? booking.sitter_profiles[0]
+            : booking.sitter_profiles;
           const nameRow = Array.isArray(booking.profiles) ? booking.profiles[0] : booking.profiles;
-          const nannyName =
-            `${nameRow?.first_name ?? ""} ${nameRow?.last_name ?? ""}`.trim() || "שמרטפית AnyNanny";
-          let publicNannyId = "";
-
-          if (profilesObj) {
-            // מחפש שדה שמכיל באופן ישיר את המזהה הציבורי (למשל ערך כמו AN-1004 או מספר קוד)
-            const foundKey = Object.keys(profilesObj).find(
-              (key) =>
-                String(profilesObj[key]).startsWith("AN-") ||
-                key.includes("code") ||
-                key.includes("display")
-            );
-
-            if (foundKey) {
-              publicNannyId = String(profilesObj[foundKey]);
-            } else if (profilesObj.id) {
-              // fallback: יצירת פורמט AN זמני מבוסס ה-ID הקיים בפרופיל
-              publicNannyId = `AN-${String(profilesObj.id).substring(0, 4).toUpperCase()}`;
-            }
-          }
-
-          if (!publicNannyId) {
-            publicNannyId = booking.sitter_id
-              ? `AN-${booking.sitter_id.substring(0, 4).toUpperCase()}`
-              : "AN-Unknown";
-          }
+          const nannyName = String(nameRow?.first_name ?? "").trim() || "שמרטפית AnyNanny";
+          const publicNannyId = pickProfilePublicId(profilesObj, "sitter") || "ללא מזהה";
+          const session = resolveSessionForBooking(booking, sessionRows);
+          const startTime = formatShiftTime((session && sessionStartValue(session)) || booking.start_time);
+          const endTime = formatShiftTime((session && sessionEndValue(session)) || booking.end_time);
+          const totalCost = resolveCompletedShiftAmount({
+            session,
+            bookingStart: booking.start_time,
+            bookingEnd: booking.end_time,
+            bookingDate: booking.booking_date,
+            sitterHourlyRate: profilesObj?.hourly_rate_nis,
+            allowCalculation: booking.status === "completed"
+          });
 
           let statusLabel = "בפעילות";
           if (booking.status === "completed") statusLabel = "שולם";
@@ -134,6 +299,8 @@ export default function ParentHistoryPage() {
             nanny_name: nannyName,
             date: displayDate,
             raw_date: rawDateStr,
+            time_range: startTime && endTime ? `${startTime} - ${endTime}` : "טרם נקבע",
+            total_cost: totalCost,
             status: statusLabel
           };
         });
@@ -151,37 +318,45 @@ export default function ParentHistoryPage() {
   useEffect(() => {
     if (!supabase) return;
 
-    const targetParentId = "1b4b958c-9013-481f-a8df-6ac0419aab83";
+    const channels: ReturnType<typeof subscribePostgresChanges>[] = [];
+    let cancelled = false;
 
-    // שליפה ראשונית של המידע
-    fetchShiftHistory(targetParentId);
-
-    // channel().on().subscribe() — chained on the same object (unique topic).
-    const channel = subscribePostgresChanges(
-      supabase,
-      `history-realtime-${targetParentId}`,
-      {
-        event: "*",
-        table: "bookings",
-        filter: `parent_id=eq.${targetParentId}`,
-        handler: () => {
-          console.log("History Real-time: Verified update received from DB change.");
-          fetchShiftHistory(targetParentId);
-        }
-      },
-      (status, err) => {
-        if (status === "SUBSCRIBED") {
-          console.log("History Real-time: Channel connected securely.");
-        }
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn(`History Real-time Status Notice: ${status}`, err?.message || "");
-        }
+    void supabase.auth.getUser().then(({ data: authData, error }) => {
+      if (cancelled) return;
+      const targetParentId = authData.user?.id;
+      if (error || !targetParentId) {
+        setLoadingData(false);
+        setShifts([]);
+        return;
       }
-    );
+
+      setParentId(targetParentId);
+      void fetchShiftHistory(targetParentId);
+      channels.push(subscribePostgresChanges(
+        supabase,
+        `history-realtime-${targetParentId}`,
+        {
+          event: "*",
+          table: "bookings",
+          filter: `parent_id=eq.${targetParentId}`,
+          handler: () => void fetchShiftHistory(targetParentId)
+        }
+      ));
+      channels.push(subscribePostgresChanges(
+        supabase,
+        `history-sessions-realtime-${targetParentId}`,
+        {
+          event: "*",
+          table: "sessions",
+          filter: `parent_id=eq.${targetParentId}`,
+          handler: () => void fetchShiftHistory(targetParentId)
+        }
+      ));
+    });
 
     return () => {
-      console.log("History Real-time: Cleaning up channel subscription.");
-      removeRealtimeChannel(supabase, channel);
+      cancelled = true;
+      for (const channel of channels) removeRealtimeChannel(supabase, channel);
     };
   }, [fetchShiftHistory, supabase]);
 
@@ -223,7 +398,8 @@ export default function ParentHistoryPage() {
         </button>
         <button
           type="button"
-          onClick={() => fetchShiftHistory("1b4b958c-9013-481f-a8df-6ac0419aab83")}
+          onClick={() => parentId && fetchShiftHistory(parentId)}
+          disabled={!parentId || loadingData}
           className="p-1 text-slate-400 hover:text-slate-600"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -295,15 +471,8 @@ export default function ParentHistoryPage() {
         )}
       </div>
 
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-soft overflow-hidden px-3 py-1">
-        <div className="grid grid-cols-12 gap-2 pt-2.5 pb-2 text-[10px] font-bold text-slate-400 border-b border-slate-100 px-1">
-          <div className="col-span-5 text-right">פרטי השמרטפית</div>
-          <div className="col-span-3 text-center">תאריך</div>
-          <div className="col-span-2 text-center">סטטוס</div>
-          <div className="col-span-2 text-left">פרטים</div>
-        </div>
-
-        <div className="divide-y divide-slate-100">
+      <section className="max-w-2xl mx-auto space-y-2.5">
+        <div>
           {loadingData ? (
             <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
@@ -315,36 +484,54 @@ export default function ParentHistoryPage() {
             filteredShifts.map((shift) => (
               <div
                 key={shift.id}
-                className="grid grid-cols-12 gap-2 py-3 items-center text-xs text-slate-700 font-medium px-1"
+                className="rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm transition-shadow hover:shadow-md"
               >
-                <div className="col-span-5 text-right min-w-0">
-                  <div className="font-bold text-slate-800 truncate">{shift.nanny_name}</div>
-                  <div className="text-[9px] text-slate-400 font-mono tabular-nums mt-0.5">
-                    ID: {shift.nanny_id}
-                  </div>
-                </div>
-                <div className="col-span-3 text-center text-slate-500 tabular-nums">{shift.date}</div>
-                <div className="col-span-2 text-center">
+                <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <div className="text-[13px] font-extrabold text-slate-800 tabular-nums">{shift.date}</div>
                   <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap ${
+                    className={`rounded-full px-2 py-1 text-[10px] font-bold ${
                       shift.status === "שולם"
-                        ? "bg-green-50 text-green-600"
+                        ? "bg-emerald-50 text-emerald-700"
                         : shift.status === "ממתין לאישור"
-                          ? "bg-blue-50 text-blue-600"
-                          : "bg-amber-50 text-amber-600"
+                          ? "bg-blue-50 text-blue-700"
+                          : "bg-amber-50 text-amber-700"
                     }`}
                   >
                     {shift.status}
                   </span>
                 </div>
-                <div className="col-span-2 text-left">
-                  <button
-                    type="button"
-                    onClick={() => alert(`משמרת מס׳ ${shift.id}`)}
-                    className="text-blue-600 font-bold hover:underline"
-                  >
-                    צפייה
-                  </button>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="min-w-0 rounded-xl bg-violet-50/70 p-2.5">
+                    <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-violet-500">
+                      <UserRound className="h-3.5 w-3.5" />
+                      שמרטפית
+                    </div>
+                    <div className="truncate text-[12px] font-extrabold text-slate-800">{shift.nanny_name}</div>
+                    <div className="mt-0.5 truncate font-mono text-[10px] font-semibold text-violet-600" dir="ltr">
+                      {shift.nanny_id}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 rounded-xl bg-blue-50/70 p-2.5">
+                    <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-blue-500">
+                      <Clock3 className="h-3.5 w-3.5" />
+                      שעות
+                    </div>
+                    <div className="whitespace-nowrap text-[12px] font-extrabold text-slate-800 tabular-nums" dir="ltr">
+                      {shift.time_range}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 rounded-xl bg-emerald-50/70 p-2.5">
+                    <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                      <WalletCards className="h-3.5 w-3.5" />
+                      סה״כ
+                    </div>
+                    <div className="whitespace-nowrap text-[13px] font-extrabold text-emerald-700 tabular-nums">
+                      {formatNis(shift.total_cost)}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))

@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import {
+  arePushNotificationsEnabled,
+  areSoundAlertsEnabled
+} from "@/lib/settings/notification-preferences";
 
 type Props = {
   visible: boolean;
@@ -19,6 +23,7 @@ function tryVibrate(pattern: number[]) {
 
 function tryWebNotification(message: string) {
   try {
+    if (!arePushNotificationsEnabled()) return;
     if (typeof window === "undefined" || typeof Notification === "undefined") return;
     if (Notification.permission !== "granted") return;
     new Notification("AnyNanny", { body: message, tag: "shift-activated" });
@@ -34,7 +39,7 @@ function tryWebNotification(message: string) {
 export function ShiftActivationToast({ visible, message }: Props) {
   useEffect(() => {
     if (!visible) return;
-    tryVibrate([120, 80, 120]);
+    if (areSoundAlertsEnabled()) tryVibrate([120, 80, 120]);
     tryWebNotification(message);
   }, [visible, message]);
 

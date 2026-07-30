@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
+import { areSoundAlertsEnabled } from "@/lib/settings/notification-preferences";
 import { Zap } from "lucide-react";
 
 interface BroadcastAlertModalProps {
@@ -48,6 +49,7 @@ function isFreshIso(createdAt: string | null | undefined, maxAgeMs: number): boo
 }
 
 function playAlertSound(): void {
+  if (!areSoundAlertsEnabled()) return;
   try {
     const AudioCtx =
       window.AudioContext ||
