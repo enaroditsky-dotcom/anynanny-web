@@ -60,6 +60,30 @@ export function PersonalChangeLink({
   );
 }
 
+/** Coerce any display value to a trimmed string without throwing. */
+export function toDisplayString(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value).trim();
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => toDisplayString(item))
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (typeof value === "object") {
+    try {
+      const json = JSON.stringify(value);
+      return json === "{}" || json === "[]" || json === "null" ? "" : json;
+    } catch {
+      return String(value ?? "").trim();
+    }
+  }
+  return String(value ?? "").trim();
+}
+
 export function PersonalStaticRow({
   label,
   value,
@@ -68,12 +92,12 @@ export function PersonalStaticRow({
   dir
 }: {
   label: string;
-  value?: string | null;
+  value?: unknown;
   emptyLabel?: string;
   onEdit: () => void;
   dir?: "ltr" | "rtl";
 }) {
-  const trimmed = value?.trim() ?? "";
+  const trimmed = toDisplayString(value);
   const isEmpty = !trimmed;
 
   return (
@@ -215,13 +239,13 @@ export function PersonalEditModal({
   );
 }
 
-export function displayOrEmpty(value: string | null | undefined, empty = "לא הוגדר"): string {
-  const trimmed = value?.trim() ?? "";
+export function displayOrEmpty(value: unknown, empty = "לא הוגדר"): string {
+  const trimmed = toDisplayString(value);
   return trimmed || empty;
 }
 
-export function formatDisplayDate(value: string | null | undefined): string {
-  const raw = value?.trim() ?? "";
+export function formatDisplayDate(value: unknown): string {
+  const raw = toDisplayString(value);
   if (!raw) return "";
   const parts = raw.slice(0, 10).split("-");
   if (parts.length !== 3) return raw;

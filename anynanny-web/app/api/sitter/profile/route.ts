@@ -3,14 +3,19 @@ import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
+  buildSitterProfilePutRow,
+  extractMissingSitterProfileColumn,
   formatSitterWorkingCitiesError,
   getSitterProfilesTable,
   isSitterProfileComplete,
+  normalizePreferredAges,
+  normalizeSitterLanguages,
   SITTER_PROFILES_TABLE,
   SITTER_PROFILES_USER_COLUMN,
   SITTER_WORKING_CITIES_COLUMN,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
+import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 
@@ -116,8 +121,9 @@ export async function PUT(request: Request) {
             ? false
             : null;
 
-    const merged: Partial<SitterProfileRow> = {
-      ...prev,
+    // Only merge fields that exist on production sitter_profiles.
+    // Do not include legal_no_criminal_declaration — missing on some schemas.
+    const merged: Record<string, unknown> = {
       first_name: body.first_name !== undefined ? body.first_name : prev.first_name ?? null,
       last_name: body.last_name !== undefined ? body.last_name : prev.last_name ?? null,
       show_full_name:
@@ -137,9 +143,16 @@ export async function PUT(request: Request) {
       referee_phone_2: body.referee_phone_2 !== undefined ? body.referee_phone_2 : prev.referee_phone_2 ?? null,
       years_experience:
         body.years_experience !== undefined ? numOrNull(body.years_experience) : prev.years_experience ?? null,
-      preferred_ages: body.preferred_ages !== undefined ? body.preferred_ages : prev.preferred_ages ?? null,
+      preferred_ages:
+        body.preferred_ages !== undefined
+          ? normalizePreferredAges(body.preferred_ages)
+          : normalizePreferredAges(prev.preferred_ages),
       has_car: body.has_car !== undefined ? Boolean(body.has_car) : Boolean(prev.has_car),
-      languages: body.languages !== undefined ? body.languages : prev.languages ?? null,
+      // Always a JS string[] for Postgres text[] — never a comma-separated string.
+      languages:
+        body.languages !== undefined
+          ? normalizeSitterLanguages(body.languages)
+          : normalizeSitterLanguages(prev.languages),
       homework_help: body.homework_help !== undefined ? Boolean(body.homework_help) : Boolean(prev.homework_help),
       light_cooking: body.light_cooking !== undefined ? Boolean(body.light_cooking) : Boolean(prev.light_cooking),
       bio: body.bio !== undefined ? body.bio : prev.bio ?? null,
@@ -148,37 +161,60 @@ export async function PUT(request: Request) {
       working_cities:
         body.working_cities !== undefined
           ? normalizeWorkingCities(body.working_cities)
-          : normalizeWorkingCities(prev.working_cities),
-      legal_no_criminal_declaration:
-        body.legal_no_criminal_declaration !== undefined
-          ? Boolean(body.legal_no_criminal_declaration)
-          : Boolean(prev.legal_no_criminal_declaration)
+          : normalizeWorkingCities(prev.working_cities)
     };
 
     const complete = isSitterProfileComplete({ ...merged, id: user.id } as SitterProfileRow);
 
-    const row: Record<string, unknown> = {
-      ...merged,
-      [fk]: user.id,
-      is_public: complete,
-      onboarding_completed_at: complete ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString()
-    };
-    if (fk === "user_id") delete row.id;
-    if (fk === "id") delete row.user_id;
+    const row = buildSitterProfilePutRow(
+      {
+        ...merged,
+        is_public: complete,
+        onboarding_completed_at: complete ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString()
+      },
+      user.id,
+      fk
+    );
 
-    const { data, error } = await supabase
-      .from(table)
-      .upsert(row, { onConflict: fk })
-      .select("*")
-      .single();
+    let data: SitterProfileRow | null = null;
+    let lastError: string | null = null;
 
-    if (error) {
-      console.error("[api/sitter/profile PUT]", { table, userId: user.id, message: error.message });
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const result = await supabase.from(table).upsert(row, { onConflict: fk }).select("*").single();
+
+      if (!result.error) {
+        data = result.data as SitterProfileRow;
+        lastError = null;
+        break;
+      }
+
+      lastError = result.error.message;
+      const missingColumn = extractMissingSitterProfileColumn(lastError);
+      if (
+        missingColumn &&
+        Object.prototype.hasOwnProperty.call(row, missingColumn) &&
+        isPostgrestSchemaDriftError(lastError)
+      ) {
+        console.warn("[api/sitter/profile PUT] omitting missing column and retrying", {
+          table,
+          userId: user.id,
+          missingColumn
+        });
+        delete row[missingColumn];
+        continue;
+      }
+
+      console.error("[api/sitter/profile PUT]", { table, userId: user.id, message: lastError });
+      return NextResponse.json({ error: lastError }, { status: 400 });
     }
 
-    return NextResponse.json({ profile: data as SitterProfileRow });
+    if (!data) {
+      console.error("[api/sitter/profile PUT]", { table, userId: user.id, message: lastError });
+      return NextResponse.json({ error: lastError || "שמירת הפרופיל נכשלה." }, { status: 400 });
+    }
+
+    return NextResponse.json({ profile: data });
   } catch (err) {
     console.error("[api/sitter/profile PUT] exception:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

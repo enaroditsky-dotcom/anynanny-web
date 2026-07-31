@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
+  formatPreferredAgesDisplay,
+  formatSitterLanguagesDisplay,
   SITTER_PROFILES_TABLE,
   SITTER_PROFILES_USER_COLUMN,
   type PublicSitterReview,
@@ -114,7 +116,7 @@ export function normalizeSitterProfilePublic(
     nanny_serial: pickString(raw, "nanny_serial", "nannySerial", "nanny_id_number"),
     display_name,
     age_years: pickNumber(raw, "age_years", "ageYears"),
-    languages: pickString(raw, "languages"),
+    languages: formatSitterLanguagesDisplay(raw.languages) || null,
     years_experience,
     transportation_mode,
     bio: pickString(raw, "bio"),
@@ -122,7 +124,7 @@ export function normalizeSitterProfilePublic(
     citizenship_israeli: pickBool(raw, "citizenship_israeli", "citizenshipIsraeli") ? true : null,
     birth_country: pickString(raw, "birth_country", "birthCountry"),
     aliyah_year: pickNumber(raw, "aliyah_year", "aliyahYear"),
-    preferred_ages: pickString(raw, "preferred_ages", "preferredAges"),
+    preferred_ages: formatPreferredAgesDisplay(raw.preferred_ages ?? raw.preferredAges) || null,
     has_car,
     working_cities: pickWorkingCities(raw),
     homework_help: pickBool(raw, "homework_help", "homeworkHelp"),

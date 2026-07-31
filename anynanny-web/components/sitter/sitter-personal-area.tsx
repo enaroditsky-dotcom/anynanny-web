@@ -19,7 +19,17 @@ import { SitterBankDetailsSection } from "@/components/sitter/SitterBankDetailsS
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
+  formatPreferredAgesDisplay,
+  formatPreferredAgesRange,
   formatSitterDisplayName,
+  formatSitterLanguagesDisplay,
+  normalizePreferredAges,
+  normalizeSitterLanguages,
+  parsePreferredAges,
+  PREFERRED_AGE_MAX,
+  PREFERRED_AGE_MIN,
+  SITTER_LANGUAGE_OPTIONS,
+  type SitterLanguage,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
 
@@ -38,7 +48,7 @@ type FormState = {
   years_experience: string;
   hourly_rate_nis: string;
   preferred_ages: string;
-  languages: string;
+  languages: SitterLanguage[];
   has_car: boolean;
   homework_help: boolean;
   light_cooking: boolean;
@@ -83,6 +93,74 @@ function militaryToPayload(value: string): string {
   return value === "לא" ? "לא" : "כן";
 }
 
+function toggleLanguage(current: readonly SitterLanguage[], language: SitterLanguage): SitterLanguage[] {
+  const selected = normalizeSitterLanguages(current);
+  return selected.includes(language)
+    ? selected.filter((item) => item !== language)
+    : normalizeSitterLanguages([...selected, language]);
+}
+
+const PREFERRED_AGE_OPTIONS = Array.from(
+  { length: PREFERRED_AGE_MAX - PREFERRED_AGE_MIN + 1 },
+  (_, index) => PREFERRED_AGE_MIN + index
+);
+
+function PreferredAgesEditor({
+  value,
+  onChange
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const parsed = parsePreferredAges(value);
+  const minAge = parsed?.min ?? 1;
+  const maxAge = parsed?.max ?? 12;
+  const current = formatPreferredAgesRange(minAge, maxAge);
+
+  return (
+    <div className="space-y-3 text-right">
+      <div className="grid grid-cols-2 gap-3">
+        <PersonalField label="מגיל">
+          <select
+            className={personalInputClassName}
+            value={minAge}
+            onChange={(e) => {
+              const nextMin = Number(e.target.value);
+              onChange(formatPreferredAgesRange(nextMin, Math.max(nextMin, maxAge)));
+            }}
+          >
+            {PREFERRED_AGE_OPTIONS.map((age) => (
+              <option key={`min-${age}`} value={age}>
+                {age}
+              </option>
+            ))}
+          </select>
+        </PersonalField>
+        <PersonalField label="עד גיל">
+          <select
+            className={personalInputClassName}
+            value={maxAge}
+            onChange={(e) => {
+              const nextMax = Number(e.target.value);
+              onChange(formatPreferredAgesRange(Math.min(minAge, nextMax), nextMax));
+            }}
+          >
+            {PREFERRED_AGE_OPTIONS.map((age) => (
+              <option key={`max-${age}`} value={age}>
+                {age}
+              </option>
+            ))}
+          </select>
+        </PersonalField>
+      </div>
+
+      <p className="text-[12px] text-slate-500">
+        יוצג בפרופיל כ־<span className="font-semibold text-[#001F3F]" dir="ltr">{current}</span>
+      </p>
+    </div>
+  );
+}
+
 function profileToForm(profile: SitterProfileRow | null): FormState {
   return {
     first_name: profile?.first_name ?? "",
@@ -103,8 +181,8 @@ function profileToForm(profile: SitterProfileRow | null): FormState {
     military_service: militaryToForm(profile?.military_service),
     years_experience: profile?.years_experience != null ? String(profile.years_experience) : "",
     hourly_rate_nis: profile?.hourly_rate_nis != null ? String(profile.hourly_rate_nis) : "",
-    preferred_ages: profile?.preferred_ages ?? "",
-    languages: profile?.languages ?? "",
+    preferred_ages: formatPreferredAgesDisplay(profile?.preferred_ages),
+    languages: normalizeSitterLanguages(profile?.languages),
     has_car: Boolean(profile?.has_car),
     homework_help: Boolean(profile?.homework_help),
     light_cooking: Boolean(profile?.light_cooking),
@@ -132,15 +210,17 @@ function formToPayload(form: FormState): Record<string, unknown> {
     military_service: militaryToPayload(form.military_service),
     years_experience: form.years_experience.trim() ? Number(form.years_experience) : null,
     hourly_rate_nis: form.hourly_rate_nis.trim() ? Number(form.hourly_rate_nis) : null,
-    preferred_ages: form.preferred_ages.trim() || null,
-    languages: form.languages.trim() || null,
+    // text[] column — JS array ["2","10"], never the display string "2-10"
+    preferred_ages: normalizePreferredAges(form.preferred_ages),
+    // text[] column — must be a JS array, never "עברית, אנגלית"
+    languages: normalizeSitterLanguages(form.languages),
     has_car: form.has_car,
     homework_help: form.homework_help,
     light_cooking: form.light_cooking,
     bio: form.bio.trim() || null,
     referee_phone_1: form.referee_phone_1.trim() || null,
     referee_phone_2: form.referee_phone_2.trim() || null,
-    legal_no_criminal_declaration: form.legal_no_criminal_declaration,
+    // legal_no_criminal_declaration is omitted — column is missing on some production schemas.
     working_cities: form.working_cities
   };
 }
@@ -192,7 +272,15 @@ export function SitterPersonalArea({ userId }: Props) {
     (key: EditKey) => {
       setModalError(null);
       setSuccess(null);
-      setDraft({ ...form, working_cities: [...form.working_cities] });
+      setDraft({
+        ...form,
+        working_cities: [...form.working_cities],
+        languages: [...form.languages],
+        preferred_ages:
+          key === "preferred_ages"
+            ? formatPreferredAgesDisplay(form.preferred_ages) || formatPreferredAgesRange(1, 12)
+            : form.preferred_ages
+      });
       setEditKey(key);
     },
     [form]
@@ -383,10 +471,14 @@ export function SitterPersonalArea({ userId }: Props) {
         />
         <PersonalStaticRow
           label="גילאים מועדפים"
-          value={form.preferred_ages}
+          value={formatPreferredAgesDisplay(form.preferred_ages)}
           onEdit={() => openEdit("preferred_ages")}
         />
-        <PersonalStaticRow label="שפות" value={form.languages} onEdit={() => openEdit("languages")} />
+        <PersonalStaticRow
+          label="שפות"
+          value={formatSitterLanguagesDisplay(form.languages)}
+          onEdit={() => openEdit("languages")}
+        />
         <PersonalStaticRow
           label="אזרחות ישראלית"
           value={yesNoLabel(form.citizenship_israeli)}
@@ -484,8 +576,6 @@ export function SitterPersonalArea({ userId }: Props) {
         editKey === "last_name" ||
         editKey === "id_number" ||
         editKey === "address_full" ||
-        editKey === "preferred_ages" ||
-        editKey === "languages" ||
         editKey === "birth_country" ||
         editKey === "referee_phone_1" ||
         editKey === "referee_phone_2" ? (
@@ -501,15 +591,11 @@ export function SitterPersonalArea({ userId }: Props) {
                       ? draft.id_number
                       : editKey === "address_full"
                         ? draft.address_full
-                        : editKey === "preferred_ages"
-                          ? draft.preferred_ages
-                          : editKey === "languages"
-                            ? draft.languages
-                            : editKey === "birth_country"
-                              ? draft.birth_country
-                              : editKey === "referee_phone_1"
-                                ? draft.referee_phone_1
-                                : draft.referee_phone_2
+                        : editKey === "birth_country"
+                          ? draft.birth_country
+                          : editKey === "referee_phone_1"
+                            ? draft.referee_phone_1
+                            : draft.referee_phone_2
               }
               onChange={(e) =>
                 setDraft((prev) => ({
@@ -526,6 +612,44 @@ export function SitterPersonalArea({ userId }: Props) {
               }
               autoFocus
             />
+          </PersonalField>
+        ) : null}
+
+        {editKey === "preferred_ages" ? (
+          <PreferredAgesEditor
+            value={draft.preferred_ages}
+            onChange={(next) => setDraft((prev) => ({ ...prev, preferred_ages: next }))}
+          />
+        ) : null}
+
+        {editKey === "languages" ? (
+          <PersonalField label="שפות">
+            <div className="flex flex-wrap justify-end gap-2" role="group" aria-label="בחירת שפות">
+              {SITTER_LANGUAGE_OPTIONS.map((language) => {
+                const selected = draft.languages.includes(language);
+                return (
+                  <button
+                    key={language}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        languages: toggleLanguage(prev.languages, language)
+                      }))
+                    }
+                    className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition ${
+                      selected
+                        ? "border-[#001F3F] bg-[#001F3F] text-white"
+                        : "border-[#001F3F]/15 bg-white text-[#001F3F] hover:border-[#001F3F]/35 hover:bg-[#FDFBF6]"
+                    }`}
+                  >
+                    {language}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500">ניתן לבחור שפה אחת או יותר</p>
           </PersonalField>
         ) : null}
 

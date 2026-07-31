@@ -57,6 +57,235 @@ export function formatSitterDisplayName(
   return combined || null;
 }
 
+/**
+ * Columns safe to write via `/api/sitter/profile` PUT.
+ * Intentionally excludes optional / derived fields (ratings, bank details, serials)
+ * and schema-drift-prone columns such as `legal_no_criminal_declaration`.
+ */
+export const SITTER_PROFILE_PUT_COLUMNS = [
+  "first_name",
+  "last_name",
+  "show_full_name",
+  "id_number",
+  "birth_date",
+  "show_age",
+  "citizenship_israeli",
+  "birth_country",
+  "aliyah_year",
+  "address_full",
+  "military_service",
+  "referee_phone_1",
+  "referee_phone_2",
+  "years_experience",
+  "preferred_ages",
+  "has_car",
+  "languages",
+  "homework_help",
+  "light_cooking",
+  "bio",
+  "hourly_rate_nis",
+  "working_cities",
+  "is_public",
+  "onboarding_completed_at",
+  "updated_at"
+] as const;
+
+export type SitterProfilePutColumn = (typeof SITTER_PROFILE_PUT_COLUMNS)[number];
+
+export const SITTER_LANGUAGE_OPTIONS = ["עברית", "ערבית", "רוסית", "צרפתית", "אנגלית"] as const;
+export type SitterLanguage = (typeof SITTER_LANGUAGE_OPTIONS)[number];
+
+const SITTER_LANGUAGE_SET = new Set<string>(SITTER_LANGUAGE_OPTIONS);
+
+const SITTER_LANGUAGE_ALIASES: Record<string, SitterLanguage> = {
+  עברית: "עברית",
+  ערבית: "ערבית",
+  רוסית: "רוסית",
+  צרפתית: "צרפתית",
+  אנגלית: "אנגלית",
+  hebrew: "עברית",
+  arabic: "ערבית",
+  russian: "רוסית",
+  french: "צרפתית",
+  english: "אנגלית"
+};
+
+/**
+ * Normalize languages for `sitter_profiles.languages` (`text[]` in production).
+ * Accepts JS arrays, Postgres array strings, or comma-separated text.
+ */
+export function normalizeSitterLanguages(raw: unknown): SitterLanguage[] {
+  const tokens: string[] = [];
+
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (typeof item === "string" && item.trim()) tokens.push(item.trim());
+    }
+  } else if (typeof raw === "string" && raw.trim()) {
+    const trimmed = raw.trim();
+    // Postgres array literal form: {עברית,אנגלית} or {"עברית","אנגלית"}
+    const fromPgArray = trimmed.match(/^\{([\s\S]*)\}$/);
+    const source = fromPgArray ? fromPgArray[1] : trimmed;
+    tokens.push(
+      ...source
+        .split(/[,،;/|]+/)
+        .map((part) => part.trim().replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1"))
+        .filter(Boolean)
+    );
+  }
+
+  const selected = new Set<SitterLanguage>();
+  for (const token of tokens) {
+    const mapped =
+      SITTER_LANGUAGE_ALIASES[token] ??
+      SITTER_LANGUAGE_ALIASES[token.toLowerCase()] ??
+      (SITTER_LANGUAGE_SET.has(token) ? (token as SitterLanguage) : null);
+    if (mapped) selected.add(mapped);
+  }
+
+  return SITTER_LANGUAGE_OPTIONS.filter((option) => selected.has(option));
+}
+
+/** Display helper — joins normalized languages for UI rows. */
+export function formatSitterLanguagesDisplay(raw: unknown): string {
+  return normalizeSitterLanguages(raw).join(", ");
+}
+
+export const PREFERRED_AGE_MIN = 0;
+export const PREFERRED_AGE_MAX = 18;
+
+export type PreferredAgeRange = { min: number; max: number };
+
+function clampPreferredAge(value: number): number {
+  if (!Number.isFinite(value)) return PREFERRED_AGE_MIN;
+  return Math.min(PREFERRED_AGE_MAX, Math.max(PREFERRED_AGE_MIN, Math.round(value)));
+}
+
+/** Format a clean display/range string like `"2-10"`. */
+export function formatPreferredAgesRange(min: number, max: number): string {
+  const lo = clampPreferredAge(Math.min(min, max));
+  const hi = clampPreferredAge(Math.max(min, max));
+  return `${lo}-${hi}`;
+}
+
+/**
+ * Parse preferred ages from text, number pairs, or Postgres `text[]` into `{ min, max }`.
+ */
+export function parsePreferredAges(raw: unknown): PreferredAgeRange | null {
+  if (raw == null || raw === "") return null;
+
+  if (Array.isArray(raw)) {
+    // Prefer explicit [min, max] numeric/string pairs written for text[].
+    const numericParts: number[] = [];
+    for (const item of raw) {
+      if (typeof item === "number" && Number.isFinite(item)) {
+        numericParts.push(item);
+        continue;
+      }
+      if (typeof item !== "string" || !item.trim()) continue;
+      const trimmed = item.trim();
+      // Whole-range element like "2-10"
+      const rangeInItem = parsePreferredAges(trimmed);
+      if (rangeInItem && /[-–—]/.test(trimmed) && !/^\d+$/.test(trimmed)) {
+        return rangeInItem;
+      }
+      if (/^\d+$/.test(trimmed)) {
+        numericParts.push(Number(trimmed));
+      }
+    }
+    if (numericParts.length >= 2) {
+      return {
+        min: clampPreferredAge(numericParts[0]),
+        max: clampPreferredAge(numericParts[1])
+      };
+    }
+    if (numericParts.length === 1) {
+      const age = clampPreferredAge(numericParts[0]);
+      return { min: age, max: age };
+    }
+    for (const item of raw) {
+      if (typeof item === "string") {
+        const nested = parsePreferredAges(item);
+        if (nested) return nested;
+      }
+    }
+    return null;
+  }
+
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    const age = clampPreferredAge(raw);
+    return { min: age, max: age };
+  }
+
+  if (typeof raw !== "string") return null;
+
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // Strip accidental Postgres array wrapping: {2,10} or {"2","10"} or {2-10}
+  const unwrapped = trimmed.replace(/^\{|\}$/g, "").replace(/"/g, "").trim();
+  const match = unwrapped.match(/(\d+)\s*[-–—toעד,]+\s*(\d+)/i);
+  if (match) {
+    return {
+      min: clampPreferredAge(Number(match[1])),
+      max: clampPreferredAge(Number(match[2]))
+    };
+  }
+
+  const single = unwrapped.match(/^(\d+)$/);
+  if (single) {
+    const age = clampPreferredAge(Number(single[1]));
+    return { min: age, max: age };
+  }
+
+  return null;
+}
+
+/**
+ * Normalize for `sitter_profiles.preferred_ages` (`text[]` in production).
+ * Always returns a JS string array like `["2", "10"]` — never a `"2-10"` string.
+ */
+export function normalizePreferredAges(raw: unknown): string[] {
+  const parsed = parsePreferredAges(raw);
+  if (!parsed) return [];
+  const lo = clampPreferredAge(Math.min(parsed.min, parsed.max));
+  const hi = clampPreferredAge(Math.max(parsed.min, parsed.max));
+  return [String(lo), String(hi)];
+}
+
+/** Display helper — `"2-10"` (or empty) from DB array / legacy string. */
+export function formatPreferredAgesDisplay(raw: unknown): string {
+  const parsed = parsePreferredAges(raw);
+  if (!parsed) return "";
+  return formatPreferredAgesRange(parsed.min, parsed.max);
+}
+
+/** Build an upsert row with only known writable profile columns (+ user FK). */
+export function buildSitterProfilePutRow(
+  source: Record<string, unknown>,
+  userId: string,
+  userColumn: SitterProfilesUserColumn = SITTER_PROFILES_USER_COLUMN
+): Record<string, unknown> {
+  const row: Record<string, unknown> = { [userColumn]: userId };
+  for (const key of SITTER_PROFILE_PUT_COLUMNS) {
+    if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined) {
+      row[key] = source[key];
+    }
+  }
+  if (userColumn === "user_id") delete row.id;
+  if (userColumn === "id") delete row.user_id;
+  return row;
+}
+
+/** Extract a missing-column name from a PostgREST schema-cache error, if present. */
+export function extractMissingSitterProfileColumn(message: string | null | undefined): string | null {
+  if (!message) return null;
+  const match =
+    message.match(/Could not find the '([^']+)' column/i) ||
+    message.match(/column ["'`]?([a-zA-Z0-9_]+)["'`]? (?:of relation )?.*does not exist/i);
+  return match?.[1] ?? null;
+}
+
 export type SitterProfileRow = {
   id: string;
   user_id?: string;
@@ -78,14 +307,15 @@ export type SitterProfileRow = {
   referee_phone_1: string | null;
   referee_phone_2: string | null;
   years_experience: number | null;
-  preferred_ages: string | null;
+  preferred_ages: string | string[] | null;
   has_car: boolean;
-  languages: string | null;
+  languages: string | string[] | null;
   homework_help: boolean;
   light_cooking: boolean;
   bio: string | null;
   hourly_rate_nis: number | null;
-  legal_no_criminal_declaration: boolean;
+  /** Optional — not present on all production schemas; never required for profile PUT. */
+  legal_no_criminal_declaration?: boolean;
   is_public: boolean;
   onboarding_completed_at: string | null;
   updated_at: string;
@@ -102,6 +332,7 @@ export type SitterProfilePublic = {
   nanny_serial?: string | null;
   display_name: string | null;
   age_years: number | null;
+  /** Display string (joined). RPCs/rows may store `text[]`. */
   languages: string | null;
   years_experience: number | null;
   /** Some RPC/DB variants expose this alias. */
