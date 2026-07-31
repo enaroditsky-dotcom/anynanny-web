@@ -194,5 +194,38 @@ export async function finalizeHypPaymentSuccess(
     console.warn("[finalizeHypPaymentSuccess] sitter wallet credit skipped:", err);
   }
 
+  // Promote any leftover pending earnings rows for this booking (idempotent).
+  if (sitterId) {
+    try {
+      const { SITTER_TRANSACTIONS_TABLE } = await import("@/lib/wallet/sitter-wallet");
+      const { error: txErr } = await supabase
+        .from(SITTER_TRANSACTIONS_TABLE)
+        .update({ status: "succeeded" })
+        .eq("sitter_id", sitterId)
+        .eq("booking_id", bookingId)
+        .eq("status", "pending");
+      if (txErr) {
+        console.warn("[finalizeHypPaymentSuccess] pending tx promote skipped:", txErr.message);
+      }
+    } catch (err) {
+      console.warn("[finalizeHypPaymentSuccess] pending tx promote skipped:", err);
+    }
+
+    try {
+      const { notifySitterPaymentReceived } = await import(
+        "@/lib/notifications/create-notification"
+      );
+      await notifySitterPaymentReceived(supabase, {
+        sitterId,
+        bookingId,
+        amountPaid: input.amountPaid ?? null,
+        hypApprovalId: input.hypApprovalId ?? null,
+        sessionIds: [...paidSessionIds]
+      });
+    } catch (err) {
+      console.warn("[finalizeHypPaymentSuccess] sitter notification skipped:", err);
+    }
+  }
+
   return { ok: true, bookingId, sessionIds: [...paidSessionIds] };
 }

@@ -1,9 +1,13 @@
 "use client";
 
-import Image from "next/image";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CheckCircle2, Loader2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, ChevronLeft, Loader2, X } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
+import {
+  EMPTY_METHOD_HINT,
+  WalletMethodCardRow,
+  WalletMethodVisualCard
+} from "@/components/wallet/wallet-method-brand";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   EMPTY_SITTER_PAYOUT_METHODS,
@@ -26,71 +30,34 @@ type SitterPayoutWalletCardsProps = {
 const fieldClassName =
   "w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#0B3C5D]/40 focus:bg-white focus:ring-2 focus:ring-[#0B3C5D]/15 disabled:opacity-60";
 
-function BrandIcon({
-  src,
-  alt,
-  size = 32,
-  fit = "cover"
-}: {
-  src: string;
-  alt: string;
-  size?: number;
-  fit?: "cover" | "contain";
-}) {
-  return (
-    <div
-      className="relative shrink-0 overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-black/5"
-      style={{ width: size, height: size }}
-    >
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        className={fit === "contain" ? "object-contain p-0.5" : "object-cover"}
-        sizes={`${size}px`}
-      />
-    </div>
-  );
-}
-
-function BitLogo({ className = "" }: { className?: string }) {
-  return (
-    <span className={`relative inline-block h-6 w-6 overflow-hidden rounded-md ${className}`}>
-      <Image src="/wallet/bit-logo.png" alt="Bit" fill className="object-cover" sizes="24px" />
-    </span>
-  );
-}
-
-function PayBoxLogo({ className = "" }: { className?: string }) {
-  return (
-    <span className={`relative inline-block h-6 w-6 overflow-hidden rounded-md ${className}`}>
-      <Image src="/wallet/paybox-logo.png" alt="PayBox" fill className="object-cover" sizes="24px" />
-    </span>
-  );
-}
-
 function statusLabel(methods: SitterPayoutMethods, kind: SitterPayoutMethodKind): string {
   if (kind === "bit") {
-    if (!payoutMethodConfigured(methods, "bit")) return "מספר טלפון לא הוגדר";
+    if (!payoutMethodConfigured(methods, "bit")) return EMPTY_METHOD_HINT;
     return formatIsraeliMobileDisplay(methods.bitPhone);
   }
   if (kind === "paybox") {
-    if (!payoutMethodConfigured(methods, "paybox")) return "מספר טלפון לא הוגדר";
+    if (!payoutMethodConfigured(methods, "paybox")) return EMPTY_METHOD_HINT;
     return formatIsraeliMobileDisplay(methods.payboxPhone);
   }
-  if (!payoutMethodConfigured(methods, "card")) return "פרטי כרטיס לא הוגדרו";
+  if (!payoutMethodConfigured(methods, "card")) return EMPTY_METHOD_HINT;
   const exp =
     methods.cardExpMonth && methods.cardExpYear
       ? ` · ${String(methods.cardExpMonth).padStart(2, "0")}/${String(methods.cardExpYear).slice(-2)}`
       : "";
-  const holder = methods.cardHolder.trim();
-  return holder ? `${holder} · •••• ${methods.cardLast4}${exp}` : `•••• ${methods.cardLast4}${exp}`;
+  return `•••• ${methods.cardLast4}${exp}`;
+}
+
+function methodTitle(kind: SitterPayoutMethodKind): string {
+  if (kind === "bit") return "Bit";
+  if (kind === "paybox") return "PayBox";
+  return "כרטיס אשראי";
 }
 
 export function SitterPayoutWalletCards({ sitterId }: SitterPayoutWalletCardsProps) {
   const [methods, setMethods] = useState<SitterPayoutMethods>({ ...EMPTY_SITTER_PAYOUT_METHODS });
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [viewing, setViewing] = useState<SitterPayoutMethodKind | null>(null);
   const [editing, setEditing] = useState<SitterPayoutMethodKind | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -121,39 +88,30 @@ export function SitterPayoutWalletCards({ sitterId }: SitterPayoutWalletCardsPro
   }, [reload]);
 
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen) {
+      setViewing(null);
+      return;
+    }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !editing) setMenuOpen(false);
+      if (e.key !== "Escape" || editing) return;
+      if (viewing) setViewing(null);
+      else setMenuOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen, editing]);
+  }, [menuOpen, editing, viewing]);
 
-  const rows: Array<{
-    kind: SitterPayoutMethodKind;
-    title: string;
-    accentClass: string;
-    logo: ReactNode;
-  }> = [
-    {
-      kind: "card",
-      title: "כרטיס אשראי",
-      accentClass: "border-[#0B3C5D]/15 bg-[#EEF4F8]",
-      logo: <BrandIcon src="/anynanny-clean-transparent.png.jpg" alt="AnyNanny" fit="contain" />
-    },
-    {
-      kind: "bit",
-      title: "Bit",
-      accentClass: "border-[#1BA7D9]/20 bg-[#EAF8FC]",
-      logo: <BrandIcon src="/wallet/bit-logo.png" alt="Bit" />
-    },
-    {
-      kind: "paybox",
-      title: "PayBox",
-      accentClass: "border-[#2E9FE6]/20 bg-[#EAF6FD]",
-      logo: <BrandIcon src="/wallet/paybox-logo.png" alt="PayBox" />
-    }
+  const rows: Array<{ kind: SitterPayoutMethodKind }> = [
+    { kind: "card" },
+    { kind: "bit" },
+    { kind: "paybox" }
   ];
+
+  const closeMenu = () => {
+    if (editing) return;
+    setViewing(null);
+    setMenuOpen(false);
+  };
 
   return (
     <section dir="rtl">
@@ -176,59 +134,67 @@ export function SitterPayoutWalletCards({ sitterId }: SitterPayoutWalletCardsPro
             type="button"
             className="absolute inset-0 cursor-default"
             aria-label="סגור"
-            onClick={() => {
-              if (!editing) setMenuOpen(false);
-            }}
+            onClick={closeMenu}
           />
           <div className="relative z-[1] w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setMenuOpen(false)}
-                className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                aria-label="סגור"
-              >
-                <X className="h-4 w-4" />
-              </button>
-              <h3 className="text-sm font-bold text-navy-header">אמצעי קבלת התשלום</h3>
+              {viewing ? (
+                <button
+                  type="button"
+                  onClick={() => setViewing(null)}
+                  className="rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100"
+                  aria-label="חזרה"
+                >
+                  <ChevronLeft className="h-4 w-4 rotate-180" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={closeMenu}
+                  className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="סגור"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              <h3 className="text-sm font-bold text-navy-header">
+                {viewing ? methodTitle(viewing) : "אמצעי קבלת התשלום"}
+              </h3>
               <span className="w-8" />
             </div>
 
-            <div className="space-y-2 px-3 py-3">
-              {rows.map((row) => {
-                const ready = payoutMethodConfigured(methods, row.kind);
-                return (
-                  <div
-                    key={row.kind}
-                    className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 ${row.accentClass}`}
-                  >
-                    {row.logo}
-                    <div className="min-w-0 flex-1 text-right">
-                      <p className="text-xs font-bold text-slate-800">{row.title}</p>
-                      <p className="truncate text-[10px] text-slate-500" dir="ltr">
-                        {statusLabel(methods, row.kind)}
-                      </p>
-                    </div>
-                    {ready ? (
-                      <span className="hidden shrink-0 text-[9px] font-bold text-emerald-600 sm:inline">
-                        מוכן
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setEditing(row.kind)}
-                      className="shrink-0 text-[11px] font-bold text-[#0B3C5D] underline underline-offset-2 decoration-[#0B3C5D]/50 transition hover:text-[#FF8A8A] hover:decoration-[#FF8A8A]"
-                    >
-                      עדכון
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            <p className="border-t border-slate-100 px-4 py-3 text-center text-[11px] text-slate-500">
-              עדכון מאפשר לשמור מספר טלפון או פרטי כרטיס למשיכה.
-            </p>
+            {viewing ? (
+              <SitterMethodDetails
+                kind={viewing}
+                methods={methods}
+                onUpdate={() => setEditing(viewing)}
+              />
+            ) : (
+              <>
+                <div className="space-y-3 px-3 py-3">
+                  {rows.map((row) => {
+                    const ready = payoutMethodConfigured(methods, row.kind);
+                    return (
+                      <WalletMethodCardRow
+                        key={row.kind}
+                        kind={row.kind}
+                        status={statusLabel(methods, row.kind)}
+                        ready={ready}
+                        cardTitle={methodTitle(row.kind)}
+                        onOpen={() => {
+                          if (ready) setViewing(row.kind);
+                          else setEditing(row.kind);
+                        }}
+                        onUpdate={() => setEditing(row.kind)}
+                      />
+                    );
+                  })}
+                </div>
+                <p className="border-t border-slate-100 px-4 py-3 text-center text-[11px] text-slate-500">
+                  כרטיס שמור ניתן לפתוח לצפייה בפרטים מוסתרים. הכספים מעובדים באופן מאובטח דרך שער התשלומים המורשה HYP.
+                </p>
+              </>
+            )}
           </div>
         </div>
       ) : null}
@@ -243,12 +209,61 @@ export function SitterPayoutWalletCards({ sitterId }: SitterPayoutWalletCardsPro
             setMethods(next);
             setToast(message);
             setEditing(null);
+            setViewing(editing);
           }}
         />
       ) : null}
 
       <ActionToast message={toast} onDismiss={() => setToast(null)} />
     </section>
+  );
+}
+
+function SitterMethodDetails({
+  kind,
+  methods,
+  onUpdate
+}: {
+  kind: SitterPayoutMethodKind;
+  methods: SitterPayoutMethods;
+  onUpdate: () => void;
+}) {
+  return (
+    <div className="space-y-3 px-4 py-4">
+      <WalletMethodVisualCard
+        kind={kind}
+        status={statusLabel(methods, kind)}
+        ready={payoutMethodConfigured(methods, kind)}
+        compact={false}
+        cardTitle={methodTitle(kind)}
+      />
+
+      {kind === "card" && methods.cardHolder.trim() ? (
+        <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right">
+          <p className="text-[10px] font-semibold text-slate-400">שם בעל הכרטיס</p>
+          <p className="mt-0.5 text-xs font-bold text-slate-800">{methods.cardHolder}</p>
+        </div>
+      ) : null}
+
+      {(kind === "bit" || kind === "paybox") && payoutMethodConfigured(methods, kind) ? (
+        <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right">
+          <p className="text-[10px] font-semibold text-slate-400">מספר טלפון רשום</p>
+          <p className="mt-0.5 text-xs font-bold text-slate-800" dir="ltr">
+            {kind === "bit"
+              ? formatIsraeliMobileDisplay(methods.bitPhone)
+              : formatIsraeliMobileDisplay(methods.payboxPhone)}
+          </p>
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={onUpdate}
+        className="w-full rounded-2xl bg-[#0B3C5D] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110"
+      >
+        עדכון פרטים
+      </button>
+    </div>
   );
 }
 
@@ -387,12 +402,11 @@ function PayoutEditSheet({
         </div>
 
         <div className="space-y-3 px-4 py-4">
+          <WalletMethodVisualCard kind={kind} compact cardTitle={methodTitle(kind)} />
+
           {kind === "bit" ? (
             <>
-              <div className="flex items-center gap-2 rounded-2xl bg-[#EAF8FC] px-3 py-2">
-                <BitLogo className="h-8 w-8" />
-                <p className="text-[11px] text-slate-600">מספר הנייד המחובר לחשבון Bit שלכם</p>
-              </div>
+              <p className="text-[11px] text-slate-600">מספר הנייד המחובר לחשבון Bit שלכם</p>
               <label className="block text-right text-xs font-bold text-slate-600">
                 מספר טלפון
                 <input
@@ -410,10 +424,7 @@ function PayoutEditSheet({
 
           {kind === "paybox" ? (
             <>
-              <div className="flex items-center gap-2 rounded-2xl bg-[#EAF6FD] px-3 py-2">
-                <PayBoxLogo className="h-8 w-8" />
-                <p className="text-[11px] text-slate-600">מספר הנייד המחובר לחשבון PayBox שלכם</p>
-              </div>
+              <p className="text-[11px] text-slate-600">מספר הנייד המחובר לחשבון PayBox שלכם</p>
               <label className="block text-right text-xs font-bold text-slate-600">
                 מספר טלפון
                 <input
@@ -431,20 +442,9 @@ function PayoutEditSheet({
 
           {kind === "card" ? (
             <>
-              <div className="flex items-center gap-2 rounded-2xl bg-[#EEF4F8] px-3 py-2">
-                <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full bg-white">
-                  <Image
-                    src="/anynanny-clean-transparent.png.jpg"
-                    alt=""
-                    fill
-                    className="object-contain p-0.5"
-                    sizes="28px"
-                  />
-                </div>
-                <p className="text-[11px] text-slate-600">
-                  פרטי כרטיס למשיכה ישירה — נשמרות רק 4 ספרות אחרונות ותוקף (ללא CVV).
-                </p>
-              </div>
+              <p className="text-[11px] text-slate-600">
+                פרטי כרטיס למשיכה ישירה — נשמרות רק 4 ספרות אחרונות ותוקף (ללא CVV).
+              </p>
               <label className="block text-right text-xs font-bold text-slate-600">
                 שם בעל הכרטיס
                 <input

@@ -3,8 +3,9 @@ import { handleHypPaymentWebhook } from "@/lib/billing/hyp-payment-webhook";
 export const runtime = "nodejs";
 
 /**
- * Hyp (YaadPay) Webhook / IPN Handler (legacy path).
- * Prefer /api/payments/webhook for new Hyp dashboard configuration.
+ * Public payment-gateway webhook endpoint (HYP / YaadPay IPN).
+ * Prefer configuring Hyp dashboard NotifyUrl to this path.
+ * Also available at /api/webhooks/hyp for backward compatibility.
  */
 export async function POST(request: Request) {
   return handleHypPaymentWebhook(request);

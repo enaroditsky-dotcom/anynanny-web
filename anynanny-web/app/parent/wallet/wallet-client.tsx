@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import Image from "next/image";
 import {
   CreditCard,
   ArrowUpRight,
@@ -9,11 +8,17 @@ import {
   Loader2,
   RefreshCw,
   ArrowLeft,
+  ChevronLeft,
   X
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { MainLayout } from "@/components/layout/MainLayout";
+import {
+  EMPTY_METHOD_HINT,
+  WalletMethodCardRow,
+  WalletMethodVisualCard
+} from "@/components/wallet/wallet-method-brand";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchParentWalletView } from "@/lib/wallet/parent-wallet";
 import type { BillingTransaction } from "@/lib/wallet/billing-transactions";
@@ -25,67 +30,11 @@ type PaymentOptionId = Extract<CheckoutPaymentMethod, "credit_card" | "bit" | "p
 const PAYMENT_OPTIONS: Array<{
   id: PaymentOptionId;
   label: string;
-  accentClass: string;
-  hint: string;
 }> = [
-  {
-    id: "credit_card",
-    label: "כרטיס אשראי",
-    accentClass: "border-[#0B3C5D]/15 bg-[#EEF4F8]",
-    hint: "AnyNanny · Visa / Mastercard"
-  },
-  {
-    id: "bit",
-    label: "Bit",
-    accentClass: "border-[#1BA7D9]/20 bg-[#EAF8FC]",
-    hint: "תשלום מהיר ב-Bit"
-  },
-  {
-    id: "paybox",
-    label: "PayBox",
-    accentClass: "border-[#2E9FE6]/20 bg-[#EAF6FD]",
-    hint: "תשלום מהיר ב-PayBox"
-  }
+  { id: "credit_card", label: "כרטיס אשראי" },
+  { id: "bit", label: "Bit" },
+  { id: "paybox", label: "PayBox" }
 ];
-
-function BrandIcon({
-  src,
-  alt,
-  fit = "cover"
-}: {
-  src: string;
-  alt: string;
-  fit?: "cover" | "contain";
-}) {
-  return (
-    <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-black/5">
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        className={fit === "contain" ? "object-contain p-0.5" : "object-cover"}
-        sizes="32px"
-      />
-    </div>
-  );
-}
-
-function PaymentOptionLogo({ id }: { id: PaymentOptionId }) {
-  if (id === "bit") return <BrandIcon src="/wallet/bit-logo.png" alt="Bit" />;
-  if (id === "paybox") return <BrandIcon src="/wallet/paybox-logo.png" alt="PayBox" />;
-  return (
-    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-[#0B3C5D] to-[#163A5F] shadow-sm ring-1 ring-[#0B3C5D]/20">
-      <Image
-        src="/anynanny-clean-transparent.png.jpg"
-        alt="AnyNanny"
-        width={18}
-        height={18}
-        className="object-contain"
-      />
-      <CreditCard className="absolute bottom-0.5 left-0.5 h-2.5 w-2.5 text-white/80" />
-    </div>
-  );
-}
 
 export default function ParentWalletClient() {
   const { user, isLoading: authLoading } = useAuth();
@@ -97,6 +46,7 @@ export default function ParentWalletClient() {
   const [loadingData, setLoadingData] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [methodsMenuOpen, setMethodsMenuOpen] = useState(false);
+  const [viewingMethod, setViewingMethod] = useState<PaymentOptionId | null>(null);
 
   const fetchPaymentMethods = useCallback(async () => {
     try {
@@ -243,25 +193,38 @@ export default function ParentWalletClient() {
   };
 
   useEffect(() => {
-    if (!methodsMenuOpen) return;
+    if (!methodsMenuOpen) {
+      setViewingMethod(null);
+      return;
+    }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && actionLoading === null) setMethodsMenuOpen(false);
+      if (e.key !== "Escape" || actionLoading !== null) return;
+      if (viewingMethod) setViewingMethod(null);
+      else setMethodsMenuOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [methodsMenuOpen, actionLoading]);
+  }, [methodsMenuOpen, actionLoading, viewingMethod]);
 
   const isPageLoading = authLoading || loadingData;
   const defaultCard = paymentMethods.find((m) => m.is_default) ?? paymentMethods[0] ?? null;
 
-  const optionStatus = (id: PaymentOptionId, hint: string): string => {
+  const isConfigured = (id: PaymentOptionId): boolean => {
+    if (id === "credit_card") return paymentMethods.length > 0;
+    return false;
+  };
+
+  const optionStatus = (id: PaymentOptionId): string => {
     if (id === "credit_card") {
       if (isPageLoading) return "טוען…";
       if (defaultCard) return `${defaultCard.brandLabel} •••• ${defaultCard.last4}`;
-      return hint;
+      return EMPTY_METHOD_HINT;
     }
-    return hint;
+    return EMPTY_METHOD_HINT;
   };
+
+  const optionLabel = (id: PaymentOptionId) =>
+    PAYMENT_OPTIONS.find((o) => o.id === id)?.label ?? id;
 
   return (
     <MainLayout>
@@ -286,6 +249,11 @@ export default function ParentWalletClient() {
           </Link>
         </div>
 
+        <header className="px-1 text-right">
+          <h1 className="text-lg font-extrabold text-navy-header">הארנק שלי</h1>
+          <p className="mt-0.5 text-[11px] text-slate-500">עיבוד מאובטח דרך שער התשלומים HYP</p>
+        </header>
+
         <section className="rounded-3xl bg-[#001F3F] p-6 text-white shadow-soft relative overflow-hidden">
           <p className="text-xs font-medium text-white/70">היתרה שלך באפליקציה</p>
           <div className="mt-2 flex items-baseline gap-1">
@@ -294,7 +262,7 @@ export default function ParentWalletClient() {
             </span>
           </div>
           <p className="mt-3 text-[11px] text-white/60 leading-relaxed">
-            היתרה מתעדכנת אוטומטית לאחר סיום משמרות ותשמש לכיסוי שירותי השמרטפות הבאים שלך.
+            היתרה מתעדכנת אוטומטית לאחר תשלום מאובטח ב־HYP ותשמש לכיסוי שירותי השמרטפות הבאים שלך.
           </p>
         </section>
 
@@ -311,7 +279,10 @@ export default function ParentWalletClient() {
         </section>
 
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
-          <h2 className="text-sm font-bold text-navy-header">פעולות אחרונות</h2>
+          <h2 className="text-sm font-bold text-navy-header">הכנסות ותשלומים</h2>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            הכספים מעובדים באופן מאובטח דרך שער התשלומים המורשה HYP.
+          </p>
 
           <div className="mt-3 space-y-2">
             {isPageLoading ? (
@@ -375,55 +346,115 @@ export default function ParentWalletClient() {
             className="absolute inset-0 cursor-default"
             aria-label="סגור"
             onClick={() => {
-              if (actionLoading === null) setMethodsMenuOpen(false);
+              if (actionLoading !== null) return;
+              if (viewingMethod) setViewingMethod(null);
+              else setMethodsMenuOpen(false);
             }}
           />
           <div className="relative z-[1] w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setMethodsMenuOpen(false)}
-                disabled={actionLoading !== null}
-                className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
-                aria-label="סגור"
-              >
-                <X className="h-4 w-4" />
-              </button>
-              <h3 className="text-sm font-bold text-navy-header">אמצעי תשלום שלי</h3>
+              {viewingMethod ? (
+                <button
+                  type="button"
+                  onClick={() => setViewingMethod(null)}
+                  disabled={actionLoading !== null}
+                  className="rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+                  aria-label="חזרה"
+                >
+                  <ChevronLeft className="h-4 w-4 rotate-180" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setMethodsMenuOpen(false)}
+                  disabled={actionLoading !== null}
+                  className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                  aria-label="סגור"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              <h3 className="text-sm font-bold text-navy-header">
+                {viewingMethod ? optionLabel(viewingMethod) : "אמצעי תשלום שלי"}
+              </h3>
               <span className="w-8" />
             </div>
 
-            <div className="space-y-2 px-3 py-3">
-              {PAYMENT_OPTIONS.map((option) => {
-                const updating = actionLoading === `update-${option.id}`;
-                return (
-                  <div
-                    key={option.id}
-                    className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 ${option.accentClass}`}
-                  >
-                    <PaymentOptionLogo id={option.id} />
-                    <div className="min-w-0 flex-1 text-right">
-                      <p className="text-xs font-bold text-slate-800">{option.label}</p>
-                      <p className="truncate text-[10px] text-slate-500" dir="ltr">
-                        {optionStatus(option.id, option.hint)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={actionLoading !== null}
-                      onClick={() => void handleUpdatePaymentMethod(option.id)}
-                      className="shrink-0 text-[11px] font-bold text-[#0B3C5D] underline underline-offset-2 decoration-[#0B3C5D]/50 transition hover:text-[#FF8A8A] hover:decoration-[#FF8A8A] disabled:opacity-50"
-                    >
-                      {updating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "עדכן"}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+            {viewingMethod ? (
+              <div className="space-y-3 px-4 py-4">
+                <WalletMethodVisualCard
+                  kind={viewingMethod}
+                  status={optionStatus(viewingMethod)}
+                  ready={isConfigured(viewingMethod)}
+                  compact={false}
+                  cardTitle={optionLabel(viewingMethod)}
+                />
 
-            <p className="border-t border-slate-100 px-4 py-3 text-center text-[11px] text-slate-500">
-              עדכון מפנה לעמוד HYP המאובטח לניהול אמצעי התשלום.
-            </p>
+                {viewingMethod === "credit_card" ? (
+                  <div className="space-y-2">
+                    {paymentMethods.map((method) => (
+                      <div
+                        key={method.id}
+                        className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right"
+                      >
+                        <p className="text-xs font-bold text-slate-800">
+                          {method.brandLabel} •••• {method.last4}
+                          {method.is_default ? (
+                            <span className="mr-1 text-[10px] font-semibold text-emerald-700">
+                              · ברירת מחדל
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-0.5 text-[10px] tabular-nums text-slate-400" dir="ltr">
+                          תוקף {String(method.exp_month).padStart(2, "0")}/
+                          {String(method.exp_year).slice(-2)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  disabled={actionLoading !== null}
+                  onClick={() => void handleUpdatePaymentMethod(viewingMethod)}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0B3C5D] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-60"
+                >
+                  {actionLoading === `update-${viewingMethod}` ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : null}
+                  עדכון פרטים
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 px-3 py-3">
+                  {PAYMENT_OPTIONS.map((option) => {
+                    const updating = actionLoading === `update-${option.id}`;
+                    const ready = isConfigured(option.id);
+                    return (
+                      <WalletMethodCardRow
+                        key={option.id}
+                        kind={option.id}
+                        status={optionStatus(option.id)}
+                        ready={ready}
+                        updating={updating}
+                        updateDisabled={actionLoading !== null}
+                        cardTitle={option.label}
+                        onOpen={() => {
+                          if (ready) setViewingMethod(option.id);
+                          else void handleUpdatePaymentMethod(option.id);
+                        }}
+                        onUpdate={() => void handleUpdatePaymentMethod(option.id)}
+                      />
+                    );
+                  })}
+                </div>
+                <p className="border-t border-slate-100 px-4 py-3 text-center text-[11px] text-slate-500">
+                  כרטיס שמור ניתן לפתוח לצפייה בפרטים מוסתרים. עדכון מפנה לשער התשלומים המורשה HYP.
+                </p>
+              </>
+            )}
           </div>
         </div>
       ) : null}

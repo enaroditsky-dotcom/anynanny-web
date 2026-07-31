@@ -67,6 +67,11 @@ export default function SitterWalletPage() {
           </Link>
         </div>
 
+        <header className="px-1 text-right">
+          <h1 className="text-lg font-extrabold text-navy-header">הכנסות ותשלומים</h1>
+          <p className="mt-0.5 text-[11px] text-slate-500">הארנק שלי · עיבוד מאובטח דרך HYP</p>
+        </header>
+
         <section className="relative overflow-hidden rounded-3xl bg-[#0B3C5D] p-6 text-white shadow-soft">
           <p className="text-xs font-medium text-white/70">היתרה שלך הזמינה למשיכה</p>
           <div className="mt-2 flex items-baseline gap-1">
@@ -75,14 +80,17 @@ export default function SitterWalletPage() {
             </span>
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-white/60">
-            הרווחים מתווספים אוטומטית עם סיום ואישור תשלום המשמרת. יתרה זמינה כוללת רק עסקאות שאושרו.
+            הרווחים מתווספים אוטומטית לאחר אישור תשלום מאובטח ב־HYP. יתרה זמינה כוללת רק עסקאות שאושרו.
           </p>
         </section>
 
         {user?.id ? <SitterPayoutWalletCards sitterId={user.id} /> : null}
 
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
-          <h2 className="text-sm font-bold text-navy-header">היסטוריית רווחים ומשיכות</h2>
+          <h2 className="text-sm font-bold text-navy-header">הכנסות ותשלומים</h2>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            הכספים מעובדים באופן מאובטח דרך שער התשלומים המורשה HYP.
+          </p>
 
           <div className="mt-3 space-y-2">
             {isPageLoading ? (
