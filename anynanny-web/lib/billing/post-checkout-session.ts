@@ -8,6 +8,7 @@ export type ParentCheckoutRequest = {
   successUrl?: string;
   cancelUrl?: string;
   paymentMethod?: CheckoutPaymentMethod | string;
+  paymentMethodId?: string;
   shiftDetails?: {
     sessionId?: string;
     elapsedSeconds?: number;
@@ -16,12 +17,13 @@ export type ParentCheckoutRequest = {
 
 export type ParentCheckoutSuccess = {
   ok: true;
-  url: string;
+  url: string | null;
   sessionId: string;
   gateway: string;
   status: string;
   mock: boolean;
   paymentMethod: string;
+  paid?: boolean;
 };
 
 export type ParentCheckoutFailure = {
@@ -51,12 +53,13 @@ export async function postParentCheckoutSession(
 
     const json = (await res.json().catch(() => ({}))) as {
       error?: string;
-      url?: string;
+      url?: string | null;
       sessionId?: string;
       gateway?: string;
       status?: string;
       mock?: boolean;
       paymentMethod?: string;
+      paid?: boolean;
     };
 
     if (!res.ok) {
@@ -67,18 +70,20 @@ export async function postParentCheckoutSession(
       };
     }
 
-    if (!json.url || !json.sessionId) {
+    const paidImmediately = json.paid === true || json.status === "paid";
+    if (!paidImmediately && (!json.url || !json.sessionId)) {
       return { ok: false, error: "Invalid checkout response.", status: 502 };
     }
 
     return {
       ok: true,
-      url: json.url,
-      sessionId: json.sessionId,
-      gateway: typeof json.gateway === "string" ? json.gateway : "mock",
-      status: typeof json.status === "string" ? json.status : "succeeded",
+      url: typeof json.url === "string" ? json.url : null,
+      sessionId: typeof json.sessionId === "string" ? json.sessionId : "paid",
+      gateway: typeof json.gateway === "string" ? json.gateway : "hyp",
+      status: typeof json.status === "string" ? json.status : paidImmediately ? "paid" : "pending",
       mock: json.mock === true,
-      paymentMethod: typeof json.paymentMethod === "string" ? json.paymentMethod : "credit_card"
+      paymentMethod: typeof json.paymentMethod === "string" ? json.paymentMethod : "credit_card",
+      paid: paidImmediately
     };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {

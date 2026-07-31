@@ -5,11 +5,14 @@ import {
 import { resolveCheckoutRedirectUrl } from "@/lib/billing/checkout-redirect-url";
 import { createHypCheckoutSession } from "@/lib/billing/hyp-checkout";
 import { isHypConfigured } from "@/lib/billing/hyp/create-transaction";
+import { chargeHypSavedToken } from "@/lib/billing/hyp/token";
+import { finalizeHypPaymentSuccess } from "@/lib/billing/finalize-hyp-payment";
 import { computePlatformFeeFromMinorUnits } from "@/lib/billing/platform-fee";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 /** Server-safe — do not import SESSIONS_TABLE from `lib/session/protocol` (`"use client"`). */
 import { SESSIONS_TABLE } from "@/lib/billing/session-types";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { getParentPaymentMethodSecret } from "@/lib/wallet/parent-payment-methods";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -32,6 +35,8 @@ export type ParentCheckoutBody = {
   cancelUrl?: string;
   bookingId?: string;
   paymentMethod?: string;
+  /** Saved Hyp card from parent_payment_methods — charges via action=soft. */
+  paymentMethodId?: string;
   shiftDetails?: {
     sessionId?: string;
     elapsedSeconds?: number;
@@ -191,6 +196,85 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
   }
 
   const shiftSessionId = body.shiftDetails?.sessionId?.trim();
+  const paymentMethodId = String(body.paymentMethodId ?? "").trim();
+
+  // Charge a previously saved Hyp card (no hosted pay page).
+  if (paymentMethodId) {
+    const secret = await getParentPaymentMethodSecret(supabase, user.id, paymentMethodId);
+    if (secret.error || !secret.method) {
+      return NextResponse.json(
+        { error: secret.error || "Saved payment method not found." },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const charge = await chargeHypSavedToken({
+        amountNis: paymentSplit.totalNis,
+        token: secret.method.hyp_token,
+        expMonth: secret.method.exp_month,
+        expYear: secret.method.exp_year,
+        info: bookingId,
+        moreData: shiftSessionId ? `Session_${shiftSessionId}` : null,
+        userId: secret.method.israeli_id,
+        clientName: user.user_metadata?.first_name ?? "Parent",
+        description: String(body.description ?? "תשלום משמרת AnyNanny")
+      });
+
+      if (!charge.success) {
+        return NextResponse.json(
+          {
+            error: charge.error || "חיוב הכרטיס השמור נכשל. נסו כרטיס אחר או תשלום חדש.",
+            gateway: "hyp",
+            cCode: charge.cCode
+          },
+          { status: 402 }
+        );
+      }
+
+      await markBookingPendingCheckout(supabase, bookingId);
+
+      const finalized = await finalizeHypPaymentSuccess(supabase, {
+        bookingId,
+        sessionId: shiftSessionId,
+        parentId: user.id,
+        hypApprovalId: charge.approvalId,
+        amountPaid: charge.amount ?? String(paymentSplit.totalNis)
+      });
+
+      if (!finalized.ok) {
+        return NextResponse.json(
+          { error: finalized.error || "החיוב עבר אך שמירת הסטטוס נכשלה." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        sessionId: charge.approvalId,
+        url: null,
+        status: "paid",
+        gateway: "hyp",
+        mock: false,
+        paymentMethod: "credit_card",
+        paymentMethodId,
+        amountMinorUnits: paymentSplit.totalMinorUnits,
+        platformFeeMinorUnits: paymentSplit.platformFeeMinorUnits,
+        platformFeeNis: paymentSplit.platformFeeNis,
+        sitterBaseNis: paymentSplit.sitterBaseNis,
+        totalNis: paymentSplit.totalNis,
+        shiftSessionId: shiftSessionId ?? null,
+        paid: true
+      });
+    } catch (error) {
+      console.error("[checkout] saved-card charge failed:", error);
+      return NextResponse.json(
+        {
+          error: error instanceof Error ? error.message : "Saved card charge failed."
+        },
+        { status: 502 }
+      );
+    }
+  }
 
   try {
     const hyp = await createHypCheckoutSession({

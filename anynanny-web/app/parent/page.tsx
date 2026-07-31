@@ -1,3 +1,5 @@
-import ParentDashboardPage from "./dashboard/parent-dashboard-page";
+import { redirect } from "next/navigation";
 
-export default ParentDashboardPage;
+export default function ParentIndexPage() {
+  redirect("/parent/dashboard");
+}

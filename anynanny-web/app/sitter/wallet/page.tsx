@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Landmark, ArrowUpRight, ArrowDownLeft, Loader2, RefreshCw, ArrowLeft, Wallet } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, Loader2, RefreshCw, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { SitterBankDetailsModal } from "@/components/sitter/SitterBankDetailsModal";
+import { SitterPayoutWalletCards } from "@/components/sitter/SitterPayoutWalletCards";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fetchSitterWalletView,
@@ -18,22 +18,20 @@ export default function SitterWalletPage() {
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<SitterWalletTransaction[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [missingSchema, setMissingSchema] = useState(false);
-  const [bankModalOpen, setBankModalOpen] = useState(false);
-
   const fetchWalletData = useCallback(async () => {
     if (!supabase || !user?.id) return;
     setLoadingData(true);
-    setLoadError(null);
-
-    const result = await fetchSitterWalletView(supabase, user.id);
-    setBalance(result.balance);
-    setTransactions(result.transactions);
-    setMissingSchema(result.missingSchema);
-    setLoadError(result.error);
-    setLoadingData(false);
+    try {
+      const result = await fetchSitterWalletView(supabase, user.id);
+      setBalance(Number.isFinite(result.balance) ? result.balance : 0);
+      setTransactions(Array.isArray(result.transactions) ? result.transactions : []);
+    } catch (err) {
+      console.warn("[sitter-wallet] failed to load wallet view:", err);
+      setBalance(0);
+      setTransactions([]);
+    } finally {
+      setLoadingData(false);
+    }
   }, [user?.id, supabase]);
 
   useEffect(() => {
@@ -43,20 +41,6 @@ export default function SitterWalletPage() {
       setLoadingData(false);
     }
   }, [authLoading, user?.id, fetchWalletData]);
-
-  const handlePayout = async () => {
-    if (balance <= 0) return alert("אין יתרה זמינה למשיכה כרגע");
-    if (!user?.id) return alert("אנא המתן לטעינת הנתונים");
-
-    try {
-      setActionLoading("payout");
-      alert("בקשת המשיכה התקבלה ותטופל בהתאם להגדרות החשבון שלך.");
-    } catch {
-      alert("הפעולה נכשלה");
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   const isPageLoading = authLoading || loadingData;
 
@@ -83,22 +67,6 @@ export default function SitterWalletPage() {
           </Link>
         </div>
 
-        {missingSchema ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-xs text-amber-900">
-            טבלאות הארנק עדיין לא הוגדרו בפרויקט. יש להריץ את המיגרציה
-            <span className="mx-1 font-mono text-[10px]" dir="ltr">
-              20260727160000_sitter_wallet_balances_and_earnings_credit.sql
-            </span>
-            ב-Supabase.
-          </div>
-        ) : null}
-
-        {!missingSchema && loadError ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-right text-xs text-rose-800">
-            שגיאה בטעינת הארנק: {loadError}
-          </div>
-        ) : null}
-
         <section className="relative overflow-hidden rounded-3xl bg-[#0B3C5D] p-6 text-white shadow-soft">
           <p className="text-xs font-medium text-white/70">היתרה שלך הזמינה למשיכה</p>
           <div className="mt-2 flex items-baseline gap-1">
@@ -111,31 +79,7 @@ export default function SitterWalletPage() {
           </p>
         </section>
 
-        <section className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            disabled={isPageLoading || balance <= 0 || actionLoading !== null}
-            onClick={() => void handlePayout()}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-[#FF8A8A] px-4 py-3.5 text-xs font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-50"
-          >
-            {actionLoading === "payout" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Wallet className="h-4 w-4" />
-            )}
-            משיכת כספים לבנק
-          </button>
-
-          <button
-            type="button"
-            disabled={!user?.id}
-            onClick={() => setBankModalOpen(true)}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-xs font-bold text-navy-header shadow-sm transition hover:bg-[#FDFBF6]/60 active:scale-[0.99] disabled:opacity-50"
-          >
-            <Landmark className="h-4 w-4" />
-            עדכון פרטי בנק
-          </button>
-        </section>
+        {user?.id ? <SitterPayoutWalletCards sitterId={user.id} /> : null}
 
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
           <h2 className="text-sm font-bold text-navy-header">היסטוריית רווחים ומשיכות</h2>
@@ -197,14 +141,6 @@ export default function SitterWalletPage() {
           </div>
         </section>
       </div>
-
-      {user?.id ? (
-        <SitterBankDetailsModal
-          sitterId={user.id}
-          open={bankModalOpen}
-          onClose={() => setBankModalOpen(false)}
-        />
-      ) : null}
     </div>
   );
 }

@@ -39,6 +39,7 @@ import {
   parentTotalFromSitterBaseNis,
   usePaymentExecutor
 } from "@/lib/billing/use-payment-executor";
+import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
 import type { ParentBusySlot, ParentPreferences } from "@/lib/parent/types";
 import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import {
@@ -321,6 +322,9 @@ export function ParentDashboardClient({
   const [confirmEndPending, startConfirmEndTransition] = useTransition();
   const [settlementStep, setSettlementStep] = useState<SettlementStep | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod>("credit_card");
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState<ParentPaymentMethod[]>([]);
+  const [savedPaymentMethodsLoading, setSavedPaymentMethodsLoading] = useState(false);
+  const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string | null>(null);
   const [ratingBusy, setRatingBusy] = useState(false);
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [hypCheckoutUrl, setHypCheckoutUrl] = useState<string | null>(null);
@@ -1057,10 +1061,19 @@ export function ParentDashboardClient({
         sessionId: String(activeSession.id),
         sitterBaseNis,
         paymentMethod,
+        paymentMethodId: selectedSavedMethodId,
         elapsedSeconds: settlementElapsedSeconds
       });
       if (!result.success) {
         setShiftError(result.error);
+        return;
+      }
+      if (result.paidImmediately) {
+        clearHypPendingCheckout();
+        setHypCheckoutUrl(null);
+        setShiftError(null);
+        // Refresh settlement / session state after immediate saved-card charge.
+        window.location.assign("/parent/dashboard?paid=1");
         return;
       }
       // Stash ids so Hyp return (no dynamic SuccessUrl) can still finalize after reload.
@@ -1080,6 +1093,7 @@ export function ParentDashboardClient({
     clearPaymentError,
     executePayment,
     paymentMethod,
+    selectedSavedMethodId,
     settlementElapsedSeconds,
     sitterBaseNis
   ]);
@@ -1111,6 +1125,39 @@ export function ParentDashboardClient({
     },
     [activeSession?.id, lockSettlement]
   );
+
+  // Load saved Hyp cards when parent reaches settlement payment step.
+  useEffect(() => {
+    if (settlementStep !== "payment") return;
+    let cancelled = false;
+    setSavedPaymentMethodsLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch("/api/parent/payment-methods", {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store"
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          methods?: ParentPaymentMethod[];
+        };
+        if (cancelled) return;
+        const methods = Array.isArray(json.methods) ? json.methods : [];
+        setSavedPaymentMethods(methods);
+        const defaultMethod = methods.find((m) => m.is_default) ?? methods[0] ?? null;
+        setSelectedSavedMethodId(defaultMethod?.id ?? null);
+        if (defaultMethod) setPaymentMethod("credit_card");
+      } catch (error) {
+        console.warn("[parent-dashboard] saved payment methods:", error);
+        if (!cancelled) setSavedPaymentMethods([]);
+      } finally {
+        if (!cancelled) setSavedPaymentMethodsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [settlementStep]);
 
   // Return from Hyp sandbox (iframe breakout or redirect).
   useEffect(() => {
@@ -1466,6 +1513,10 @@ export function ParentDashboardClient({
                     platformFeeNis={paymentSplit.platformFeeNis}
                     selectedMethod={paymentMethod}
                     onSelectMethod={setPaymentMethod}
+                    savedMethods={savedPaymentMethods}
+                    selectedSavedMethodId={selectedSavedMethodId}
+                    onSelectSavedMethod={setSelectedSavedMethodId}
+                    savedMethodsLoading={savedPaymentMethodsLoading}
                     busy={paymentBusy || Boolean(hypCheckoutUrl)}
                     bookingReady={Boolean(activeBooking?.id && activeSession?.id)}
                     errorMessage={paymentError ?? shiftError}

@@ -12,7 +12,7 @@ import SessionProvider from "@/context/SessionContext";
 
 const CHROMELESS_PREFIXES = ["/auth/role-selection", "/auth/login", "/auth/sign-up", "/terms"];
 const FIXED_VIEWPORT_PREFIXES = ["/parent/dashboard", "/parent/calendar", "/sitter/dashboard", "/sitter/shifts", "/session"];
-const MAIN_LAYOUT_PREFIXES = ["/parent/search", "/parent/wallet"];
+const MAIN_LAYOUT_PREFIXES = ["/parent/search", "/parent/wallet", "/sitter/wallet"];
 
 export function isChromelessAuthPath(pathname: string): boolean {
   return CHROMELESS_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

@@ -17,16 +17,28 @@ export type BillingTransaction = {
 
 type RawTxRow = Record<string, unknown>;
 
-const TYPE_SELECTS = ["transaction_type", "type"] as const;
 const OWNER_COLUMNS = ["parent_id", "user_id"] as const;
 
-function normalizeTxType(raw: unknown): BillingTransactionType {
+function normalizeTxType(raw: unknown, description?: unknown): BillingTransactionType {
   const value = String(raw ?? "")
     .trim()
     .toLowerCase();
   if (value === "deposit" || value === "refund" || value === "payment") return value;
   if (value === "credit" || value === "topup" || value === "top_up") return "deposit";
   if (value === "debit" || value === "charge" || value === "spend") return "payment";
+
+  const desc = String(description ?? "").trim().toLowerCase();
+  if (
+    desc.includes("deposit") ||
+    desc.includes("top-up") ||
+    desc.includes("topup") ||
+    desc.includes("הטענ") ||
+    desc.includes("טעינ") ||
+    desc.includes("זיכוי")
+  ) {
+    return "deposit";
+  }
+  if (desc.includes("refund") || desc.includes("החזר")) return "refund";
   return "payment";
 }
 
@@ -39,21 +51,30 @@ function normalizeTxStatus(raw: unknown): BillingTransactionStatus {
 }
 
 function mapBillingTransactionRow(row: RawTxRow): BillingTransaction {
-  const typeRaw = row.transaction_type ?? row.type;
+  const description = String(row.description ?? row.note ?? row.title ?? "");
+  const typeRaw =
+    row.transaction_type ??
+    row.type ??
+    row.tx_type ??
+    row.kind ??
+    row.category ??
+    row.entry_type;
   return {
     id: String(row.id ?? ""),
-    type: normalizeTxType(typeRaw),
-    amount: Number(row.amount) || 0,
-    description: String(row.description ?? ""),
-    created_at: String(row.created_at ?? new Date().toISOString()),
-    status: normalizeTxStatus(row.status)
+    type: normalizeTxType(typeRaw, description),
+    amount: Math.abs(
+      Number(row.amount ?? row.amount_nis ?? row.total ?? row.sum ?? row.value) || 0
+    ),
+    description,
+    created_at: String(row.created_at ?? row.inserted_at ?? new Date().toISOString()),
+    status: normalizeTxStatus(row.status ?? row.payment_status)
   };
 }
 
 /**
  * Load recent billing rows for a parent, tolerating schema drift:
  * - owner column: `parent_id` or `user_id`
- * - type column: `transaction_type` or `type`
+ * - uses `select('*')` so missing `type` / `transaction_type` columns never 400
  */
 export async function fetchParentBillingTransactions(
   supabase: SupabaseClient,
@@ -65,38 +86,52 @@ export async function fetchParentBillingTransactions(
   let lastError: string | null = null;
 
   for (const ownerCol of OWNER_COLUMNS) {
-    for (const typeCol of TYPE_SELECTS) {
-      const select = `id, ${typeCol}, amount, description, created_at, status`;
-      const { data, error } = await supabase
-        .from(BILLING_TRANSACTIONS_TABLE)
-        .select(select)
-        .eq(ownerCol, parentId)
-        .order("created_at", { ascending: false })
-        .limit(limit);
+    const { data, error } = await supabase
+      .from(BILLING_TRANSACTIONS_TABLE)
+      .select("*")
+      .eq(ownerCol, parentId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
 
-      if (!error) {
-        return (((data as unknown) as RawTxRow[] | null) ?? [])
-          .map(mapBillingTransactionRow)
-          .filter((row) => Boolean(row.id));
-      }
-
-      lastError = error.message;
-      const missingType =
-        isPostgrestMissingColumnError(error.message, typeCol) ||
-        isPostgrestMissingColumnError(error.message, "type") ||
-        isPostgrestMissingColumnError(error.message, "transaction_type");
-      const missingOwner = isPostgrestMissingColumnError(error.message, ownerCol);
-
-      // Try next type/owner combination on schema drift only.
-      if (!missingType && !missingOwner) {
-        console.warn("[billing-transactions] fetch failed:", error.message);
-        return [];
-      }
+    if (!error) {
+      return (((data as unknown) as RawTxRow[] | null) ?? [])
+        .map(mapBillingTransactionRow)
+        .filter((row) => Boolean(row.id) && row.amount > 0);
     }
+
+    lastError = error.message;
+    const missingOwner = isPostgrestMissingColumnError(error.message, ownerCol);
+    const missingTable =
+      /Could not find the table/i.test(error.message) ||
+      /PGRST205/i.test(error.message) ||
+      /relation .* does not exist/i.test(error.message);
+
+    if (missingOwner) continue;
+    if (missingTable) {
+      console.warn("[billing-transactions] table unavailable:", error.message);
+      return [];
+    }
+
+    // created_at might be missing — retry without explicit order.
+    if (isPostgrestMissingColumnError(error.message, "created_at")) {
+      const unordered = await supabase
+        .from(BILLING_TRANSACTIONS_TABLE)
+        .select("*")
+        .eq(ownerCol, parentId)
+        .limit(limit);
+      if (!unordered.error) {
+        return (((unordered.data as unknown) as RawTxRow[] | null) ?? [])
+          .map(mapBillingTransactionRow)
+          .filter((row) => Boolean(row.id) && row.amount > 0);
+      }
+      lastError = unordered.error.message;
+    }
+
+    console.warn("[billing-transactions] fetch failed:", error.message);
   }
 
   if (lastError) {
-    console.warn("[billing-transactions] no compatible columns:", lastError);
+    console.warn("[billing-transactions] no compatible owner column:", lastError);
   }
   return [];
 }

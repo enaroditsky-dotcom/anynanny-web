@@ -18,6 +18,8 @@ export type PaymentExecutorParams = {
   /** Sitter base amount (before the flat 10% platform fee). */
   sitterBaseNis: number;
   paymentMethod: CheckoutPaymentMethod;
+  /** Saved Hyp card id from parent_payment_methods. */
+  paymentMethodId?: string | null;
   elapsedSeconds?: number;
 };
 
@@ -25,9 +27,10 @@ export type PaymentExecutorResult =
   | {
       success: true;
       paymentSplit: ParentPaymentSplit;
-      /** Hyp hosted checkout URL for iframe / redirect. */
-      checkoutUrl: string;
+      /** Hyp hosted checkout URL for iframe / redirect. Null when saved card charged immediately. */
+      checkoutUrl: string | null;
       hypSessionId: string;
+      paidImmediately?: boolean;
     }
   | { success: false; error: string };
 
@@ -57,6 +60,7 @@ export function usePaymentExecutor() {
           currency: "ils",
           description: "תשלום משמרת AnyNanny",
           paymentMethod: params.paymentMethod,
+          paymentMethodId: params.paymentMethodId ?? undefined,
           shiftDetails: {
             sessionId: params.sessionId,
             elapsedSeconds: params.elapsedSeconds
@@ -71,10 +75,28 @@ export function usePaymentExecutor() {
         }
 
         // Never accept mock / inline success — session finalizes only after Hyp sandbox.
-        if (result.mock || result.gateway === "mock" || result.status === "succeeded") {
+        if (result.mock || result.gateway === "mock") {
           const message =
             "תשלום מדומה אינו זמין. יש להשלים תשלום דרך HYP Sandbox.";
           console.error("[usePaymentExecutor] rejected mock checkout:", result);
+          setError(message);
+          return { success: false, error: message };
+        }
+
+        if (result.paid || result.status === "paid") {
+          return {
+            success: true,
+            paymentSplit,
+            checkoutUrl: null,
+            hypSessionId: String(result.sessionId),
+            paidImmediately: true
+          };
+        }
+
+        // Hosted pay-page success statuses are "pending" / "pending_checkout" — not "succeeded".
+        if (result.status === "succeeded") {
+          const message =
+            "תשלום מדומה אינו זמין. יש להשלים תשלום דרך HYP Sandbox.";
           setError(message);
           return { success: false, error: message };
         }

@@ -7,6 +7,7 @@ import { readCardcomCredentials, resolveCardcomWebhookUrl } from "@/lib/cardcom/
 import { createCardcomLowProfile } from "@/lib/cardcom/low-profile-create";
 import { createServerClient } from "@/lib/supabase/server";
 import { buildHypWalletDepositInfo } from "@/lib/wallet/billing-transactions";
+import { buildHypWalletPaymentMethodInfo } from "@/lib/wallet/parent-payment-methods";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -15,6 +16,10 @@ type DepositBody = {
   amount?: number;
   parentId?: string;
   parentName?: string;
+  /** `deposit` (default) or `payment_method` for card registration via Hyp. */
+  purpose?: "deposit" | "payment_method";
+  /** Preferred Hyp rail when opening the hosted page. */
+  paymentMethod?: "credit_card" | "bit" | "paybox" | "wallet";
 };
 
 /**
@@ -51,6 +56,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 
+  const purpose = body.purpose === "payment_method" || amountRaw === 0 ? "payment_method" : "deposit";
+
   const parentName =
     String(body.parentName ?? "").trim() ||
     `${user.user_metadata?.first_name ?? ""} ${user.user_metadata?.last_name ?? ""}`.trim() ||
@@ -59,50 +66,62 @@ export async function POST(request: Request) {
   let successUrl: string;
   let cancelUrl: string;
   try {
-    successUrl = resolveCheckoutRedirectUrl(request, undefined, "/parent/wallet?status=success");
+    successUrl = resolveCheckoutRedirectUrl(
+      request,
+      undefined,
+      purpose === "payment_method"
+        ? "/parent/wallet?status=success&pm=1"
+        : "/parent/wallet?status=success"
+    );
     cancelUrl = resolveCheckoutRedirectUrl(request, undefined, "/parent/wallet?status=cancel");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid redirect URL.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  // amount === 0 → card registration / verification (Hyp requires a small positive amount).
-  const isTokenOnly = amountRaw === 0;
-  const chargeAmount = isTokenOnly ? 1 : amountRaw;
+  const isTokenOnly = purpose === "payment_method";
+  const chargeAmount = isTokenOnly ? Math.max(1, amountRaw || 1) : amountRaw;
+  if (!isTokenOnly && chargeAmount <= 0) {
+    return NextResponse.json({ error: "deposit amount must be > 0." }, { status: 400 });
+  }
+
   const description = isTokenOnly
-    ? "אימות / רישום אמצעי תשלום — AnyNanny"
+    ? "שמירת אמצעי תשלום — AnyNanny (Visa / Mastercard / Isracard / Amex)"
     : "טעינת ארנק דיגיטלי — AnyNanny";
+
+  const hypInfo = isTokenOnly
+    ? buildHypWalletPaymentMethodInfo(parentId)
+    : buildHypWalletDepositInfo(parentId);
 
   if (isHypConfigured()) {
     try {
-      const walletInfo = buildHypWalletDepositInfo(parentId);
+      const preferredMethod =
+        body.paymentMethod === "bit" || body.paymentMethod === "paybox" || body.paymentMethod === "wallet"
+          ? body.paymentMethod
+          : "credit_card";
       const hyp = await createHypTransaction({
         amountNis: chargeAmount,
-        bookingId: walletInfo,
+        bookingId: hypInfo,
         description,
-        paymentMethod: "credit_card",
+        paymentMethod: preferredMethod,
         pageLang: "HEB",
         clientName: parentName.split(/\s+/)[0] || "Parent",
         clientLastName: parentName.split(/\s+/).slice(1).join(" ") || "AnyNanny",
         successUrl,
         cancelUrl,
-        // Echo parent id on return/IPN for wallet credit (not a booking UUID).
         shiftSessionId: null
       });
-
-      // Put wallet marker in MoreData via a second sign if needed — Info already carries WalletDeposit_<uuid>.
-      // createHypTransaction stores bookingId in Info; parseHypWalletDepositParentId reads it.
 
       return NextResponse.json({
         url: hyp.checkoutUrl,
         sessionId: hyp.sessionId,
         gateway: "hyp",
         amount: chargeAmount,
-        tokenOnly: isTokenOnly
+        tokenOnly: isTokenOnly,
+        purpose
       });
     } catch (error) {
       console.error("[israel-deposit] Hyp failed:", error);
-      // Fall through to Cardcom if configured.
       if (!readCardcomCredentials()) {
         return NextResponse.json(
           {
@@ -154,7 +173,8 @@ export async function POST(request: Request) {
       sessionId: result.lowProfileId,
       gateway: "cardcom",
       amount: chargeAmount,
-      tokenOnly: isTokenOnly
+      tokenOnly: isTokenOnly,
+      purpose
     });
   } catch (error) {
     console.error("[israel-deposit] Cardcom exception:", error);

@@ -8,6 +8,10 @@ import {
   creditParentWalletDeposit,
   parseHypWalletDepositParentId
 } from "@/lib/wallet/billing-transactions";
+import {
+  parseHypWalletPaymentMethodParentId,
+  saveHypPaymentMethodFromTransId
+} from "@/lib/wallet/parent-payment-methods";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -44,14 +48,20 @@ export async function POST(request: Request) {
   const infoRaw = params.get("Info") ?? params.get("info") ?? parsed.raw.Info ?? parsed.raw.info ?? "";
   const moreDataRaw =
     params.get("MoreData") ?? params.get("moredata") ?? parsed.raw.MoreData ?? parsed.raw.moredata ?? "";
+  const israeliId = params.get("UserId") ?? params.get("userid") ?? parsed.raw.UserId ?? null;
+  const brandHint =
+    params.get("Brand") ?? params.get("CardName") ?? params.get("cardname") ?? parsed.raw.Brand ?? null;
   const walletParentId =
     parseHypWalletDepositParentId(infoRaw) || parseHypWalletDepositParentId(moreDataRaw);
+  const paymentMethodParentId =
+    parseHypWalletPaymentMethodParentId(infoRaw) || parseHypWalletPaymentMethodParentId(moreDataRaw);
 
   if (!isHypSuccessCCode(parsed.cCode)) {
     console.warn(`[Hyp Webhook] Ignoring non-success CCode=${parsed.cCode}`, {
       bookingId,
       approvalNumber,
-      walletParentId
+      walletParentId,
+      paymentMethodParentId
     });
     return new NextResponse("IGNORED", {
       status: 200,
@@ -68,6 +78,46 @@ export async function POST(request: Request) {
       { error: "Server misconfigured (SUPABASE_SERVICE_ROLE_KEY)." },
       { status: 500 }
     );
+  }
+
+  // Save card / payment method (Info = WalletPaymentMethod_<parentUuid>).
+  if (paymentMethodParentId) {
+    if (!approvalNumber) {
+      return NextResponse.json({ error: "Missing Hyp Id for tokenization." }, { status: 400 });
+    }
+
+    const saved = await saveHypPaymentMethodFromTransId(supabase, {
+      parentId: paymentMethodParentId,
+      transId: approvalNumber,
+      israeliId,
+      brandHint,
+      makeDefault: true
+    });
+
+    if (saved.error) {
+      console.error("[Hyp Webhook] Save payment method failed:", saved.error, {
+        paymentMethodParentId,
+        approvalNumber
+      });
+      return NextResponse.json({ error: saved.error }, { status: 500 });
+    }
+
+    const depositAmount = Number(amount);
+    if (Number.isFinite(depositAmount) && depositAmount > 0) {
+      const credit = await creditParentWalletDeposit(supabase, {
+        parentId: paymentMethodParentId,
+        amount: depositAmount,
+        description: `אימות אמצעי תשלום (Hyp #${approvalNumber})`
+      });
+      if (credit.error) {
+        console.warn("[Hyp Webhook] PM wallet credit skipped:", credit.error);
+      }
+    }
+
+    console.log(
+      `[Hyp Webhook] Payment method saved parent=${paymentMethodParentId} method=${saved.method?.id} approval=${approvalNumber}`
+    );
+    return new NextResponse("OK", { status: 200, headers: { "Content-Type": "text/plain" } });
   }
 
   // Parent wallet top-up (Info = WalletDeposit_<parentUuid>) — not a shift booking.
@@ -89,6 +139,18 @@ export async function POST(request: Request) {
         approvalNumber
       });
       return NextResponse.json({ error: credit.error }, { status: 500 });
+    }
+
+    if (approvalNumber) {
+      const saved = await saveHypPaymentMethodFromTransId(supabase, {
+        parentId: walletParentId,
+        transId: approvalNumber,
+        israeliId,
+        brandHint
+      });
+      if (saved.error) {
+        console.warn("[Hyp Webhook] Deposit token save skipped:", saved.error);
+      }
     }
 
     console.log(
@@ -130,6 +192,16 @@ export async function POST(request: Request) {
       bookingId
     });
     return NextResponse.json({ error: result.error }, { status: 500 });
+  }
+
+  const saved = await saveHypPaymentMethodFromTransId(supabase, {
+    parentId: String(booking.parent_id),
+    transId: approvalNumber,
+    israeliId,
+    brandHint
+  });
+  if (saved.error) {
+    console.warn("[Hyp Webhook] Shift token save skipped:", saved.error);
   }
 
   console.log(
