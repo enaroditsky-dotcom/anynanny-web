@@ -5,10 +5,15 @@ import { Loader2 } from "lucide-react";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import {
   PersonalAreaSection,
+  PersonalChangeLink,
   PersonalCheckbox,
+  PersonalEditModal,
   PersonalField,
+  PersonalStaticRow,
+  formatDisplayDate,
   personalInputClassName,
-  personalTextareaClassName
+  personalTextareaClassName,
+  yesNoLabel
 } from "@/components/personal-area/personal-area-ui";
 import { SitterBankDetailsSection } from "@/components/sitter/SitterBankDetailsSection";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
@@ -44,6 +49,28 @@ type FormState = {
   working_cities: IsraelCity[];
   nanny_serial: string;
 };
+
+type EditKey =
+  | "first_name"
+  | "last_name"
+  | "birth_date"
+  | "id_number"
+  | "address_full"
+  | "years_experience"
+  | "hourly_rate_nis"
+  | "military_service"
+  | "preferred_ages"
+  | "languages"
+  | "citizenship_israeli"
+  | "birth_country"
+  | "aliyah_year"
+  | "bio"
+  | "referee_phone_1"
+  | "referee_phone_2"
+  | "working_cities"
+  | "visibility"
+  | "skills"
+  | "legal";
 
 function militaryToForm(value: unknown): string {
   if (value === true || value === "true" || value === "כן") return "כן";
@@ -90,6 +117,34 @@ function profileToForm(profile: SitterProfileRow | null): FormState {
   };
 }
 
+function formToPayload(form: FormState): Record<string, unknown> {
+  return {
+    first_name: form.first_name.trim(),
+    last_name: form.last_name.trim(),
+    birth_date: form.birth_date || null,
+    show_age: form.show_age,
+    show_full_name: form.show_full_name,
+    id_number: form.id_number.trim() || null,
+    address_full: form.address_full.trim() || null,
+    citizenship_israeli: form.citizenship_israeli,
+    birth_country: form.birth_country.trim() || null,
+    aliyah_year: form.aliyah_year.trim() ? Number(form.aliyah_year) : null,
+    military_service: militaryToPayload(form.military_service),
+    years_experience: form.years_experience.trim() ? Number(form.years_experience) : null,
+    hourly_rate_nis: form.hourly_rate_nis.trim() ? Number(form.hourly_rate_nis) : null,
+    preferred_ages: form.preferred_ages.trim() || null,
+    languages: form.languages.trim() || null,
+    has_car: form.has_car,
+    homework_help: form.homework_help,
+    light_cooking: form.light_cooking,
+    bio: form.bio.trim() || null,
+    referee_phone_1: form.referee_phone_1.trim() || null,
+    referee_phone_2: form.referee_phone_2.trim() || null,
+    legal_no_criminal_declaration: form.legal_no_criminal_declaration,
+    working_cities: form.working_cities
+  };
+}
+
 type Props = {
   userId: string | null;
 };
@@ -99,7 +154,10 @@ export function SitterPersonalArea({ userId }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(profileToForm(null));
+  const [editKey, setEditKey] = useState<EditKey | null>(null);
+  const [draft, setDraft] = useState<FormState>(profileToForm(null));
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -130,68 +188,61 @@ export function SitterPersonalArea({ userId }: Props) {
     void load();
   }, [load]);
 
-  const patchForm = useCallback((patch: Partial<FormState>) => {
-    setForm((prev) => ({ ...prev, ...patch }));
-    setSuccess(null);
-  }, []);
+  const openEdit = useCallback(
+    (key: EditKey) => {
+      setModalError(null);
+      setSuccess(null);
+      setDraft({ ...form, working_cities: [...form.working_cities] });
+      setEditKey(key);
+    },
+    [form]
+  );
+
+  const closeEdit = useCallback(() => {
+    if (saving) return;
+    setEditKey(null);
+    setModalError(null);
+  }, [saving]);
 
   const handleSave = useCallback(async () => {
-    if (!userId || saving) return;
-    if (!form.first_name.trim() || !form.last_name.trim()) {
-      setError("יש למלא שם פרטי ושם משפחה.");
+    if (!userId || !editKey) return;
+
+    if (!draft.first_name.trim() || !draft.last_name.trim()) {
+      setModalError("יש למלא שם פרטי ושם משפחה.");
+      return;
+    }
+
+    if (editKey === "working_cities" && draft.working_cities.length === 0) {
+      setModalError("יש לבחור לפחות עיר אחת.");
       return;
     }
 
     setSaving(true);
-    setError(null);
-    setSuccess(null);
+    setModalError(null);
 
     try {
+      const next = { ...form, ...draft };
       const response = await fetch("/api/sitter/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim(),
-          birth_date: form.birth_date || null,
-          show_age: form.show_age,
-          show_full_name: form.show_full_name,
-          id_number: form.id_number.trim() || null,
-          address_full: form.address_full.trim() || null,
-          citizenship_israeli: form.citizenship_israeli,
-          birth_country: form.birth_country.trim() || null,
-          aliyah_year: form.aliyah_year.trim() ? Number(form.aliyah_year) : null,
-          military_service: militaryToPayload(form.military_service),
-          years_experience: form.years_experience.trim() ? Number(form.years_experience) : null,
-          hourly_rate_nis: form.hourly_rate_nis.trim() ? Number(form.hourly_rate_nis) : null,
-          preferred_ages: form.preferred_ages.trim() || null,
-          languages: form.languages.trim() || null,
-          has_car: form.has_car,
-          homework_help: form.homework_help,
-          light_cooking: form.light_cooking,
-          bio: form.bio.trim() || null,
-          referee_phone_1: form.referee_phone_1.trim() || null,
-          referee_phone_2: form.referee_phone_2.trim() || null,
-          legal_no_criminal_declaration: form.legal_no_criminal_declaration,
-          working_cities: form.working_cities
-        })
+        body: JSON.stringify(formToPayload(next))
       });
-
       const json = (await response.json()) as { profile?: SitterProfileRow | null; error?: string };
       if (!response.ok) {
-        setError(json.error || "שמירת הפרופיל נכשלה.");
+        setModalError(json.error || "שמירת הפרופיל נכשלה.");
         setSaving(false);
         return;
       }
 
       setForm(profileToForm(json.profile ?? null));
-      setSuccess("הפרופיל עודכן בהצלחה");
+      setEditKey(null);
+      setSuccess("הפרטים עודכנו בהצלחה");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "שמירת הפרופיל נכשלה.");
+      setModalError(err instanceof Error ? err.message : "שמירת הפרופיל נכשלה.");
     } finally {
       setSaving(false);
     }
-  }, [form, saving, userId]);
+  }, [draft, editKey, form, userId]);
 
   if (!userId) return null;
 
@@ -207,6 +258,62 @@ export function SitterPersonalArea({ userId }: Props) {
   const displayName =
     formatSitterDisplayName({ first_name: form.first_name, last_name: form.last_name }) ||
     "הפרופיל שלי";
+
+  const skillsLabel = [
+    form.has_car ? "רכב / הגעה עצמאית" : null,
+    form.homework_help ? "עזרה בשיעורים" : null,
+    form.light_cooking ? "בישול קל" : null
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const visibilityLabel = [
+    form.show_full_name ? "שם מלא מוצג" : "שם מלא מוסתר",
+    form.show_age ? "גיל מוצג" : "גיל מוסתר"
+  ].join(" · ");
+
+  const modalTitle =
+    editKey === "first_name"
+      ? "שינוי שם פרטי"
+      : editKey === "last_name"
+        ? "שינוי שם משפחה"
+        : editKey === "birth_date"
+          ? "שינוי תאריך לידה"
+          : editKey === "id_number"
+            ? "שינוי תעודת זהות"
+            : editKey === "address_full"
+              ? "שינוי כתובת"
+              : editKey === "years_experience"
+                ? "שינוי שנות ניסיון"
+                : editKey === "hourly_rate_nis"
+                  ? "שינוי תעריף שעתי"
+                  : editKey === "military_service"
+                    ? "שינוי שירות צבאי / לאומי"
+                    : editKey === "preferred_ages"
+                      ? "שינוי גילאים מועדפים"
+                      : editKey === "languages"
+                        ? "שינוי שפות"
+                        : editKey === "citizenship_israeli"
+                          ? "שינוי אזרחות"
+                          : editKey === "birth_country"
+                            ? "שינוי ארץ לידה"
+                            : editKey === "aliyah_year"
+                              ? "שינוי שנת עלייה"
+                              : editKey === "bio"
+                                ? "שינוי אודותיי"
+                                : editKey === "referee_phone_1"
+                                  ? "שינוי טלפון ממליץ 1"
+                                  : editKey === "referee_phone_2"
+                                    ? "שינוי טלפון ממליץ 2"
+                                    : editKey === "working_cities"
+                                      ? "שינוי אזורי שירות"
+                                      : editKey === "visibility"
+                                        ? "שינוי הגדרות תצוגה"
+                                        : editKey === "skills"
+                                          ? "שינוי כישורים"
+                                          : editKey === "legal"
+                                            ? "שינוי הצהרה"
+                                            : "";
 
   return (
     <div className="space-y-4 pb-4" dir="rtl">
@@ -230,121 +337,265 @@ export function SitterPersonalArea({ userId }: Props) {
       ) : null}
 
       <PersonalAreaSection title="פרטים אישיים" description="הפרטים שנשמרו בשאלון ופרופיל מקצועי">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <PersonalField label="שם פרטי *">
+        <PersonalStaticRow label="שם פרטי" value={form.first_name} onEdit={() => openEdit("first_name")} />
+        <PersonalStaticRow label="שם משפחה" value={form.last_name} onEdit={() => openEdit("last_name")} />
+        <PersonalStaticRow
+          label="תאריך לידה"
+          value={formatDisplayDate(form.birth_date)}
+          onEdit={() => openEdit("birth_date")}
+        />
+        <PersonalStaticRow
+          label="תעודת זהות"
+          value={form.id_number}
+          onEdit={() => openEdit("id_number")}
+          dir="ltr"
+        />
+        <PersonalStaticRow
+          label="כתובת מלאה"
+          value={form.address_full}
+          onEdit={() => openEdit("address_full")}
+        />
+      </PersonalAreaSection>
+
+      <PersonalAreaSection
+        title="הגדרות תצוגה"
+        accent="sky"
+        action={<PersonalChangeLink onClick={() => openEdit("visibility")} />}
+      >
+        <p className="text-[14px] font-medium text-[#001F3F]">{visibilityLabel}</p>
+      </PersonalAreaSection>
+
+      <PersonalAreaSection title="רקע מקצועי" accent="emerald">
+        <PersonalStaticRow
+          label="שנות ניסיון"
+          value={form.years_experience}
+          onEdit={() => openEdit("years_experience")}
+        />
+        <PersonalStaticRow
+          label="תעריף שעתי"
+          value={form.hourly_rate_nis ? `₪${form.hourly_rate_nis}` : ""}
+          onEdit={() => openEdit("hourly_rate_nis")}
+        />
+        <PersonalStaticRow
+          label="שירות צבאי / לאומי"
+          value={form.military_service}
+          onEdit={() => openEdit("military_service")}
+        />
+        <PersonalStaticRow
+          label="גילאים מועדפים"
+          value={form.preferred_ages}
+          onEdit={() => openEdit("preferred_ages")}
+        />
+        <PersonalStaticRow label="שפות" value={form.languages} onEdit={() => openEdit("languages")} />
+        <PersonalStaticRow
+          label="אזרחות ישראלית"
+          value={yesNoLabel(form.citizenship_israeli)}
+          onEdit={() => openEdit("citizenship_israeli")}
+        />
+        <PersonalStaticRow
+          label="ארץ לידה"
+          value={form.birth_country}
+          onEdit={() => openEdit("birth_country")}
+        />
+        <PersonalStaticRow
+          label="שנת עלייה"
+          value={form.aliyah_year}
+          onEdit={() => openEdit("aliyah_year")}
+        />
+      </PersonalAreaSection>
+
+      <PersonalAreaSection
+        title="כישורים"
+        accent="emerald"
+        action={<PersonalChangeLink onClick={() => openEdit("skills")} />}
+      >
+        <p className={`text-[14px] ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
+          {skillsLabel || "לא הוגדרו כישורים נוספים"}
+        </p>
+      </PersonalAreaSection>
+
+      <PersonalAreaSection
+        title="אודותיי"
+        accent="sky"
+        description="הטקסט שההורים רואים בכרטיס שלך"
+        action={<PersonalChangeLink onClick={() => openEdit("bio")} />}
+      >
+        <p
+          className={`whitespace-pre-wrap text-[14px] leading-relaxed ${
+            form.bio.trim() ? "font-medium text-[#001F3F]" : "italic text-slate-400"
+          }`}
+        >
+          {form.bio.trim() || "לא הוגדר"}
+        </p>
+      </PersonalAreaSection>
+
+      <PersonalAreaSection
+        title="אזורי שירות"
+        description="הערים שבהן את מוכנה לעבוד"
+        action={<PersonalChangeLink onClick={() => openEdit("working_cities")} />}
+      >
+        <p
+          className={`text-[14px] leading-relaxed ${
+            form.working_cities.length ? "font-medium text-[#001F3F]" : "italic text-slate-400"
+          }`}
+        >
+          {form.working_cities.length ? form.working_cities.join(", ") : "לא הוגדרו אזורי שירות"}
+        </p>
+      </PersonalAreaSection>
+
+      <PersonalAreaSection title="אנשי קשר ממליצים" accent="gold">
+        <PersonalStaticRow
+          label="טלפון ממליץ 1"
+          value={form.referee_phone_1}
+          onEdit={() => openEdit("referee_phone_1")}
+          dir="ltr"
+        />
+        <PersonalStaticRow
+          label="טלפון ממליץ 2"
+          value={form.referee_phone_2}
+          onEdit={() => openEdit("referee_phone_2")}
+          dir="ltr"
+        />
+      </PersonalAreaSection>
+
+      <PersonalAreaSection
+        title="הצהרה"
+        accent="gold"
+        action={<PersonalChangeLink onClick={() => openEdit("legal")} />}
+      >
+        <p className="text-[14px] font-medium text-[#001F3F]">
+          {form.legal_no_criminal_declaration
+            ? "הצהרת היעדר עבר פלילי רלוונטי אושרה"
+            : "הצהרה טרם אושרה"}
+        </p>
+      </PersonalAreaSection>
+
+      <SitterBankDetailsSection sitterId={userId} />
+
+      <PersonalEditModal
+        open={editKey != null}
+        title={modalTitle}
+        onClose={closeEdit}
+        onSave={handleSave}
+        saving={saving}
+        error={modalError}
+      >
+        {editKey === "first_name" ||
+        editKey === "last_name" ||
+        editKey === "id_number" ||
+        editKey === "address_full" ||
+        editKey === "preferred_ages" ||
+        editKey === "languages" ||
+        editKey === "birth_country" ||
+        editKey === "referee_phone_1" ||
+        editKey === "referee_phone_2" ? (
+          <PersonalField label={modalTitle.replace("שינוי ", "")}>
             <input
               className={personalInputClassName}
-              value={form.first_name}
-              onChange={(e) => patchForm({ first_name: e.target.value })}
+              value={
+                editKey === "first_name"
+                  ? draft.first_name
+                  : editKey === "last_name"
+                    ? draft.last_name
+                    : editKey === "id_number"
+                      ? draft.id_number
+                      : editKey === "address_full"
+                        ? draft.address_full
+                        : editKey === "preferred_ages"
+                          ? draft.preferred_ages
+                          : editKey === "languages"
+                            ? draft.languages
+                            : editKey === "birth_country"
+                              ? draft.birth_country
+                              : editKey === "referee_phone_1"
+                                ? draft.referee_phone_1
+                                : draft.referee_phone_2
+              }
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  [editKey]: e.target.value
+                }))
+              }
+              dir={
+                editKey === "id_number" ||
+                editKey === "referee_phone_1" ||
+                editKey === "referee_phone_2"
+                  ? "ltr"
+                  : undefined
+              }
+              autoFocus
             />
           </PersonalField>
-          <PersonalField label="שם משפחה *">
-            <input
-              className={personalInputClassName}
-              value={form.last_name}
-              onChange={(e) => patchForm({ last_name: e.target.value })}
-            />
-          </PersonalField>
+        ) : null}
+
+        {editKey === "birth_date" ? (
           <PersonalField label="תאריך לידה">
             <input
               type="date"
               className={personalInputClassName}
-              value={form.birth_date}
-              onChange={(e) => patchForm({ birth_date: e.target.value })}
+              value={draft.birth_date}
+              onChange={(e) => setDraft((prev) => ({ ...prev, birth_date: e.target.value }))}
+              autoFocus
             />
           </PersonalField>
-          <PersonalField label="תעודת זהות">
-            <input
-              className={personalInputClassName}
-              value={form.id_number}
-              onChange={(e) => patchForm({ id_number: e.target.value })}
-              dir="ltr"
-            />
-          </PersonalField>
-          <PersonalField label="כתובת מלאה" className="sm:col-span-2">
-            <input
-              className={personalInputClassName}
-              value={form.address_full}
-              onChange={(e) => patchForm({ address_full: e.target.value })}
-              placeholder="רחוב, מספר, עיר"
-            />
-          </PersonalField>
-        </div>
-        <div className="mt-3 space-y-2">
-          <PersonalCheckbox
-            checked={form.show_full_name}
-            onChange={(next) => patchForm({ show_full_name: next })}
-            label="הצג שם מלא להורים"
-          />
-          <PersonalCheckbox
-            checked={form.show_age}
-            onChange={(next) => patchForm({ show_age: next })}
-            label="הצג גיל להורים"
-          />
-        </div>
-      </PersonalAreaSection>
+        ) : null}
 
-      <PersonalAreaSection title="רקע מקצועי" accent="emerald">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <PersonalField label="שנות ניסיון">
+        {editKey === "years_experience" ||
+        editKey === "hourly_rate_nis" ||
+        editKey === "aliyah_year" ? (
+          <PersonalField label={modalTitle.replace("שינוי ", "")}>
             <input
               type="number"
-              min={0}
               className={personalInputClassName}
-              value={form.years_experience}
-              onChange={(e) => patchForm({ years_experience: e.target.value })}
+              value={
+                editKey === "years_experience"
+                  ? draft.years_experience
+                  : editKey === "hourly_rate_nis"
+                    ? draft.hourly_rate_nis
+                    : draft.aliyah_year
+              }
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  [editKey]: e.target.value
+                }))
+              }
+              autoFocus
             />
           </PersonalField>
-          <PersonalField label="תעריף שעתי (₪)">
-            <input
-              type="number"
-              min={0}
-              className={personalInputClassName}
-              value={form.hourly_rate_nis}
-              onChange={(e) => patchForm({ hourly_rate_nis: e.target.value })}
-            />
-          </PersonalField>
+        ) : null}
+
+        {editKey === "military_service" ? (
           <PersonalField label="שירות צבאי / לאומי">
             <select
               className={personalInputClassName}
-              value={form.military_service}
-              onChange={(e) => patchForm({ military_service: e.target.value })}
+              value={draft.military_service}
+              onChange={(e) => setDraft((prev) => ({ ...prev, military_service: e.target.value }))}
             >
               <option value="כן">כן</option>
               <option value="לא">לא</option>
             </select>
           </PersonalField>
-          <PersonalField label="גילאים מועדפים">
-            <input
-              className={personalInputClassName}
-              value={form.preferred_ages}
-              onChange={(e) => patchForm({ preferred_ages: e.target.value })}
-              placeholder="לדוגמה: 0–3, 4–8"
-            />
-          </PersonalField>
-          <PersonalField label="שפות" className="sm:col-span-2">
-            <input
-              className={personalInputClassName}
-              value={form.languages}
-              onChange={(e) => patchForm({ languages: e.target.value })}
-              placeholder="עברית, אנגלית…"
-            />
-          </PersonalField>
+        ) : null}
+
+        {editKey === "citizenship_israeli" ? (
           <PersonalField label="אזרחות ישראלית">
             <select
               className={personalInputClassName}
               value={
-                form.citizenship_israeli === true
+                draft.citizenship_israeli === true
                   ? "yes"
-                  : form.citizenship_israeli === false
+                  : draft.citizenship_israeli === false
                     ? "no"
                     : ""
               }
               onChange={(e) =>
-                patchForm({
+                setDraft((prev) => ({
+                  ...prev,
                   citizenship_israeli:
                     e.target.value === "yes" ? true : e.target.value === "no" ? false : null
-                })
+                }))
               }
             >
               <option value="">לא צוין</option>
@@ -352,103 +603,72 @@ export function SitterPersonalArea({ userId }: Props) {
               <option value="no">לא</option>
             </select>
           </PersonalField>
-          <PersonalField label="ארץ לידה">
-            <input
-              className={personalInputClassName}
-              value={form.birth_country}
-              onChange={(e) => patchForm({ birth_country: e.target.value })}
-            />
-          </PersonalField>
-          <PersonalField label="שנת עלייה">
-            <input
-              type="number"
-              min={1900}
-              max={2100}
-              className={personalInputClassName}
-              value={form.aliyah_year}
-              onChange={(e) => patchForm({ aliyah_year: e.target.value })}
-            />
-          </PersonalField>
-        </div>
-        <div className="mt-3 space-y-2">
-          <PersonalCheckbox
-            checked={form.has_car}
-            onChange={(next) => patchForm({ has_car: next })}
-            label="יש לי רכב / הגעה עצמאית"
-          />
-          <PersonalCheckbox
-            checked={form.homework_help}
-            onChange={(next) => patchForm({ homework_help: next })}
-            label="עזרה בשיעורי בית"
-          />
-          <PersonalCheckbox
-            checked={form.light_cooking}
-            onChange={(next) => patchForm({ light_cooking: next })}
-            label="בישול קל"
-          />
-        </div>
-      </PersonalAreaSection>
+        ) : null}
 
-      <PersonalAreaSection title="אודותיי" accent="sky" description="הטקסט שההורים רואים בכרטיס שלך">
-        <PersonalField label="ביוגרפיה קצרה">
-          <textarea
-            className={personalTextareaClassName}
-            value={form.bio}
-            onChange={(e) => patchForm({ bio: e.target.value })}
-            placeholder="ספרי קצת על עצמך, על הניסיון ועל הגישה שלך לילדים…"
+        {editKey === "bio" ? (
+          <PersonalField label="ביוגרפיה קצרה">
+            <textarea
+              className={personalTextareaClassName}
+              value={draft.bio}
+              onChange={(e) => setDraft((prev) => ({ ...prev, bio: e.target.value }))}
+              autoFocus
+            />
+          </PersonalField>
+        ) : null}
+
+        {editKey === "working_cities" ? (
+          <IsraelCitiesMultiSelect
+            value={draft.working_cities}
+            onChange={(cities) => setDraft((prev) => ({ ...prev, working_cities: cities }))}
+            label="בחרו ערים"
           />
-        </PersonalField>
-      </PersonalAreaSection>
+        ) : null}
 
-      <PersonalAreaSection title="אזורי שירות" description="הערים שבהן את מוכנה לעבוד — נשמרות יחד עם שאר הפרטים">
-        <IsraelCitiesMultiSelect
-          value={form.working_cities}
-          onChange={(cities) => patchForm({ working_cities: cities })}
-          label="בחרו ערים"
-        />
-      </PersonalAreaSection>
+        {editKey === "visibility" ? (
+          <div className="space-y-2">
+            <PersonalCheckbox
+              checked={draft.show_full_name}
+              onChange={(next) => setDraft((prev) => ({ ...prev, show_full_name: next }))}
+              label="הצג שם מלא להורים"
+            />
+            <PersonalCheckbox
+              checked={draft.show_age}
+              onChange={(next) => setDraft((prev) => ({ ...prev, show_age: next }))}
+              label="הצג גיל להורים"
+            />
+          </div>
+        ) : null}
 
-      <PersonalAreaSection title="אנשי קשר ממליצים" accent="gold">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <PersonalField label="טלפון ממליץ 1">
-            <input
-              type="tel"
-              className={personalInputClassName}
-              value={form.referee_phone_1}
-              onChange={(e) => patchForm({ referee_phone_1: e.target.value })}
-              dir="ltr"
+        {editKey === "skills" ? (
+          <div className="space-y-2">
+            <PersonalCheckbox
+              checked={draft.has_car}
+              onChange={(next) => setDraft((prev) => ({ ...prev, has_car: next }))}
+              label="יש לי רכב / הגעה עצמאית"
             />
-          </PersonalField>
-          <PersonalField label="טלפון ממליץ 2">
-            <input
-              type="tel"
-              className={personalInputClassName}
-              value={form.referee_phone_2}
-              onChange={(e) => patchForm({ referee_phone_2: e.target.value })}
-              dir="ltr"
+            <PersonalCheckbox
+              checked={draft.homework_help}
+              onChange={(next) => setDraft((prev) => ({ ...prev, homework_help: next }))}
+              label="עזרה בשיעורי בית"
             />
-          </PersonalField>
-        </div>
-        <div className="mt-3">
+            <PersonalCheckbox
+              checked={draft.light_cooking}
+              onChange={(next) => setDraft((prev) => ({ ...prev, light_cooking: next }))}
+              label="בישול קל"
+            />
+          </div>
+        ) : null}
+
+        {editKey === "legal" ? (
           <PersonalCheckbox
-            checked={form.legal_no_criminal_declaration}
-            onChange={(next) => patchForm({ legal_no_criminal_declaration: next })}
+            checked={draft.legal_no_criminal_declaration}
+            onChange={(next) =>
+              setDraft((prev) => ({ ...prev, legal_no_criminal_declaration: next }))
+            }
             label="אני מצהירה שאין לי עבר פלילי רלוונטי"
           />
-        </div>
-      </PersonalAreaSection>
-
-      <button
-        type="button"
-        disabled={saving}
-        onClick={() => void handleSave()}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#001F3F] px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#003366] disabled:opacity-60"
-      >
-        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-        {saving ? "שומר…" : "שמירת שינויים"}
-      </button>
-
-      <SitterBankDetailsSection sitterId={userId} />
+        ) : null}
+      </PersonalEditModal>
     </div>
   );
 }
