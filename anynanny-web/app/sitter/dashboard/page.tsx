@@ -1171,7 +1171,7 @@ export default function SitterDashboardPage() {
                   <div className="grid grid-cols-2 gap-2.5 sm:col-span-2 sm:grid-cols-2">
                     <Link href="/sitter/wallet" className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]">
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10"><Wallet className="h-6 w-6 stroke-[1.75]" aria-hidden /></span>
-                      <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הכנסות ותשלומים</span>
+                      <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הארנק שלי</span>
                     </Link>
                     <Link href="/sitter/shifts" aria-label={pendingBookingCount > 0 ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות` : "המשמרות שלי"} className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]">
                       <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">

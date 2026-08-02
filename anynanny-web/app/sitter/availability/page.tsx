@@ -6,10 +6,7 @@ import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
 
 export default function SitterAvailabilityPage() {
   return (
-    <SitterPageShell
-      title="סידור עבודה"
-      subtitle="ניהול זמינות בסיס — שעות פתוחות וחסומות. ללא משמרות מאושרות."
-    >
+    <SitterPageShell title="סידור עבודה">
       <AvailabilityErrorBoundary>
         <SitterAvailabilityManager />
       </AvailabilityErrorBoundary>

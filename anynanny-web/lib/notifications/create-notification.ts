@@ -60,8 +60,8 @@ export async function notifySitterPaymentReceived(
     kind: "payment_received",
     title: "תשלום התקבל",
     body: amountLabel
-      ? `התקבל תשלום מאובטח דרך HYP בסך ${amountLabel}. הפרטים עודכנו ב«הכנסות ותשלומים».`
-      : "התקבל תשלום מאובטח דרך HYP. הפרטים עודכנו ב«הכנסות ותשלומים».",
+      ? `התקבל תשלום מאובטח דרך HYP בסך ${amountLabel}. הפרטים עודכנו ב«הארנק שלי».`
+      : "התקבל תשלום מאובטח דרך HYP. הפרטים עודכנו ב«הארנק שלי».",
     payload: {
       booking_id: input.bookingId,
       hyp_approval_id: input.hypApprovalId ?? null,

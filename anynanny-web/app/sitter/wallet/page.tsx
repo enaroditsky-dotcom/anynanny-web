@@ -68,8 +68,8 @@ export default function SitterWalletPage() {
         </div>
 
         <header className="px-1 text-right">
-          <h1 className="text-lg font-extrabold text-navy-header">הכנסות ותשלומים</h1>
-          <p className="mt-0.5 text-[11px] text-slate-500">הארנק שלי · עיבוד מאובטח דרך HYP</p>
+          <h1 className="text-lg font-extrabold text-navy-header">הארנק שלי</h1>
+          <p className="mt-0.5 text-[11px] text-slate-500">עיבוד מאובטח דרך שער התשלומים HYP</p>
         </header>
 
         <section className="relative overflow-hidden rounded-3xl bg-[#0B3C5D] p-6 text-white shadow-soft">

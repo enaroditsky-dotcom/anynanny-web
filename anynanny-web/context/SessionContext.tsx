@@ -114,18 +114,11 @@ function useSitterCircleSync() {
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(0);
   const [activeRole, setActiveRole] = useState<DashboardRole | null>(null);
 
   const [parentUserId, setParentUserId] = useState<string | null>(null);
-  const [sessionState, setSessionState] = useState<SessionProtocolState>(() => {
-    if (typeof window === "undefined") return { status: "idle" };
-    try {
-      return readSessionState();
-    } catch {
-      return { status: "idle" };
-    }
-  });
+  const [sessionState, setSessionState] = useState<SessionProtocolState>({ status: "idle" });
   const [sessionDbStatus, setSessionDbStatus] = useState<string | null>(null);
   const [parentSessionView, setParentSessionView] = useState<ParentSessionView>("idle");
   const [sessionHydrateError, setSessionHydrateError] = useState(false);
@@ -151,6 +144,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const sitterCircle = useSitterCircleSync();
 
   useEffect(() => {
+    setNowMs(Date.now());
+    try {
+      setSessionState(readSessionState());
+    } catch {
+      setSessionState({ status: "idle" });
+    }
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);

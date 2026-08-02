@@ -67,7 +67,7 @@ import {
   subscribePostgresChanges
 } from "@/lib/supabase/subscribe-postgres-changes";
 import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
-import { Calendar, Wallet, History, LogOut, Search, Zap, CheckCircle2, Clock, Star, X } from "lucide-react";
+import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, X } from "lucide-react";
 
 const BOOKING_LIVE_SELECT =
   "id, parent_id, sitter_id, status, booking_date, start_time, end_time, created_at, updated_at";
@@ -308,7 +308,11 @@ export function ParentDashboardClient({
   const [parentSerial, setParentSerial] = useState<string>(initialPreferences.parentSerial || "");
   const [statusCardCollapsed, setStatusCardCollapsed] = useState(false);
   const [dismissedStatusKey, setDismissedStatusKey] = useState<string | null>(null);
-  const [dismissedScheduledBookingIds, setDismissedScheduledBookingIds] = useState<Set<string>>(() => readDismissedScheduledBookingIds());
+  /** Empty on SSR/hydration — load sessionStorage after mount to avoid mismatches. */
+  const [dismissedScheduledBookingIds, setDismissedScheduledBookingIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [hasHydrated, setHasHydrated] = useState(false);
   const [parentId, setParentId] = useState<string | null>(
     initialActiveBooking?.parent_id ? String(initialActiveBooking.parent_id) : null
   );
@@ -348,6 +352,11 @@ export function ParentDashboardClient({
   const clearSettlementLock = useCallback(() => {
     settlementLockRef.current = null;
     setSettlementStep(null);
+  }, []);
+
+  useEffect(() => {
+    setHasHydrated(true);
+    setDismissedScheduledBookingIds(readDismissedScheduledBookingIds());
   }, []);
 
   const refreshParentOnboardingStatus = useCallback(
@@ -1280,14 +1289,16 @@ export function ParentDashboardClient({
     !["pending", "approved", "sitter_started", "parent_started"].includes(
       normalizeStatus(activeBooking?.status)
     );
+  // Time-window checks use the wall clock — defer until after mount so SSR HTML matches hydrate.
   const dueForActiveShiftUi = Boolean(
-    activeBooking && isBookingDueForParentActiveShiftUi(activeBooking)
+    hasHydrated && activeBooking && isBookingDueForParentActiveShiftUi(activeBooking)
   );
   const isScheduledConfirmed = Boolean(
-    activeBooking && isFutureConfirmedScheduleBooking(activeBooking)
+    hasHydrated && activeBooking && isFutureConfirmedScheduleBooking(activeBooking)
   );
   const isScheduledPending = Boolean(
-    activeBooking &&
+    hasHydrated &&
+      activeBooking &&
       isFutureScheduledBooking(activeBooking) &&
       !isScheduledConfirmed
   );
@@ -1353,11 +1364,13 @@ export function ParentDashboardClient({
       : null;
   const scheduledBookingId = activeBooking?.id ? String(activeBooking.id) : null;
   const scheduledBannerDismissed = Boolean(
-    scheduledBookingId &&
+    hasHydrated &&
+      scheduledBookingId &&
       (isScheduledConfirmed || isScheduledPending) &&
       dismissedScheduledBookingIds.has(scheduledBookingId)
   );
   const statusCardVisible =
+    hasHydrated &&
     showShiftCard &&
     !scheduledBannerDismissed &&
     (!statusCardKey || dismissedStatusKey !== statusCardKey);
@@ -1458,24 +1471,30 @@ export function ParentDashboardClient({
               <Link
                 href="/parent/calendar"
                 onClick={dismissScheduledStatusBanner}
-                className="flex flex-col items-center justify-center rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs transition hover:bg-slate-50"
+                className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
               >
-                <Calendar className="h-5 w-5 text-emerald-600 mb-1" />
-                <span className="text-xs font-semibold text-slate-800">יומן</span>
+                <Calendar className="h-5 w-5 shrink-0 text-emerald-600" />
+                <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                  יומן תיאום המשמרות
+                </span>
               </Link>
               <Link
                 href="/parent/wallet"
-                className="flex flex-col items-center justify-center rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs transition hover:bg-slate-50"
+                className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
               >
-                <Wallet className="h-5 w-5 text-emerald-600 mb-1" />
-                <span className="text-xs font-semibold text-slate-800">הארנק שלי</span>
+                <Wallet className="h-5 w-5 shrink-0 text-emerald-600" />
+                <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                  הארנק שלי
+                </span>
               </Link>
               <Link
                 href="/parent/history"
-                className="flex flex-col items-center justify-center rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs transition hover:bg-slate-50"
+                className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
               >
-                <History className="h-5 w-5 text-[#001F3F] mb-1" />
-                <span className="text-xs font-semibold text-slate-800">היסטוריית משמרות</span>
+                <History className="h-5 w-5 shrink-0 text-[#001F3F]" />
+                <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                  היסטוריית משמרות
+                </span>
               </Link>
             </div>
           </div>
@@ -1643,13 +1662,6 @@ export function ParentDashboardClient({
 
           {/* Always available — status cards are non-blocking. */}
           <div className="space-y-2 pt-1">
-              <Link
-                href="/parent/broadcast"
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-3.5 px-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700"
-              >
-                <Zap className="h-4 w-4 fill-white" />
-                <span dir="ltr">ANYNANNY NOW!</span>
-              </Link>
               <Link
                 href="/parent/search"
                 className="flex items-center justify-center gap-1.5 rounded-xl bg-[#001F3F] py-3 px-2 text-xs font-bold text-white shadow-md transition hover:bg-[#001F3F]/90"

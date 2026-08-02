@@ -4,6 +4,27 @@ const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./features/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: [
+          "var(--font-varela-round)",
+          "Varela Round",
+          "system-ui",
+          "Segoe UI",
+          "Arial",
+          "sans-serif"
+        ]
+      },
+      fontSize: {
+        /** Slightly roomier defaults for Varela Round on mobile + desktop */
+        xs: ["0.8125rem", { lineHeight: "1.35" }],
+        sm: ["0.9375rem", { lineHeight: "1.45" }],
+        base: ["1.0625rem", { lineHeight: "1.55" }],
+        lg: ["1.1875rem", { lineHeight: "1.5" }],
+        xl: ["1.3125rem", { lineHeight: "1.4" }],
+        "2xl": ["1.5rem", { lineHeight: "1.35" }],
+        "3xl": ["1.875rem", { lineHeight: "1.3" }],
+        "4xl": ["2.25rem", { lineHeight: "1.25" }]
+      },
       colors: {
         navy: {
           /** Matches global header wordmark / primary dark navy */
