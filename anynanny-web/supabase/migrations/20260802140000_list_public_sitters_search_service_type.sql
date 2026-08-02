@@ -31,7 +31,7 @@ create or replace function public.list_public_sitters_search(
   p_min_years_experience int default 0,
   p_min_rating numeric default null,
   p_transport text default 'all',
-  p_max_hourly_rate numeric default 150,
+  p_max_hourly_rate numeric default null,
   p_search_city text default null,
   p_service_type text default null
 )
@@ -58,7 +58,10 @@ as $$
         else p_min_rating
       end as min_rating,
       coalesce(nullif(trim(lower(p_transport)), ''), 'all') as transport_mode,
-      greatest(coalesce(p_max_hourly_rate, 150), 0) as max_rate,
+      case
+        when p_max_hourly_rate is null or p_max_hourly_rate < 0 then null
+        else greatest(p_max_hourly_rate, 0)
+      end as max_rate,
       nullif(trim(p_search_city), '') as search_city,
       case lower(coalesce(nullif(trim(p_service_type), ''), 'babysitter'))
         when 'sitter' then 'babysitter'
@@ -67,6 +70,7 @@ as $$
         when 'sleep_consultant' then 'sleep_consultant'
         when 'lactation' then 'lactation_consultant'
         when 'lactation_consultant' then 'lactation_consultant'
+        when 'doula' then 'doula'
         else 'babysitter'
       end as service_type
   )
@@ -132,6 +136,7 @@ as $$
     )
     and (
       f.search_serial is not null
+      or f.max_rate is null
       or sp.hourly_rate_nis is null
       or sp.hourly_rate_nis <= f.max_rate
     )

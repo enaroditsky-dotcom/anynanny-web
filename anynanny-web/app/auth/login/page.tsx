@@ -24,6 +24,7 @@ function LoginInner() {
   const nextPath = searchParams.get("next");
   const emailFromQuery = searchParams.get("email");
   const roleFromQuery = searchParams.get("role");
+  const trackFromQuery = (searchParams.get("track") || "").trim().toLowerCase();
 
   const [bypassLogin, setBypassLogin] = useState(false);
   const [email, setEmail] = useState("");
@@ -32,6 +33,13 @@ function LoginInner() {
   const [busy, setBusy] = useState(false);
 
   const supabase = getSupabaseBrowserClient();
+
+  const loginHeadline = useMemo(() => {
+    if (roleFromQuery === "parent") return "כניסת הורים";
+    if (roleFromQuery === "sitter" && trackFromQuery === "expert") return "כניסת יועצת / דולה";
+    if (roleFromQuery === "sitter") return "כניסת בייביסיטר";
+    return "התחברות";
+  }, [roleFromQuery, trackFromQuery]);
 
   useEffect(() => {
     const q = emailFromQuery?.trim();
@@ -47,7 +55,18 @@ function LoginInner() {
     if (roleFromQuery === "parent" || roleFromQuery === "sitter") {
       setUserRoleChoice(roleFromQuery);
     }
-  }, [roleFromQuery]);
+    try {
+      if (trackFromQuery === "expert") {
+        localStorage.setItem("anynanny_service_track", "expert");
+      } else if (trackFromQuery === "babysitter") {
+        localStorage.setItem("anynanny_service_track", "babysitter");
+      } else if (roleFromQuery === "parent") {
+        localStorage.setItem("anynanny_service_track", "parent");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [roleFromQuery, trackFromQuery]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -122,7 +141,10 @@ function LoginInner() {
       </button>
 
       <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft" suppressHydrationWarning>
-        <h1 className="text-center text-2xl font-bold text-navy-header">התחברות</h1>
+        <h1 className="text-center text-2xl font-bold text-navy-header">{loginHeadline}</h1>
+        {roleFromQuery === "sitter" && trackFromQuery === "expert" ? (
+          <p className="mt-1 text-center text-xs text-slate-500">הנקה · שינה · דולה</p>
+        ) : null}
         <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }} noValidate>
           <label className="block text-sm">אימייל
             <input type="email" className="mt-1 block w-full rounded-lg border p-2" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />

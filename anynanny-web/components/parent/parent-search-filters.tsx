@@ -237,23 +237,52 @@ export function ParentSearchFiltersBar({
         </div>
       </div>
 
-      {/* 💰 סליידר מחיר שעתי מעוצב */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-xs">
-        <div className="flex items-center justify-between text-xs font-bold text-slate-500">
-          <span className="font-black text-sm text-emerald-700 tabular-nums bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
-            ₪{filters.maxHourlyRate}
-          </span>
-          <span>מחיר שעתי מקסימלי:</span>
+      {/* 💰 סליידר מחיר שעתי — אופציונלי */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-3.5 shadow-xs">
+        <div className="flex items-center justify-between gap-2">
+          <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] font-bold text-slate-600">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-[#001F3F]"
+              checked={filters.maxHourlyRate != null}
+              onChange={(e) =>
+                patch({
+                  maxHourlyRate: e.target.checked ? PARENT_SEARCH_MAX_HOURLY_SLIDER : null
+                })
+              }
+            />
+            הגבל מחיר
+          </label>
+          <span className="text-xs font-bold text-slate-500">מחיר שעתי מקסימלי</span>
         </div>
-        <input
-          type="range"
-          min={0}
-          max={PARENT_SEARCH_MAX_HOURLY_SLIDER}
-          step={5}
-          className="mt-2.5 h-1.5 w-full cursor-pointer accent-[#001F3F] bg-slate-100 rounded-lg appearance-none transition-all"
-          value={filters.maxHourlyRate}
-          onChange={(e) => patch({ maxHourlyRate: Number(e.target.value) })}
-        />
+
+        {filters.maxHourlyRate != null ? (
+          <>
+            <div className="mt-2.5 flex items-center justify-between text-xs font-bold text-slate-500">
+              <button
+                type="button"
+                onClick={() => patch({ maxHourlyRate: null })}
+                className="text-[11px] font-semibold text-slate-500 underline underline-offset-2 transition hover:text-navy-header"
+              >
+                נקה הגבלה
+              </button>
+              <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-sm font-black tabular-nums text-emerald-700">
+                ₪{filters.maxHourlyRate}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={PARENT_SEARCH_MAX_HOURLY_SLIDER}
+              step={5}
+              className="mt-2.5 h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-100 accent-[#001F3F] transition-all"
+              value={filters.maxHourlyRate}
+              onChange={(e) => patch({ maxHourlyRate: Number(e.target.value) })}
+            />
+          </>
+        ) : (
+          <p className="mt-2 text-right text-[11px] font-semibold text-slate-400">ללא הגבלת מחיר</p>
+        )}
       </div>
 
     </section>

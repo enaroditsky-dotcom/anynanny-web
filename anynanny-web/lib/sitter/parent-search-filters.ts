@@ -8,10 +8,16 @@ export type ParentSearchMinExperience = 0 | 1 | 3 | 5;
 export type ParentSearchServiceType =
   | "babysitter"
   | "sleep_consultant"
-  | "lactation_consultant";
+  | "lactation_consultant"
+  | "doula";
 
 /** UI / URL role aliases used by `/parent/search`. */
-export type ParentSearchServiceRoleAlias = "sitter" | "lactation" | "sleep" | ParentSearchServiceType;
+export type ParentSearchServiceRoleAlias =
+  | "sitter"
+  | "lactation"
+  | "sleep"
+  | "doula"
+  | ParentSearchServiceType;
 
 /** Minimum average sitter rating; `all` sends no `p_min_rating` filter. */
 export type ParentSearchMinRating = "all" | "4.5" | "4.0" | "3.5";
@@ -54,7 +60,11 @@ export type ParentSearchFilters = {
   minYearsExperience: ParentSearchMinExperience;
   minRating: ParentSearchMinRating;
   transport: ParentSearchTransportFilter;
-  maxHourlyRate: number;
+  /**
+   * Max hourly rate (NIS). `null` = no price restriction.
+   * When set, filters sitters with `hourly_rate_nis <= maxHourlyRate`.
+   */
+  maxHourlyRate: number | null;
   /** Canonical city from `ISRAEL_CITIES` — filters `sitter_profiles.working_cities`. */
   selectedCity: IsraelCity | "";
   /** Selected parent search service (`babysitter` | `sleep_consultant` | `lactation_consultant`). */
@@ -72,7 +82,7 @@ export const defaultParentSearchFilters = (): ParentSearchFilters => ({
   minYearsExperience: 0,
   minRating: "all",
   transport: "all",
-  maxHourlyRate: PARENT_SEARCH_MAX_HOURLY_SLIDER,
+  maxHourlyRate: null,
   selectedCity: "",
   serviceType: "babysitter"
 });
@@ -84,6 +94,7 @@ export function normalizeParentSearchServiceType(
   const value = String(raw ?? "")
     .trim()
     .toLowerCase();
+  if (value === "doula") return "doula";
   if (value === "sleep" || value === "sleep_consultant") return "sleep_consultant";
   if (value === "lactation" || value === "lactation_consultant") return "lactation_consultant";
   return "babysitter";
@@ -117,7 +128,13 @@ export function normalizeParentSearchFilters(
     minYearsExperience: partial.minYearsExperience ?? base.minYearsExperience,
     minRating: partial.minRating ?? base.minRating,
     transport: partial.transport ?? base.transport,
-    maxHourlyRate: partial.maxHourlyRate ?? base.maxHourlyRate,
+    maxHourlyRate: (() => {
+      if (partial.maxHourlyRate === null) return null;
+      if (partial.maxHourlyRate === undefined) return base.maxHourlyRate;
+      const n = Number(partial.maxHourlyRate);
+      if (!Number.isFinite(n) || n < 0) return null;
+      return n;
+    })(),
     selectedCity:
       partial.selectedCity != null && isIsraelCity(String(partial.selectedCity))
         ? partial.selectedCity
@@ -230,7 +247,8 @@ export type ListPublicSittersSearchRpcParams = {
   p_min_years_experience: number;
   p_min_rating: number | null;
   p_transport: string;
-  p_max_hourly_rate: number;
+  /** `null` = no max-rate filter. */
+  p_max_hourly_rate: number | null;
   p_search_city: string | null;
   p_service_type: ParentSearchServiceType;
 };
@@ -247,7 +265,7 @@ export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): 
     p_min_years_experience: serialOnly ? 0 : minYearsExperienceToRpcValue(safe.minYearsExperience),
     p_min_rating: serialOnly ? null : minRatingToRpcValue(safe.minRating),
     p_transport: serialOnly ? "all" : safe.transport,
-    p_max_hourly_rate: serialOnly ? PARENT_SEARCH_MAX_HOURLY_SLIDER : safe.maxHourlyRate,
+    p_max_hourly_rate: serialOnly ? null : safe.maxHourlyRate,
     p_search_city: serialOnly || !safe.selectedCity ? null : safe.selectedCity,
     p_service_type: safe.serviceType
   };

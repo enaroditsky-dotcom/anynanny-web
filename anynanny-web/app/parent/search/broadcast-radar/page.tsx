@@ -228,7 +228,7 @@ export default function BroadcastRadarPage() {
     }
   };
 
-  const serviceLabel = type === "lactation" ? "יועצת הנקה" : type === "sleep" ? "יועצת שינה" : "בייביסיטר";
+  const serviceLabel = type === "lactation" ? "יועצת הנקה" : type === "sleep" ? "יועצת שינה" : type === "doula" ? "דולה" : "בייביסיטר";
 
   return (
     <MainLayout>

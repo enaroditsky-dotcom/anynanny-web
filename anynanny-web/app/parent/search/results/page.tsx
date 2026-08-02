@@ -74,7 +74,11 @@ function parseFiltersFromSearchParams(params: URLSearchParams): ParentSearchFilt
   const transport = (["all", "self", "taxi"] as const).includes(transportRaw) ? transportRaw : "all";
 
   const maxHourlyRaw = readParam(params, ["maxHourlyRate", "maxRate"]);
-  const maxHourlyRate = maxHourlyRaw ? Number(maxHourlyRaw) : defaultParentSearchFilters().maxHourlyRate;
+  const maxHourlyParsed = maxHourlyRaw ? Number(maxHourlyRaw) : null;
+  const maxHourlyRate =
+    maxHourlyParsed != null && Number.isFinite(maxHourlyParsed) && maxHourlyParsed >= 0
+      ? maxHourlyParsed
+      : null;
 
   return normalizeParentSearchFilters({
     searchSitterSerial: readParam(params, ["searchSitterSerial", "serial", "searchNannyId"]),
@@ -87,7 +91,7 @@ function parseFiltersFromSearchParams(params: URLSearchParams): ParentSearchFilt
     minYearsExperience,
     minRating,
     transport,
-    maxHourlyRate: Number.isFinite(maxHourlyRate) ? maxHourlyRate : defaultParentSearchFilters().maxHourlyRate,
+    maxHourlyRate,
     selectedCity: readParam(params, ["city", "selectedCity"]) as ParentSearchFilters["selectedCity"],
     serviceType: readParam(params, ["serviceType", "roleType", "p_service_type"])
   });
@@ -212,7 +216,9 @@ function ParentSearchResultsInner() {
                 ? "יועצות הנקה זמינות"
                 : filters.serviceType === "sleep_consultant"
                   ? "יועצות שינה זמינות"
-                  : "בייביסיטריות זמינות"}
+                  : filters.serviceType === "doula"
+                    ? "דולות זמינות"
+                    : "בייביסיטריות זמינות"}
             </h1>
             {!listLoading && !visibleSearchError && !serialLookupActive && sitters.length > 0 ? (
               <p className="text-xs text-slate-600">ממוינים לפי דירוג ממוצע (גבוה קודם).</p>

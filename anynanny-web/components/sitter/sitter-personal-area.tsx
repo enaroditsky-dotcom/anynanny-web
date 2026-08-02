@@ -16,8 +16,21 @@ import {
   yesNoLabel
 } from "@/components/personal-area/personal-area-ui";
 import { SitterBankDetailsSection } from "@/components/sitter/SitterBankDetailsSection";
+import { ExpertRegistrationFields } from "@/components/sitter/expert-registration-fields";
+import { EXPERT_SERVICE_VISUALS } from "@/components/sitter/expert-service-icons";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
+import {
+  expertDraftToProfilePatch,
+  EXPERT_BIO_MAX_LENGTH,
+  isExpertOnlyServiceKind,
+  normalizeExpertServiceTypes,
+  normalizePricingModel,
+  normalizeServiceLocations,
+  SERVICE_LOCATION_OPTIONS,
+  validateExpertProfileDraft,
+  type ExpertProfileDraft
+} from "@/lib/sitter/expert-profile";
 import {
   formatPreferredAgesDisplay,
   formatPreferredAgesRange,
@@ -47,6 +60,11 @@ type FormState = {
   military_service: string;
   years_experience: string;
   hourly_rate_nis: string;
+  package_price_nis: string;
+  pricing_model: "hourly" | "package";
+  service_type: ExpertProfileDraft["serviceType"] | "babysitter";
+  service_locations: ExpertProfileDraft["serviceLocations"];
+  certifications: string;
   preferred_ages: string;
   languages: SitterLanguage[];
   has_car: boolean;
@@ -80,7 +98,27 @@ type EditKey =
   | "working_cities"
   | "visibility"
   | "skills"
-  | "legal";
+  | "legal"
+  | "expert_profile";
+
+function formToExpertDraft(form: FormState): ExpertProfileDraft {
+  const serviceType = isExpertOnlyServiceKind(form.service_type)
+    ? form.service_type
+    : "lactation_consultant";
+  return {
+    serviceType,
+    serviceLocations: form.service_locations,
+    pricingModel: form.pricing_model,
+    hourlyRateNis: form.hourly_rate_nis,
+    packagePriceNis: form.package_price_nis,
+    bio: form.bio,
+    certifications: form.certifications
+  };
+}
+
+function isExpertForm(form: FormState): boolean {
+  return isExpertOnlyServiceKind(form.service_type);
+}
 
 function militaryToForm(value: unknown): string {
   if (value === true || value === "true" || value === "כן") return "כן";
@@ -162,6 +200,8 @@ function PreferredAgesEditor({
 }
 
 function profileToForm(profile: SitterProfileRow | null): FormState {
+  const types = normalizeExpertServiceTypes(profile?.service_types);
+  const primary = types.find((t) => isExpertOnlyServiceKind(t)) ?? types[0] ?? "babysitter";
   return {
     first_name: profile?.first_name ?? "",
     last_name: profile?.last_name ?? "",
@@ -181,6 +221,11 @@ function profileToForm(profile: SitterProfileRow | null): FormState {
     military_service: militaryToForm(profile?.military_service),
     years_experience: profile?.years_experience != null ? String(profile.years_experience) : "",
     hourly_rate_nis: profile?.hourly_rate_nis != null ? String(profile.hourly_rate_nis) : "",
+    package_price_nis: profile?.package_price_nis != null ? String(profile.package_price_nis) : "",
+    pricing_model: normalizePricingModel(profile?.pricing_model),
+    service_type: primary,
+    service_locations: normalizeServiceLocations(profile?.service_locations),
+    certifications: profile?.certifications ?? "",
     preferred_ages: formatPreferredAgesDisplay(profile?.preferred_ages),
     languages: normalizeSitterLanguages(profile?.languages),
     has_car: Boolean(profile?.has_car),
@@ -196,7 +241,7 @@ function profileToForm(profile: SitterProfileRow | null): FormState {
 }
 
 function formToPayload(form: FormState): Record<string, unknown> {
-  return {
+  const base: Record<string, unknown> = {
     first_name: form.first_name.trim(),
     last_name: form.last_name.trim(),
     birth_date: form.birth_date || null,
@@ -209,20 +254,29 @@ function formToPayload(form: FormState): Record<string, unknown> {
     aliyah_year: form.aliyah_year.trim() ? Number(form.aliyah_year) : null,
     military_service: militaryToPayload(form.military_service),
     years_experience: form.years_experience.trim() ? Number(form.years_experience) : null,
-    hourly_rate_nis: form.hourly_rate_nis.trim() ? Number(form.hourly_rate_nis) : null,
-    // text[] column — JS array ["2","10"], never the display string "2-10"
     preferred_ages: normalizePreferredAges(form.preferred_ages),
-    // text[] column — must be a JS array, never "עברית, אנגלית"
     languages: normalizeSitterLanguages(form.languages),
     has_car: form.has_car,
     homework_help: form.homework_help,
     light_cooking: form.light_cooking,
-    bio: form.bio.trim() || null,
+    bio: form.bio.trim().slice(0, EXPERT_BIO_MAX_LENGTH) || null,
     referee_phone_1: form.referee_phone_1.trim() || null,
     referee_phone_2: form.referee_phone_2.trim() || null,
-    // legal_no_criminal_declaration is omitted — column is missing on some production schemas.
     working_cities: form.working_cities
   };
+
+  if (isExpertForm(form)) {
+    Object.assign(base, expertDraftToProfilePatch(formToExpertDraft(form)));
+  } else {
+    base.service_types = ["babysitter"];
+    base.pricing_model = "hourly";
+    base.hourly_rate_nis = form.hourly_rate_nis.trim() ? Number(form.hourly_rate_nis) : null;
+    base.package_price_nis = null;
+    base.service_locations = [];
+    base.certifications = form.certifications.trim() || null;
+  }
+
+  return base;
 }
 
 type Props = {
@@ -276,6 +330,7 @@ export function SitterPersonalArea({ userId }: Props) {
         ...form,
         working_cities: [...form.working_cities],
         languages: [...form.languages],
+        service_locations: [...form.service_locations],
         preferred_ages:
           key === "preferred_ages"
             ? formatPreferredAgesDisplay(form.preferred_ages) || formatPreferredAgesRange(1, 12)
@@ -303,6 +358,14 @@ export function SitterPersonalArea({ userId }: Props) {
     if (editKey === "working_cities" && draft.working_cities.length === 0) {
       setModalError("יש לבחור לפחות עיר אחת.");
       return;
+    }
+
+    if (editKey === "expert_profile" || (editKey === "bio" && isExpertForm(draft))) {
+      const expertError = validateExpertProfileDraft(formToExpertDraft(draft));
+      if (expertError) {
+        setModalError(expertError);
+        return;
+      }
     }
 
     setSaving(true);
@@ -401,12 +464,34 @@ export function SitterPersonalArea({ userId }: Props) {
                                           ? "שינוי כישורים"
                                           : editKey === "legal"
                                             ? "שינוי הצהרה"
-                                            : "";
+                                            : editKey === "expert_profile"
+                                              ? "שינוי פרופיל מקצועי"
+                                              : "";
+
+  const expert = isExpertForm(form);
+  const priceLabel =
+    form.pricing_model === "package"
+      ? form.package_price_nis
+        ? `₪${form.package_price_nis} · חבילה`
+        : ""
+      : form.hourly_rate_nis
+        ? `₪${form.hourly_rate_nis} · שעתי`
+        : "";
+  const locationsLabel = form.service_locations
+    .map((id) => SERVICE_LOCATION_OPTIONS.find((o) => o.id === id)?.labelHe)
+    .filter(Boolean)
+    .join(" · ");
+  const serviceTypeLabel =
+    form.service_type in EXPERT_SERVICE_VISUALS
+      ? EXPERT_SERVICE_VISUALS[form.service_type as keyof typeof EXPERT_SERVICE_VISUALS].labelHe
+      : "";
 
   return (
     <div className="space-y-4 pb-4" dir="rtl">
       <section className="rounded-2xl border border-[#C5A059]/25 bg-gradient-to-l from-[#FFF8EA] to-white p-4 shadow-soft">
-        <p className="text-xs font-semibold text-[#B8860B]">אזור אישי · שמרטפית</p>
+        <p className="text-xs font-semibold text-[#B8860B]">
+          {expert ? "אזור אישי · יועצת / דולה" : "אזור אישי · שמרטפית"}
+        </p>
         <h2 className="mt-1 text-lg font-extrabold text-[#001F3F]">{displayName}</h2>
         {form.nanny_serial ? (
           <p className="mt-1 font-mono text-xs font-semibold text-slate-500" dir="ltr">
@@ -454,21 +539,25 @@ export function SitterPersonalArea({ userId }: Props) {
       </PersonalAreaSection>
 
       <PersonalAreaSection title="רקע מקצועי" accent="emerald">
+        {!expert ? (
+          <PersonalStaticRow
+            label="שנות ניסיון"
+            value={form.years_experience}
+            onEdit={() => openEdit("years_experience")}
+          />
+        ) : null}
         <PersonalStaticRow
-          label="שנות ניסיון"
-          value={form.years_experience}
-          onEdit={() => openEdit("years_experience")}
+          label={expert ? "תמחור" : "תעריף שעתי"}
+          value={priceLabel || (form.hourly_rate_nis ? `₪${form.hourly_rate_nis}` : "")}
+          onEdit={() => openEdit(expert ? "expert_profile" : "hourly_rate_nis")}
         />
-        <PersonalStaticRow
-          label="תעריף שעתי"
-          value={form.hourly_rate_nis ? `₪${form.hourly_rate_nis}` : ""}
-          onEdit={() => openEdit("hourly_rate_nis")}
-        />
-        <PersonalStaticRow
-          label="שירות צבאי / לאומי"
-          value={form.military_service}
-          onEdit={() => openEdit("military_service")}
-        />
+        {!expert ? (
+          <PersonalStaticRow
+            label="שירות צבאי / לאומי"
+            value={form.military_service}
+            onEdit={() => openEdit("military_service")}
+          />
+        ) : null}
         <PersonalStaticRow
           label="גילאים מועדפים"
           value={formatPreferredAgesDisplay(form.preferred_ages)}
@@ -495,6 +584,29 @@ export function SitterPersonalArea({ userId }: Props) {
           onEdit={() => openEdit("aliyah_year")}
         />
       </PersonalAreaSection>
+
+      {expert ? (
+        <PersonalAreaSection
+          title="שירות מקצועי"
+          accent="emerald"
+          description="סוג השירות, מיקום השירות והסמכות"
+          action={<PersonalChangeLink onClick={() => openEdit("expert_profile")} />}
+        >
+          <div className="space-y-2 text-[14px] font-medium text-[#001F3F]">
+            <p>{serviceTypeLabel || "לא נבחר סוג שירות"}</p>
+            <p className={locationsLabel ? "" : "italic text-slate-400"}>
+              {locationsLabel || "לא נבחרו מיקומי שירות"}
+            </p>
+            <p
+              className={`whitespace-pre-wrap ${
+                form.certifications.trim() ? "" : "italic text-slate-400"
+              }`}
+            >
+              {form.certifications.trim() || "לא הוגדרו הסמכות"}
+            </p>
+          </div>
+        </PersonalAreaSection>
+      ) : null}
 
       <PersonalAreaSection
         title="כישורים"
@@ -730,14 +842,41 @@ export function SitterPersonalArea({ userId }: Props) {
         ) : null}
 
         {editKey === "bio" ? (
-          <PersonalField label="ביוגרפיה קצרה">
+          <PersonalField label="ביוגרפיה מקצועית">
             <textarea
               className={personalTextareaClassName}
               value={draft.bio}
-              onChange={(e) => setDraft((prev) => ({ ...prev, bio: e.target.value }))}
+              maxLength={EXPERT_BIO_MAX_LENGTH}
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  bio: e.target.value.slice(0, EXPERT_BIO_MAX_LENGTH)
+                }))
+              }
               autoFocus
             />
+            <p className="mt-1 text-[11px] text-slate-400">
+              {draft.bio.length}/{EXPERT_BIO_MAX_LENGTH}
+            </p>
           </PersonalField>
+        ) : null}
+
+        {editKey === "expert_profile" ? (
+          <ExpertRegistrationFields
+            value={formToExpertDraft(draft)}
+            onChange={(next) =>
+              setDraft((prev) => ({
+                ...prev,
+                service_type: next.serviceType,
+                service_locations: next.serviceLocations,
+                pricing_model: next.pricingModel,
+                hourly_rate_nis: next.hourlyRateNis,
+                package_price_nis: next.packagePriceNis,
+                bio: next.bio,
+                certifications: next.certifications
+              }))
+            }
+          />
         ) : null}
 
         {editKey === "working_cities" ? (

@@ -4,8 +4,20 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { ExpertRegistrationFields } from "@/components/sitter/expert-registration-fields";
 import { upsertProfileOnSignup } from "@/lib/auth/supabase-profile";
-import { isProfileRole, type ProfileRole } from "@/lib/supabase/profiles";
+import {
+  emptyExpertProfileDraft,
+  expertDraftToProfilePatch,
+  validateExpertProfileDraft,
+  type ExpertProfileDraft
+} from "@/lib/sitter/expert-profile";
+import {
+  ensureSitterProfileRowForUser,
+  SITTER_PROFILES_TABLE,
+  SITTER_PROFILES_USER_COLUMN
+} from "@/lib/sitter/sitter-profile";
+import type { ProfileRole } from "@/lib/supabase/profiles";
 
 const SUPABASE_URL = "https://dqycvddpdhxawdgdatfe.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -15,8 +27,36 @@ const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const ROLE_LABELS: Record<ProfileRole, string> = {
   parent: "הורה",
-  sitter: "נני",
+  sitter: "נני"
 };
+
+async function persistExpertSitterProfile(
+  userId: string,
+  draft: ExpertProfileDraft,
+  names: { first_name: string; last_name: string }
+): Promise<void> {
+  const ensure = await ensureSitterProfileRowForUser(supabase, userId);
+  if (ensure.error) {
+    console.warn("[register] ensure sitter profile:", ensure.error);
+    return;
+  }
+
+  const patch = {
+    ...expertDraftToProfilePatch(draft),
+    first_name: names.first_name,
+    last_name: names.last_name,
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabase
+    .from(SITTER_PROFILES_TABLE)
+    .update(patch)
+    .eq(SITTER_PROFILES_USER_COLUMN, userId);
+
+  if (error) {
+    console.warn("[register] expert profile patch:", error.message);
+  }
+}
 
 function RegisterInner() {
   const searchParams = useSearchParams();
@@ -27,10 +67,27 @@ function RegisterInner() {
     return value === "parent" || value === "sitter" ? value : null;
   }, [searchParams]);
 
+  const track = useMemo(() => {
+    const value = (searchParams.get("track") || "").trim().toLowerCase();
+    if (value === "expert") return "expert" as const;
+    if (value === "babysitter") return "babysitter" as const;
+    return null;
+  }, [searchParams]);
+
+  const isExpert = role === "sitter" && track === "expert";
+
+  const roleHeadline = useMemo(() => {
+    if (role === "parent") return "הורה";
+    if (isExpert) return "יועצת / דולה";
+    if (role === "sitter") return "בייביסיטר";
+    return null;
+  }, [role, isExpert]);
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [expertDraft, setExpertDraft] = useState<ExpertProfileDraft>(() => emptyExpertProfileDraft());
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -38,7 +95,7 @@ function RegisterInner() {
     e.preventDefault();
 
     if (!role) {
-      setErrorMsg("לא נבחר תפקיד. חזרו לדף הבית ובחרו הורה או נני.");
+      setErrorMsg("לא נבחר תפקיד. חזרו לדף הבית ובחרו הורה, בייביסיטר או יועצת/דולה.");
       return;
     }
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
@@ -46,11 +103,20 @@ function RegisterInner() {
       return;
     }
 
+    if (isExpert) {
+      const expertError = validateExpertProfileDraft(expertDraft);
+      if (expertError) {
+        setErrorMsg(expertError);
+        return;
+      }
+    }
+
     setLoading(true);
     setErrorMsg(null);
 
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
+    const expertPatch = isExpert ? expertDraftToProfilePatch(expertDraft) : null;
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -61,8 +127,20 @@ function RegisterInner() {
             role,
             first_name: trimmedFirst,
             last_name: trimmedLast,
-          },
-        },
+            service_track: isExpert ? "expert" : role === "sitter" ? "babysitter" : "parent",
+            ...(expertPatch
+              ? {
+                  service_types: expertPatch.service_types,
+                  service_locations: expertPatch.service_locations,
+                  pricing_model: expertPatch.pricing_model,
+                  hourly_rate_nis: expertPatch.hourly_rate_nis,
+                  package_price_nis: expertPatch.package_price_nis,
+                  bio: expertPatch.bio,
+                  certifications: expertPatch.certifications
+                }
+              : {})
+          }
+        }
       });
 
       if (error) throw error;
@@ -72,15 +150,27 @@ function RegisterInner() {
           id: data.user.id,
           role,
           first_name: trimmedFirst,
-          last_name: trimmedLast,
+          last_name: trimmedLast
         });
         if (profileResult.error) {
           console.warn("[register] profile upsert:", profileResult.error);
         }
+
+        if (isExpert) {
+          await persistExpertSitterProfile(data.user.id, expertDraft, {
+            first_name: trimmedFirst,
+            last_name: trimmedLast
+          });
+          try {
+            localStorage.setItem("anynanny_service_track", "expert");
+          } catch {
+            /* ignore */
+          }
+        }
       }
 
       alert("ההרשמה הצליחה! נא לאשר את האימייל שנשלח אליך.");
-      router.push("/");
+      router.push(isExpert ? "/login?role=sitter&track=expert" : "/");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "לא ניתן להשלים את ההרשמה";
       console.error("שגיאת הרשמה:", err);
@@ -96,7 +186,7 @@ function RegisterInner() {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-right shadow-sm">
           <h1 className="text-xl font-bold text-navy-header">לא נבחר תפקיד</h1>
           <p className="mt-2 text-sm text-slate-600">
-            יש לבחור הורה או נני בדף הבית לפני ההרשמה.
+            יש לבחור הורה, בייביסיטר או יועצת/דולה בדף הבית לפני ההרשמה.
           </p>
           <Link
             href="/"
@@ -110,7 +200,7 @@ function RegisterInner() {
   }
 
   return (
-    <main className="mx-auto max-w-md p-8" dir="rtl">
+    <main className="mx-auto max-w-md p-6 sm:p-8" dir="rtl">
       <button
         type="button"
         onClick={() => router.push("/")}
@@ -119,14 +209,19 @@ function RegisterInner() {
         ← חזרה
       </button>
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
         <header className="mb-6 text-right">
           <h1 className="text-2xl font-bold text-navy-header">יצירת חשבון</h1>
-          <p className="mt-1 text-sm text-slate-600">הרשמה כ{ROLE_LABELS[role]}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            הרשמה כ{roleHeadline ?? ROLE_LABELS[role]}
+            {isExpert ? " · הנקה / שינה / דולה" : null}
+          </p>
         </header>
 
         {errorMsg ? (
-          <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{errorMsg}</p>
+          <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+            {errorMsg}
+          </p>
         ) : null}
 
         <form onSubmit={handleRegister} className="space-y-4">
@@ -169,6 +264,13 @@ function RegisterInner() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
           />
+
+          {isExpert ? (
+            <div className="rounded-2xl border border-dashed border-emerald-200 bg-gradient-to-b from-emerald-50/60 to-rose-50/40 p-4">
+              <p className="mb-3 text-sm font-bold text-navy-header">פרטי השירות המקצועי</p>
+              <ExpertRegistrationFields value={expertDraft} onChange={setExpertDraft} />
+            </div>
+          ) : null}
 
           <button
             type="submit"

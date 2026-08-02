@@ -10,7 +10,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
 import SessionProvider from "@/context/SessionContext";
 
-const CHROMELESS_PREFIXES = ["/auth/role-selection", "/auth/login", "/auth/sign-up", "/terms"];
+const CHROMELESS_PREFIXES = ["/", "/auth/role-selection", "/auth/login", "/auth/sign-up", "/login", "/register", "/terms"];
 const FIXED_VIEWPORT_PREFIXES = ["/parent/dashboard", "/parent/calendar", "/sitter/dashboard", "/sitter/shifts", "/session"];
 const MAIN_LAYOUT_PREFIXES = ["/parent/search", "/parent/wallet", "/sitter/wallet"];
 

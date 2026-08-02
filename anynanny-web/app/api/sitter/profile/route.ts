@@ -18,6 +18,12 @@ import {
 import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
+import {
+  clampExpertBio,
+  normalizeExpertServiceTypes,
+  normalizePricingModel,
+  normalizeServiceLocations
+} from "@/lib/sitter/expert-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -155,9 +161,29 @@ export async function PUT(request: Request) {
           : normalizeSitterLanguages(prev.languages),
       homework_help: body.homework_help !== undefined ? Boolean(body.homework_help) : Boolean(prev.homework_help),
       light_cooking: body.light_cooking !== undefined ? Boolean(body.light_cooking) : Boolean(prev.light_cooking),
-      bio: body.bio !== undefined ? body.bio : prev.bio ?? null,
+      bio: body.bio !== undefined ? clampExpertBio(String(body.bio ?? "")) || null : prev.bio ?? null,
       hourly_rate_nis:
         body.hourly_rate_nis !== undefined ? numOrNull(body.hourly_rate_nis) : prev.hourly_rate_nis ?? null,
+      package_price_nis:
+        body.package_price_nis !== undefined
+          ? numOrNull(body.package_price_nis)
+          : prev.package_price_nis ?? null,
+      pricing_model:
+        body.pricing_model !== undefined
+          ? normalizePricingModel(body.pricing_model)
+          : normalizePricingModel(prev.pricing_model),
+      service_types:
+        body.service_types !== undefined
+          ? normalizeExpertServiceTypes(body.service_types)
+          : normalizeExpertServiceTypes(prev.service_types),
+      service_locations:
+        body.service_locations !== undefined
+          ? normalizeServiceLocations(body.service_locations)
+          : normalizeServiceLocations(prev.service_locations),
+      certifications:
+        body.certifications !== undefined
+          ? String(body.certifications ?? "").trim() || null
+          : prev.certifications ?? null,
       working_cities:
         body.working_cities !== undefined
           ? normalizeWorkingCities(body.working_cities)

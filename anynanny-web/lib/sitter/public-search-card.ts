@@ -51,7 +51,12 @@ export function normalizePublicSearchCard(raw: unknown): PublicSitterSearchCard 
     hourly_rate_nis: pickNumber(row, "hourly_rate_nis"),
     avg_rating: pickNumber(row, "avg_rating", "avgRating"),
     rating_count: pickNumber(row, "rating_count", "ratingCount") ?? 0,
-    avatar_url: pickString(row, "avatar_url", "avatarUrl")
+    avatar_url: pickString(row, "avatar_url", "avatarUrl"),
+    service_types: Array.isArray(row.service_types)
+      ? row.service_types.map((v) => String(v).trim()).filter(Boolean)
+      : Array.isArray(row.serviceTypes)
+        ? row.serviceTypes.map((v) => String(v).trim()).filter(Boolean)
+        : null
   };
 }
 

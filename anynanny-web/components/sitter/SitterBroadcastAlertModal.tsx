@@ -319,7 +319,9 @@ export function SitterBroadcastAlertModal({ sitterId, paused = false }: Broadcas
       ? "יועצת הנקה"
       : activeAlert.service_type === "sleep"
         ? "יועצת שינה"
-        : "בייביסיטר";
+        : activeAlert.service_type === "doula"
+          ? "דולה"
+          : "בייביסיטר";
 
   return (
     <div

@@ -84,6 +84,11 @@ export const SITTER_PROFILE_PUT_COLUMNS = [
   "light_cooking",
   "bio",
   "hourly_rate_nis",
+  "package_price_nis",
+  "pricing_model",
+  "service_types",
+  "service_locations",
+  "certifications",
   "working_cities",
   "is_public",
   "onboarding_completed_at",
@@ -314,6 +319,14 @@ export type SitterProfileRow = {
   light_cooking: boolean;
   bio: string | null;
   hourly_rate_nis: number | null;
+  /** hourly | package — package uses package_price_nis */
+  pricing_model?: string | null;
+  package_price_nis?: number | null;
+  /** babysitter | lactation_consultant | sleep_consultant | doula */
+  service_types?: string[] | null;
+  /** home_visit | clinic | online */
+  service_locations?: string[] | null;
+  certifications?: string | null;
   /** Optional — not present on all production schemas; never required for profile PUT. */
   legal_no_criminal_declaration?: boolean;
   is_public: boolean;
@@ -377,6 +390,8 @@ export type PublicSitterSearchCard = {
   rating_count: number;
   /** From `auth.users` metadata via RPC — not a sitter_profiles column. */
   avatar_url?: string | null;
+  /** Service specialties offered (`babysitter`, consultants, doula). */
+  service_types?: string[] | null;
 };
 
 /** One anonymized public review for parent-facing sitter profile screens. */
@@ -390,8 +405,21 @@ export type PublicSitterReview = {
 export function isSitterProfileComplete(p: Partial<SitterProfileRow>): boolean {
   if (!formatSitterDisplayName(p)) return false;
   if (!String(p.bio ?? "").trim()) return false;
-  if (p.years_experience == null || Number(p.years_experience) < 0) return false;
-  if (p.hourly_rate_nis == null || Number(p.hourly_rate_nis) <= 0) return false;
+
+  const serviceTypes = Array.isArray(p.service_types) ? p.service_types : [];
+  const isExpertOnly = serviceTypes.some((t) =>
+    ["lactation_consultant", "sleep_consultant", "doula"].includes(String(t))
+  );
+
+  if (!isExpertOnly && (p.years_experience == null || Number(p.years_experience) < 0)) return false;
+
+  const pricingModel = p.pricing_model === "package" ? "package" : "hourly";
+  if (pricingModel === "package") {
+    if (p.package_price_nis == null || Number(p.package_price_nis) <= 0) return false;
+  } else if (p.hourly_rate_nis == null || Number(p.hourly_rate_nis) <= 0) {
+    return false;
+  }
+
   if (normalizeWorkingCities(p.working_cities).length === 0) return false;
   return true;
 }

@@ -2,6 +2,11 @@ import Link from "next/link";
 import { Star } from "lucide-react";
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
+  ExpertServiceBadge,
+  resolveExpertServiceKind,
+  type ExpertServiceKind
+} from "@/components/sitter/expert-service-icons";
+import {
   bioExcerpt,
   experienceBadgeLabel,
   formatParentFacingHourlyRateNis,
@@ -17,11 +22,19 @@ export function parentSitterProfilePath(sitterId: string): string {
   return `/parent/sitter/${encodeURIComponent(id)}`;
 }
 
+function resolveCardServiceKinds(sitter: PublicSitterSearchCard): ExpertServiceKind[] {
+  const raw = sitter.service_types;
+  if (!Array.isArray(raw) || raw.length === 0) return ["babysitter"];
+  const kinds = Array.from(new Set(raw.map((v) => resolveExpertServiceKind(v))));
+  return kinds.length > 0 ? kinds : ["babysitter"];
+}
+
 export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSearchCard }) {
   const title = resolveSitterCardTitle(sitter);
   const rateLabel = formatParentFacingHourlyRateNis(sitter.hourly_rate_nis);
   const profileHref = parentSitterProfilePath(sitter.id);
   const serviceAreas = formatSearchCardWorkingCities(sitter.working_cities);
+  const serviceKinds = resolveCardServiceKinds(sitter);
 
   return (
     <Link
@@ -35,7 +48,13 @@ export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSea
             <p className="mt-0.5 text-xs font-medium text-slate-500">{sitter.nanny_serial}</p>
           ) : null}
           <div className="mt-2 flex flex-wrap justify-end gap-1.5">
-            <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80" dir="rtl">
+            {serviceKinds.map((kind) => (
+              <ExpertServiceBadge key={kind} kind={kind} />
+            ))}
+            <span
+              className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80"
+              dir="rtl"
+            >
               {experienceBadgeLabel(sitter.years_experience)}
             </span>
             <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-900 ring-1 ring-violet-200/80">
