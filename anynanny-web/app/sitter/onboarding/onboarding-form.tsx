@@ -1,8 +1,20 @@
 'use client';
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  coalesceSignupNames,
+  hasCompleteSignupNames,
+  namesFromUserMetadata,
+  readSignupNamesFromDevice,
+  saveSignupNamesToDevice
+} from "@/lib/auth/signup-names";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
+import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import {
+  ensureSitterProfileRowForUser,
+  SITTER_PROFILES_TABLE,
+  SITTER_PROFILES_USER_COLUMN
+} from "@/lib/sitter/sitter-profile";
 
 export default function SitterOnboardingForm() {
   const router = useRouter();
@@ -13,11 +25,75 @@ export default function SitterOnboardingForm() {
     hourlyRateNis: 0,
     hasCar: false
   });
+  const [namesReady, setNamesReady] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        const cached = readSignupNamesFromDevice();
+        if (cached) {
+          setFormData((prev) => ({
+            ...prev,
+            firstName: cached.first_name,
+            lastName: cached.last_name
+          }));
+          setNamesReady(true);
+        }
+        return;
+      }
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+      if (!user) {
+        const cached = readSignupNamesFromDevice();
+        if (cached) {
+          setFormData((prev) => ({
+            ...prev,
+            firstName: cached.first_name,
+            lastName: cached.last_name
+          }));
+          setNamesReady(true);
+        }
+        return;
+      }
+
+      const [{ data: sitterRow }, { data: profileRow }] = await Promise.all([
+        supabase
+          .from(SITTER_PROFILES_TABLE)
+          .select("first_name, last_name")
+          .eq(SITTER_PROFILES_USER_COLUMN, user.id)
+          .maybeSingle(),
+        supabase.from(PROFILES_TABLE).select("first_name, last_name").eq("id", user.id).maybeSingle()
+      ]);
+
+      const resolved = coalesceSignupNames(
+        sitterRow,
+        profileRow,
+        namesFromUserMetadata(user.user_metadata as Record<string, unknown> | undefined),
+        readSignupNamesFromDevice()
+      );
+
+      if (resolved.first_name || resolved.last_name) {
+        setFormData((prev) => ({
+          ...prev,
+          firstName: resolved.first_name || prev.firstName,
+          lastName: resolved.last_name || prev.lastName
+        }));
+      }
+      if (hasCompleteSignupNames(resolved)) {
+        setNamesReady(true);
+        saveSignupNamesToDevice(resolved);
+        await ensureSitterProfileRowForUser(supabase, user.id, resolved);
+      }
+    })();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
+    if (!formData.firstName.trim() || !formData.lastName.trim()) return;
     setSaving(true);
 
     const supabase = getSupabaseBrowserClient();
@@ -29,6 +105,11 @@ export default function SitterOnboardingForm() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
+
+      await ensureSitterProfileRowForUser(supabase, user.id, {
+        first_name: formData.firstName.trim(),
+        last_name: formData.lastName.trim()
+      });
 
       await supabase
         .from(SITTER_PROFILES_TABLE)
@@ -54,21 +135,24 @@ export default function SitterOnboardingForm() {
     <form onSubmit={handleSubmit} className="p-6 max-w-sm mx-auto" dir="rtl">
       <h1 className="text-2xl font-bold mb-2 text-[#001F3F]">הרשמת מטפלת</h1>
       
-      {/* משפט הפתיחה המזמין */}
       <p className="text-sm text-slate-600 mb-6 leading-relaxed">
         בואי נכיר טוב יותר ונבנה פרופיל בולט ואטרקטיבי שיגרום להורים לבחור בך בקלות!
       </p>
       
       <div className="space-y-4">
-        <div>
-          <label className="block text-xs font-medium text-slate-700 mb-1">שם פרטי</label>
-          <input type="text" placeholder="שם פרטי" className="block w-full p-2.5 border rounded-xl bg-slate-50/50" value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} required />
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-slate-700 mb-1">שם משפחה</label>
-          <input type="text" placeholder="שם משפחה" className="block w-full p-2.5 border rounded-xl bg-slate-50/50" value={formData.lastName} onChange={(e) => setFormData({...formData, lastName: e.target.value})} required />
-        </div>
+        {namesReady ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-right">
+            <p className="text-[11px] font-semibold text-slate-500">שלום</p>
+            <p className="mt-0.5 text-sm font-bold text-[#001F3F]">
+              {formData.firstName} {formData.lastName}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-500">השם נשמר מההרשמה ואין צורך להקליד שוב</p>
+          </div>
+        ) : (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            טוען את השם מההרשמה…
+          </p>
+        )}
         
         <div>
           <label className="block text-xs font-medium text-slate-700 mb-1">שנות ניסיון</label>
@@ -86,7 +170,7 @@ export default function SitterOnboardingForm() {
         </label>
       </div>
 
-      <button type="submit" disabled={saving} className="w-full mt-6 rounded-xl bg-emerald-700 p-3 text-white font-medium transition hover:bg-emerald-800 disabled:opacity-60 shadow-sm">
+      <button type="submit" disabled={saving || !namesReady} className="w-full mt-6 rounded-xl bg-emerald-700 p-3 text-white font-medium transition hover:bg-emerald-800 disabled:opacity-60 shadow-sm">
         {saving ? "שומרים..." : "סיום"}
       </button>
     </form>

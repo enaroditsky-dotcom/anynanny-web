@@ -52,9 +52,12 @@ export function AppShellGate({ children }: { children: ReactNode }) {
       {/* Layout chrome may change with pathname; BottomNav stays mounted as a sibling. */}
       {mainLayout ? (
         <div className="mx-auto flex h-screen w-full min-w-0 max-w-md flex-col overflow-hidden md:my-4 md:rounded-[2rem] md:h-[calc(100dvh-2rem)]">
-          <div className={`min-h-0 flex-1 overflow-hidden ${SHELL_BOTTOM_NAV_PADDING}`}>
+          {/* Scroll lives here — do not use overflow-hidden or the search/wallet pages lock. */}
+          <div
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${SHELL_BOTTOM_NAV_PADDING}`}
+          >
             <AppShellStableBoundary>
-              <RouteTransitionShell fill>{children}</RouteTransitionShell>
+              <RouteTransitionShell>{children}</RouteTransitionShell>
             </AppShellStableBoundary>
           </div>
         </div>

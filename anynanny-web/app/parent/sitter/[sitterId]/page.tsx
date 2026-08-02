@@ -8,6 +8,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Calendar, ArrowRight } from "lucide-react";
 import { getSitterProfilesTable, formatSitterDisplayName } from "@/lib/sitter/sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
+import { formatParentFacingPriceLabel } from "@/lib/sitter/public-search-card";
 
 export default function ParentSitterProfileView() {
   const router = useRouter();
@@ -80,11 +81,22 @@ export default function ParentSitterProfileView() {
 
   const displayName = formatSitterDisplayName(profile) || profile?.display_name || "בייביסיטר";
   const workingCity = profile?.working_cities?.[0] || "חיפה";
-  const rateValue = profile?.hourly_rate_nis;
+  const rateLabel = formatParentFacingPriceLabel({
+    pricing_model: profile?.pricing_model,
+    hourly_rate_nis: profile?.hourly_rate_nis,
+    package_price_nis: profile?.package_price_nis
+  });
   
   // טיפול בפורמט המזהה הסידורי (אם קיים nanny_serial מציגים אותו, אחרת מציגים פורמט נקי או נמנעים מ-UUID ארוך)
   const serialNumber = profile?.nanny_serial;
-  const serialDisplay = serialNumber ? (String(serialNumber).startsWith("AN-") ? serialNumber : `AN-${serialNumber}`) : null;
+  const serialRaw = serialNumber ? String(serialNumber).trim() : "";
+  const serialDisplay = serialRaw
+    ? /^(AN|CONS)-/i.test(serialRaw)
+      ? serialRaw
+      : /^\d+$/.test(serialRaw)
+        ? `AN-${serialRaw}`
+        : serialRaw
+    : null;
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-4 pb-24 px-2" dir="rtl">
@@ -122,7 +134,7 @@ export default function ParentSitterProfileView() {
               {profile.has_car ? "דרך הגעה: עצמאית" : "דרך הגעה: תחבורה ציבורית"}
             </p>
             <p className="text-sm font-semibold text-navy-800 pt-1">
-              {rateValue != null ? `${rateValue} ₪ / שעה` : "מחיר לא צוין"}
+              {rateLabel}
             </p>
           </div>
 

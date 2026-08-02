@@ -12,6 +12,7 @@ import {
   validateExpertProfileDraft,
   type ExpertProfileDraft
 } from "@/lib/sitter/expert-profile";
+import { saveSignupNamesToDevice } from "@/lib/auth/signup-names";
 import {
   ensureSitterProfileRowForUser,
   SITTER_PROFILES_TABLE,
@@ -35,14 +36,21 @@ async function persistExpertSitterProfile(
   draft: ExpertProfileDraft,
   names: { first_name: string; last_name: string }
 ): Promise<void> {
-  const ensure = await ensureSitterProfileRowForUser(supabase, userId);
+  const expertPatch = expertDraftToProfilePatch(draft);
+  const ensure = await ensureSitterProfileRowForUser(supabase, userId, {
+    first_name: names.first_name,
+    last_name: names.last_name,
+    service_types: Array.isArray(expertPatch.service_types)
+      ? (expertPatch.service_types as string[])
+      : undefined
+  });
   if (ensure.error) {
     console.warn("[register] ensure sitter profile:", ensure.error);
     return;
   }
 
   const patch = {
-    ...expertDraftToProfilePatch(draft),
+    ...expertPatch,
     first_name: names.first_name,
     last_name: names.last_name,
     updated_at: new Date().toISOString()
@@ -117,6 +125,7 @@ function RegisterInner() {
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
     const expertPatch = isExpert ? expertDraftToProfilePatch(expertDraft) : null;
+    saveSignupNamesToDevice({ first_name: trimmedFirst, last_name: trimmedLast });
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -156,15 +165,31 @@ function RegisterInner() {
           console.warn("[register] profile upsert:", profileResult.error);
         }
 
-        if (isExpert) {
-          await persistExpertSitterProfile(data.user.id, expertDraft, {
-            first_name: trimmedFirst,
-            last_name: trimmedLast
-          });
-          try {
-            localStorage.setItem("anynanny_service_track", "expert");
-          } catch {
-            /* ignore */
+        if (role === "sitter") {
+          if (isExpert) {
+            await persistExpertSitterProfile(data.user.id, expertDraft, {
+              first_name: trimmedFirst,
+              last_name: trimmedLast
+            });
+            try {
+              localStorage.setItem("anynanny_service_track", "expert");
+            } catch {
+              /* ignore */
+            }
+          } else {
+            const ensure = await ensureSitterProfileRowForUser(supabase, data.user.id, {
+              first_name: trimmedFirst,
+              last_name: trimmedLast,
+              service_types: ["babysitter"]
+            });
+            if (ensure.error) {
+              console.warn("[register] ensure sitter profile:", ensure.error);
+            }
+            try {
+              localStorage.setItem("anynanny_service_track", "babysitter");
+            } catch {
+              /* ignore */
+            }
           }
         }
       }

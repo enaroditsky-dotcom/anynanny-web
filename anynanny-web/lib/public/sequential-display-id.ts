@@ -16,6 +16,7 @@ export const SITTER_DISPLAY_ID_STORAGE_KEY = "anynanny_sitter_display_id";
 
 const PARENT_SERIAL_RE = /^P-\d+$/i;
 const SITTER_SERIAL_RE = /^AN-\d+$/i;
+const CONSULTANT_SERIAL_RE = /^CONS-\d+$/i;
 
 export function pickProfileSerialId(row: unknown): number | null {
   if (!row || typeof row !== "object") return null;
@@ -31,7 +32,7 @@ export function formatParentPublicIdFromSerial(serialId: number | null | undefin
   return `P-${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
 }
 
-/** Canonical sitter display id: AN-1001 */
+/** Canonical babysitter display id: AN-1001 */
 export function formatSitterPublicIdFromSerial(serialId: number | null | undefined): string | null {
   if (serialId == null || !Number.isFinite(Number(serialId)) || Number(serialId) < 1) return null;
   return `AN-${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
@@ -47,10 +48,13 @@ function normalizeParentSerial(raw: unknown): string | null {
   return null;
 }
 
+/** Accept AN-#### (babysitter) or CONS-#### (expert). */
 function normalizeSitterSerial(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const v = raw.trim();
   if (!v) return null;
+  if (CONSULTANT_SERIAL_RE.test(v)) return `CONS-${v.slice(5)}`;
+  if (/^CONS_\d+$/i.test(v)) return `CONS-${v.slice(5)}`;
   if (SITTER_SERIAL_RE.test(v)) return `AN-${v.slice(3)}`;
   if (/^AN_\d+$/i.test(v)) return `AN-${v.slice(3)}`;
   if (/^\d+$/.test(v)) return `AN-${v}`;
@@ -190,7 +194,7 @@ async function readSitterPublicIdFromProfiles(
   return { publicId: null, error: lastError };
 }
 
-/** Loads role-scoped public display id for dashboard badges (AN-#### / P-####). */
+/** Loads role-scoped public display id for dashboard badges (AN-#### / CONS-#### / P-####). */
 export async function fetchProfilePublicId(
   supabase: SupabaseClient,
   userId: string,

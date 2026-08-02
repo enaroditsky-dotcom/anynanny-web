@@ -49,6 +49,9 @@ export function normalizePublicSearchCard(raw: unknown): PublicSitterSearchCard 
     working_cities: normalizeWorkingCities(row.working_cities ?? row.workingCities),
     bio: pickString(row, "bio"),
     hourly_rate_nis: pickNumber(row, "hourly_rate_nis"),
+    pricing_model:
+      pickString(row, "pricing_model", "pricingModel") === "package" ? "package" : "hourly",
+    package_price_nis: pickNumber(row, "package_price_nis", "packagePriceNis"),
     avg_rating: pickNumber(row, "avg_rating", "avgRating"),
     rating_count: pickNumber(row, "rating_count", "ratingCount") ?? 0,
     avatar_url: pickString(row, "avatar_url", "avatarUrl"),
@@ -80,7 +83,11 @@ export function resolveSitterCardTitle(card: PublicSitterSearchCard): string {
   const display = card.display_name?.trim();
   if (display && display.toLowerCase() !== "user") return display;
 
-  if (card.nanny_serial) return `נני מס' ${card.nanny_serial}`;
+  if (card.nanny_serial) {
+    const serial = card.nanny_serial.trim().toUpperCase();
+    if (serial.startsWith("CONS-")) return `יועצת מס' ${card.nanny_serial}`;
+    return `נני מס' ${card.nanny_serial}`;
+  }
 
   return "בייביסיטר ללא שם";
 }
@@ -101,6 +108,25 @@ export function formatParentFacingHourlyRateNis(rate: number | null | undefined)
   const baseRate = parentFacingHourlyRateNis(rate);
   if (baseRate == null) return "מחיר לא צוין";
   return `₪${baseRate} / שעה`;
+}
+
+/** Prefer package / global price when pricing_model is package; otherwise hourly. */
+export function formatParentFacingPriceLabel(input: {
+  pricing_model?: string | null;
+  hourly_rate_nis?: number | null;
+  package_price_nis?: number | null;
+}): string {
+  const model = String(input.pricing_model ?? "").trim().toLowerCase();
+  const packageAmount = parentFacingHourlyRateNis(input.package_price_nis);
+  const isPackage =
+    model === "package" ||
+    (model !== "hourly" && packageAmount != null && parentFacingHourlyRateNis(input.hourly_rate_nis) == null);
+
+  if (isPackage) {
+    if (packageAmount == null) return "מחיר לא צוין";
+    return `${packageAmount} ₪ · חבילה`;
+  }
+  return formatParentFacingHourlyRateNis(input.hourly_rate_nis);
 }
 
 export function experienceBadgeLabel(years: number | null | undefined): string {

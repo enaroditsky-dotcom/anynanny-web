@@ -121,6 +121,16 @@ export function normalizeSitterProfilePublic(
     transportation_mode,
     bio: pickString(raw, "bio"),
     hourly_rate_nis: pickNumber(raw, "hourly_rate_nis", "hourly_rate", "hourlyRateNis"),
+    pricing_model:
+      pickString(raw, "pricing_model", "pricingModel") === "package" ? "package" : "hourly",
+    package_price_nis: pickNumber(raw, "package_price_nis", "packagePriceNis"),
+    service_types: (() => {
+      const rawTypes = raw.service_types ?? raw.serviceTypes;
+      if (!Array.isArray(rawTypes)) return null;
+      const types = rawTypes.map((v) => String(v).trim()).filter(Boolean);
+      return types.length ? types : null;
+    })(),
+    certifications: pickString(raw, "certifications"),
     citizenship_israeli: pickBool(raw, "citizenship_israeli", "citizenshipIsraeli") ? true : null,
     birth_country: pickString(raw, "birth_country", "birthCountry"),
     aliyah_year: pickNumber(raw, "aliyah_year", "aliyahYear"),
@@ -171,7 +181,7 @@ async function fetchSitterProfileDirect(
 ): Promise<SitterProfilePublic | null> {
   const fk = SITTER_PROFILES_USER_COLUMN;
   const fullSelect =
-    "id, first_name, last_name, bio, hourly_rate_nis, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages, working_cities";
+    "id, first_name, last_name, bio, hourly_rate_nis, pricing_model, package_price_nis, service_types, certifications, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages, working_cities";
 
   let read = safeSupabaseRead(
     await supabase
@@ -182,6 +192,20 @@ async function fetchSitterProfileDirect(
       .maybeSingle(),
     "sitter profile direct"
   );
+
+  if (read.error) {
+    read = safeSupabaseRead(
+      await supabase
+        .from(SITTER_PROFILES_TABLE)
+        .select(
+          "id, first_name, last_name, bio, hourly_rate_nis, pricing_model, package_price_nis, years_experience, is_public, updated_at"
+        )
+        .eq(fk, sitterId)
+        .eq("is_public", true)
+        .maybeSingle(),
+      "sitter profile direct with pricing"
+    );
+  }
 
   if (read.error) {
     read = safeSupabaseRead(
@@ -242,7 +266,9 @@ export async function fetchParentSitterProfile(
         }
       }
     } else if (!isPostgrestMissingFunctionError(profErr.message)) {
-      return { profile: null, reviews: [], error: profErr.message };
+      // Prefer a soft miss over hard 400 when RPC is schema-incompatible;
+      // callers can still show cards from list/direct reads.
+      console.warn("[fetchParentSitterProfile] get_sitter_profile_public:", profErr.message);
     }
   }
 

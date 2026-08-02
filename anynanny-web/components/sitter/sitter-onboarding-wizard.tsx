@@ -6,6 +6,13 @@ import { ExpertRegistrationFields } from "@/components/sitter/expert-registratio
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import {
+  coalesceSignupNames,
+  hasCompleteSignupNames,
+  namesFromUserMetadata,
+  readSignupNamesFromDevice,
+  saveSignupNamesToDevice
+} from "@/lib/auth/signup-names";
+import {
   emptyExpertProfileDraft,
   expertDraftToProfilePatch,
   isExpertOnlyServiceKind,
@@ -23,6 +30,7 @@ import {
   SITTER_WORKING_CITIES_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import { updateSitterWorkingCities } from "@/lib/sitter/sitter-working-cities";
+import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 type Props = {
@@ -43,6 +51,7 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
   const [step, setStep] = useState(1);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [namesLoading, setNamesLoading] = useState(true);
   const [birthDate, setBirthDate] = useState("");
   const [militaryService, setMilitaryService] = useState("כן");
   const [yearsExperience, setYearsExperience] = useState("");
@@ -57,7 +66,10 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
     setIsExpert(readIsExpertTrack());
     void (async () => {
       const auth = await resolveBrowserAuth();
-      if (!auth.ok) return;
+      if (!auth.ok) {
+        setNamesLoading(false);
+        return;
+      }
 
       const {
         data: { user }
@@ -76,15 +88,40 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
         }
       }
 
-      const { data } = await auth.supabase
-        .from(SITTER_PROFILES_TABLE)
-        .select(
-          "first_name, last_name, birth_date, bio, certifications, service_types, service_locations, pricing_model, hourly_rate_nis, package_price_nis"
-        )
-        .eq(SITTER_PROFILES_USER_COLUMN, auth.userId)
-        .maybeSingle();
+      const [{ data: sitterRow }, { data: profileRow }] = await Promise.all([
+        auth.supabase
+          .from(SITTER_PROFILES_TABLE)
+          .select(
+            "first_name, last_name, birth_date, bio, certifications, service_types, service_locations, pricing_model, hourly_rate_nis, package_price_nis"
+          )
+          .eq(SITTER_PROFILES_USER_COLUMN, auth.userId)
+          .maybeSingle(),
+        auth.supabase
+          .from(PROFILES_TABLE)
+          .select("first_name, last_name")
+          .eq("id", auth.userId)
+          .maybeSingle()
+      ]);
 
-      if (!data) {
+      const resolved = coalesceSignupNames(
+        sitterRow,
+        profileRow,
+        namesFromUserMetadata(user?.user_metadata as Record<string, unknown> | undefined),
+        readSignupNamesFromDevice()
+      );
+
+      if (resolved.first_name) setFirstName(resolved.first_name);
+      if (resolved.last_name) setLastName(resolved.last_name);
+      if (hasCompleteSignupNames(resolved)) {
+        saveSignupNamesToDevice(resolved);
+        await ensureSitterProfileRowForUser(auth.supabase, auth.userId, {
+          first_name: resolved.first_name,
+          last_name: resolved.last_name
+        });
+      }
+      setNamesLoading(false);
+
+      if (!sitterRow) {
         if (expertFromMeta) {
           const metaPrimary = metaTypes.find((t) => isExpertOnlyServiceKind(t));
           const meta = user?.user_metadata ?? {};
@@ -101,22 +138,22 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
         return;
       }
 
-      if (typeof data.first_name === "string" && data.first_name) setFirstName(data.first_name);
-      if (typeof data.last_name === "string" && data.last_name) setLastName(data.last_name);
-      if (data.birth_date) setBirthDate(String(data.birth_date).slice(0, 10));
+      if (sitterRow.birth_date) setBirthDate(String(sitterRow.birth_date).slice(0, 10));
 
-      const types = normalizeExpertServiceTypes(data.service_types);
+      const types = normalizeExpertServiceTypes(sitterRow.service_types);
       const primary = types.find((t) => isExpertOnlyServiceKind(t));
       if (primary) {
         setIsExpert(true);
         setExpertDraft({
           serviceType: primary,
-          serviceLocations: normalizeServiceLocations(data.service_locations),
-          pricingModel: normalizePricingModel(data.pricing_model),
-          hourlyRateNis: data.hourly_rate_nis != null ? String(data.hourly_rate_nis) : "",
-          packagePriceNis: data.package_price_nis != null ? String(data.package_price_nis) : "",
-          bio: typeof data.bio === "string" ? data.bio : "",
-          certifications: typeof data.certifications === "string" ? data.certifications : ""
+          serviceLocations: normalizeServiceLocations(sitterRow.service_locations),
+          pricingModel: normalizePricingModel(sitterRow.pricing_model),
+          hourlyRateNis: sitterRow.hourly_rate_nis != null ? String(sitterRow.hourly_rate_nis) : "",
+          packagePriceNis:
+            sitterRow.package_price_nis != null ? String(sitterRow.package_price_nis) : "",
+          bio: typeof sitterRow.bio === "string" ? sitterRow.bio : "",
+          certifications:
+            typeof sitterRow.certifications === "string" ? sitterRow.certifications : ""
         });
       } else if (expertFromMeta) {
         const metaPrimary = metaTypes.find((t) => isExpertOnlyServiceKind(t));
@@ -141,6 +178,12 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
       return;
     }
 
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("חסרים שם פרטי או שם משפחה מההרשמה. חזרו להשלים אותם או פנו לתמיכה.");
+      setStep(1);
+      return;
+    }
+
     if (isExpert) {
       const expertError = validateExpertProfileDraft(expertDraft);
       if (expertError) {
@@ -160,7 +203,11 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
         return;
       }
 
-      const ensure = await ensureSitterProfileRowForUser(auth.supabase, auth.userId);
+      const ensure = await ensureSitterProfileRowForUser(auth.supabase, auth.userId, {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        service_types: isExpert ? [expertDraft.serviceType] : ["babysitter"]
+      });
       if (ensure.error) {
         setError(ensure.error);
         return;
@@ -250,6 +297,15 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
     setStep(3);
   };
 
+  const goToStep2 = () => {
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("השם מההרשמה לא נמצא. התחברו מחדש או פנו לתמיכה.");
+      return;
+    }
+    setError(null);
+    setStep(2);
+  };
+
   return (
     <div
       className="mx-auto my-auto max-h-[85vh] max-w-sm overflow-y-auto rounded-[2rem] border-2 border-[#C5A059] bg-[#FDFBF6] p-6 text-center shadow-2xl"
@@ -270,26 +326,21 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
 
       {step === 1 && (
         <div className="space-y-4 text-right">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">שם פרטי</label>
-            <input
-              type="text"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="w-full rounded-2xl border-2 border-[#C5A059]/30 bg-white p-3.5"
-              placeholder="שם פרטי"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">שם משפחה</label>
-            <input
-              type="text"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className="w-full rounded-2xl border-2 border-[#C5A059]/30 bg-white p-3.5"
-              placeholder="שם משפחה"
-            />
-          </div>
+          {namesLoading ? (
+            <p className="text-center text-sm text-slate-500">טוען את פרטי ההרשמה…</p>
+          ) : firstName.trim() && lastName.trim() ? (
+            <div className="rounded-2xl border border-[#C5A059]/25 bg-white/80 px-4 py-3 text-right">
+              <p className="text-[11px] font-semibold text-slate-500">שלום</p>
+              <p className="mt-1 text-base font-bold text-[#001F3F]">
+                {firstName} {lastName}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">השם נשמר מההרשמה ואין צורך להקליד שוב</p>
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              לא נמצא שם מההרשמה. התחברו מחדש עם אותו חשבון או פנו לתמיכה.
+            </p>
+          )}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-700">תאריך לידה</label>
             <input
@@ -301,8 +352,9 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
           </div>
           <button
             type="button"
-            onClick={() => setStep(2)}
-            className="mt-2 w-full rounded-2xl bg-[#001F3F] py-3.5 font-bold text-white transition hover:bg-blue-900"
+            onClick={goToStep2}
+            disabled={namesLoading || !firstName.trim() || !lastName.trim()}
+            className="mt-2 w-full rounded-2xl bg-[#001F3F] py-3.5 font-bold text-white transition hover:bg-blue-900 disabled:opacity-60"
           >
             הבא
           </button>

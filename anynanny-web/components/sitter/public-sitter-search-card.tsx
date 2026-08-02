@@ -9,7 +9,7 @@ import {
 import {
   bioExcerpt,
   experienceBadgeLabel,
-  formatParentFacingHourlyRateNis,
+  formatParentFacingPriceLabel,
   formatSearchCardRatingLine,
   formatSearchCardWorkingCities,
   resolveSitterCardTitle,
@@ -31,7 +31,11 @@ function resolveCardServiceKinds(sitter: PublicSitterSearchCard): ExpertServiceK
 
 export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSearchCard }) {
   const title = resolveSitterCardTitle(sitter);
-  const rateLabel = formatParentFacingHourlyRateNis(sitter.hourly_rate_nis);
+  const rateLabel = formatParentFacingPriceLabel({
+    pricing_model: sitter.pricing_model,
+    hourly_rate_nis: sitter.hourly_rate_nis,
+    package_price_nis: sitter.package_price_nis
+  });
   const profileHref = parentSitterProfilePath(sitter.id);
   const serviceAreas = formatSearchCardWorkingCities(sitter.working_cities);
   const serviceKinds = resolveCardServiceKinds(sitter);

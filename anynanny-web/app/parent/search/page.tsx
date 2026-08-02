@@ -109,27 +109,27 @@ function ParentSearchContent() {
 
   return (
     <MainLayout>
-      <div className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2" dir="rtl">
+      <div className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-8" dir="rtl">
         {showWait ? (
-          <p className="text-right text-sm text-slate-600">טוען…</p>
+          <p className="text-center text-sm text-slate-600">טוען…</p>
         ) : redirectingToLogin ? (
-          <p className="text-right text-sm text-slate-600">מעבירים להתחברות…</p>
+          <p className="text-center text-sm text-slate-600">מעבירים להתחברות…</p>
         ) : !showContent ? (
-          <p className="text-right text-sm text-slate-600">טוען…</p>
+          <p className="text-center text-sm text-slate-600">טוען…</p>
         ) : null}
 
         {showContent ? (
           <div className="space-y-5">
-            <div className="flex w-full flex-wrap items-center justify-between gap-2 px-1">
-              <h1 className="text-xl font-black tracking-tight text-navy-header">
-                שלום! מה תרצה לעשות היום?
+            <header className="space-y-2 px-1 text-center">
+              <h1 className="text-xl font-black tracking-tight text-navy-header sm:text-2xl">
+                חיפוש מהיר באפליקציה
               </h1>
               {parentPublicId ? (
-                <span className="inline-flex items-center gap-1 rounded-lg border border-purple-100 bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 shadow-xs">
+                <p className="inline-flex items-center gap-1 rounded-lg border border-purple-100 bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">
                   מזהה: {parentPublicId}
-                </span>
+                </p>
               ) : null}
-            </div>
+            </header>
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="סוג השירות">
               {EXPERT_SERVICE_OPTIONS.map((kind) => {
@@ -165,7 +165,7 @@ function ParentSearchContent() {
               />
             </div>
 
-            <div className="pt-2">
+            <div className="pb-4 pt-2">
               <button
                 type="button"
                 disabled={navigating}

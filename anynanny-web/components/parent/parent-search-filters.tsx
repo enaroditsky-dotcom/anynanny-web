@@ -116,7 +116,7 @@ export function ParentSearchFiltersBar({
               type="search"
               inputMode="search"
               autoComplete="off"
-              placeholder="AN-1001"
+              placeholder="AN-1001 / CONS-1001"
               className={`${FIELD_CONTROL} pr-9`}
               value={filters.searchSitterSerial}
               onChange={(e) => patch({ searchSitterSerial: e.target.value })}

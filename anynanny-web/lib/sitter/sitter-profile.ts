@@ -294,7 +294,7 @@ export function extractMissingSitterProfileColumn(message: string | null | undef
 export type SitterProfileRow = {
   id: string;
   user_id?: string;
-  /** Assigned on onboarding completion; format e.g. AN-1001 */
+  /** Assigned on insert; babysitter AN-1001+ or expert CONS-1001+. */
   nanny_serial?: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -353,6 +353,10 @@ export type SitterProfilePublic = {
   transportation_mode?: string | null;
   bio: string | null;
   hourly_rate_nis: number | null;
+  pricing_model?: string | null;
+  package_price_nis?: number | null;
+  service_types?: string[] | null;
+  certifications?: string | null;
   citizenship_israeli: boolean | null;
   birth_country: string | null;
   aliyah_year: number | null;
@@ -386,6 +390,9 @@ export type PublicSitterSearchCard = {
   working_cities?: IsraelCity[];
   bio: string | null;
   hourly_rate_nis: number | null;
+  /** hourly | package — package uses package_price_nis */
+  pricing_model?: string | null;
+  package_price_nis?: number | null;
   avg_rating: number | null;
   rating_count: number;
   /** From `auth.users` metadata via RPC — not a sitter_profiles column. */
@@ -431,27 +438,59 @@ export function hasSitterCompletedOnboarding(p: Partial<SitterProfileRow>): bool
 }
 
 /**
- * Ensure a `sitter_profiles` row exists for this user (id-only stub). Call after role = sitter
- * so PostgREST upserts and middleware checks never hit a missing row.
+ * Ensure a `sitter_profiles` row exists for this user.
+ * Optionally seed signup names and service_types (so experts get CONS- on insert).
  */
 export async function ensureSitterProfileRowForUser(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  seed?: {
+    first_name?: string | null;
+    last_name?: string | null;
+    service_types?: string[] | null;
+  }
 ): Promise<{ error: string | null }> {
   const col = SITTER_PROFILES_USER_COLUMN;
+  const seedFirst = typeof seed?.first_name === "string" ? seed.first_name.trim() : "";
+  const seedLast = typeof seed?.last_name === "string" ? seed.last_name.trim() : "";
+  const seedTypes = Array.isArray(seed?.service_types)
+    ? seed.service_types.map((t) => String(t).trim()).filter(Boolean)
+    : [];
+
   const { data: existing, error: selErr } = await supabase
     .from(SITTER_PROFILES_TABLE)
-    .select(col)
+    .select(`${col}, first_name, last_name, service_types, nanny_serial`)
     .eq(col, userId)
     .maybeSingle();
   if (selErr) return { error: selErr.message };
-  if (existing) return { error: null };
+
+  if (existing) {
+    const row = existing as {
+      first_name?: string | null;
+      last_name?: string | null;
+      service_types?: string[] | null;
+    };
+    const patch: Record<string, unknown> = {};
+    if (seedFirst && !String(row.first_name ?? "").trim()) patch.first_name = seedFirst;
+    if (seedLast && !String(row.last_name ?? "").trim()) patch.last_name = seedLast;
+    if (seedTypes.length > 0) patch.service_types = seedTypes;
+    if (Object.keys(patch).length > 0) {
+      patch.updated_at = new Date().toISOString();
+      const { error: updateErr } = await supabase.from(SITTER_PROFILES_TABLE).update(patch).eq(col, userId);
+      if (updateErr) return { error: updateErr.message };
+    }
+    return { error: null };
+  }
 
   const now = new Date().toISOString();
   const insertRow: Record<string, unknown> = {
     [col]: userId,
     updated_at: now
   };
+  if (seedFirst) insertRow.first_name = seedFirst;
+  if (seedLast) insertRow.last_name = seedLast;
+  if (seedTypes.length > 0) insertRow.service_types = seedTypes;
+
   const { error } = await supabase.from(SITTER_PROFILES_TABLE).insert(insertRow);
   if (error) return { error: error.message };
   return { error: null };
