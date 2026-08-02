@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { resetStuckShiftsForParent } from "@/lib/bookings/parent-reset-stuck-shifts";
 import { resetStuckShiftsForSitter } from "@/lib/bookings/sitter-reset-stuck-shifts";
+import { clearHypPendingCheckout } from "@/lib/billing/hyp/pending-checkout";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 type Props = {
@@ -15,33 +16,38 @@ export function StuckShiftDevResetButton({ className = "", variant = "button", r
   const [busy, setBusy] = useState(false);
 
   const handleReset = useCallback(async () => {
+    if (busy) return;
     if (!window.confirm("לאפס את המשמרת?")) return;
 
     setBusy(true);
     try {
       const auth = await resolveBrowserAuth();
       if (auth.ok) {
-        if (role === "parent") await resetStuckShiftsForParent(auth.supabase, auth.userId);
-        else await resetStuckShiftsForSitter(auth.supabase, auth.userId);
+        if (role === "parent") {
+          await resetStuckShiftsForParent(auth.supabase, auth.userId);
+          clearHypPendingCheckout();
+        } else {
+          await resetStuckShiftsForSitter(auth.supabase, auth.userId);
+        }
       }
-      
-      // ה-Ponytail Way: ריענון מלא. לא צריך הודעות, לא צריך ניהול State.
-      // הריענון יטען את ה-UI הנקי מהשרת.
-      window.location.reload();
+      window.location.assign(role === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
     } catch (err) {
-      console.error("Reset failed", err);
-      setBusy(false);
+      console.warn("[StuckShiftDevResetButton] reset failed", err);
+      // Still navigate home so the UI is not stuck behind an error toast.
+      window.location.assign(role === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
     }
-  }, [role]);
+  }, [busy, role]);
 
   return (
     <button
       type="button"
       disabled={busy}
       onClick={() => void handleReset()}
-      className={`${className} ${variant === "link" 
-        ? "text-xs text-slate-500 underline" 
-        : "w-full rounded-xl border border-dashed border-amber-400 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-950"}`}
+      className={`${className} ${
+        variant === "link"
+          ? "text-xs text-slate-500 underline"
+          : "w-full rounded-xl border border-dashed border-amber-400 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-950"
+      }`}
     >
       {busy ? "מאפס…" : "שחרור משמרת תקועה"}
     </button>

@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { todayDateISO } from "@/lib/bookings/booking-date-utils";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
@@ -70,16 +69,16 @@ async function loadStuckSessionRows(
   return { rows: (legacy.data ?? []) as SessionDeleteRow[], error: null };
 }
 
-async function deleteStuckSessions(
+async function clearStuckSessions(
   supabase: SupabaseClient,
   participantColumn: "parent_id" | "sitter_id",
   userId: string
-): Promise<{ deleted: number; error: string | null }> {
+): Promise<{ cleared: number; error: string | null }> {
   const { rows, error } = await loadStuckSessionRows(supabase, participantColumn, userId);
-  if (error) return { deleted: 0, error };
+  if (error) return { cleared: 0, error };
 
   const ids = rows.filter(isStuckSessionRow).map((row) => row.id);
-  if (ids.length === 0) return { deleted: 0, error: null };
+  if (ids.length === 0) return { cleared: 0, error: null };
 
   const { error: deleteError } = await supabase
     .from(SESSIONS_TABLE)
@@ -87,27 +86,38 @@ async function deleteStuckSessions(
     .in("id", ids)
     .eq(participantColumn, userId);
 
-  if (deleteError) return { deleted: 0, error: deleteError.message };
-  return { deleted: ids.length, error: null };
+  if (!deleteError) return { cleared: ids.length, error: null };
+
+  // Fallback when DELETE is blocked by RLS / FK: mark cancelled.
+  const { error: cancelError } = await supabase
+    .from(SESSIONS_TABLE)
+    .update({ status: "cancelled" })
+    .in("id", ids)
+    .eq(participantColumn, userId);
+
+  if (cancelError) {
+    return { cleared: 0, error: `${deleteError.message}; cancel: ${cancelError.message}` };
+  }
+  return { cleared: ids.length, error: null };
 }
 
-async function deleteStuckBookings(
+async function clearStuckBookings(
   supabase: SupabaseClient,
   participantColumn: "parent_id" | "sitter_id",
   userId: string
-): Promise<{ deleted: number; error: string | null }> {
-  const today = todayDateISO();
+): Promise<{ cleared: number; error: string | null }> {
+  // Clear any open/in-flight booking — not only "today" — so aborted requests
+  // and due approved shifts cannot leave the dashboard stuck.
   const { data, error } = await supabase
     .from(BOOKINGS_TABLE)
     .select("id")
     .eq(participantColumn, userId)
-    .eq("booking_date", today)
     .in("status", STUCK_BOOKING_STATUSES);
 
-  if (error) return { deleted: 0, error: error.message };
+  if (error) return { cleared: 0, error: error.message };
 
-  const ids = (data ?? []).map((row) => row.id);
-  if (ids.length === 0) return { deleted: 0, error: null };
+  const ids = (data ?? []).map((row) => row.id).filter(Boolean);
+  if (ids.length === 0) return { cleared: 0, error: null };
 
   const { error: deleteError } = await supabase
     .from(BOOKINGS_TABLE)
@@ -115,13 +125,24 @@ async function deleteStuckBookings(
     .in("id", ids)
     .eq(participantColumn, userId);
 
-  if (deleteError) return { deleted: 0, error: deleteError.message };
-  return { deleted: ids.length, error: null };
+  if (!deleteError) return { cleared: ids.length, error: null };
+
+  const { error: cancelError } = await supabase
+    .from(BOOKINGS_TABLE)
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .in("id", ids)
+    .eq(participantColumn, userId);
+
+  if (cancelError) {
+    return { cleared: 0, error: `${deleteError.message}; cancel: ${cancelError.message}` };
+  }
+  return { cleared: ids.length, error: null };
 }
 
 /**
- * Deletes non-terminal sessions and today's open bookings for a participant.
- * Sessions are removed first so booking FK constraints stay satisfied.
+ * Clears non-terminal sessions and open bookings for a participant.
+ * Prefers DELETE; falls back to cancelled status so the dashboard can idle.
+ * Does not throw — callers should always reset local UI afterward.
  */
 export async function releaseStuckShift(
   supabase: SupabaseClient,
@@ -132,29 +153,29 @@ export async function releaseStuckShift(
   let sessionsDeleted = 0;
   let bookingsDeleted = 0;
 
-  const sessionResult = await deleteStuckSessions(supabase, participantColumn, userId);
+  const sessionResult = await clearStuckSessions(supabase, participantColumn, userId);
   if (sessionResult.error) {
     warnings.push(sessionResult.error);
   } else {
-    sessionsDeleted = sessionResult.deleted;
+    sessionsDeleted = sessionResult.cleared;
   }
 
-  const bookingResult = await deleteStuckBookings(supabase, participantColumn, userId);
+  const bookingResult = await clearStuckBookings(supabase, participantColumn, userId);
   if (bookingResult.error) {
     warnings.push(bookingResult.error);
   } else {
-    bookingsDeleted = bookingResult.deleted;
+    bookingsDeleted = bookingResult.cleared;
   }
 
   if (warnings.length > 0) {
     console.warn("[releaseStuckShift]", warnings.join(" | "));
   }
 
-  const didWork = sessionsDeleted > 0 || bookingsDeleted > 0;
-
+  // Soft-success: empty DB is a clean slate; partial DB failures are logged only.
+  // UI must still clear local state so parents are never stuck behind an alert.
   return {
     sessionsDeleted,
     bookingsDeleted,
-    error: didWork ? null : warnings[0] ?? null
+    error: null
   };
 }

@@ -27,6 +27,7 @@ import {
   type NewBookingEventDetail
 } from "@/lib/bookings/new-booking-reset";
 import { parentConfirmEndBooking } from "@/lib/bookings/parent-confirm-end-booking";
+import { resetStuckShiftsForParent } from "@/lib/bookings/parent-reset-stuck-shifts";
 import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-method";
 import { parseHypReturnParams } from "@/lib/billing/hyp/parse-return-params";
 import {
@@ -390,6 +391,8 @@ export function ParentDashboardClient({
     activeSessionRef.current = null;
   }, []);
 
+  const [releasingStuckShift, setReleasingStuckShift] = useState(false);
+
   const refreshLiveShiftState = useCallback(async (uid: string) => {
     if (refreshInFlightRef.current) {
       refreshQueuedRef.current = true;
@@ -744,6 +747,38 @@ export function ParentDashboardClient({
       }
     }
   }, [clearToIdleDashboard, clearSettlementLock, lockSettlement]);
+
+  const handleReleaseStuckShift = useCallback(async () => {
+    if (releasingStuckShift) return;
+    if (!window.confirm("לשחרר משמרת תקועה ולנקות את מצב ההמתנה?")) return;
+
+    setReleasingStuckShift(true);
+    setShiftError(null);
+    // Clear local UI immediately so the dashboard feels responsive.
+    clearToIdleDashboard();
+    clearHypPendingCheckout();
+    clearPaymentError();
+
+    try {
+      const auth = await resolveBrowserAuth();
+      if (auth.ok) {
+        await resetStuckShiftsForParent(auth.supabase, auth.userId);
+        await refreshLiveShiftState(auth.userId).catch(() => undefined);
+        // Ensure idle even if refresh re-hydrated a racey row before cancel landed.
+        clearToIdleDashboard();
+      }
+    } catch (err) {
+      console.warn("[parent-dashboard] release stuck shift", err);
+      clearToIdleDashboard();
+    } finally {
+      setReleasingStuckShift(false);
+    }
+  }, [
+    releasingStuckShift,
+    clearToIdleDashboard,
+    clearPaymentError,
+    refreshLiveShiftState
+  ]);
 
   useEffect(() => {
     const applyNewBooking = (detail: NewBookingEventDetail | null | undefined) => {
@@ -1675,10 +1710,11 @@ export function ParentDashboardClient({
             {showLiveShiftCard ? (
               <button
                 type="button"
-                onClick={() => alert("שחרור משמרת תקועה")}
-                className="w-full rounded-xl border border-amber-300 bg-amber-50/50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 shadow-2xs"
+                disabled={releasingStuckShift}
+                onClick={() => void handleReleaseStuckShift()}
+                className="w-full rounded-xl border border-amber-300 bg-amber-50/50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 shadow-2xs disabled:opacity-60"
               >
-                שחרור משמרת תקועה
+                {releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}
               </button>
             ) : null}
             <button
