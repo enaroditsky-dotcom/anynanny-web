@@ -267,6 +267,10 @@ function formToPayload(form: FormState): Record<string, unknown> {
 
   if (isExpertForm(form)) {
     Object.assign(base, expertDraftToProfilePatch(formToExpertDraft(form)));
+    // Babysitter-only skills — never persist for expert / consultant / doula accounts.
+    base.has_car = false;
+    base.homework_help = false;
+    base.light_cooking = false;
   } else {
     base.service_types = ["babysitter"];
     base.pricing_model = "hourly";
@@ -324,6 +328,7 @@ export function SitterPersonalArea({ userId }: Props) {
 
   const openEdit = useCallback(
     (key: EditKey) => {
+      if (key === "skills" && isExpertForm(form)) return;
       setModalError(null);
       setSuccess(null);
       setDraft({
@@ -608,15 +613,17 @@ export function SitterPersonalArea({ userId }: Props) {
         </PersonalAreaSection>
       ) : null}
 
-      <PersonalAreaSection
-        title="כישורים"
-        accent="emerald"
-        action={<PersonalChangeLink onClick={() => openEdit("skills")} />}
-      >
-        <p className={`text-[14px] ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
-          {skillsLabel || "לא הוגדרו כישורים נוספים"}
-        </p>
-      </PersonalAreaSection>
+      {!expert ? (
+        <PersonalAreaSection
+          title="כישורים"
+          accent="emerald"
+          action={<PersonalChangeLink onClick={() => openEdit("skills")} />}
+        >
+          <p className={`text-[14px] ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
+            {skillsLabel || "לא הוגדרו כישורים נוספים"}
+          </p>
+        </PersonalAreaSection>
+      ) : null}
 
       <PersonalAreaSection
         title="אודותיי"
@@ -902,7 +909,7 @@ export function SitterPersonalArea({ userId }: Props) {
           </div>
         ) : null}
 
-        {editKey === "skills" ? (
+        {editKey === "skills" && !expert ? (
           <div className="space-y-2">
             <PersonalCheckbox
               checked={draft.has_car}

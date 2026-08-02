@@ -9,6 +9,7 @@ import { Calendar, ArrowRight } from "lucide-react";
 import { getSitterProfilesTable, formatSitterDisplayName } from "@/lib/sitter/sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import { formatParentFacingPriceLabel } from "@/lib/sitter/public-search-card";
+import { isExpertOnlyServiceKind, normalizeExpertServiceTypes } from "@/lib/sitter/expert-profile";
 
 export default function ParentSitterProfileView() {
   const router = useRouter();
@@ -86,6 +87,9 @@ export default function ParentSitterProfileView() {
     hourly_rate_nis: profile?.hourly_rate_nis,
     package_price_nis: profile?.package_price_nis
   });
+  const isExpertProfile = normalizeExpertServiceTypes(profile?.service_types).some((t) =>
+    isExpertOnlyServiceKind(t)
+  );
   
   // טיפול בפורמט המזהה הסידורי (אם קיים nanny_serial מציגים אותו, אחרת מציגים פורמט נקי או נמנעים מ-UUID ארוך)
   const serialNumber = profile?.nanny_serial;
@@ -130,9 +134,11 @@ export default function ParentSitterProfileView() {
               <span className="font-semibold text-slate-700">אזור עבודה:</span>
               <span>{workingCity}</span>
             </div>
-            <p className="text-xs text-violet-700 font-medium">
-              {profile.has_car ? "דרך הגעה: עצמאית" : "דרך הגעה: תחבורה ציבורית"}
-            </p>
+            {!isExpertProfile ? (
+              <p className="text-xs text-violet-700 font-medium">
+                {profile.has_car ? "דרך הגעה: עצמאית" : "דרך הגעה: תחבורה ציבורית"}
+              </p>
+            ) : null}
             <p className="text-sm font-semibold text-navy-800 pt-1">
               {rateLabel}
             </p>

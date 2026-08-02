@@ -6,6 +6,7 @@ import {
   resolveExpertServiceKind,
   type ExpertServiceKind
 } from "@/components/sitter/expert-service-icons";
+import { isExpertOnlyServiceKind } from "@/lib/sitter/expert-profile";
 import {
   bioExcerpt,
   experienceBadgeLabel,
@@ -39,6 +40,7 @@ export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSea
   const profileHref = parentSitterProfilePath(sitter.id);
   const serviceAreas = formatSearchCardWorkingCities(sitter.working_cities);
   const serviceKinds = resolveCardServiceKinds(sitter);
+  const isExpertCard = serviceKinds.some((kind) => isExpertOnlyServiceKind(kind));
 
   return (
     <Link
@@ -55,15 +57,19 @@ export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSea
             {serviceKinds.map((kind) => (
               <ExpertServiceBadge key={kind} kind={kind} />
             ))}
-            <span
-              className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80"
-              dir="rtl"
-            >
-              {experienceBadgeLabel(sitter.years_experience)}
-            </span>
-            <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-900 ring-1 ring-violet-200/80">
-              {transportBadgeLabel(sitter.has_car)}
-            </span>
+            {!isExpertCard ? (
+              <span
+                className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80"
+                dir="rtl"
+              >
+                {experienceBadgeLabel(sitter.years_experience)}
+              </span>
+            ) : null}
+            {!isExpertCard ? (
+              <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-900 ring-1 ring-violet-200/80">
+                {transportBadgeLabel(sitter.has_car)}
+              </span>
+            ) : null}
           </div>
           <p className="mt-1.5 text-xs text-slate-600 unicode-bidi-isolate" dir="rtl">
             <span className="font-semibold text-slate-700">אזורי שירות: </span>
