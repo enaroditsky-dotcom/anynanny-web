@@ -20,6 +20,7 @@ import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
   clampExpertBio,
+  isExpertOnlyServiceKind,
   normalizeExpertServiceTypes,
   normalizePricingModel,
   normalizeServiceLocations
@@ -189,6 +190,16 @@ export async function PUT(request: Request) {
           ? normalizeWorkingCities(body.working_cities)
           : normalizeWorkingCities(prev.working_cities)
     };
+
+    const isExpertProfile = normalizeExpertServiceTypes(merged.service_types).some((t) =>
+      isExpertOnlyServiceKind(t)
+    );
+    if (isExpertProfile) {
+      // Babysitter-only skills — never persist for consultants / doulas.
+      merged.has_car = false;
+      merged.homework_help = false;
+      merged.light_cooking = false;
+    }
 
     const complete = isSitterProfileComplete({ ...merged, id: user.id } as SitterProfileRow);
 

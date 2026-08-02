@@ -1,6 +1,7 @@
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
-import { getSitterProfilesUserColumn } from "@/lib/sitter/sitter-profile";
+import { formatSitterLanguagesDisplay, getSitterProfilesUserColumn } from "@/lib/sitter/sitter-profile";
+import { isExpertOnlyServiceKind } from "@/lib/sitter/expert-profile";
 
 export const SITTER_PROFILES_HOURLY_RATE_COLUMN = "hourly_rate_nis" as const;
 
@@ -59,7 +60,9 @@ export function normalizePublicSearchCard(raw: unknown): PublicSitterSearchCard 
       ? row.service_types.map((v) => String(v).trim()).filter(Boolean)
       : Array.isArray(row.serviceTypes)
         ? row.serviceTypes.map((v) => String(v).trim()).filter(Boolean)
-        : null
+        : null,
+    languages: formatSitterLanguagesDisplay(row.languages) || null,
+    certifications: pickString(row, "certifications")
   };
 }
 
@@ -130,8 +133,41 @@ export function formatParentFacingPriceLabel(input: {
 }
 
 export function experienceBadgeLabel(years: number | null | undefined): string {
-  if (years == null || years < 0) return "ניסיון לא צוין";
-  return `${years} שנות ניסיון`;
+  if (years == null || !Number.isFinite(years) || years < 0) return "ניסיון לא צוין";
+  return `${Math.round(years)} שנות ניסיון`;
+}
+
+/**
+ * Experts store free-text experience in `certifications` (e.g. "כבר 20 שנה");
+ * babysitters use numeric `years_experience`.
+ */
+export function formatPublicExperienceLabel(input: {
+  isExpert?: boolean;
+  years_experience?: number | null;
+  certifications?: string | null;
+  service_types?: string[] | null;
+}): string {
+  const isExpert =
+    input.isExpert === true ||
+    (Array.isArray(input.service_types) &&
+      input.service_types.some((t) => isExpertOnlyServiceKind(String(t))));
+
+  if (isExpert) {
+    const cert = String(input.certifications ?? "").trim();
+    if (cert) return cert.length > 100 ? `${cert.slice(0, 100)}…` : cert;
+  }
+
+  return experienceBadgeLabel(input.years_experience);
+}
+
+export function formatPublicLanguagesLabel(raw: unknown): string | null {
+  if (typeof raw === "string" && raw.trim() && !raw.includes("{")) {
+    // Already a display string from normalizePublicSearchCard / RPC.
+    const normalized = formatSitterLanguagesDisplay(raw);
+    return normalized || raw.trim() || null;
+  }
+  const display = formatSitterLanguagesDisplay(raw);
+  return display || null;
 }
 
 export function transportBadgeLabel(hasCar: boolean): string {

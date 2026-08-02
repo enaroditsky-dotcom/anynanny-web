@@ -117,7 +117,9 @@ function formToExpertDraft(form: FormState): ExpertProfileDraft {
 }
 
 function isExpertForm(form: FormState): boolean {
-  return isExpertOnlyServiceKind(form.service_type);
+  if (isExpertOnlyServiceKind(form.service_type)) return true;
+  // Fallback when service_types were not loaded but CONS- serial already assigned.
+  return /^CONS-/i.test(String(form.nanny_serial ?? "").trim());
 }
 
 function militaryToForm(value: unknown): string {
@@ -201,7 +203,12 @@ function PreferredAgesEditor({
 
 function profileToForm(profile: SitterProfileRow | null): FormState {
   const types = normalizeExpertServiceTypes(profile?.service_types);
-  const primary = types.find((t) => isExpertOnlyServiceKind(t)) ?? types[0] ?? "babysitter";
+  const serial = String(profile?.nanny_serial ?? "").trim();
+  const primary =
+    types.find((t) => isExpertOnlyServiceKind(t)) ??
+    (/^CONS-/i.test(serial) ? "lactation_consultant" : null) ??
+    types[0] ??
+    "babysitter";
   return {
     first_name: profile?.first_name ?? "",
     last_name: profile?.last_name ?? "",
@@ -684,7 +691,7 @@ export function SitterPersonalArea({ userId }: Props) {
       <SitterBankDetailsSection sitterId={userId} />
 
       <PersonalEditModal
-        open={editKey != null}
+        open={editKey != null && !(editKey === "skills" && expert)}
         title={modalTitle}
         onClose={closeEdit}
         onSave={handleSave}

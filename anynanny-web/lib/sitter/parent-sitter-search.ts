@@ -32,7 +32,7 @@ export type ParentSitterSearchResult = {
 };
 
 const SERIAL_SELECT_BASE =
-  "first_name, last_name, nanny_serial, nanny_id_number, years_experience, has_car, bio, hourly_rate_nis, pricing_model, package_price_nis, working_cities";
+  "first_name, last_name, nanny_serial, nanny_id_number, years_experience, has_car, bio, hourly_rate_nis, pricing_model, package_price_nis, languages, certifications, working_cities";
 const SERIAL_SELECT_MINIMAL =
   "first_name, last_name, nanny_serial, nanny_id_number, years_experience, has_car, bio, hourly_rate_nis, working_cities";
 
@@ -113,13 +113,15 @@ async function enrichSearchCardsWithProfilePublicRpc(supabase: SupabaseClient, c
       (card.pricing_model === "package"
         ? card.package_price_nis == null
         : card.hourly_rate_nis == null);
-    if (!needsRating && !needsPrice) return card;
+    const needsLanguages = !String(card.languages ?? "").trim();
+    const needsCertifications = !String(card.certifications ?? "").trim();
+    if (!needsRating && !needsPrice && !needsLanguages && !needsCertifications) return card;
 
     const fk = getSitterProfilesUserColumn();
     const direct = await supabase
       .from(SITTER_PROFILES_TABLE)
       .select(
-        `${fk}, avg_rating, working_cities, nanny_serial, first_name, last_name, hourly_rate_nis, pricing_model, package_price_nis, service_types`
+        `${fk}, avg_rating, working_cities, nanny_serial, first_name, last_name, hourly_rate_nis, pricing_model, package_price_nis, service_types, languages, certifications, years_experience`
       )
       .eq(fk, card.id)
       .maybeSingle();
@@ -134,7 +136,10 @@ async function enrichSearchCardsWithProfilePublicRpc(supabase: SupabaseClient, c
               pricing_model: fromRow.pricing_model,
               package_price_nis: fromRow.package_price_nis,
               hourly_rate_nis: fromRow.hourly_rate_nis ?? card.hourly_rate_nis,
-              service_types: fromRow.service_types ?? card.service_types
+              service_types: fromRow.service_types ?? card.service_types,
+              languages: fromRow.languages || card.languages,
+              certifications: fromRow.certifications || card.certifications,
+              years_experience: fromRow.years_experience ?? card.years_experience
             }
           : {}),
         avg_rating: isDisplayableSearchRating(avg) ? avg : card.avg_rating,
@@ -153,6 +158,9 @@ async function enrichSearchCardsWithProfilePublicRpc(supabase: SupabaseClient, c
       package_price_nis: profile.package_price_nis ?? card.package_price_nis,
       hourly_rate_nis: profile.hourly_rate_nis ?? card.hourly_rate_nis,
       service_types: profile.service_types ?? card.service_types,
+      languages: profile.languages || card.languages,
+      certifications: profile.certifications || card.certifications,
+      years_experience: profile.years_experience ?? card.years_experience,
       avg_rating: isDisplayableSearchRating(profile.avg_rating) ? profile.avg_rating ?? null : card.avg_rating,
       rating_count: isDisplayableSearchRating(profile.avg_rating)
         ? profile.rating_count ?? 0
@@ -274,12 +282,17 @@ async function runBrowseParentSitterSearchDirect(
     error &&
     (isPostgrestMissingColumnError(error.message, "service_types") ||
       isPostgrestMissingColumnError(error.message, "pricing_model") ||
-      isPostgrestMissingColumnError(error.message, "package_price_nis"))
+      isPostgrestMissingColumnError(error.message, "package_price_nis") ||
+      isPostgrestMissingColumnError(error.message, "certifications") ||
+      isPostgrestMissingColumnError(error.message, "languages"))
   ) {
-    const fallbackSelect = isPostgrestMissingColumnError(error.message, "pricing_model") ||
-      isPostgrestMissingColumnError(error.message, "package_price_nis")
-      ? `${userColumn}, ${SERIAL_SELECT_MINIMAL}`
-      : `${userColumn}, ${SERIAL_SELECT_BASE}`;
+    const fallbackSelect =
+      isPostgrestMissingColumnError(error.message, "pricing_model") ||
+      isPostgrestMissingColumnError(error.message, "package_price_nis") ||
+      isPostgrestMissingColumnError(error.message, "certifications") ||
+      isPostgrestMissingColumnError(error.message, "languages")
+        ? `${userColumn}, ${SERIAL_SELECT_MINIMAL}`
+        : `${userColumn}, ${SERIAL_SELECT_BASE}`;
     const fallback = await supabase.from(SITTER_PROFILES_TABLE).select(fallbackSelect).eq("is_public", true);
     data = fallback.data;
     error = fallback.error;

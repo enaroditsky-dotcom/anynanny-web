@@ -8,8 +8,13 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Calendar, ArrowRight } from "lucide-react";
 import { getSitterProfilesTable, formatSitterDisplayName } from "@/lib/sitter/sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
-import { formatParentFacingPriceLabel } from "@/lib/sitter/public-search-card";
+import {
+  formatParentFacingPriceLabel,
+  formatPublicExperienceLabel,
+  formatPublicLanguagesLabel
+} from "@/lib/sitter/public-search-card";
 import { isExpertOnlyServiceKind, normalizeExpertServiceTypes } from "@/lib/sitter/expert-profile";
+import { formatSitterLanguagesDisplay } from "@/lib/sitter/sitter-profile";
 
 export default function ParentSitterProfileView() {
   const router = useRouter();
@@ -90,6 +95,19 @@ export default function ParentSitterProfileView() {
   const isExpertProfile = normalizeExpertServiceTypes(profile?.service_types).some((t) =>
     isExpertOnlyServiceKind(t)
   );
+  const experienceLabel = formatPublicExperienceLabel({
+    isExpert: isExpertProfile,
+    years_experience:
+      profile?.years_experience != null && Number.isFinite(Number(profile.years_experience))
+        ? Number(profile.years_experience)
+        : null,
+    certifications: profile?.certifications ?? null,
+    service_types: profile?.service_types
+  });
+  const languagesLabel =
+    formatPublicLanguagesLabel(profile?.languages) ||
+    formatSitterLanguagesDisplay(profile?.languages) ||
+    null;
   
   // טיפול בפורמט המזהה הסידורי (אם קיים nanny_serial מציגים אותו, אחרת מציגים פורמט נקי או נמנעים מ-UUID ארוך)
   const serialNumber = profile?.nanny_serial;
@@ -126,10 +144,14 @@ export default function ParentSitterProfileView() {
               <p className="text-xs font-semibold text-violet-600">מזהה: {serialDisplay}</p>
             )}
             <div className="flex items-center gap-1 text-xs text-slate-600 pt-1" dir="rtl">
-              <span className="font-semibold text-slate-700">
-                {profile.years_experience ? `${profile.years_experience} שנות ניסיון` : "ניסיון לא צוין"}
-              </span>
+              <span className="font-semibold text-slate-700">{experienceLabel}</span>
             </div>
+            {languagesLabel ? (
+              <p className="text-sm font-bold text-[#001F3F] pt-0.5" dir="rtl">
+                <span className="text-slate-600">שפות: </span>
+                {languagesLabel}
+              </p>
+            ) : null}
             <div className="flex items-center gap-1 text-xs text-slate-600" dir="rtl">
               <span className="font-semibold text-slate-700">אזור עבודה:</span>
               <span>{workingCity}</span>

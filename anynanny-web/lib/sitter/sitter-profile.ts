@@ -399,6 +399,10 @@ export type PublicSitterSearchCard = {
   avatar_url?: string | null;
   /** Service specialties offered (`babysitter`, consultants, doula). */
   service_types?: string[] | null;
+  /** Display string (joined) for parent-facing cards. */
+  languages?: string | null;
+  /** Expert certifications / free-text professional experience. */
+  certifications?: string | null;
 };
 
 /** One anonymized public review for parent-facing sitter profile screens. */

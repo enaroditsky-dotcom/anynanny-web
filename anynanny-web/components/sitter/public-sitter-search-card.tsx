@@ -9,8 +9,9 @@ import {
 import { isExpertOnlyServiceKind } from "@/lib/sitter/expert-profile";
 import {
   bioExcerpt,
-  experienceBadgeLabel,
   formatParentFacingPriceLabel,
+  formatPublicExperienceLabel,
+  formatPublicLanguagesLabel,
   formatSearchCardRatingLine,
   formatSearchCardWorkingCities,
   resolveSitterCardTitle,
@@ -41,6 +42,13 @@ export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSea
   const serviceAreas = formatSearchCardWorkingCities(sitter.working_cities);
   const serviceKinds = resolveCardServiceKinds(sitter);
   const isExpertCard = serviceKinds.some((kind) => isExpertOnlyServiceKind(kind));
+  const experienceLabel = formatPublicExperienceLabel({
+    isExpert: isExpertCard,
+    years_experience: sitter.years_experience,
+    certifications: sitter.certifications,
+    service_types: sitter.service_types
+  });
+  const languagesLabel = formatPublicLanguagesLabel(sitter.languages);
 
   return (
     <Link
@@ -57,20 +65,24 @@ export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSea
             {serviceKinds.map((kind) => (
               <ExpertServiceBadge key={kind} kind={kind} />
             ))}
-            {!isExpertCard ? (
-              <span
-                className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80"
-                dir="rtl"
-              >
-                {experienceBadgeLabel(sitter.years_experience)}
-              </span>
-            ) : null}
+            <span
+              className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80"
+              dir="rtl"
+            >
+              {experienceLabel}
+            </span>
             {!isExpertCard ? (
               <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-900 ring-1 ring-violet-200/80">
                 {transportBadgeLabel(sitter.has_car)}
               </span>
             ) : null}
           </div>
+          {languagesLabel ? (
+            <p className="mt-1.5 text-sm font-semibold text-[#001F3F]" dir="rtl">
+              <span className="font-bold text-slate-700">שפות: </span>
+              {languagesLabel}
+            </p>
+          ) : null}
           <p className="mt-1.5 text-xs text-slate-600 unicode-bidi-isolate" dir="rtl">
             <span className="font-semibold text-slate-700">אזורי שירות: </span>
             <span>{serviceAreas}</span>
