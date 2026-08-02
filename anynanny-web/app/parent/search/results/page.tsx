@@ -88,7 +88,8 @@ function parseFiltersFromSearchParams(params: URLSearchParams): ParentSearchFilt
     minRating,
     transport,
     maxHourlyRate: Number.isFinite(maxHourlyRate) ? maxHourlyRate : defaultParentSearchFilters().maxHourlyRate,
-    selectedCity: readParam(params, ["city", "selectedCity"]) as ParentSearchFilters["selectedCity"]
+    selectedCity: readParam(params, ["city", "selectedCity"]) as ParentSearchFilters["selectedCity"],
+    serviceType: readParam(params, ["serviceType", "roleType", "p_service_type"])
   });
 }
 
@@ -206,7 +207,13 @@ function ParentSearchResultsInner() {
       {showContent ? (
         <>
           <header className="space-y-1 px-1 text-right">
-            <h1 className="text-xl font-bold text-[#001F3F]">בייביסיטריות זמינות</h1>
+            <h1 className="text-xl font-bold text-[#001F3F]">
+              {filters.serviceType === "lactation_consultant"
+                ? "יועצות הנקה זמינות"
+                : filters.serviceType === "sleep_consultant"
+                  ? "יועצות שינה זמינות"
+                  : "בייביסיטריות זמינות"}
+            </h1>
             {!listLoading && !visibleSearchError && !serialLookupActive && sitters.length > 0 ? (
               <p className="text-xs text-slate-600">ממוינים לפי דירוג ממוצע (גבוה קודם).</p>
             ) : null}

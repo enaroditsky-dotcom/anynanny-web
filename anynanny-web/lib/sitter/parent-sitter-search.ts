@@ -149,13 +149,33 @@ function shouldFallbackListPublicSittersRpc(error: unknown): boolean {
   );
 }
 
-async function invokeListPublicSittersSearchRpc(supabase: SupabaseClient, filters: ParentSearchFilters): Promise<{ data: unknown; error: unknown }> {
+async function invokeListPublicSittersSearchRpc(
+  supabase: SupabaseClient,
+  filters: ParentSearchFilters
+): Promise<{ data: unknown; error: unknown }> {
   const args = toListPublicSittersSearchRpcArgs(filters);
   const cleanArgs = { ...args };
-  delete (cleanArgs as any).min_rating;
-  delete (cleanArgs as any).rating;
+  delete (cleanArgs as { min_rating?: unknown }).min_rating;
+  delete (cleanArgs as { rating?: unknown }).rating;
 
-  const read = await safeSupabaseReadAsync(() => supabase.rpc("list_public_sitters_search", cleanArgs), "list_public_sitters_search");
+  const read = await safeSupabaseReadAsync(
+    () => supabase.rpc("list_public_sitters_search", cleanArgs),
+    "list_public_sitters_search"
+  );
+
+  // Older DBs may not have p_service_type yet — retry without it.
+  if (read.error) {
+    const message = readSupabaseErrorMessage(read.error).toLowerCase();
+    if (message.includes("p_service_type") || message.includes("service_type")) {
+      const { p_service_type: _ignored, ...legacyArgs } = cleanArgs;
+      const legacy = await safeSupabaseReadAsync(
+        () => supabase.rpc("list_public_sitters_search", legacyArgs),
+        "list_public_sitters_search"
+      );
+      return { data: legacy.data, error: legacy.error };
+    }
+  }
+
   return { data: read.data, error: read.error };
 }
 
@@ -190,13 +210,42 @@ async function enrichSearchCardsWithWorkingCities(supabase: SupabaseClient, card
   return cards.map((c) => citiesById.has(c.id) ? { ...c, working_cities: citiesById.get(c.id) } : c);
 }
 
-async function runBrowseParentSitterSearchDirect(supabase: SupabaseClient, filters: ParentSearchFilters, options?: DirectSearchOptions): Promise<ParentSitterSearchResult> {
+function rowOffersServiceType(row: Record<string, unknown>, serviceType: string): boolean {
+  const raw = row.service_types;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    // Legacy rows without the column default to babysitter.
+    return serviceType === "babysitter";
+  }
+  return raw.map((v) => String(v).trim().toLowerCase()).includes(serviceType);
+}
+
+async function runBrowseParentSitterSearchDirect(
+  supabase: SupabaseClient,
+  filters: ParentSearchFilters,
+  options?: DirectSearchOptions
+): Promise<ParentSitterSearchResult> {
   const safe = normalizeParentSearchFilters(filters);
   const userColumn = getSitterProfilesUserColumn();
-  let query = supabase.from(SITTER_PROFILES_TABLE).select(`${userColumn}, ${SERIAL_SELECT_BASE}`).eq("is_public", true);
-  const { data, error } = await query;
+  const withServiceTypes = `${userColumn}, ${SERIAL_SELECT_BASE}, service_types`;
+  let query = supabase.from(SITTER_PROFILES_TABLE).select(withServiceTypes).eq("is_public", true);
+  let { data, error } = await query;
+
+  if (error && isPostgrestMissingColumnError(error.message, "service_types")) {
+    const fallback = await supabase
+      .from(SITTER_PROFILES_TABLE)
+      .select(`${userColumn}, ${SERIAL_SELECT_BASE}`)
+      .eq("is_public", true);
+    data = fallback.data;
+    error = fallback.error;
+  }
+
   if (error) return { cards: [], error: error.message };
-  const cards = (data ?? []).map((r) => profileRowToSearchCard(r as any)).filter((c): c is PublicSitterSearchCard => c != null);
+
+  const cards = (data ?? [])
+    .filter((r) => rowOffersServiceType(r as Record<string, unknown>, safe.serviceType))
+    .map((r) => profileRowToSearchCard(r as Record<string, unknown>))
+    .filter((c): c is PublicSitterSearchCard => c != null);
+
   return { cards: await ensureSearchCardRatings(supabase, cards, safe, options), error: null };
 }
 

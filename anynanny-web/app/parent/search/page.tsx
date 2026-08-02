@@ -9,17 +9,23 @@ import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filter
 import {
   defaultParentSearchFilters,
   normalizeParentSearchFilters,
+  normalizeParentSearchServiceType,
   PARENT_SEARCH_MAX_HOURLY_SLIDER,
-  type ParentSearchFilters
+  type ParentSearchFilters,
+  type ParentSearchServiceRoleAlias
 } from "@/lib/sitter/parent-search-filters";
 
-type ServiceType = "sitter" | "lactation" | "sleep";
+type ServiceType = ParentSearchServiceRoleAlias;
 
 function buildResultsSearchParams(filters: ParentSearchFilters, serviceType: ServiceType): string {
-  const safe = normalizeParentSearchFilters(filters);
+  const safe = normalizeParentSearchFilters({
+    ...filters,
+    serviceType: normalizeParentSearchServiceType(serviceType)
+  });
   const params = new URLSearchParams();
 
   params.set("roleType", serviceType);
+  params.set("serviceType", safe.serviceType);
 
   const serial = safe.searchSitterSerial.trim();
   if (serial) params.set("serial", serial);

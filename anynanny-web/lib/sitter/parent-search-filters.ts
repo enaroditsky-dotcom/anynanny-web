@@ -4,6 +4,15 @@ export type ParentSearchTransportFilter = "all" | "self" | "taxi";
 
 export type ParentSearchMinExperience = 0 | 1 | 3 | 5;
 
+/** Canonical service types sent to `list_public_sitters_search.p_service_type`. */
+export type ParentSearchServiceType =
+  | "babysitter"
+  | "sleep_consultant"
+  | "lactation_consultant";
+
+/** UI / URL role aliases used by `/parent/search`. */
+export type ParentSearchServiceRoleAlias = "sitter" | "lactation" | "sleep" | ParentSearchServiceType;
+
 /** Minimum average sitter rating; `all` sends no `p_min_rating` filter. */
 export type ParentSearchMinRating = "all" | "4.5" | "4.0" | "3.5";
 
@@ -48,6 +57,8 @@ export type ParentSearchFilters = {
   maxHourlyRate: number;
   /** Canonical city from `ISRAEL_CITIES` — filters `sitter_profiles.working_cities`. */
   selectedCity: IsraelCity | "";
+  /** Selected parent search service (`babysitter` | `sleep_consultant` | `lactation_consultant`). */
+  serviceType: ParentSearchServiceType;
 };
 
 export const defaultParentSearchFilters = (): ParentSearchFilters => ({
@@ -62,8 +73,21 @@ export const defaultParentSearchFilters = (): ParentSearchFilters => ({
   minRating: "all",
   transport: "all",
   maxHourlyRate: PARENT_SEARCH_MAX_HOURLY_SLIDER,
-  selectedCity: ""
+  selectedCity: "",
+  serviceType: "babysitter"
 });
+
+/** Map UI / URL role aliases to the RPC `p_service_type` value. */
+export function normalizeParentSearchServiceType(
+  raw: string | null | undefined
+): ParentSearchServiceType {
+  const value = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (value === "sleep" || value === "sleep_consultant") return "sleep_consultant";
+  if (value === "lactation" || value === "lactation_consultant") return "lactation_consultant";
+  return "babysitter";
+}
 
 /** Merge partial / legacy filter state (e.g. old single `searchHour` field). */
 export function normalizeParentSearchFilters(
@@ -97,7 +121,12 @@ export function normalizeParentSearchFilters(
     selectedCity:
       partial.selectedCity != null && isIsraelCity(String(partial.selectedCity))
         ? partial.selectedCity
-        : base.selectedCity
+        : base.selectedCity,
+    serviceType: normalizeParentSearchServiceType(
+      (partial as { serviceType?: string; roleType?: string }).serviceType ??
+        (partial as { roleType?: string }).roleType ??
+        base.serviceType
+    )
   };
 }
 
@@ -203,6 +232,7 @@ export type ListPublicSittersSearchRpcParams = {
   p_transport: string;
   p_max_hourly_rate: number;
   p_search_city: string | null;
+  p_service_type: ParentSearchServiceType;
 };
 
 /** RPC args for `list_public_sitters_search`. */
@@ -218,6 +248,7 @@ export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): 
     p_min_rating: serialOnly ? null : minRatingToRpcValue(safe.minRating),
     p_transport: serialOnly ? "all" : safe.transport,
     p_max_hourly_rate: serialOnly ? PARENT_SEARCH_MAX_HOURLY_SLIDER : safe.maxHourlyRate,
-    p_search_city: serialOnly || !safe.selectedCity ? null : safe.selectedCity
+    p_search_city: serialOnly || !safe.selectedCity ? null : safe.selectedCity,
+    p_service_type: safe.serviceType
   };
 }
