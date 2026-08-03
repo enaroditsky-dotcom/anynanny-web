@@ -5,7 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { BookingCalendarPanel } from "@/components/bookings/booking-calendar-panel";
-import type { CalendarShift } from "@/components/bookings/booking-calendar-views";
+import {
+  isUpcomingOrActiveCalendarShift,
+  type CalendarShift
+} from "@/components/bookings/booking-calendar-views";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -16,8 +19,7 @@ const BOOKED_STATUSES: BookingStatus[] = [
   "approved",
   "sitter_started",
   "parent_started",
-  "sitter_ended",
-  "completed"
+  "sitter_ended"
 ];
 
 export default function ParentCalendarPage() {
@@ -68,26 +70,28 @@ export default function ParentCalendarPage() {
         if (name) nameBySitterId.set(id, name);
       }
 
-      const formatted: CalendarShift[] = bookings.map((raw) => {
-        const row = raw as {
-          id: string;
-          sitter_id: string;
-          booking_date: string;
-          start_time: string;
-          end_time: string;
-          status: BookingStatus;
-        };
-        return {
-          id: row.id,
-          partnerId: row.sitter_id,
-          partnerName: nameBySitterId.get(row.sitter_id) ?? "שמרטפית AnyNanny",
-          bookingDate: row.booking_date,
-          startTime: row.start_time,
-          endTime: row.end_time,
-          status: row.status,
-          scheduleLabel: formatBookingSchedule(row)
-        };
-      });
+      const formatted: CalendarShift[] = bookings
+        .map((raw) => {
+          const row = raw as {
+            id: string;
+            sitter_id: string;
+            booking_date: string;
+            start_time: string;
+            end_time: string;
+            status: BookingStatus;
+          };
+          return {
+            id: row.id,
+            partnerId: row.sitter_id,
+            partnerName: nameBySitterId.get(row.sitter_id) ?? "שמרטפית AnyNanny",
+            bookingDate: row.booking_date,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            status: row.status,
+            scheduleLabel: formatBookingSchedule(row)
+          };
+        })
+        .filter((shift) => isUpcomingOrActiveCalendarShift(shift));
 
       setAllShifts(formatted);
     } catch (e) {

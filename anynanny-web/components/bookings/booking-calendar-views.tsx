@@ -126,6 +126,36 @@ function shiftDateKey(shift: CalendarShift): string {
   return shift.bookingDate.slice(0, 10);
 }
 
+/**
+ * Scheduled calendar ("משמרות שנקבעו") — upcoming or still-active only.
+ * Past end times and completed/cancelled bookings belong in history.
+ */
+export function isUpcomingOrActiveCalendarShift(
+  shift: Pick<CalendarShift, "bookingDate" | "startTime" | "endTime" | "status">,
+  nowMs = Date.now()
+): boolean {
+  const status = String(shift.status ?? "").trim().toLowerCase();
+  if (status === "completed" || status === "cancelled" || status === "rejected") {
+    return false;
+  }
+
+  const window = resolveBookingWindowMs(
+    {
+      booking_date: shift.bookingDate,
+      start_time: shift.startTime,
+      end_time: shift.endTime
+    },
+    nowMs
+  );
+
+  if (!window) {
+    // Fallback when times can't be parsed: keep today and future booking dates.
+    return shift.bookingDate.slice(0, 10) >= todayDateISO();
+  }
+
+  return window.endMs >= nowMs;
+}
+
 export function buildCalendarShiftsByDate(shifts: CalendarShift[]): Map<string, CalendarShift[]> {
   const map = new Map<string, CalendarShift[]>();
   for (const shift of shifts) {
@@ -140,15 +170,17 @@ export function buildCalendarShiftsByDate(shifts: CalendarShift[]): Map<string, 
 export function filterCalendarShiftsByView(
   shifts: CalendarShift[],
   view: CalendarViewMode,
-  period?: { month: number; year: number }
+  period?: { month: number; year: number },
+  nowMs = Date.now()
 ): CalendarShift[] {
+  const relevant = shifts.filter((s) => isUpcomingOrActiveCalendarShift(s, nowMs));
   const today = todayDateISO();
   switch (view) {
     case "today":
-      return shifts.filter((s) => shiftDateKey(s) === today);
+      return relevant.filter((s) => shiftDateKey(s) === today);
     case "week": {
       const { start, end } = getWeekRange();
-      return shifts.filter((s) => {
+      return relevant.filter((s) => {
         const d = shiftDateKey(s);
         return d >= start && d <= end;
       });
@@ -157,15 +189,15 @@ export function filterCalendarShiftsByView(
       const month = period?.month ?? new Date().getMonth() + 1;
       const year = period?.year ?? new Date().getFullYear();
       const { start, end } = getMonthRangeForPeriod(year, month);
-      return shifts.filter((s) => {
+      return relevant.filter((s) => {
         const d = shiftDateKey(s);
         return d >= start && d <= end;
       });
     }
     case "all":
-      return shifts;
+      return relevant;
     default:
-      return shifts;
+      return relevant;
   }
 }
 
