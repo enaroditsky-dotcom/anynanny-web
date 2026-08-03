@@ -2,6 +2,10 @@ import {
   createHypTransaction,
   isHypConfigured
 } from "@/lib/billing/hyp/create-transaction";
+import {
+  hypPaymentMethodDescription,
+  validateHypWalletAmount
+} from "@/lib/billing/hyp/payment-method-flags";
 import { resolveCheckoutRedirectUrl } from "@/lib/billing/checkout-redirect-url";
 import { readCardcomCredentials, resolveCardcomWebhookUrl } from "@/lib/cardcom/config";
 import { createCardcomLowProfile } from "@/lib/cardcom/low-profile-create";
@@ -85,9 +89,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "deposit amount must be > 0." }, { status: 400 });
   }
 
-  const description = isTokenOnly
-    ? "שמירת אמצעי תשלום — AnyNanny (Visa / Mastercard / Isracard / Amex)"
-    : "טעינת ארנק דיגיטלי — AnyNanny";
+  const preferredMethod =
+    body.paymentMethod === "bit" || body.paymentMethod === "paybox" || body.paymentMethod === "wallet"
+      ? body.paymentMethod
+      : "credit_card";
+
+  const amountError = validateHypWalletAmount(preferredMethod, chargeAmount);
+  if (amountError) {
+    return NextResponse.json({ error: amountError }, { status: 400 });
+  }
+
+  const description = hypPaymentMethodDescription(
+    preferredMethod,
+    isTokenOnly ? "payment_method" : "deposit"
+  );
 
   const hypInfo = isTokenOnly
     ? buildHypWalletPaymentMethodInfo(parentId)
@@ -95,10 +110,6 @@ export async function POST(request: Request) {
 
   if (isHypConfigured()) {
     try {
-      const preferredMethod =
-        body.paymentMethod === "bit" || body.paymentMethod === "paybox" || body.paymentMethod === "wallet"
-          ? body.paymentMethod
-          : "credit_card";
       const hyp = await createHypTransaction({
         amountNis: chargeAmount,
         bookingId: hypInfo,
@@ -118,7 +129,8 @@ export async function POST(request: Request) {
         gateway: "hyp",
         amount: chargeAmount,
         tokenOnly: isTokenOnly,
-        purpose
+        purpose,
+        paymentMethod: preferredMethod
       });
     } catch (error) {
       console.error("[israel-deposit] Hyp failed:", error);

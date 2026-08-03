@@ -3,6 +3,7 @@ import {
   HYP_SANDBOX_SUCCESS_CARD,
   isHypTestTerminalMasof
 } from "@/lib/billing/hyp/sandbox-test-cards";
+import { buildHypPaymentMethodSignEntries } from "@/lib/billing/hyp/payment-method-flags";
 
 /**
  * Hyp Pay APISign integration (official Pay Page API).
@@ -286,6 +287,20 @@ export function buildHypApiSignEntries(
     ["UTF8out", hypTrueFalse(true)],
     ["Tash", "1"]
   );
+
+  // Open Bit / PayBox / card according to the rail the user clicked.
+  // (Previously paymentMethod was accepted but never signed into the request.)
+  for (const entry of buildHypPaymentMethodSignEntries(input.paymentMethod)) {
+    const key = entry[0];
+    // Wallet rails already set Tash/FixTash — avoid duplicate Tash keys.
+    if (key === "Tash") {
+      const existing = entries.findIndex(([k]) => k === "Tash");
+      if (existing >= 0) entries[existing] = entry;
+      else entries.push(entry);
+      continue;
+    }
+    entries.push(entry);
+  }
 
   // Prefill Israeli ID in sandbox so the payment page matches the success test card.
   // (Hyp requires this ID with the approved sandbox Mastercard.)

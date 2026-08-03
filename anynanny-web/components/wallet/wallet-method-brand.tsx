@@ -299,7 +299,8 @@ export function WalletMethodCardRow({
   onOpen,
   onUpdate,
   updateDisabled,
-  cardTitle
+  cardTitle,
+  updateLabel = "עדכון"
 }: {
   kind: WalletMethodKind;
   status: string;
@@ -309,6 +310,7 @@ export function WalletMethodCardRow({
   onUpdate: () => void;
   updateDisabled?: boolean;
   cardTitle?: string;
+  updateLabel?: string;
 }): ReactNode {
   return (
     <div className="group relative">
@@ -333,7 +335,7 @@ export function WalletMethodCardRow({
         onClick={onUpdate}
         className="absolute bottom-2 left-2 z-[1] rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur-md ring-1 ring-white/25 transition hover:bg-black/40 disabled:opacity-50"
       >
-        {updating ? "…" : "עדכון"}
+        {updating ? "…" : updateLabel}
       </button>
     </div>
   );

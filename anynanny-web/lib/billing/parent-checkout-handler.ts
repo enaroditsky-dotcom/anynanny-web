@@ -5,6 +5,10 @@ import {
 import { resolveCheckoutRedirectUrl } from "@/lib/billing/checkout-redirect-url";
 import { createHypCheckoutSession } from "@/lib/billing/hyp-checkout";
 import { isHypConfigured } from "@/lib/billing/hyp/create-transaction";
+import {
+  hypPaymentMethodDescription,
+  validateHypWalletAmount
+} from "@/lib/billing/hyp/payment-method-flags";
 import { chargeHypSavedToken } from "@/lib/billing/hyp/token";
 import { finalizeHypPaymentSuccess } from "@/lib/billing/finalize-hyp-payment";
 import { computePlatformFeeFromMinorUnits } from "@/lib/billing/platform-fee";
@@ -277,13 +281,20 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
   }
 
   try {
+    const amountGuard = validateHypWalletAmount(paymentMethod, paymentSplit.totalNis);
+    if (amountGuard) {
+      return NextResponse.json({ error: amountGuard }, { status: 400 });
+    }
+
     const hyp = await createHypCheckoutSession({
       bookingId,
       amountNis: paymentSplit.totalNis,
       successUrl,
       cancelUrl,
       paymentMethod,
-      description: String(body.description ?? "תשלום משמרת AnyNanny"),
+      description: String(
+        body.description ?? hypPaymentMethodDescription(paymentMethod, "checkout")
+      ),
       shiftSessionId
     });
 

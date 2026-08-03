@@ -9,11 +9,13 @@ import {
   RefreshCw,
   ArrowLeft,
   ChevronLeft,
+  CheckCircle2,
   X
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { ActionToast } from "@/components/ui/action-toast";
 import {
   EMPTY_METHOD_HINT,
   WalletMethodCardRow,
@@ -24,6 +26,11 @@ import { fetchParentWalletView } from "@/lib/wallet/parent-wallet";
 import type { BillingTransaction } from "@/lib/wallet/billing-transactions";
 import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
 import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-method";
+import {
+  readParentPreferredCheckoutMethod,
+  writeParentPreferredCheckoutMethod,
+  type ParentPreferredCheckoutMethod
+} from "@/lib/wallet/parent-preferred-checkout-method";
 
 type PaymentOptionId = Extract<CheckoutPaymentMethod, "credit_card" | "bit" | "paybox">;
 
@@ -36,6 +43,16 @@ const PAYMENT_OPTIONS: Array<{
   { id: "paybox", label: "PayBox" }
 ];
 
+function walletRailExplanation(id: PaymentOptionId): string {
+  if (id === "bit") {
+    return "Bit ישמש כאמצעי המועדף בתשלום משמרת. לא נפתח שער תשלום עכשיו — החיוב ב־HYP יתבצע רק כשתאשרו תשלום בפועל בדשבורד.";
+  }
+  if (id === "paybox") {
+    return "PayBox ישמש כאמצעי המועדף בתשלום משמרת. לא נפתח שער תשלום עכשיו — החיוב ב־HYP יתבצע רק כשתאשרו תשלום בפועל בדשבורד.";
+  }
+  return "שמירת כרטיס מאפשרת חיוב מהיר במשמרות הבאות דרך HYP.";
+}
+
 export default function ParentWalletClient() {
   const { user, isLoading: authLoading } = useAuth();
   const supabase = getSupabaseBrowserClient();
@@ -46,6 +63,18 @@ export default function ParentWalletClient() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [methodsMenuOpen, setMethodsMenuOpen] = useState(false);
   const [viewingMethod, setViewingMethod] = useState<PaymentOptionId | null>(null);
+  const [preferredMethod, setPreferredMethod] = useState<ParentPreferredCheckoutMethod | null>(
+    null
+  );
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setPreferredMethod(null);
+      return;
+    }
+    setPreferredMethod(readParentPreferredCheckoutMethod(user.id));
+  }, [user?.id]);
 
   const fetchPaymentMethods = useCallback(async () => {
     try {
@@ -106,7 +135,12 @@ export default function ParentWalletClient() {
     let cancelled = false;
     void (async () => {
       try {
-        if (pm === "1" || String(params.get("Info") ?? "").toLowerCase().includes("walletpaymentmethod")) {
+        if (
+          pm === "1" ||
+          String(params.get("Info") ?? "")
+            .toLowerCase()
+            .includes("walletpaymentmethod")
+        ) {
           setActionLoading("payment");
           await fetch("/api/parent/payment-methods/complete", {
             method: "POST",
@@ -121,9 +155,19 @@ export default function ParentWalletClient() {
         if (!cancelled) {
           setActionLoading(null);
           const url = new URL(window.location.href);
-          ["status", "pm", "Id", "id", "CCode", "Amount", "Info", "Sign", "Order", "ACode", "UserId"].forEach(
-            (key) => url.searchParams.delete(key)
-          );
+          [
+            "status",
+            "pm",
+            "Id",
+            "id",
+            "CCode",
+            "Amount",
+            "Info",
+            "Sign",
+            "Order",
+            "ACode",
+            "UserId"
+          ].forEach((key) => url.searchParams.delete(key));
           window.history.replaceState({}, "", url.pathname + url.search);
           void fetchWalletData();
         }
@@ -171,22 +215,36 @@ export default function ParentWalletClient() {
     window.location.href = data.url;
   };
 
-  const handleUpdatePaymentMethod = async (method: PaymentOptionId) => {
+  /** Card only — Bit/PayBox must not open a ₪1 HYP registration from this modal. */
+  const handleRegisterCreditCard = async () => {
     if (!user?.id) return alert("אנא המתן לטעינת נתוני המשתמש");
     try {
-      setActionLoading(`update-${method}`);
+      setActionLoading("update-credit_card");
       await postIsraelDeposit(
         0,
         `${user.user_metadata?.first_name ?? ""} ${user.user_metadata?.last_name ?? ""}`.trim() ||
           "משתמש AnyNanny",
         "payment_method",
-        method
+        "credit_card"
       );
     } catch (err) {
       alert(err instanceof Error ? err.message : "חיבור הרשת נכשל");
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleSelectPreferred = (method: PaymentOptionId) => {
+    if (!user?.id) return;
+    writeParentPreferredCheckoutMethod(user.id, method);
+    setPreferredMethod(method);
+    setToast(
+      method === "bit"
+        ? "Bit הוגדר כאמצעי המועדף לתשלום משמרת"
+        : method === "paybox"
+          ? "PayBox הוגדר כאמצעי המועדף לתשלום משמרת"
+          : "כרטיס אשראי הוגדר כאמצעי המועדף"
+    );
   };
 
   useEffect(() => {
@@ -210,7 +268,6 @@ export default function ParentWalletClient() {
     const succeeded = transactions.filter(
       (tx) => tx.status === "succeeded" && Number(tx.amount) > 0
     );
-    // Prefer an actual payment (shift charge); otherwise any successful HYP transaction.
     const payments = succeeded.filter((tx) => tx.type === "payment");
     const pool = payments.length > 0 ? payments : succeeded;
     if (pool.length === 0) return null;
@@ -229,20 +286,31 @@ export default function ParentWalletClient() {
 
   const isConfigured = (id: PaymentOptionId): boolean => {
     if (id === "credit_card") return paymentMethods.length > 0;
-    return false;
+    return preferredMethod === id;
   };
 
   const optionStatus = (id: PaymentOptionId): string => {
     if (id === "credit_card") {
       if (isPageLoading) return "טוען…";
-      if (defaultCard) return `${defaultCard.brandLabel} •••• ${defaultCard.last4}`;
+      if (defaultCard) {
+        const preferredMark =
+          preferredMethod === "credit_card" || preferredMethod == null ? " · מועדף" : "";
+        return `${defaultCard.brandLabel} •••• ${defaultCard.last4}${preferredMark}`;
+      }
       return EMPTY_METHOD_HINT;
     }
+    if (preferredMethod === id) return "מועדף לתשלום משמרת";
+    if (id === "bit") return "בחרו להגדיר כמועדף — ללא חיוב עכשיו";
+    if (id === "paybox") return "בחרו להגדיר כמועדף — ללא חיוב עכשיו";
     return EMPTY_METHOD_HINT;
   };
 
   const optionLabel = (id: PaymentOptionId) =>
     PAYMENT_OPTIONS.find((o) => o.id === id)?.label ?? id;
+
+  const openMethodDetails = (id: PaymentOptionId) => {
+    setViewingMethod(id);
+  };
 
   return (
     <MainLayout>
@@ -339,7 +407,9 @@ export default function ParentWalletClient() {
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                        tx.type === "deposit" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                        tx.type === "deposit"
+                          ? "bg-emerald-50 text-emerald-600"
+                          : "bg-rose-50 text-rose-600"
                       }`}
                     >
                       {tx.type === "deposit" ? (
@@ -423,6 +493,10 @@ export default function ParentWalletClient() {
                   cardTitle={optionLabel(viewingMethod)}
                 />
 
+                <p className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right text-[11px] leading-relaxed text-slate-600">
+                  {walletRailExplanation(viewingMethod)}
+                </p>
+
                 {viewingMethod === "credit_card" ? (
                   <div className="space-y-2">
                     {paymentMethods.map((method) => (
@@ -447,23 +521,40 @@ export default function ParentWalletClient() {
                   </div>
                 ) : null}
 
-                <button
-                  type="button"
-                  disabled={actionLoading !== null}
-                  onClick={() => void handleUpdatePaymentMethod(viewingMethod)}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0B3C5D] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-60"
-                >
-                  {actionLoading === `update-${viewingMethod}` ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : null}
-                  עדכון פרטים
-                </button>
+                {preferredMethod === viewingMethod ? (
+                  <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600">
+                    <CheckCircle2 className="h-4 w-4" /> אמצעי מועדף לתשלום משמרת
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectPreferred(viewingMethod)}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0B3C5D] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110"
+                  >
+                    הגדר כמועדף
+                  </button>
+                )}
+
+                {viewingMethod === "credit_card" ? (
+                  <button
+                    type="button"
+                    disabled={actionLoading !== null}
+                    onClick={() => void handleRegisterCreditCard()}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {actionLoading === "update-credit_card" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : null}
+                    {paymentMethods.length > 0 ? "עדכון / הוספת כרטיס ב־HYP" : "הוספת כרטיס ב־HYP"}
+                  </button>
+                ) : null}
               </div>
             ) : (
               <>
                 <div className="space-y-3 px-3 py-3">
                   {PAYMENT_OPTIONS.map((option) => {
-                    const updating = actionLoading === `update-${option.id}`;
+                    const updating =
+                      option.id === "credit_card" && actionLoading === "update-credit_card";
                     const ready = isConfigured(option.id);
                     return (
                       <WalletMethodCardRow
@@ -474,23 +565,30 @@ export default function ParentWalletClient() {
                         updating={updating}
                         updateDisabled={actionLoading !== null}
                         cardTitle={option.label}
-                        onOpen={() => {
-                          if (ready) setViewingMethod(option.id);
-                          else void handleUpdatePaymentMethod(option.id);
+                        updateLabel={option.id === "credit_card" ? "עדכון" : "בחירה"}
+                        onOpen={() => openMethodDetails(option.id)}
+                        onUpdate={() => {
+                          if (option.id === "credit_card") {
+                            if (ready) openMethodDetails(option.id);
+                            else void handleRegisterCreditCard();
+                            return;
+                          }
+                          openMethodDetails(option.id);
                         }}
-                        onUpdate={() => void handleUpdatePaymentMethod(option.id)}
                       />
                     );
                   })}
                 </div>
                 <p className="border-t border-slate-100 px-4 py-3 text-center text-[11px] text-slate-500">
-                  כרטיס שמור ניתן לפתוח לצפייה בפרטים מוסתרים. עדכון מפנה לשער התשלומים המורשה HYP.
+                  Bit ו־PayBox נבחרים כאן כמועדפים בלבד. החיוב ב־HYP מתבצע רק בתשלום משמרת.
                 </p>
               </>
             )}
           </div>
         </div>
       ) : null}
+
+      <ActionToast message={toast} onDismiss={() => setToast(null)} />
     </MainLayout>
   );
 }

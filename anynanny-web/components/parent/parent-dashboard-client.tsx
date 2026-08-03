@@ -41,6 +41,7 @@ import {
   usePaymentExecutor
 } from "@/lib/billing/use-payment-executor";
 import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
+import { readParentPreferredCheckoutMethod } from "@/lib/wallet/parent-preferred-checkout-method";
 import type { ParentBusySlot, ParentPreferences } from "@/lib/parent/types";
 import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import {
@@ -1177,6 +1178,11 @@ export function ParentDashboardClient({
     setSavedPaymentMethodsLoading(true);
     void (async () => {
       try {
+        const preferred = parentId ? readParentPreferredCheckoutMethod(parentId) : null;
+        if (!cancelled && preferred) {
+          setPaymentMethod(preferred);
+        }
+
         const res = await fetch("/api/parent/payment-methods", {
           method: "GET",
           credentials: "same-origin",
@@ -1190,7 +1196,8 @@ export function ParentDashboardClient({
         setSavedPaymentMethods(methods);
         const defaultMethod = methods.find((m) => m.is_default) ?? methods[0] ?? null;
         setSelectedSavedMethodId(defaultMethod?.id ?? null);
-        if (defaultMethod) setPaymentMethod("credit_card");
+        // Wallet preference wins; otherwise fall back to saved card when present.
+        if (!preferred && defaultMethod) setPaymentMethod("credit_card");
       } catch (error) {
         console.warn("[parent-dashboard] saved payment methods:", error);
         if (!cancelled) setSavedPaymentMethods([]);
@@ -1201,7 +1208,7 @@ export function ParentDashboardClient({
     return () => {
       cancelled = true;
     };
-  }, [settlementStep]);
+  }, [settlementStep, parentId]);
 
   // Return from Hyp sandbox (iframe breakout or redirect).
   useEffect(() => {

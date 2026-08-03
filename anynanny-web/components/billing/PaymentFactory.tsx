@@ -17,8 +17,8 @@ const PAYMENT_OPTIONS: {
     hint: "Visa · Mastercard · Isracard · Amex (+ Apple Pay / Google Pay אם זמין ב-HYP)",
     icon: CreditCard
   },
-  { id: "bit", label: "Bit", hint: "דרך עמוד התשלום של HYP", icon: Smartphone },
-  { id: "paybox", label: "Paybox", hint: "דרך עמוד התשלום של HYP", icon: Wallet }
+  { id: "bit", label: "Bit", hint: "נפתח ישירות למסך Bit ב־HYP", icon: Smartphone },
+  { id: "paybox", label: "PayBox", hint: "נפתח ישירות למסך PayBox ב־HYP", icon: Wallet }
 ];
 
 export type PaymentFactoryProps = {
