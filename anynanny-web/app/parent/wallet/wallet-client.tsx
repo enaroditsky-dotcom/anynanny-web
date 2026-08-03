@@ -40,7 +40,6 @@ export default function ParentWalletClient() {
   const { user, isLoading: authLoading } = useAuth();
   const supabase = getSupabaseBrowserClient();
 
-  const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<BillingTransaction[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<ParentPaymentMethod[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(true);
@@ -77,11 +76,9 @@ export default function ParentWalletClient() {
 
     try {
       const view = await fetchParentWalletView(supabase, user.id);
-      setBalance(view.balance);
       setTransactions(view.transactions);
     } catch (err) {
       console.warn("[parent-wallet] failed to load wallet view:", err);
-      setBalance(0);
       setTransactions([]);
     }
 
@@ -209,6 +206,27 @@ export default function ParentWalletClient() {
   const isPageLoading = authLoading || loadingData;
   const defaultCard = paymentMethods.find((m) => m.is_default) ?? paymentMethods[0] ?? null;
 
+  const lastPayment = (() => {
+    const succeeded = transactions.filter(
+      (tx) => tx.status === "succeeded" && Number(tx.amount) > 0
+    );
+    // Prefer an actual payment (shift charge); otherwise any successful HYP transaction.
+    const payments = succeeded.filter((tx) => tx.type === "payment");
+    const pool = payments.length > 0 ? payments : succeeded;
+    if (pool.length === 0) return null;
+    return [...pool].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0]!;
+  })();
+
+  const lastPaymentDateLabel = lastPayment
+    ? new Date(lastPayment.created_at).toLocaleDateString("he-IL", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      })
+    : null;
+
   const isConfigured = (id: PaymentOptionId): boolean => {
     if (id === "credit_card") return paymentMethods.length > 0;
     return false;
@@ -255,14 +273,29 @@ export default function ParentWalletClient() {
         </header>
 
         <section className="rounded-3xl bg-[#001F3F] p-6 text-white shadow-soft relative overflow-hidden">
-          <p className="text-xs font-medium text-white/70">היתרה שלך באפליקציה</p>
-          <div className="mt-2 flex items-baseline gap-1">
-            <span className="text-4xl font-extrabold tracking-tight tabular-nums">
-              ₪{isPageLoading ? "0.00" : balance.toFixed(2)}
-            </span>
+          <p className="text-xs font-medium text-white/70">תשלום אחרון</p>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            {isPageLoading ? (
+              <span className="text-4xl font-extrabold tracking-tight tabular-nums">₪—</span>
+            ) : lastPayment ? (
+              <>
+                <span className="text-4xl font-extrabold tracking-tight tabular-nums">
+                  ₪{lastPayment.amount.toFixed(2)}
+                </span>
+                {lastPaymentDateLabel ? (
+                  <span className="text-sm font-semibold text-white/80 tabular-nums">
+                    · {lastPaymentDateLabel}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-2xl font-extrabold tracking-tight text-white/85">
+                אין תשלום עדיין
+              </span>
+            )}
           </div>
           <p className="mt-3 text-[11px] text-white/60 leading-relaxed">
-            היתרה מתעדכנת אוטומטית לאחר תשלום מאובטח ב־HYP ותשמש לכיסוי שירותי השמרטפות הבאים שלך.
+            מוצג כאן סכום ותאריך העסקה המאובטחת האחרונה שהושלמה בהצלחה דרך שער התשלומים HYP.
           </p>
         </section>
 
