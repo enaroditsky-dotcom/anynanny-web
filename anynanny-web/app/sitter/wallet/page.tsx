@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { ArrowUpRight, ArrowDownLeft, Loader2, RefreshCw, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { SitterPayoutWalletCards } from "@/components/sitter/SitterPayoutWalletCards";
+import { ActionToast } from "@/components/ui/action-toast";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fetchSitterWalletView,
@@ -18,6 +19,9 @@ export default function SitterWalletPage() {
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<SitterWalletTransaction[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(true);
+  const [payoutReloadToken, setPayoutReloadToken] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+
   const fetchWalletData = useCallback(async () => {
     if (!supabase || !user?.id) return;
     setLoadingData(true);
@@ -41,6 +45,61 @@ export default function SitterWalletPage() {
       setLoadingData(false);
     }
   }, [authLoading, user?.id, fetchWalletData]);
+
+  // After Hyp card-registration redirect: persist payout token via getToken.
+  useEffect(() => {
+    if (typeof window === "undefined" || !user?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const pm = params.get("pm");
+    const hypId = params.get("Id") || params.get("id");
+    const info = String(params.get("Info") ?? "");
+    if (status !== "success" || !hypId) return;
+    if (pm !== "1" && !/sitterpayoutmethod/i.test(info)) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/sitter/payout-methods/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ search: params.toString() })
+        });
+        if (!cancelled) {
+          if (res.ok) setToast("כרטיס המשיכה נרשם בהצלחה ב־HYP");
+          else setToast("רישום HYP לא הושלם — נסו שוב מאמצעי התשלום");
+        }
+      } catch (error) {
+        console.warn("[sitter-wallet] complete payout method:", error);
+        if (!cancelled) setToast("רישום HYP לא הושלם — נסו שוב מאמצעי התשלום");
+      } finally {
+        if (!cancelled) {
+          const url = new URL(window.location.href);
+          [
+            "status",
+            "pm",
+            "Id",
+            "id",
+            "CCode",
+            "Amount",
+            "Info",
+            "Sign",
+            "Order",
+            "ACode",
+            "UserId"
+          ].forEach((key) => url.searchParams.delete(key));
+          window.history.replaceState({}, "", url.pathname + url.search);
+          setPayoutReloadToken((n) => n + 1);
+          void fetchWalletData();
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, fetchWalletData]);
 
   const isPageLoading = authLoading || loadingData;
 
@@ -84,7 +143,9 @@ export default function SitterWalletPage() {
           </p>
         </section>
 
-        {user?.id ? <SitterPayoutWalletCards sitterId={user.id} /> : null}
+        {user?.id ? (
+          <SitterPayoutWalletCards sitterId={user.id} reloadToken={payoutReloadToken} />
+        ) : null}
 
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
           <h2 className="text-sm font-bold text-navy-header">הכנסות ותשלומים</h2>
@@ -149,6 +210,7 @@ export default function SitterWalletPage() {
           </div>
         </section>
       </div>
+      <ActionToast message={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

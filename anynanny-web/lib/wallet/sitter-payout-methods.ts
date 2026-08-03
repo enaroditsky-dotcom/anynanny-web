@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { brandLabelHe, fetchHypCardToken, inferCardBrand } from "@/lib/billing/hyp/token";
 import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 
@@ -12,6 +13,10 @@ export type SitterPayoutMethods = {
   cardLast4: string;
   cardExpMonth: number | null;
   cardExpYear: number | null;
+  cardIdNumber: string;
+  cardBrand: string;
+  /** True when a Hyp payout token is registered (token itself never sent to client). */
+  hypTokenReady: boolean;
 };
 
 export const EMPTY_SITTER_PAYOUT_METHODS: SitterPayoutMethods = {
@@ -21,11 +26,23 @@ export const EMPTY_SITTER_PAYOUT_METHODS: SitterPayoutMethods = {
   cardHolder: "",
   cardLast4: "",
   cardExpMonth: null,
-  cardExpYear: null
+  cardExpYear: null,
+  cardIdNumber: "",
+  cardBrand: "",
+  hypTokenReady: false
 };
 
-const SELECT_COLS =
-  "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year";
+export const HYP_SITTER_PAYOUT_METHOD_PREFIX = "SitterPayoutMethod_" as const;
+
+const PUBLIC_SELECT_COLS =
+  "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number, payout_card_brand, payout_hyp_tokef, payout_hyp_trans_id";
+
+const PUBLIC_SELECT_FALLBACKS = [
+  PUBLIC_SELECT_COLS,
+  "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number",
+  "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year",
+  "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_card_holder, payout_card_last4"
+];
 
 function normalizePhone(raw: string): string {
   return String(raw ?? "")
@@ -52,6 +69,29 @@ export function extractCardLast4(raw: string): string {
   return digits.slice(-4);
 }
 
+export function normalizeCardExpYear(raw: number | null | undefined): number | null {
+  if (raw == null || !Number.isFinite(Number(raw))) return null;
+  let year = Math.trunc(Number(raw));
+  if (year >= 0 && year < 100) year += 2000;
+  return year;
+}
+
+export function normalizeIsraeliId(raw: string): string {
+  return String(raw ?? "").replace(/\D/g, "").slice(0, 9);
+}
+
+export function isValidIsraeliId(raw: string): boolean {
+  const id = normalizeIsraeliId(raw);
+  if (!/^\d{9}$/.test(id)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    let digit = Number(id[i]) * ((i % 2) + 1);
+    if (digit > 9) digit -= 9;
+    sum += digit;
+  }
+  return sum % 10 === 0;
+}
+
 export function validateBitPhone(phone: string): string | null {
   if (!phone.trim()) return "נא להזין מספר טלפון עבור Bit.";
   if (!isValidIsraeliMobile(phone)) return "מספר Bit חייב להיות נייד ישראלי תקין (05X…).";
@@ -69,14 +109,48 @@ export function validatePayoutCard(input: {
   last4OrNumber: string;
   expMonth: number | null;
   expYear: number | null;
+  idNumber?: string;
+  /** CVV is validated for form completeness only — never persisted. */
+  cvv?: string;
+  requireCvv?: boolean;
 }): string | null {
   if (!input.holder.trim()) return "נא להזין שם בעל הכרטיס.";
+  const digits = String(input.last4OrNumber ?? "").replace(/\D/g, "");
   const last4 = extractCardLast4(input.last4OrNumber);
-  if (!/^\d{4}$/.test(last4)) return "נא להזין מספר כרטיס (יישמרו 4 ספרות אחרונות בלבד).";
+  if (digits.length >= 12 && digits.length <= 19) {
+    // Full PAN typed — OK for last4 extract; never store full number.
+  } else if (!/^\d{4}$/.test(last4)) {
+    return "נא להזין מספר כרטיס מלא (יישמרו 4 ספרות אחרונות בלבד).";
+  }
   if (!input.expMonth || input.expMonth < 1 || input.expMonth > 12) return "נא לבחור חודש תוקף.";
-  const year = input.expYear ?? 0;
+  const year = normalizeCardExpYear(input.expYear) ?? 0;
   const nowY = new Date().getFullYear();
   if (year < nowY || year > nowY + 20) return "נא לבחור שנת תוקף תקינה.";
+  if (input.idNumber != null && input.idNumber.trim()) {
+    if (!isValidIsraeliId(input.idNumber)) return "תעודת זהות אינה תקינה.";
+  } else if (input.idNumber !== undefined) {
+    return "נא להזין תעודת זהות.";
+  }
+  if (input.requireCvv) {
+    const cvv = String(input.cvv ?? "").replace(/\D/g, "");
+    if (!/^\d{3,4}$/.test(cvv)) return "נא להזין CVV תקין (3–4 ספרות).";
+  }
+  return null;
+}
+
+export function buildHypSitterPayoutMethodInfo(sitterId: string): string {
+  return `${HYP_SITTER_PAYOUT_METHOD_PREFIX}${sitterId.trim()}`;
+}
+
+export function parseHypSitterPayoutMethodSitterId(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const value = String(raw).trim();
+  const match = /^sitterpayoutmethod[_:-]?([0-9a-f-]{36})$/i.exec(value);
+  if (match?.[1]) return match[1].toLowerCase();
+  for (const part of value.split(/[|,;]/)) {
+    const nested = parseHypSitterPayoutMethodSitterId(part.trim());
+    if (nested) return nested;
+  }
   return null;
 }
 
@@ -90,6 +164,11 @@ function mapRow(row: Record<string, unknown> | null): SitterPayoutMethods {
     preferredRaw === "bank"
       ? preferredRaw
       : null;
+  const tokenReady = Boolean(
+    String(row.payout_hyp_tokef ?? "").trim() ||
+      String(row.payout_hyp_trans_id ?? "").trim() ||
+      String(row.payout_hyp_token ?? "").trim()
+  );
   return {
     preferred,
     bitPhone: String(row.payout_bit_phone ?? ""),
@@ -100,10 +179,12 @@ function mapRow(row: Record<string, unknown> | null): SitterPayoutMethods {
       row.payout_card_exp_month != null && Number.isFinite(Number(row.payout_card_exp_month))
         ? Number(row.payout_card_exp_month)
         : null,
-    cardExpYear:
-      row.payout_card_exp_year != null && Number.isFinite(Number(row.payout_card_exp_year))
-        ? Number(row.payout_card_exp_year)
-        : null
+    cardExpYear: normalizeCardExpYear(
+      row.payout_card_exp_year != null ? Number(row.payout_card_exp_year) : null
+    ),
+    cardIdNumber: String(row.payout_card_id_number ?? ""),
+    cardBrand: String(row.payout_card_brand ?? ""),
+    hypTokenReady: tokenReady
   };
 }
 
@@ -114,48 +195,77 @@ function isMissingSchema(message: string | undefined): boolean {
     isPostgrestMissingColumnError(msg, "payout_bit_phone") ||
     isPostgrestMissingColumnError(msg, "payout_paybox_phone") ||
     isPostgrestMissingColumnError(msg, "payout_card_last4") ||
+    isPostgrestMissingColumnError(msg, "payout_card_id_number") ||
+    isPostgrestMissingColumnError(msg, "payout_hyp_token") ||
     /Could not find the table/i.test(msg) ||
     /PGRST205/i.test(msg)
   );
+}
+
+async function selectPayoutRow(
+  supabase: SupabaseClient,
+  sitterId: string
+): Promise<{ row: Record<string, unknown> | null; error: string | null; missingSchema: boolean }> {
+  for (const cols of PUBLIC_SELECT_FALLBACKS) {
+    const { data, error } = await supabase
+      .from(SITTER_PROFILES_TABLE)
+      .select(cols)
+      .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
+      .maybeSingle();
+
+    if (!error) {
+      return { row: (data as Record<string, unknown> | null) ?? null, error: null, missingSchema: false };
+    }
+
+    if (isMissingSchema(error.message)) {
+      // Try a smaller column set before giving up.
+      continue;
+    }
+    return { row: null, error: error.message, missingSchema: false };
+  }
+
+  return {
+    row: null,
+    error: "עמודות אמצעי המשיכה חסרות בפרופיל. הריצו את מיגרציות ה-payout ב-Supabase.",
+    missingSchema: true
+  };
 }
 
 export async function fetchSitterPayoutMethods(
   supabase: SupabaseClient,
   sitterId: string
 ): Promise<{ methods: SitterPayoutMethods; error: string | null; missingSchema: boolean }> {
-  const { data, error } = await supabase
-    .from(SITTER_PROFILES_TABLE)
-    .select(SELECT_COLS)
-    .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
-    .maybeSingle();
-
-  if (error) {
+  const result = await selectPayoutRow(supabase, sitterId);
+  if (result.error) {
     return {
       methods: { ...EMPTY_SITTER_PAYOUT_METHODS },
-      error: error.message,
-      missingSchema: isMissingSchema(error.message)
+      error: result.error,
+      missingSchema: result.missingSchema
     };
   }
-
   return {
-    methods: mapRow((data as Record<string, unknown> | null) ?? null),
+    methods: mapRow(result.row),
     error: null,
     missingSchema: false
   };
 }
 
-export async function saveSitterPayoutMethods(
-  supabase: SupabaseClient,
-  sitterId: string,
-  patch: Partial<SitterPayoutMethods> & { preferred?: SitterPayoutMethodKind | "bank" | null }
-): Promise<{ ok: true; methods: SitterPayoutMethods } | { ok: false; error: string; missingSchema?: boolean }> {
+export type SitterPayoutSavePatch = Partial<SitterPayoutMethods> & {
+  preferred?: SitterPayoutMethodKind | "bank" | null;
+  /** Server-only Hyp fields — never accept from browser for arbitrary overwrite without complete flow. */
+  hypToken?: string | null;
+  hypTokef?: string | null;
+  hypTransId?: string | null;
+};
+
+function buildUpdatePayload(patch: SitterPayoutSavePatch): Record<string, unknown> {
   const row: Record<string, unknown> = {
     payout_methods_updated_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
 
   if (patch.preferred !== undefined) {
-    row.payout_preferred_method = patch.preferred;
+    row.payout_preferred_method = patch.preferred || null;
   }
   if (patch.bitPhone !== undefined) {
     row.payout_bit_phone = normalizePhone(patch.bitPhone) || null;
@@ -173,25 +283,128 @@ export async function saveSitterPayoutMethods(
     row.payout_card_exp_month = patch.cardExpMonth;
   }
   if (patch.cardExpYear !== undefined) {
-    row.payout_card_exp_year = patch.cardExpYear;
+    row.payout_card_exp_year = normalizeCardExpYear(patch.cardExpYear);
+  }
+  if (patch.cardIdNumber !== undefined) {
+    row.payout_card_id_number = normalizeIsraeliId(patch.cardIdNumber) || null;
+  }
+  if (patch.cardBrand !== undefined) {
+    row.payout_card_brand = patch.cardBrand.trim() || null;
+  }
+  if (patch.hypToken !== undefined) {
+    row.payout_hyp_token = patch.hypToken?.trim() || null;
+  }
+  if (patch.hypTokef !== undefined) {
+    row.payout_hyp_tokef = patch.hypTokef?.trim() || null;
+  }
+  if (patch.hypTransId !== undefined) {
+    row.payout_hyp_trans_id = patch.hypTransId?.trim() || null;
   }
 
-  const { data, error } = await supabase
-    .from(SITTER_PROFILES_TABLE)
-    .update(row)
-    .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
-    .select(SELECT_COLS)
-    .maybeSingle();
+  return row;
+}
 
-  if (error) {
+async function updateWithColumnFallback(
+  supabase: SupabaseClient,
+  sitterId: string,
+  payload: Record<string, unknown>
+): Promise<{ error: string | null; missingSchema: boolean }> {
+  let current = { ...payload };
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { error } = await supabase
+      .from(SITTER_PROFILES_TABLE)
+      .update(current)
+      .eq(SITTER_PROFILES_USER_COLUMN, sitterId);
+
+    if (!error) return { error: null, missingSchema: false };
+
+    const msg = error.message ?? "";
+    const missingCol =
+      /Could not find the '([^']+)' column/i.exec(msg)?.[1] ??
+      /column ["']?([a-z0-9_]+)["']? of relation/i.exec(msg)?.[1] ??
+      null;
+
+    if (missingCol && missingCol in current) {
+      delete current[missingCol];
+      continue;
+    }
+
+    if (isMissingSchema(msg)) {
+      return { error: msg, missingSchema: true };
+    }
+
+    return { error: msg, missingSchema: false };
+  }
+
+  return { error: "שמירת אמצעי המשיכה נכשלה לאחר ניסיונות חוזרים.", missingSchema: false };
+}
+
+export async function saveSitterPayoutMethods(
+  supabase: SupabaseClient,
+  sitterId: string,
+  patch: SitterPayoutSavePatch
+): Promise<{ ok: true; methods: SitterPayoutMethods } | { ok: false; error: string; missingSchema?: boolean }> {
+  const payload = buildUpdatePayload(patch);
+  const updated = await updateWithColumnFallback(supabase, sitterId, payload);
+  if (updated.error) {
+    return { ok: false, error: updated.error, missingSchema: updated.missingSchema };
+  }
+
+  const loaded = await fetchSitterPayoutMethods(supabase, sitterId);
+  if (loaded.error && !loaded.missingSchema) {
+    // Update succeeded but re-read failed — still treat as ok with mapped empty+patch.
     return {
-      ok: false,
-      error: error.message,
-      missingSchema: isMissingSchema(error.message)
+      ok: true,
+      methods: {
+        ...EMPTY_SITTER_PAYOUT_METHODS,
+        ...patch,
+        cardLast4: patch.cardLast4 ? extractCardLast4(patch.cardLast4) : "",
+        cardExpYear: normalizeCardExpYear(patch.cardExpYear ?? null),
+        cardIdNumber: patch.cardIdNumber ? normalizeIsraeliId(patch.cardIdNumber) : "",
+        hypTokenReady: Boolean(patch.hypToken)
+      }
     };
   }
 
-  return { ok: true, methods: mapRow((data as Record<string, unknown> | null) ?? null) };
+  return { ok: true, methods: loaded.methods };
+}
+
+/** After Hyp success: getToken + persist payout card token on sitter_profiles. */
+export async function saveHypSitterPayoutFromTransId(
+  supabase: SupabaseClient,
+  input: {
+    sitterId: string;
+    transId: string;
+    israeliId?: string | null;
+    brandHint?: string | null;
+    holderHint?: string | null;
+  }
+): Promise<{ methods: SitterPayoutMethods | null; error: string | null }> {
+  try {
+    const token = await fetchHypCardToken({ transId: input.transId });
+    const last4 = token.last4 || token.token.slice(-4);
+    const brand = inferCardBrand(last4, input.brandHint);
+    const result = await saveSitterPayoutMethods(supabase, input.sitterId, {
+      preferred: "card",
+      cardLast4: last4,
+      cardExpMonth: token.expMonth,
+      cardExpYear: token.expYear,
+      cardBrand: brandLabelHe(brand),
+      cardHolder: input.holderHint?.trim() || undefined,
+      cardIdNumber: input.israeliId ? normalizeIsraeliId(input.israeliId) : undefined,
+      hypToken: token.token,
+      hypTokef: token.tokef,
+      hypTransId: input.transId
+    });
+
+    if (!result.ok) return { methods: null, error: result.error };
+    return { methods: result.methods, error: null };
+  } catch (error) {
+    return {
+      methods: null,
+      error: error instanceof Error ? error.message : "שמירת טוקן HYP נכשלה."
+    };
+  }
 }
 
 export function payoutMethodConfigured(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, ChevronLeft, Loader2, X } from "lucide-react";
+import { CheckCircle2, ChevronLeft, Loader2, ShieldCheck, X } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
 import {
   EMPTY_METHOD_HINT,
@@ -11,11 +11,9 @@ import {
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   EMPTY_SITTER_PAYOUT_METHODS,
-  extractCardLast4,
   fetchSitterPayoutMethods,
   formatIsraeliMobileDisplay,
   payoutMethodConfigured,
-  saveSitterPayoutMethods,
   type SitterPayoutMethodKind,
   type SitterPayoutMethods,
   validateBitPhone,
@@ -25,6 +23,8 @@ import {
 
 type SitterPayoutWalletCardsProps = {
   sitterId: string;
+  /** Optional: bump from parent after Hyp return complete. */
+  reloadToken?: number;
 };
 
 const fieldClassName =
@@ -40,11 +40,13 @@ function statusLabel(methods: SitterPayoutMethods, kind: SitterPayoutMethodKind)
     return formatIsraeliMobileDisplay(methods.payboxPhone);
   }
   if (!payoutMethodConfigured(methods, "card")) return EMPTY_METHOD_HINT;
+  const brand = methods.cardBrand.trim() ? `${methods.cardBrand} · ` : "";
   const exp =
     methods.cardExpMonth && methods.cardExpYear
       ? ` · ${String(methods.cardExpMonth).padStart(2, "0")}/${String(methods.cardExpYear).slice(-2)}`
       : "";
-  return `•••• ${methods.cardLast4}${exp}`;
+  const hyp = methods.hypTokenReady ? " · HYP מוכן" : "";
+  return `${brand}•••• ${methods.cardLast4}${exp}${hyp}`;
 }
 
 function methodTitle(kind: SitterPayoutMethodKind): string {
@@ -53,7 +55,7 @@ function methodTitle(kind: SitterPayoutMethodKind): string {
   return "כרטיס אשראי";
 }
 
-export function SitterPayoutWalletCards({ sitterId }: SitterPayoutWalletCardsProps) {
+export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPayoutWalletCardsProps) {
   const [methods, setMethods] = useState<SitterPayoutMethods>({ ...EMPTY_SITTER_PAYOUT_METHODS });
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,7 +87,7 @@ export function SitterPayoutWalletCards({ sitterId }: SitterPayoutWalletCardsPro
 
   useEffect(() => {
     void reload();
-  }, [reload]);
+  }, [reload, reloadToken]);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -202,7 +204,6 @@ export function SitterPayoutWalletCards({ sitterId }: SitterPayoutWalletCardsPro
       {editing ? (
         <PayoutEditSheet
           kind={editing}
-          sitterId={sitterId}
           methods={methods}
           onClose={() => setEditing(null)}
           onSaved={(next, message) => {
@@ -245,6 +246,13 @@ function SitterMethodDetails({
         </div>
       ) : null}
 
+      {kind === "card" && methods.hypTokenReady ? (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/80 px-3 py-2.5 text-right text-xs font-semibold text-emerald-800">
+          <ShieldCheck className="h-4 w-4 shrink-0" />
+          כרטיס רשום ב־HYP — מוכן למשיכות חיות
+        </div>
+      ) : null}
+
       {(kind === "bit" || kind === "paybox") && payoutMethodConfigured(methods, kind) ? (
         <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right">
           <p className="text-[10px] font-semibold text-slate-400">מספר טלפון רשום</p>
@@ -267,15 +275,45 @@ function SitterMethodDetails({
   );
 }
 
+async function postPayoutMethods(body: Record<string, unknown>): Promise<{
+  ok: boolean;
+  methods?: SitterPayoutMethods;
+  error?: string;
+  missingSchema?: boolean;
+}> {
+  const res = await fetch("/api/sitter/payout-methods", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(body)
+  });
+  let data: {
+    methods?: SitterPayoutMethods;
+    error?: string;
+    missingSchema?: boolean;
+  } = {};
+  try {
+    data = (await res.json()) as typeof data;
+  } catch {
+    /* ignore */
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: data.error || `שמירה נכשלה (${res.status}).`,
+      missingSchema: data.missingSchema === true
+    };
+  }
+  return { ok: true, methods: data.methods };
+}
+
 function PayoutEditSheet({
   kind,
-  sitterId,
   methods,
   onClose,
   onSaved
 }: {
   kind: SitterPayoutMethodKind;
-  sitterId: string;
   methods: SitterPayoutMethods;
   onClose: () => void;
   onSaved: (methods: SitterPayoutMethods, message: string) => void;
@@ -283,12 +321,15 @@ function PayoutEditSheet({
   const [bitPhone, setBitPhone] = useState(methods.bitPhone);
   const [payboxPhone, setPayboxPhone] = useState(methods.payboxPhone);
   const [cardHolder, setCardHolder] = useState(methods.cardHolder);
+  const [cardIdNumber, setCardIdNumber] = useState(methods.cardIdNumber);
+  const [cardCvv, setCardCvv] = useState("");
   const [cardNumber, setCardNumber] = useState(
     methods.cardLast4 ? `•••• •••• •••• ${methods.cardLast4}` : ""
   );
   const [cardExpMonth, setCardExpMonth] = useState<number | "">(methods.cardExpMonth ?? "");
   const [cardExpYear, setCardExpYear] = useState<number | "">(methods.cardExpYear ?? "");
   const [setAsPreferred, setSetAsPreferred] = useState(true);
+  const [registerWithHyp, setRegisterWithHyp] = useState(!methods.hypTokenReady);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSucceeded, setSaveSucceeded] = useState(false);
@@ -313,69 +354,148 @@ function PayoutEditSheet({
 
   const handleSave = async () => {
     setError(null);
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setError("שירות הארנק אינו זמין כרגע.");
-      return;
-    }
 
-    let patch: Partial<SitterPayoutMethods> & { preferred?: SitterPayoutMethodKind } = {};
     if (kind === "bit") {
       const v = validateBitPhone(bitPhone);
       if (v) {
         setError(v);
         return;
       }
-      patch = { bitPhone, preferred: setAsPreferred ? "bit" : undefined };
-    } else if (kind === "paybox") {
+      setSaving(true);
+      const result = await postPayoutMethods({
+        kind: "bit",
+        bitPhone,
+        preferred: setAsPreferred
+      });
+      setSaving(false);
+      if (!result.ok || !result.methods) {
+        setError(
+          result.missingSchema
+            ? "עמודות אמצעי התשלום חסרות. הריצו את המיגרציה ב-Supabase."
+            : result.error || "שמירה נכשלה."
+        );
+        return;
+      }
+      setSaveSucceeded(true);
+      closeTimerRef.current = setTimeout(() => {
+        onSaved(result.methods!, "פרטי המשיכה נשמרו בהצלחה");
+      }, 900);
+      return;
+    }
+
+    if (kind === "paybox") {
       const v = validatePayboxPhone(payboxPhone);
       if (v) {
         setError(v);
         return;
       }
-      patch = { payboxPhone, preferred: setAsPreferred ? "paybox" : undefined };
-    } else {
-      const last4Source = /\d{4}/.test(cardNumber.replace(/\D/g, ""))
-        ? cardNumber
-        : methods.cardLast4;
-      const month = cardExpMonth === "" ? null : Number(cardExpMonth);
-      const year = cardExpYear === "" ? null : Number(cardExpYear);
-      const v = validatePayoutCard({
-        holder: cardHolder,
-        last4OrNumber: last4Source,
-        expMonth: month,
-        expYear: year
+      setSaving(true);
+      const result = await postPayoutMethods({
+        kind: "paybox",
+        payboxPhone,
+        preferred: setAsPreferred
       });
-      if (v) {
-        setError(v);
+      setSaving(false);
+      if (!result.ok || !result.methods) {
+        setError(
+          result.missingSchema
+            ? "עמודות אמצעי התשלום חסרות. הריצו את המיגרציה ב-Supabase."
+            : result.error || "שמירה נכשלה."
+        );
         return;
       }
-      patch = {
-        cardHolder,
-        cardLast4: extractCardLast4(last4Source),
-        cardExpMonth: month,
-        cardExpYear: year,
-        preferred: setAsPreferred ? "card" : undefined
-      };
-    }
-
-    setSaving(true);
-    const result = await saveSitterPayoutMethods(supabase, sitterId, patch);
-    setSaving(false);
-
-    if (!result.ok) {
-      setError(
-        result.missingSchema
-          ? "עמודות אמצעי התשלום חסרות. הריצו את המיגרציה ב-Supabase."
-          : result.error
-      );
+      setSaveSucceeded(true);
+      closeTimerRef.current = setTimeout(() => {
+        onSaved(result.methods!, "פרטי המשיכה נשמרו בהצלחה");
+      }, 900);
       return;
     }
 
-    setSaveSucceeded(true);
-    closeTimerRef.current = setTimeout(() => {
-      onSaved(result.methods, "פרטי המשיכה נשמרו בהצלחה");
-    }, 900);
+    const digitsOnly = cardNumber.replace(/\D/g, "");
+    const isMaskedExisting =
+      cardNumber.includes("•") && /^\d{4}$/.test(methods.cardLast4) && digitsOnly.length <= 4;
+    const last4Source = isMaskedExisting ? methods.cardLast4 : cardNumber;
+    const month = cardExpMonth === "" ? null : Number(cardExpMonth);
+    const year = cardExpYear === "" ? null : Number(cardExpYear);
+    const v = validatePayoutCard({
+      holder: cardHolder,
+      last4OrNumber: last4Source,
+      expMonth: month,
+      expYear: year,
+      idNumber: cardIdNumber,
+      cvv: cardCvv,
+      requireCvv: !isMaskedExisting || Boolean(cardCvv) || registerWithHyp
+    });
+    if (v) {
+      setError(v);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await postPayoutMethods({
+        kind: "card",
+        preferred: setAsPreferred,
+        cardHolder,
+        cardNumber: isMaskedExisting ? methods.cardLast4 : cardNumber.replace(/\D/g, ""),
+        cardExpMonth: month,
+        cardExpYear: year,
+        cardIdNumber,
+        // CVV is validated server-side then discarded — never written to Postgres.
+        cardCvv
+      });
+
+      if (!result.ok || !result.methods) {
+        setError(
+          result.missingSchema
+            ? "עמודות אמצעי התשלום חסרות. הריצו את המיגרציה ב-Supabase."
+            : result.error || "שמירה נכשלה."
+        );
+        return;
+      }
+
+      if (registerWithHyp) {
+        const hypRes = await fetch("/api/sitter/payout-methods/hyp-register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            sitterName: cardHolder,
+            cardHolder,
+            cardIdNumber
+          })
+        });
+        let hypData: { url?: string; error?: string } = {};
+        try {
+          hypData = (await hypRes.json()) as typeof hypData;
+        } catch {
+          /* ignore */
+        }
+        if (!hypRes.ok || !hypData.url) {
+          // Metadata already saved — surface Hyp issue but keep success path soft.
+          setSaveSucceeded(true);
+          closeTimerRef.current = setTimeout(() => {
+            onSaved(
+              result.methods!,
+              hypData.error
+                ? `פרטי הכרטיס נשמרו. רישום HYP: ${hypData.error}`
+                : "פרטי הכרטיס נשמרו (ללא טוקן HYP עדיין)"
+            );
+          }, 900);
+          return;
+        }
+        window.location.assign(hypData.url);
+        return;
+      }
+
+      setSaveSucceeded(true);
+      closeTimerRef.current = setTimeout(() => {
+        onSaved(result.methods!, "פרטי המשיכה נשמרו בהצלחה");
+      }, 900);
+    } finally {
+      setSaving(false);
+      setCardCvv("");
+    }
   };
 
   const years = Array.from({ length: 16 }, (_, i) => new Date().getFullYear() + i);
@@ -443,7 +563,8 @@ function PayoutEditSheet({
           {kind === "card" ? (
             <>
               <p className="text-[11px] text-slate-600">
-                פרטי כרטיס למשיכה ישירה — נשמרות רק 4 ספרות אחרונות ותוקף (ללא CVV).
+                פרטי כרטיס למשיכה — במסד נשמרות רק 4 ספרות אחרונות, תוקף, שם ות.ז. מספר מלא ו־CVV
+                משמשים לאימות ורישום HYP בלבד ואינם נשמרים.
               </p>
               <label className="block text-right text-xs font-bold text-slate-600">
                 שם בעל הכרטיס
@@ -451,6 +572,20 @@ function PayoutEditSheet({
                   className={`${fieldClassName} mt-1.5`}
                   value={cardHolder}
                   onChange={(e) => setCardHolder(e.target.value)}
+                  disabled={saving || saveSucceeded}
+                  autoComplete="cc-name"
+                />
+              </label>
+              <label className="block text-right text-xs font-bold text-slate-600">
+                תעודת זהות
+                <input
+                  className={`${fieldClassName} mt-1.5`}
+                  dir="ltr"
+                  inputMode="numeric"
+                  placeholder="XXXXXXXXX"
+                  maxLength={9}
+                  value={cardIdNumber}
+                  onChange={(e) => setCardIdNumber(e.target.value.replace(/\D/g, "").slice(0, 9))}
                   disabled={saving || saveSucceeded}
                 />
               </label>
@@ -505,6 +640,33 @@ function PayoutEditSheet({
                   </select>
                 </label>
               </div>
+              <label className="block text-right text-xs font-bold text-slate-600">
+                CVV
+                <input
+                  className={`${fieldClassName} mt-1.5`}
+                  dir="ltr"
+                  inputMode="numeric"
+                  autoComplete="cc-csc"
+                  placeholder="•••"
+                  maxLength={4}
+                  value={cardCvv}
+                  onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  disabled={saving || saveSucceeded}
+                />
+              </label>
+              <p className="text-[10px] text-slate-400">
+                CVV מאומת בטופס בלבד ואינו נשמר במסד הנתונים (PCI).
+              </p>
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5 text-xs font-semibold text-slate-700">
+                <span>רישום מאובטח ב־HYP למשיכות חיות</span>
+                <input
+                  type="checkbox"
+                  checked={registerWithHyp}
+                  onChange={(e) => setRegisterWithHyp(e.target.checked)}
+                  disabled={saving || saveSucceeded}
+                  className="h-4 w-4 accent-[#0B3C5D]"
+                />
+              </label>
             </>
           ) : null}
 
@@ -540,7 +702,7 @@ function PayoutEditSheet({
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0B3C5D] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-60"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            שמירת פרטים
+            {kind === "card" && registerWithHyp ? "שמירה והמשך ל־HYP" : "שמירת פרטים"}
           </button>
         </div>
       </div>
