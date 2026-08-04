@@ -76,13 +76,18 @@ function cardMatchesExactSerial(card: PublicSitterSearchCard, serial: string): b
 
 function finalizeSerialSearchResults(cards: PublicSitterSearchCard[], serial: string): ParentSitterSearchResult {
   const exact = cards.filter((c) => cardMatchesExactSerial(c, serial));
-  const unique = Array.from(new Map(exact.map(c => [c.id, c])).values());
+  const unique = Array.from(new Map(exact.map((c) => [c.id, c])).values());
   return { cards: unique.slice(0, 1), error: null };
 }
 
-function mergeRatingsOntoCards(cards: PublicSitterSearchCard[], ratingSource: PublicSitterSearchCard[]): PublicSitterSearchCard[] {
+function mergeRatingsOntoCards(
+  cards: PublicSitterSearchCard[],
+  ratingSource: PublicSitterSearchCard[]
+): PublicSitterSearchCard[] {
   if (cards.length === 0 || ratingSource.length === 0) return cards;
-  const byId = new Map(ratingSource.map((c) => [c.id, { avg_rating: c.avg_rating, rating_count: c.rating_count }]));
+  const byId = new Map(
+    ratingSource.map((c) => [c.id, { avg_rating: c.avg_rating, rating_count: c.rating_count }])
+  );
   return cards.map((card) => {
     const ratings = byId.get(card.id);
     if (!ratings || !isDisplayableSearchRating(ratings.avg_rating)) return card;
@@ -91,7 +96,9 @@ function mergeRatingsOntoCards(cards: PublicSitterSearchCard[], ratingSource: Pu
 }
 
 function stripInvalidSearchRatings(cards: PublicSitterSearchCard[]): PublicSitterSearchCard[] {
-  return cards.map((card) => isDisplayableSearchRating(card.avg_rating) ? card : { ...card, avg_rating: null, rating_count: 0 });
+  return cards.map((card) =>
+    isDisplayableSearchRating(card.avg_rating) ? card : { ...card, avg_rating: null, rating_count: 0 }
+  );
 }
 
 function parseAvgRatingValue(raw: unknown): number | null {
@@ -104,86 +111,108 @@ function parseAvgRatingValue(raw: unknown): number | null {
   return null;
 }
 
-async function enrichSearchCardsWithProfilePublicRpc(supabase: SupabaseClient, cards: PublicSitterSearchCard[]): Promise<PublicSitterSearchCard[]> {
+async function enrichSearchCardsWithProfilePublicRpc(
+  supabase: SupabaseClient,
+  cards: PublicSitterSearchCard[]
+): Promise<PublicSitterSearchCard[]> {
   if (cards.length === 0) return cards;
-  return Promise.all(cards.map(async (card) => {
-    const needsRating = !isDisplayableSearchRating(card.avg_rating);
-    const needsPrice =
-      card.pricing_model == null ||
-      (card.pricing_model === "package"
-        ? card.package_price_nis == null
-        : card.hourly_rate_nis == null);
-    const needsLanguages = !String(card.languages ?? "").trim();
-    const needsCertifications = !String(card.certifications ?? "").trim();
-    if (!needsRating && !needsPrice && !needsLanguages && !needsCertifications) return card;
+  return Promise.all(
+    cards.map(async (card) => {
+      const needsRating = !isDisplayableSearchRating(card.avg_rating);
+      const needsPrice =
+        card.pricing_model == null ||
+        (card.pricing_model === "package"
+          ? card.package_price_nis == null
+          : card.hourly_rate_nis == null);
+      const needsLanguages = !String(card.languages ?? "").trim();
+      const needsCertifications = !String(card.certifications ?? "").trim();
+      if (!needsRating && !needsPrice && !needsLanguages && !needsCertifications) return card;
 
-    const fk = getSitterProfilesUserColumn();
-    const direct = await supabase
-      .from(SITTER_PROFILES_TABLE)
-      .select(
-        `${fk}, avg_rating, working_cities, nanny_serial, first_name, last_name, hourly_rate_nis, pricing_model, package_price_nis, service_types, languages, certifications, years_experience`
-      )
-      .eq(fk, card.id)
-      .maybeSingle();
-    if (!direct.error && direct.data) {
-      const row = direct.data as Record<string, unknown>;
-      const avg = parseAvgRatingValue(row.avg_rating);
-      const fromRow = normalizePublicSearchCard({ ...card, ...row, id: card.id });
+      const fk = getSitterProfilesUserColumn();
+      const direct = await supabase
+        .from(SITTER_PROFILES_TABLE)
+        .select(
+          `${fk}, avg_rating, working_cities, nanny_serial, first_name, last_name, hourly_rate_nis, pricing_model, package_price_nis, service_types, languages, certifications, years_experience`
+        )
+        .eq(fk, card.id)
+        .maybeSingle();
+      if (!direct.error && direct.data) {
+        const row = direct.data as Record<string, unknown>;
+        const avg = parseAvgRatingValue(row.avg_rating);
+        const fromRow = normalizePublicSearchCard({ ...card, ...row, id: card.id });
+        return {
+          ...card,
+          ...(fromRow
+            ? {
+                pricing_model: fromRow.pricing_model,
+                package_price_nis: fromRow.package_price_nis,
+                hourly_rate_nis: fromRow.hourly_rate_nis ?? card.hourly_rate_nis,
+                service_types: fromRow.service_types ?? card.service_types,
+                languages: fromRow.languages || card.languages,
+                certifications: fromRow.certifications || card.certifications,
+                years_experience: fromRow.years_experience ?? card.years_experience
+              }
+            : {}),
+          avg_rating: isDisplayableSearchRating(avg) ? avg : card.avg_rating,
+          working_cities: normalizeWorkingCities(row.working_cities ?? card.working_cities)
+        };
+      }
+
+      const { data, error } = await supabase.rpc("get_sitter_profile_public", { target_id: card.id });
+      if (error || !data) return card;
+      const payload = unwrapRpcProfilePayload(data);
+      if (!payload) return card;
+      const profile = normalizeSitterProfilePublic(payload, card.id);
       return {
         ...card,
-        ...(fromRow
-          ? {
-              pricing_model: fromRow.pricing_model,
-              package_price_nis: fromRow.package_price_nis,
-              hourly_rate_nis: fromRow.hourly_rate_nis ?? card.hourly_rate_nis,
-              service_types: fromRow.service_types ?? card.service_types,
-              languages: fromRow.languages || card.languages,
-              certifications: fromRow.certifications || card.certifications,
-              years_experience: fromRow.years_experience ?? card.years_experience
-            }
-          : {}),
-        avg_rating: isDisplayableSearchRating(avg) ? avg : card.avg_rating,
-        working_cities: normalizeWorkingCities(row.working_cities ?? card.working_cities)
+        pricing_model: profile.pricing_model ?? card.pricing_model,
+        package_price_nis: profile.package_price_nis ?? card.package_price_nis,
+        hourly_rate_nis: profile.hourly_rate_nis ?? card.hourly_rate_nis,
+        service_types: profile.service_types ?? card.service_types,
+        languages: profile.languages || card.languages,
+        certifications: profile.certifications || card.certifications,
+        years_experience: profile.years_experience ?? card.years_experience,
+        avg_rating: isDisplayableSearchRating(profile.avg_rating)
+          ? profile.avg_rating ?? null
+          : card.avg_rating,
+        rating_count: isDisplayableSearchRating(profile.avg_rating)
+          ? profile.rating_count ?? 0
+          : card.rating_count,
+        working_cities: profile.working_cities?.length ? profile.working_cities : card.working_cities
       };
-    }
-
-    const { data, error } = await supabase.rpc("get_sitter_profile_public", { target_id: card.id });
-    if (error || !data) return card;
-    const payload = unwrapRpcProfilePayload(data);
-    if (!payload) return card;
-    const profile = normalizeSitterProfilePublic(payload, card.id);
-    return {
-      ...card,
-      pricing_model: profile.pricing_model ?? card.pricing_model,
-      package_price_nis: profile.package_price_nis ?? card.package_price_nis,
-      hourly_rate_nis: profile.hourly_rate_nis ?? card.hourly_rate_nis,
-      service_types: profile.service_types ?? card.service_types,
-      languages: profile.languages || card.languages,
-      certifications: profile.certifications || card.certifications,
-      years_experience: profile.years_experience ?? card.years_experience,
-      avg_rating: isDisplayableSearchRating(profile.avg_rating) ? profile.avg_rating ?? null : card.avg_rating,
-      rating_count: isDisplayableSearchRating(profile.avg_rating)
-        ? profile.rating_count ?? 0
-        : card.rating_count,
-      working_cities: profile.working_cities?.length ? profile.working_cities : card.working_cities
-    };
-  }));
+    })
+  );
 }
 
-async function ensureSearchCardRatings(supabase: SupabaseClient, cards: PublicSitterSearchCard[], filters: ParentSearchFilters, options?: DirectSearchOptions): Promise<PublicSitterSearchCard[]> {
+async function ensureSearchCardRatings(
+  supabase: SupabaseClient,
+  cards: PublicSitterSearchCard[],
+  filters: ParentSearchFilters,
+  options?: DirectSearchOptions
+): Promise<PublicSitterSearchCard[]> {
   let result = stripInvalidSearchRatings(cards);
   if (!options?.skipListRpcEnrich) {
     try {
       const { data, error } = await invokeListPublicSittersSearchRpc(supabase, filters);
       if (!error && data != null) result = mergeRatingsOntoCards(result, parsePublicSearchCards(data));
-    } catch (e) { console.warn("[parent-sitter-search] enrich skipped"); }
+    } catch {
+      console.warn("[parent-sitter-search] enrich skipped");
+    }
   }
-  if (!result.some((c) => isDisplayableSearchRating(c.avg_rating))) result = await enrichSearchCardsWithAvgRatingColumn(supabase, result);
-  return enrichSearchCardsWithWorkingCities(supabase, await enrichSearchCardsWithProfilePublicRpc(supabase, result));
+  if (!result.some((c) => isDisplayableSearchRating(c.avg_rating))) {
+    result = await enrichSearchCardsWithAvgRatingColumn(supabase, result);
+  }
+  return enrichSearchCardsWithWorkingCities(
+    supabase,
+    await enrichSearchCardsWithProfilePublicRpc(supabase, result)
+  );
 }
 
 function isRpcRatingSchemaError(message: string): boolean {
-  return isPostgrestMissingColumnError(message, "rating_count") || isPostgrestMissingColumnError(message, "avg_rating");
+  return (
+    isPostgrestMissingColumnError(message, "rating_count") ||
+    isPostgrestMissingColumnError(message, "avg_rating")
+  );
 }
 
 function shouldFallbackListPublicSittersRpc(error: unknown): boolean {
@@ -227,35 +256,57 @@ async function invokeListPublicSittersSearchRpc(
   return { data: read.data, error: read.error };
 }
 
-type DirectSearchOptions = { skipListRpcEnrich?: boolean; };
+type DirectSearchOptions = { skipListRpcEnrich?: boolean };
 
-async function enrichSearchCardsWithAvgRatingColumn(supabase: SupabaseClient, cards: PublicSitterSearchCard[]): Promise<PublicSitterSearchCard[]> {
+async function enrichSearchCardsWithAvgRatingColumn(
+  supabase: SupabaseClient,
+  cards: PublicSitterSearchCard[]
+): Promise<PublicSitterSearchCard[]> {
   if (cards.length === 0) return cards;
   const fk = getSitterProfilesUserColumn();
-  const { data, error } = await supabase.from(SITTER_PROFILES_TABLE).select(`${fk}, avg_rating`).in(fk, cards.map((c) => c.id));
+  const { data, error } = await supabase
+    .from(SITTER_PROFILES_TABLE)
+    .select(`${fk}, avg_rating`)
+    .in(
+      fk,
+      cards.map((c) => c.id)
+    );
   if (error) return cards;
   const avgById = new Map<string, number>();
-  for (const row of (data ?? [])) {
+  for (const row of data ?? []) {
     const record = row as Record<string, unknown>;
     const avg = parseAvgRatingValue(record.avg_rating);
     if (avg != null) avgById.set(record[fk] as string, avg);
   }
-  return cards.map((c) => avgById.has(c.id) ? { ...c, avg_rating: avgById.get(c.id) } : c);
+  return cards.map((c) =>
+    avgById.has(c.id) ? { ...c, avg_rating: avgById.get(c.id) ?? null } : c
+  );
 }
 
-async function enrichSearchCardsWithWorkingCities(supabase: SupabaseClient, cards: PublicSitterSearchCard[]): Promise<PublicSitterSearchCard[]> {
+async function enrichSearchCardsWithWorkingCities(
+  supabase: SupabaseClient,
+  cards: PublicSitterSearchCard[]
+): Promise<PublicSitterSearchCard[]> {
   const missing = cards.filter((c) => !c.working_cities?.length);
   if (missing.length === 0) return cards;
   const fk = getSitterProfilesUserColumn();
-  const { data, error } = await supabase.from(SITTER_PROFILES_TABLE).select(`${fk}, ${SITTER_WORKING_CITIES_COLUMN}`).in(fk, missing.map((c) => c.id));
+  const { data, error } = await supabase
+    .from(SITTER_PROFILES_TABLE)
+    .select(`${fk}, ${SITTER_WORKING_CITIES_COLUMN}`)
+    .in(
+      fk,
+      missing.map((c) => c.id)
+    );
   if (error) return cards;
   const citiesById = new Map<string, IsraelCity[]>();
-  for (const row of (data ?? [])) {
+  for (const row of data ?? []) {
     const record = row as Record<string, unknown>;
     const cities = normalizeWorkingCities(record[SITTER_WORKING_CITIES_COLUMN]);
     if (cities.length) citiesById.set(record[fk] as string, cities);
   }
-  return cards.map((c) => citiesById.has(c.id) ? { ...c, working_cities: citiesById.get(c.id) } : c);
+  return cards.map((c) =>
+    citiesById.has(c.id) ? { ...c, working_cities: citiesById.get(c.id) ?? [] } : c
+  );
 }
 
 function rowOffersServiceType(row: Record<string, unknown>, serviceType: string): boolean {
@@ -274,8 +325,14 @@ async function runBrowseParentSitterSearchDirect(
 ): Promise<ParentSitterSearchResult> {
   const safe = normalizeParentSearchFilters(filters);
   const userColumn = getSitterProfilesUserColumn();
-  const withServiceTypes = `${userColumn}, ${SERIAL_SELECT_BASE}, service_types`;
+  const withServiceTypes = `${userColumn}, ${SERIAL_SELECT_BASE}, service_types, working_cities`;
+
   let query = supabase.from(SITTER_PROFILES_TABLE).select(withServiceTypes).eq("is_public", true);
+
+  if (safe.city) {
+    query = query.contains(SITTER_WORKING_CITIES_COLUMN, [safe.city]);
+  }
+
   let { data, error } = await query;
 
   if (
@@ -291,24 +348,36 @@ async function runBrowseParentSitterSearchDirect(
       isPostgrestMissingColumnError(error.message, "package_price_nis") ||
       isPostgrestMissingColumnError(error.message, "certifications") ||
       isPostgrestMissingColumnError(error.message, "languages")
-        ? `${userColumn}, ${SERIAL_SELECT_MINIMAL}`
-        : `${userColumn}, ${SERIAL_SELECT_BASE}`;
-    const fallback = await supabase.from(SITTER_PROFILES_TABLE).select(fallbackSelect).eq("is_public", true);
-    data = fallback.data;
+        ? `${userColumn}, ${SERIAL_SELECT_MINIMAL}, working_cities`
+        : `${userColumn}, ${SERIAL_SELECT_BASE}, working_cities`;
+
+    let fallbackQuery = supabase
+      .from(SITTER_PROFILES_TABLE)
+      .select(fallbackSelect)
+      .eq("is_public", true);
+    if (safe.city) {
+      fallbackQuery = fallbackQuery.contains(SITTER_WORKING_CITIES_COLUMN, [safe.city]);
+    }
+    const fallback = await fallbackQuery;
+    data = fallback.data as typeof data;
     error = fallback.error;
   }
 
   if (error) return { cards: [], error: error.message };
 
   const cards = (data ?? [])
-    .filter((r) => rowOffersServiceType(r as Record<string, unknown>, safe.serviceType))
-    .map((r) => profileRowToSearchCard(r as Record<string, unknown>))
+    .filter((r) => rowOffersServiceType(r as unknown as Record<string, unknown>, safe.serviceType))
+    .map((r) => profileRowToSearchCard(r as unknown as Record<string, unknown>))
     .filter((c): c is PublicSitterSearchCard => c != null);
 
   return { cards: await ensureSearchCardRatings(supabase, cards, safe, options), error: null };
 }
 
-async function fetchPublicSitterBySerialDirect(supabase: SupabaseClient, serial: string, options?: DirectSearchOptions): Promise<ParentSitterSearchResult> {
+async function fetchPublicSitterBySerialDirect(
+  supabase: SupabaseClient,
+  serial: string,
+  options?: DirectSearchOptions
+): Promise<ParentSitterSearchResult> {
   let { data, error } = await supabase
     .from(SITTER_PROFILES_TABLE)
     .select(`${getSitterProfilesUserColumn()}, ${SERIAL_SELECT_BASE}`)
@@ -326,39 +395,83 @@ async function fetchPublicSitterBySerialDirect(supabase: SupabaseClient, serial:
       .eq("is_public", true)
       .eq("nanny_serial", serial)
       .limit(1);
-    data = fallback.data;
+    data = fallback.data as typeof data;
     error = fallback.error;
   }
   if (error) return { cards: [], error: error.message };
-  const cards = (data ?? []).filter((r) => rowMatchesSerial(r as any, serial)).map((r) => profileRowToSearchCard(r as any)).filter((c): c is PublicSitterSearchCard => c != null);
-  return finalizeSerialSearchResults(await ensureSearchCardRatings(supabase, cards, normalizeParentSearchFilters({ searchSitterSerial: serial }), options), serial);
+  const cards = (data ?? [])
+    .filter((r) => rowMatchesSerial(r as unknown as Record<string, unknown>, serial))
+    .map((r) => profileRowToSearchCard(r as unknown as Record<string, unknown>))
+    .filter((c): c is PublicSitterSearchCard => c != null);
+  return finalizeSerialSearchResults(
+    await ensureSearchCardRatings(
+      supabase,
+      cards,
+      normalizeParentSearchFilters({ searchSitterSerial: serial }),
+      options
+    ),
+    serial
+  );
 }
 
-export async function fetchPublicSitterSearchBySerial(supabase: SupabaseClient, serialInput: string): Promise<ParentSitterSearchResult> {
+export async function fetchPublicSitterSearchBySerial(
+  supabase: SupabaseClient,
+  serialInput: string
+): Promise<ParentSitterSearchResult> {
   const serial = normalizeSitterSerialForLookup(serialInput);
   if (!serial) return { cards: [], error: null };
-  const rpcResult = await runListPublicSittersSearchRpc(supabase, normalizeParentSearchFilters({ searchSitterSerial: serial }));
+  const rpcResult = await runListPublicSittersSearchRpc(
+    supabase,
+    normalizeParentSearchFilters({ searchSitterSerial: serial })
+  );
   if (!rpcResult.error && rpcResult.cards.length > 0) {
-    const rated = await ensureSearchCardRatings(supabase, rpcResult.cards, normalizeParentSearchFilters({ searchSitterSerial: serial }), { skipListRpcEnrich: true });
+    const rated = await ensureSearchCardRatings(
+      supabase,
+      rpcResult.cards,
+      normalizeParentSearchFilters({ searchSitterSerial: serial }),
+      { skipListRpcEnrich: true }
+    );
     return finalizeSerialSearchResults(rated, serial);
   }
-  return fetchPublicSitterBySerialDirect(supabase, serial, { skipListRpcEnrich: rpcResult.error != null && isRpcRatingSchemaError(readSupabaseErrorMessage(rpcResult.error)) });
+  return fetchPublicSitterBySerialDirect(supabase, serial, {
+    skipListRpcEnrich:
+      rpcResult.error != null && isRpcRatingSchemaError(readSupabaseErrorMessage(rpcResult.error))
+  });
 }
 
-export async function runListPublicSittersSearchRpc(supabase: SupabaseClient, filters: ParentSearchFilters): Promise<ParentSitterSearchResult> {
+export async function runListPublicSittersSearchRpc(
+  supabase: SupabaseClient,
+  filters: ParentSearchFilters
+): Promise<ParentSitterSearchResult> {
   try {
     const { data: results, error } = await invokeListPublicSittersSearchRpc(supabase, filters);
     if (error) {
-      if (shouldFallbackListPublicSittersRpc(error)) return runBrowseParentSitterSearchDirect(supabase, filters, { skipListRpcEnrich: isRpcRatingSchemaError(readSupabaseErrorMessage(error)) });
+      if (shouldFallbackListPublicSittersRpc(error)) {
+        return runBrowseParentSitterSearchDirect(supabase, filters, {
+          skipListRpcEnrich: isRpcRatingSchemaError(readSupabaseErrorMessage(error))
+        });
+      }
       return { cards: [], error: readSupabaseErrorMessage(error) || "שגיאה בביצוע החיפוש" };
     }
-    return { cards: await ensureSearchCardRatings(supabase, parsePublicSearchCards(results), filters, { skipListRpcEnrich: true }), error: null };
+    return {
+      cards: await ensureSearchCardRatings(supabase, parsePublicSearchCards(results), filters, {
+        skipListRpcEnrich: true
+      }),
+      error: null
+    };
   } catch (e) {
-    return runBrowseParentSitterSearchDirect(supabase, filters, { skipListRpcEnrich: isRpcRatingSchemaError(readSupabaseErrorMessage(e)) });
+    return runBrowseParentSitterSearchDirect(supabase, filters, {
+      skipListRpcEnrich: isRpcRatingSchemaError(readSupabaseErrorMessage(e))
+    });
   }
 }
 
-export async function runParentSitterSearch(supabase: SupabaseClient, filters: ParentSearchFilters): Promise<ParentSitterSearchResult> {
-  if (isSerialTargetedSearch(filters)) return fetchPublicSitterSearchBySerial(supabase, filters.searchSitterSerial);
+export async function runParentSitterSearch(
+  supabase: SupabaseClient,
+  filters: ParentSearchFilters
+): Promise<ParentSitterSearchResult> {
+  if (isSerialTargetedSearch(filters)) {
+    return fetchPublicSitterSearchBySerial(supabase, filters.searchSitterSerial);
+  }
   return runListPublicSittersSearchRpc(supabase, filters);
 }
