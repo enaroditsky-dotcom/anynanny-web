@@ -14,6 +14,11 @@ type PortalBody = {
 /** Opens Stripe Customer Portal so parents can manage saved payment methods. */
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
+
+  if (!supabase) {
+    return NextResponse.json({ error: "Database client initialization failed." }, { status: 500 });
+  }
+
   const {
     data: { user },
     error: authError
