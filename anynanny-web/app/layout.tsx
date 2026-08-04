@@ -1,10 +1,17 @@
-﻿import "./globals.css";
+import "./globals.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import Image from "next/image";
-import { Assistant } from "next/font/google";
+import { Varela_Round } from "next/font/google";
+import { AuthProvider } from "@/components/auth-provider";
+import { AppShellGate } from "@/components/app-shell-gate";
 
-const assistant = Assistant({ subsets: ["hebrew", "latin"], weight: ["400", "500", "600", "700"] });
+const varelaRound = Varela_Round({
+  subsets: ["hebrew", "latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-varela-round",
+  fallback: ["system-ui", "Segoe UI", "Arial", "sans-serif"]
+});
 
 export const metadata: Metadata = {
   title: "AnyNanny",
@@ -13,20 +20,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="he">
-      <body className={assistant.className}>
-        <header className="sticky top-0 z-40 border-b border-brand-mint bg-white/95 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
-            <div className="flex items-center gap-3">
-              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-brand-mint/40 md:h-11 md:w-11">
-                <Image src="/logo.png" alt="AnyNanny" width={44} height={44} className="h-full w-full object-cover object-center" priority />
-              </div>
-              <div className="text-2xl font-bold tracking-[0.2em] text-navy-header">ANYNANNY</div>
-            </div>
-            <div className="rounded-full bg-brand-mint px-3 py-1 text-xs text-navy-800">ביטחון • פשטות • פרטיות</div>
-          </div>
-        </header>
-        {children}
+    <html lang="he" className={varelaRound.variable} suppressHydrationWarning>
+      <body className={`${varelaRound.className} bg-[#FDFBF6] font-sans antialiased`} suppressHydrationWarning>
+        <AuthProvider>
+          <AppShellGate>{children}</AppShellGate>
+        </AuthProvider>
       </body>
     </html>
   );

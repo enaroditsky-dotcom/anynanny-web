@@ -42,7 +42,7 @@ export default function VerificationPage() {
       <form className="space-y-4 rounded-xl border border-navy-200 bg-white p-6 shadow-sm" onSubmit={handleSubmit}>
         <div>
           <label className="mb-2 block text-sm font-medium text-navy-900" htmlFor="sitterName">
-            Sitter full name
+          Sitter first and last name
           </label>
           <input
             className="block w-full rounded-lg border border-navy-200 p-2 text-sm"

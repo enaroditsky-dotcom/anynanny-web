@@ -10,44 +10,42 @@ type Props = {
 };
 
 export function NannyRatingForm({ sessionId, nannyName, parentName, alreadyRated = false }: Props) {
-  const [stars, setStars] = useState(5);
+  const [ratingValue, setRatingValue] = useState(5);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
   const [locked, setLocked] = useState(alreadyRated);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    event.stopPropagation();
     setSubmitting(true);
-    setMessage("");
+
+    const commentTrimmed = comment.trim() ? comment.trim().slice(0, 2000) : null;
+    const payload = {
+      session_id: sessionId.trim(),
+      rating: ratingValue,
+      comment: commentTrimmed
+    };
 
     const response = await fetch("/api/ratings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        nannyName,
-        parentName,
-        stars,
-        comment
-      })
+      credentials: "include",
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
+      const bodyText = await response.text().catch(() => "");
+      console.error("[NannyRatingForm] submit failed", response.status, bodyText);
       if (response.status === 409) {
-        setMessage("This session was already rated.");
         setLocked(true);
-      } else {
-        setMessage("Could not submit rating. Please try again.");
       }
       setSubmitting(false);
       return;
     }
 
-    const data = (await response.json()) as { profile: { reputationScore: number } };
-    setMessage(`Thanks! Updated reputation score: ${data.profile.reputationScore.toFixed(2)} / 5`);
     setComment("");
-    setStars(5);
+    setRatingValue(5);
     setLocked(true);
     setSubmitting(false);
   };
@@ -55,14 +53,17 @@ export function NannyRatingForm({ sessionId, nannyName, parentName, alreadyRated
   return (
     <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
       <div>
-        <p className="mb-2 text-sm font-medium text-navy-900">Rate this nanny</p>
+        <p className="mb-2 text-sm font-medium text-navy-900">
+          Rate this nanny{nannyName ? `: ${nannyName}` : ""}
+          {parentName ? <span className="block text-xs font-normal text-slate-500">From {parentName}</span> : null}
+        </p>
         <div className="flex gap-2">
           {[1, 2, 3, 4, 5].map((value) => (
             <button
               key={value}
-              className={`rounded-lg px-3 py-1 text-lg ${value <= stars ? "bg-navy-800 text-white" : "bg-slate-100 text-slate-500"} ${locked ? "cursor-not-allowed opacity-70" : ""}`}
+              className={`rounded-lg px-3 py-1 text-lg ${value <= ratingValue ? "bg-navy-800 text-white" : "bg-slate-100 text-slate-500"} ${locked ? "cursor-not-allowed opacity-70" : ""}`}
               type="button"
-              onClick={() => setStars(value)}
+              onClick={() => setRatingValue(value)}
               aria-label={`Set ${value} stars`}
               disabled={locked}
             >
@@ -95,8 +96,6 @@ export function NannyRatingForm({ sessionId, nannyName, parentName, alreadyRated
       >
         {locked ? "Already Rated" : submitting ? "Submitting..." : "Submit Rating"}
       </button>
-
-      {message ? <p className="text-sm font-medium text-navy-700">{message}</p> : null}
     </form>
   );
 }

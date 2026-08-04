@@ -1,0 +1,245 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { LayoutDashboard, MessageCircle, UserRound, Settings, Zap } from "lucide-react";
+import { useAuth } from "@/components/auth-provider";
+import { useWalletNotification } from "@/features/wallet/hooks/useWalletNotification";
+import { useChatNotification } from "@/features/chat/hooks/useChatNotification";
+import { useSitterPendingBookingCount } from "@/lib/bookings/use-sitter-pending-booking-count";
+
+type NavItem = {
+  href: string;
+  label: string;
+  match: (path: string) => boolean;
+  Icon: typeof LayoutDashboard;
+  badgeKey?: "messages" | "wallet" | "pending";
+};
+
+const parentSideItems: NavItem[] = [
+  {
+    href: "/parent/dashboard",
+    label: "דשבורד",
+    match: (p) => p === "/parent/dashboard",
+    Icon: LayoutDashboard
+  },
+  {
+    href: "/parent/messages",
+    label: "הודעות",
+    match: (p) => p.startsWith("/parent/messages") || p.startsWith("/parent/chat/"),
+    Icon: MessageCircle,
+    badgeKey: "messages"
+  },
+  {
+    href: "/parent/profile",
+    label: "אזור אישי",
+    match: (p) => p.startsWith("/parent/profile") || p.startsWith("/parent/wallet"),
+    Icon: UserRound,
+    badgeKey: "wallet"
+  },
+  {
+    href: "/parent/settings",
+    label: "הגדרות",
+    match: (p) => p.startsWith("/parent/settings"),
+    Icon: Settings
+  }
+];
+
+const sitterItems: NavItem[] = [
+  {
+    href: "/sitter/dashboard",
+    label: "דשבורד",
+    match: (p) => p === "/sitter/dashboard",
+    Icon: LayoutDashboard,
+    badgeKey: "pending"
+  },
+  {
+    href: "/sitter/messages",
+    label: "הודעות",
+    match: (p) => p.startsWith("/sitter/messages") || p.startsWith("/sitter/chat/"),
+    Icon: MessageCircle,
+    badgeKey: "messages"
+  },
+  {
+    href: "/sitter/profile",
+    label: "אזור אישי",
+    match: (p) => p.startsWith("/sitter/profile") || p.startsWith("/sitter/personal"),
+    Icon: UserRound
+  },
+  {
+    href: "/sitter/settings",
+    label: "הגדרות",
+    match: (p) => p.startsWith("/sitter/settings"),
+    Icon: Settings
+  }
+];
+
+function NavLink({
+  item,
+  pathname,
+  hasUnreadMessages,
+  hasWalletUpdate,
+  pendingBookingCount,
+  clearWalletNotification,
+  clearChatNotification
+}: {
+  item: NavItem;
+  pathname: string;
+  hasUnreadMessages: boolean;
+  hasWalletUpdate: boolean;
+  pendingBookingCount: number;
+  clearWalletNotification: () => void;
+  clearChatNotification: () => void;
+}) {
+  const { href, label, match, Icon, badgeKey } = item;
+  const active = match(pathname);
+  const showMessageBadge = badgeKey === "messages" && hasUnreadMessages;
+  const showWalletBadge = badgeKey === "wallet" && hasWalletUpdate;
+  const showPendingBadge = badgeKey === "pending" && pendingBookingCount > 0;
+  const showBadge = showMessageBadge || showWalletBadge || showPendingBadge;
+
+  return (
+    <Link
+      href={href}
+      onClick={() => {
+        if (badgeKey === "wallet") clearWalletNotification();
+        if (badgeKey === "messages") clearChatNotification();
+      }}
+      className={`flex min-w-0 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 py-1 text-[10px] font-semibold leading-tight transition ${
+        active ? "text-emerald-700" : "text-navy-header/70 hover:bg-slate-50 hover:text-navy-header"
+      }`}
+      aria-label={
+        showPendingBadge
+          ? `${label} — ${pendingBookingCount} בקשות ממתינות`
+          : showMessageBadge
+            ? `${label} — הודעות חדשות`
+            : showWalletBadge
+              ? `${label} — עדכון בארנק`
+              : label
+      }
+    >
+      <div className="relative">
+        <Icon className={`h-5 w-5 shrink-0 ${active ? "stroke-[2.25]" : "stroke-[1.85]"}`} aria-hidden />
+        {showPendingBadge ? (
+          <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white">
+            {pendingBookingCount > 9 ? "9+" : pendingBookingCount}
+          </span>
+        ) : showBadge ? (
+          <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
+        ) : null}
+      </div>
+      <span className="max-w-[4.75rem] truncate text-center">{label}</span>
+    </Link>
+  );
+}
+
+/** Elevated AnyNanny Now action — floats above the bottom nav rail. */
+function AnyNannyNowFab({ active }: { active: boolean }) {
+  return (
+    <Link
+      href="/parent/broadcast"
+      aria-label="AnyNanny Now"
+      className="group relative z-10 -mt-7 flex w-full flex-col items-center justify-end gap-1 outline-none"
+    >
+      <span
+        className={`relative flex h-[3.85rem] w-[3.85rem] items-center justify-center rounded-full bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-[0_10px_24px_-4px_rgba(16,185,129,0.55),0_4px_10px_-2px_rgba(5,150,105,0.45)] ring-[3px] ring-white transition duration-200 group-hover:brightness-105 group-hover:shadow-[0_14px_28px_-4px_rgba(16,185,129,0.6)] group-active:scale-[0.96] ${
+          active ? "ring-emerald-200" : ""
+        }`}
+      >
+        <span className="pointer-events-none absolute inset-[3px] rounded-full bg-gradient-to-b from-white/25 to-transparent" aria-hidden />
+        <span className="relative flex flex-col items-center justify-center leading-none">
+          <Zap className="mb-0.5 h-3.5 w-3.5 fill-white text-white drop-shadow-sm" aria-hidden />
+          <span className="text-[13px] font-black tracking-wide" dir="ltr">
+            AN
+          </span>
+        </span>
+      </span>
+      <span
+        className={`max-w-[5.5rem] text-center text-[9px] font-bold leading-tight ${
+          active ? "text-emerald-700" : "text-navy-header/80"
+        }`}
+      >
+        AnyNanny Now
+      </span>
+    </Link>
+  );
+}
+
+/** Fixed bottom navigation for authenticated parent/sitter routes. */
+export function BottomNav() {
+  const pathname = usePathname();
+  const { signedIn, currentRole, user } = useAuth();
+  const role = currentRole === "sitter" ? "sitter" : "parent";
+
+  const { hasWalletUpdate, clearWalletNotification } = useWalletNotification(user?.id, role);
+  const { hasUnreadMessages, clearChatNotification } = useChatNotification(user?.id);
+  const pendingBookingCount = useSitterPendingBookingCount(
+    role === "sitter" ? user?.id ?? null : null,
+    role === "sitter" && Boolean(user?.id)
+  );
+
+  if (!signedIn) return null;
+  if (!pathname.startsWith("/parent/") && !pathname.startsWith("/sitter/")) return null;
+
+  const nowActive = pathname.startsWith("/parent/broadcast");
+
+  if (role === "parent") {
+    const [leftA, leftB, rightA, rightB] = parentSideItems;
+    return (
+      <nav
+        aria-label="ניווט ראשי"
+        className="fixed bottom-0 left-0 right-0 z-50 w-full border-t border-slate-200/80 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_-12px_rgba(15,23,42,0.12)] backdrop-blur-sm"
+      >
+        <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5">
+          {[leftA, leftB].map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              hasUnreadMessages={hasUnreadMessages}
+              hasWalletUpdate={hasWalletUpdate}
+              pendingBookingCount={pendingBookingCount}
+              clearWalletNotification={clearWalletNotification}
+              clearChatNotification={clearChatNotification}
+            />
+          ))}
+          <AnyNannyNowFab active={nowActive} />
+          {[rightA, rightB].map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              hasUnreadMessages={hasUnreadMessages}
+              hasWalletUpdate={hasWalletUpdate}
+              pendingBookingCount={pendingBookingCount}
+              clearWalletNotification={clearWalletNotification}
+              clearChatNotification={clearChatNotification}
+            />
+          ))}
+        </div>
+      </nav>
+    );
+  }
+
+  return (
+    <nav
+      aria-label="ניווט ראשי"
+      className="fixed bottom-0 left-0 right-0 z-50 w-full border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+    >
+      <div className="mx-auto grid w-full max-w-md grid-cols-4 items-center">
+        {sitterItems.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            pathname={pathname}
+            hasUnreadMessages={hasUnreadMessages}
+            hasWalletUpdate={hasWalletUpdate}
+            pendingBookingCount={pendingBookingCount}
+            clearWalletNotification={clearWalletNotification}
+            clearChatNotification={clearChatNotification}
+          />
+        ))}
+      </div>
+    </nav>
+  );
+}

@@ -1,1 +1,46 @@
-[]
+[
+  {
+    "sitterId": "demo-sitter-1",
+    "date": "2026-05-18",
+    "availableSlots": []
+  },
+  {
+    "sitterId": "demo-sitter-1",
+    "date": "2026-05-21",
+    "availableSlots": [
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47
+    ]
+  },
+  {
+    "sitterId": "demo-sitter-1",
+    "date": "2026-05-25",
+    "availableSlots": [
+      41,
+      42,
+      43,
+      44,
+      45
+    ]
+  },
+  {
+    "sitterId": "demo-sitter-1",
+    "date": "2026-05-28",
+    "availableSlots": [
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46
+    ]
+  }
+]

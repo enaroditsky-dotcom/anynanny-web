@@ -4,9 +4,42 @@
 
 :root {
   color-scheme: light;
+  --font-varela-round: "Varela Round", system-ui, sans-serif;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background: #f7f2ea;
   color: #165b73;
+  font-family: var(--font-varela-round), "Varela Round", system-ui, "Segoe UI", Arial, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Keep bold/semibold readable with single-weight Varela Round */
+b,
+strong,
+button,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  letter-spacing: 0.015em;
+}
+
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
 }

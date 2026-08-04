@@ -14,5 +14,21 @@
     },
     "reassurancePingEnabled": false,
     "pingedHours": []
+  },
+  {
+    "sessionId": "sess_1778171427269_4t6jkj",
+    "bookingId": "booking_1778171426301",
+    "sitterId": "demo-sitter-1",
+    "parentName": "הורה",
+    "hourlyRateNis": 60,
+    "status": "waiting_end",
+    "startConfirmations": {
+      "parent": "2026-05-07T16:30:27.269Z"
+    },
+    "endConfirmations": {
+      "parent": "2026-05-07T16:30:28.771Z"
+    },
+    "reassurancePingEnabled": false,
+    "pingedHours": []
   }
 ]
