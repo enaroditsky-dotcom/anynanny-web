@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { User, Baby } from 'lucide-react';
 import { upsertProfileOnSignup } from '@/lib/auth/supabase-profile';
+import { saveSignupNamesToDevice } from '@/lib/auth/signup-names';
 import { isProfileRole } from '@/lib/supabase/profiles';
+import { ensureSitterProfileRowForUser } from '@/lib/sitter/sitter-profile';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -52,6 +54,7 @@ export default function SignUpPage() {
 
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
+    saveSignupNamesToDevice({ first_name: trimmedFirst, last_name: trimmedLast });
 
     try {
       const { data, error: authError } = await supabase.auth.signUp({
@@ -78,6 +81,16 @@ export default function SignUpPage() {
         });
         if (profileResult.error) {
           console.warn('[sign-up] profile upsert:', profileResult.error);
+        }
+
+        if (role === 'sitter') {
+          const ensure = await ensureSitterProfileRowForUser(supabase, data.user.id, {
+            first_name: trimmedFirst,
+            last_name: trimmedLast,
+          });
+          if (ensure.error) {
+            console.warn('[sign-up] ensure sitter profile:', ensure.error);
+          }
         }
       }
 
