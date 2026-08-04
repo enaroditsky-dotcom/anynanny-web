@@ -113,6 +113,10 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return errorResponse("supabase_error", "Database client initialization failed.", 500);
+  }
+
   const {
     data: { user },
     error: authError
@@ -285,7 +289,7 @@ export async function POST(request: Request) {
       }
     });
   } catch (err) {
-    const stripeErr = err as Stripe.errors.StripeError & { code?: string };
+    const stripeErr = err as Stripe.StripeRawError & { code?: string; decline_code?: string };
     const message = stripeErr.message ?? "Stripe error.";
     const code = stripeErr.code === "authentication_required" || stripeErr.code === "card_declined"
       ? "card_declined"

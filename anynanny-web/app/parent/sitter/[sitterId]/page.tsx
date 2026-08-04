@@ -13,7 +13,6 @@ import {
   formatPublicExperienceLabel,
   formatPublicLanguagesLabel
 } from "@/lib/sitter/public-search-card";
-import { isExpertOnlyServiceKind, normalizeExpertServiceTypes } from "@/lib/sitter/expert-profile";
 import { formatSitterLanguagesDisplay } from "@/lib/sitter/sitter-profile";
 
 export default function ParentSitterProfileView() {
@@ -92,11 +91,8 @@ export default function ParentSitterProfileView() {
     hourly_rate_nis: profile?.hourly_rate_nis,
     package_price_nis: profile?.package_price_nis
   });
-  const isExpertProfile = normalizeExpertServiceTypes(profile?.service_types).some((t) =>
-    isExpertOnlyServiceKind(t)
-  );
   const experienceLabel = formatPublicExperienceLabel({
-    isExpert: isExpertProfile,
+    isExpert: false,
     years_experience:
       profile?.years_experience != null && Number.isFinite(Number(profile.years_experience))
         ? Number(profile.years_experience)
@@ -109,11 +105,10 @@ export default function ParentSitterProfileView() {
     formatSitterLanguagesDisplay(profile?.languages) ||
     null;
   
-  // טיפול בפורמט המזהה הסידורי (אם קיים nanny_serial מציגים אותו, אחרת מציגים פורמט נקי או נמנעים מ-UUID ארוך)
   const serialNumber = profile?.nanny_serial;
   const serialRaw = serialNumber ? String(serialNumber).trim() : "";
   const serialDisplay = serialRaw
-    ? /^(AN|CONS)-/i.test(serialRaw)
+    ? /^AN-/i.test(serialRaw)
       ? serialRaw
       : /^\d+$/.test(serialRaw)
         ? `AN-${serialRaw}`
@@ -156,11 +151,9 @@ export default function ParentSitterProfileView() {
               <span className="font-semibold text-slate-700">אזור עבודה:</span>
               <span>{workingCity}</span>
             </div>
-            {!isExpertProfile ? (
-              <p className="text-xs text-violet-700 font-medium">
-                {profile.has_car ? "דרך הגעה: עצמאית" : "דרך הגעה: תחבורה ציבורית"}
-              </p>
-            ) : null}
+            <p className="text-xs text-violet-700 font-medium">
+              {profile.has_car ? "דרך הגעה: עצמאית" : "דרך הגעה: תחבורה ציבורית"}
+            </p>
             <p className="text-sm font-semibold text-navy-800 pt-1">
               {rateLabel}
             </p>

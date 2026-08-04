@@ -28,11 +28,16 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Database client initialization failed." }, { status: 500 });
+  }
+
   const {
-    data: { user }
+    data: { user },
+    error: authError
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

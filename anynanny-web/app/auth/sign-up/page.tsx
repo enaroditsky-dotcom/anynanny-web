@@ -40,6 +40,11 @@ export default function SignUpPage() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!supabase) {
+      setErrorMsg('לקוח ה-Database אינו זמין.');
+      return;
+    }
+
     if (!role) {
       setErrorMsg('אנא בחר/י תפקיד (הורה או בייביסיטר) כדי להמשיך.');
       return;

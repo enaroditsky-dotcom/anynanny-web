@@ -17,11 +17,12 @@ const LIVE_BOOKING_STATUSES = new Set<BookingStatus>([
   "approved",
   "sitter_started",
   "parent_started",
-  "in_progress",
   "sitter_ended"
 ]);
 
-const CLOSURE_BOOKING_STATUSES = new Set<BookingStatus>(["completed"]);
+const CLOSURE_BOOKING_STATUSES = new Set<BookingStatus>([
+  "completed"
+]);
 
 export function isClosureBookingStatus(status: BookingStatus | null | undefined): boolean {
   return status != null && CLOSURE_BOOKING_STATUSES.has(status);

@@ -10,9 +10,15 @@ type Props = {
   className?: string;
   variant?: "button" | "link";
   role?: "parent" | "sitter";
+  onSuccess?: () => void | Promise<void>;
 };
 
-export function StuckShiftDevResetButton({ className = "", variant = "button", role = "sitter" }: Props) {
+export function StuckShiftDevResetButton({
+  className = "",
+  variant = "button",
+  role = "sitter",
+  onSuccess
+}: Props) {
   const [busy, setBusy] = useState(false);
 
   const handleReset = useCallback(async () => {
@@ -20,8 +26,10 @@ export function StuckShiftDevResetButton({ className = "", variant = "button", r
     if (!window.confirm("לאפס את המשמרת?")) return;
 
     setBusy(true);
+
     try {
       const auth = await resolveBrowserAuth();
+
       if (auth.ok) {
         if (role === "parent") {
           await resetStuckShiftsForParent(auth.supabase, auth.userId);
@@ -30,13 +38,20 @@ export function StuckShiftDevResetButton({ className = "", variant = "button", r
           await resetStuckShiftsForSitter(auth.supabase, auth.userId);
         }
       }
-      window.location.assign(role === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
+
+      await onSuccess?.();
+
+      window.location.assign(
+        role === "parent" ? "/parent/dashboard" : "/sitter/dashboard"
+      );
     } catch (err) {
       console.warn("[StuckShiftDevResetButton] reset failed", err);
-      // Still navigate home so the UI is not stuck behind an error toast.
-      window.location.assign(role === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
+
+      window.location.assign(
+        role === "parent" ? "/parent/dashboard" : "/sitter/dashboard"
+      );
     }
-  }, [busy, role]);
+  }, [busy, role, onSuccess]);
 
   return (
     <button

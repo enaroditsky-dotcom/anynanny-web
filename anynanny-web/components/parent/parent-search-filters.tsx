@@ -116,7 +116,7 @@ export function ParentSearchFiltersBar({
               type="search"
               inputMode="search"
               autoComplete="off"
-              placeholder="AN-1001 / CONS-1001"
+              placeholder="001 / AN-1001"
               className={`${FIELD_CONTROL} pr-9`}
               value={filters.searchSitterSerial}
               onChange={(e) => patch({ searchSitterSerial: e.target.value })}
@@ -142,7 +142,7 @@ export function ParentSearchFiltersBar({
         </div>
       </div>
 
-      {/* 📅 קוביית זמנים ותאריכים: קוביית בוטיק שמנת חמה ונקייה */}
+      {/* 📅 קוביית זמנים ותאריכים */}
       <div className="rounded-2xl border border-slate-100 bg-[#FDFBF6]/80 p-3.5 space-y-3 shadow-inner">
         <div className="flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
           <Calendar className="h-4 w-4 text-navy-header" />

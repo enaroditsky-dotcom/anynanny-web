@@ -211,7 +211,7 @@ export function SitterShiftsPageContent() {
       </div>
 
       <div className="shrink-0 pt-2">
-        <StuckShiftDevResetButton onReset={handleDevReset} />
+        <StuckShiftDevResetButton role="sitter" variant="button" onSuccess={handleDevReset} />
       </div>
     </div>
   );

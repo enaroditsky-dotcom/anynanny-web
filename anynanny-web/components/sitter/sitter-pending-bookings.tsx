@@ -2,10 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BellRing, CalendarClock, Check, X } from "lucide-react";
-import type {
-  RealtimePostgresChangesPayload,
-  RealtimePostgresDeletePayload
-} from "@supabase/supabase-js";
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { ActionToast } from "@/components/ui/action-toast";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 import {
@@ -107,7 +104,7 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
     if (!supabase) return;
 
     const handleInsert = (
-      payload: RealtimePostgresChangesPayload<BookingRow>
+      payload: RealtimePostgresChangesPayload<Record<string, unknown>>
     ) => {
       const row = (payload.new ?? null) as BookingRow | null;
       if (!row || row.status !== "pending") {
@@ -132,7 +129,7 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
     };
 
     const handleUpdate = (
-      payload: RealtimePostgresChangesPayload<BookingRow>
+      payload: RealtimePostgresChangesPayload<Record<string, unknown>>
     ) => {
       const row = (payload.new ?? null) as BookingRow | null;
       if (row && row.status !== "pending") {
@@ -143,7 +140,7 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
     };
 
     const handleDelete = (
-      payload: RealtimePostgresDeletePayload<BookingRow>
+      payload: RealtimePostgresChangesPayload<Record<string, unknown>>
     ) => {
       const old = (payload.old ?? null) as Partial<BookingRow> | null;
       if (old?.id) {

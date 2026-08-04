@@ -193,7 +193,7 @@ function SitterDoubleShakeIdleCircleInner({
     );
   }
 
-  if (shiftAwake || withinShiftHours || booking.status === "approved") {
+  if (shiftAwake || withinShiftHours) {
     if (booking.status === "sitter_started") {
       return (
         <DoubleShakeCircleButton

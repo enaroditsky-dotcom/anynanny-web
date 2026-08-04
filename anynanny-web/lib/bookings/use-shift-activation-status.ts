@@ -9,6 +9,7 @@ import { isBookingTerminalStatus } from "@/lib/bookings/booking-shift-ui";
 
 export { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
 export { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/booking-status-normalize";
+export type { BookingStatus };
 
 export const NO_ACTIVE_SHIFT_LABEL = "אין משמרת פעילה";
 

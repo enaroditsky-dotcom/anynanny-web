@@ -7,7 +7,7 @@ import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
 import { fetchPendingBookingForParentSitter } from "@/lib/bookings/todays-linked-booking";
-import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
+import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
@@ -21,7 +21,7 @@ export type SitterProfileActionsProps = {
 const REJECTION_NOTICE = "הבקשה נדחתה על ידי המטפלת";
 
 function applyBookingStatusFromPayload(
-  payload: RealtimePostgresChangesPayload<Pick<BookingRow, "status">>,
+  payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
   setBookingStatus: (status: BookingStatus) => void
 ) {
   if (payload.eventType === "DELETE") {
@@ -29,9 +29,14 @@ function applyBookingStatusFromPayload(
     return;
   }
 
-  const row = (payload.new ?? null) as Pick<BookingRow, "status"> | null;
-  if (row?.status) {
-    setBookingStatus(row.status);
+  const row = payload.new;
+
+  if (
+    row &&
+    typeof row === "object" &&
+    typeof row.status === "string"
+  ) {
+    setBookingStatus(row.status as BookingStatus);
   }
 }
 
@@ -99,7 +104,9 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
       if (next) setBookingStatus(next);
     })();
 
-    const handleRealtimeChange = (payload: RealtimePostgresChangesPayload<Pick<BookingRow, "status">>) => {
+    const handleRealtimeChange = (
+      payload: RealtimePostgresChangesPayload<Record<string, unknown>>
+    ) => {
       applyBookingStatusFromPayload(payload, setBookingStatus);
     };
 

@@ -1,6 +1,9 @@
 "use client";
 
-import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
+import {
+  normalizeBookingStatus,
+  type BookingStatusInput
+} from "@/lib/bookings/use-shift-activation-status";
 import { mapSupabaseRowToProtocol, type SessionProtocolState, type SupabaseSessionRow } from "@/lib/session/protocol";
 import { LIVE_BOOKING_STATUSES_FOR_SESSION_UI } from "@/lib/session/sessions-query";
 
@@ -36,7 +39,11 @@ export function shouldSuppressStaleCompletedSession(params: {
   hasInFlightSession: boolean;
 }): boolean {
   if (!params.completedRow || params.hasInFlightSession) return false;
-  const status = normalizeBookingStatus(params.bookingStatus ?? undefined);
+
+  const status = normalizeBookingStatus(
+    params.bookingStatus as BookingStatusInput | undefined
+  );
+
   return status != null && LIVE_BOOKING_STATUSES_FOR_SESSION_UI.has(status);
 }
 

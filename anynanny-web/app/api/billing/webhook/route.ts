@@ -39,6 +39,9 @@ async function handleWalletDeposit(paymentIntent: Stripe.PaymentIntent): Promise
   }
 
   const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Database client initialization failed.");
+  }
 
   const { data: existingTxn, error: existingTxnError } = await supabase
     .from(BILLING_TRANSACTIONS_TABLE)

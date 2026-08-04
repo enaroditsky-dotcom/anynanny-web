@@ -251,7 +251,7 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
       <div className={`flex min-h-0 flex-1 flex-col ${className}`}>
         <StatusCard>{error}</StatusCard>
         <div className="mt-auto shrink-0 pt-2 text-center">
-          <StuckShiftDevResetButton role="parent" variant="link" onReset={() => void handleLocalReset()} />
+          <StuckShiftDevResetButton role="parent" variant="link" onSuccess={() => void handleLocalReset()} />
         </div>
       </div>
     );
@@ -370,7 +370,7 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
           <StuckShiftDevResetButton
             role="parent"
             variant="link"
-            onReset={() => void handleLocalReset()}
+            onSuccess={() => void handleLocalReset()}
           />
         </div>
       ) : null}

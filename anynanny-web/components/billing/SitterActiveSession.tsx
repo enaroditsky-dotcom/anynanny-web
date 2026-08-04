@@ -166,11 +166,16 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
   // שליחת דירוג ההורה על ידי הנני וסגירה מוחלטת
   const handleSitterSubmitRating = async () => {
     if (rating === 0 || ratingBusy) return;
+    
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setActionError("Supabase לא מוגדר.");
+      return;
+    }
+
     setRatingBusy(true);
     
     try {
-      const supabase = getSupabaseBrowserClient();
-      
       // 1. שמירת הדירוג בטבלה המתאימה
       await supabase.from("sitter_ratings").insert([
         {
@@ -364,7 +369,7 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
           <button
             type="button"
             disabled={rating === 0 || ratingBusy}
-            onClick={handleSitterSubmitRating}
+            onClick={() => void handleSitterSubmitRating()}
             className="w-full rounded-xl bg-navy-header py-2.5 text-xs font-bold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
           >
             {ratingBusy ? "שומר..." : "סיום ותודה"}

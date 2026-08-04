@@ -10,6 +10,7 @@ import {
   defaultParentSearchFilters,
   isSerialTargetedSearch,
   normalizeParentSearchFilters,
+  normalizeParentSearchServiceType,
   type ParentSearchFilters,
   type ParentSearchMinExperience,
   type ParentSearchMinRating,
@@ -93,7 +94,9 @@ function parseFiltersFromSearchParams(params: URLSearchParams): ParentSearchFilt
     transport,
     maxHourlyRate,
     selectedCity: readParam(params, ["city", "selectedCity"]) as ParentSearchFilters["selectedCity"],
-    serviceType: readParam(params, ["serviceType", "roleType", "p_service_type"])
+    serviceType: normalizeParentSearchServiceType(
+      readParam(params, ["serviceType", "roleType", "p_service_type"])
+    )
   });
 }
 

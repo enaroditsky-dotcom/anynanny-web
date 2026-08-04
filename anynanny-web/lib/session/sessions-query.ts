@@ -55,9 +55,7 @@ export function readSessionLinkedBookingId(
   return fallbackBookingId?.trim() ?? "";
 }
 
-type SessionBookingQuery = {
-  parentId: string;
-  bookingId: string;
+type SessionFilters = {
   status?: string;
   statuses?: string[];
   completedOnly?: boolean;
@@ -65,20 +63,21 @@ type SessionBookingQuery = {
   ascending?: boolean;
 };
 
-type SessionRowQuery = {
+type SessionBookingQuery = SessionFilters & {
   parentId: string;
-  statuses?: string[];
-  completedOnly?: boolean;
-  orderBy?: "created_at" | "end_time";
-  ascending?: boolean;
+  bookingId: string;
+};
+
+type SessionRowQuery = SessionFilters & {
+  parentId: string;
 };
 
 function applySessionFilters(
-  request: ReturnType<SupabaseClient["from"]>,
-  query: SessionBookingQuery | SessionRowQuery
+  request: any,
+  query: SessionFilters
 ) {
   let next = request;
-  if ("status" in query && query.status) {
+  if (query.status) {
     next = next.eq("status", query.status);
   }
   if (query.statuses?.length) {
@@ -92,7 +91,7 @@ function applySessionFilters(
 
 async function selectSessionMaybeSingle(
   supabase: SupabaseClient,
-  build: (select: string) => ReturnType<SupabaseClient["from"]>
+  build: (select: string) => any
 ): Promise<{ row: SupabaseSessionRow | null; error: string | null }> {
   let lastError: string | null = null;
 
@@ -230,7 +229,7 @@ export async function updateSessionReturningRow(
   let lastError: string | null = null;
 
   for (const select of SESSION_SELECT_FALLBACK_CHAIN) {
-    let request = supabase.from(SESSIONS_TABLE).update(payload).eq("id", sessionId).select(select);
+    let request: any = supabase.from(SESSIONS_TABLE).update(payload).eq("id", sessionId).select(select);
     if (filters?.parentId) {
       request = request.eq("parent_id", filters.parentId);
     }
@@ -303,8 +302,9 @@ async function querySessionsByParticipants(
     return { row: null, error: bookingRead.error };
   }
 
+  const bookingData = bookingRead.data as Record<string, unknown> | null;
   const sitterId =
-    bookingRead.data?.sitter_id != null ? String(bookingRead.data.sitter_id).trim() : "";
+    bookingData?.sitter_id != null ? String(bookingData.sitter_id).trim() : "";
   if (!sitterId) {
     return { row: null, error: null };
   }

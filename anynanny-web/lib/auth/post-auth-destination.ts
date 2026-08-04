@@ -191,7 +191,7 @@ export async function resolvePostAuthPath(
     if (targetRole === "sitter") {
       // מקרה מולטי-רול: אם המשתמש בחר להיכנס כנני אך חסרה שורה בטבלה, ניצור אותה מיד
       if (!hasSitterProfile) {
-        await supabase.from(SITTER_PROFILES_TABLE).insert({ [fk]: userId });
+        await supabase.from(SITTER_PROFILES_TABLE).insert({ [fk]: userId } as never);
       }
       return "/sitter/dashboard";
     }

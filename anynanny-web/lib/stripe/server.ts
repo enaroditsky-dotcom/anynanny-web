@@ -9,7 +9,7 @@ export function getStripe(): Stripe {
   }
   if (!stripe) {
     stripe = new Stripe(key, {
-      apiVersion: "2026-04-22.dahlia",
+      apiVersion: "2026-05-27.dahlia",
       typescript: true
     });
   }

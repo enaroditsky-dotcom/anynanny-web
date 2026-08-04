@@ -7,26 +7,17 @@ import { useAuth } from "@/components/auth-provider";
 import { MainLayout } from "@components/layout/MainLayout";
 import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filters";
 import {
-  EXPERT_SERVICE_OPTIONS,
-  EXPERT_SERVICE_VISUALS,
-  type ExpertServiceKind
-} from "@/components/sitter/expert-service-icons";
-import {
   defaultParentSearchFilters,
   normalizeParentSearchFilters,
-  normalizeParentSearchServiceType,
   type ParentSearchFilters
 } from "@/lib/sitter/parent-search-filters";
 
-function buildResultsSearchParams(filters: ParentSearchFilters, serviceType: ExpertServiceKind): string {
-  const safe = normalizeParentSearchFilters({
-    ...filters,
-    serviceType: normalizeParentSearchServiceType(serviceType)
-  });
+function buildResultsSearchParams(filters: ParentSearchFilters): string {
+  const safe = normalizeParentSearchFilters(filters);
   const params = new URLSearchParams();
 
-  params.set("roleType", EXPERT_SERVICE_VISUALS[safe.serviceType].alias);
-  params.set("serviceType", safe.serviceType);
+  params.set("roleType", "sitter");
+  params.set("serviceType", "babysitter");
 
   const serial = safe.searchSitterSerial.trim();
   if (serial) params.set("serial", serial);
@@ -68,7 +59,6 @@ function ParentSearchContent() {
   const searchParams = useSearchParams();
   const { isLoading, signedIn, effectiveRole, user } = useAuth();
   const [draftFilters, setDraftFilters] = useState<ParentSearchFilters>(() => defaultParentSearchFilters());
-  const [serviceType, setServiceType] = useState<ExpertServiceKind>("babysitter");
   const [navigating, setNavigating] = useState(false);
 
   useEffect(() => {
@@ -82,16 +72,11 @@ function ParentSearchContent() {
     }
   }, [isLoading, signedIn, effectiveRole, router]);
 
-  useEffect(() => {
-    const fromUrl = searchParams.get("serviceType") || searchParams.get("roleType");
-    if (fromUrl) setServiceType(normalizeParentSearchServiceType(fromUrl));
-  }, [searchParams]);
-
   const handleSearch = useCallback(() => {
     const filters = normalizeParentSearchFilters(draftFilters);
     setNavigating(true);
-    router.push(buildResultsSearchParams(filters, serviceType));
-  }, [draftFilters, serviceType, router]);
+    router.push(buildResultsSearchParams(filters));
+  }, [draftFilters, router]);
 
   const authSettled = !isLoading;
   const showContent = authSettled && signedIn && effectiveRole === "parent";
@@ -99,13 +84,6 @@ function ParentSearchContent() {
   const redirectingToLogin = authSettled && !signedIn;
 
   const parentPublicId = (user as any)?.parent_public_id || (user as any)?.user_metadata?.parent_public_id;
-
-  const getSearchButtonLabel = () => {
-    if (serviceType === "lactation_consultant") return "חפש יועצת הנקה";
-    if (serviceType === "sleep_consultant") return "חפש יועצת שינה";
-    if (serviceType === "doula") return "חפש דולה";
-    return "חפש בייביסיטר";
-  };
 
   return (
     <MainLayout>
@@ -131,33 +109,6 @@ function ParentSearchContent() {
               ) : null}
             </header>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="סוג השירות">
-              {EXPERT_SERVICE_OPTIONS.map((kind) => {
-                const visual = EXPERT_SERVICE_VISUALS[kind];
-                const Icon = visual.Icon;
-                const selected = serviceType === kind;
-                return (
-                  <button
-                    key={kind}
-                    type="button"
-                    onClick={() => setServiceType(kind)}
-                    aria-pressed={selected}
-                    className={`flex flex-col items-center justify-center rounded-2xl border p-3 text-center transition-all duration-200 active:scale-95 ${
-                      selected
-                        ? visual.selectedClass
-                        : "border-slate-100 bg-white text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    <Icon
-                      className={`mb-1 h-5 w-5 ${selected ? visual.iconClass : "text-slate-400"}`}
-                      aria-hidden
-                    />
-                    <span className="text-[11px] tracking-tight sm:text-xs">{visual.labelHe}</span>
-                  </button>
-                );
-              })}
-            </div>
-
             <div className="rounded-2xl bg-white p-1">
               <ParentSearchFiltersBar
                 filters={draftFilters}
@@ -173,7 +124,7 @@ function ParentSearchContent() {
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#001F3F] py-3.5 text-sm font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
               >
                 <Search className="h-4 w-4" aria-hidden />
-                {getSearchButtonLabel()}
+                חפש בייביסיטר
               </button>
             </div>
           </div>

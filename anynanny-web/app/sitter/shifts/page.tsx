@@ -261,7 +261,7 @@ export default function SitterShiftsPage() {
           bookingDate: row.booking_date,
           startTime: row.start_time,
           endTime: row.end_time,
-          status: (normalizeBookingStatus(row.status) ?? "approved") as BookingStatus,
+          status: normalizeBookingStatus(row.status as BookingStatus) ?? "approved",
           scheduleLabel: formatBookingSchedule(row)
         }))
       );

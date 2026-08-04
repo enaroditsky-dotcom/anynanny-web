@@ -582,9 +582,9 @@ export default function SitterDashboardPage() {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !sitterId || loading || checkingAuthEnforcement) return;
 
-    const handler = (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+    const handler = (payload: any) => {
       if (payload.eventType !== "INSERT") return;
-      const newRow = (payload as { new?: Record<string, unknown> | null }).new;
+      const newRow = payload.new;
       if (!newRow) return;
 
       const createdAt =

@@ -240,7 +240,6 @@ async function invokeListPublicSittersSearchRpc(
     "list_public_sitters_search"
   );
 
-  // Older DBs may not have p_service_type yet — retry without it.
   if (read.error) {
     const message = readSupabaseErrorMessage(read.error).toLowerCase();
     if (message.includes("p_service_type") || message.includes("service_type")) {
@@ -312,7 +311,6 @@ async function enrichSearchCardsWithWorkingCities(
 function rowOffersServiceType(row: Record<string, unknown>, serviceType: string): boolean {
   const raw = row.service_types;
   if (!Array.isArray(raw) || raw.length === 0) {
-    // Legacy rows without the column default to babysitter.
     return serviceType === "babysitter";
   }
   return raw.map((v) => String(v).trim().toLowerCase()).includes(serviceType);
@@ -329,8 +327,8 @@ async function runBrowseParentSitterSearchDirect(
 
   let query = supabase.from(SITTER_PROFILES_TABLE).select(withServiceTypes).eq("is_public", true);
 
-  if (safe.city) {
-    query = query.contains(SITTER_WORKING_CITIES_COLUMN, [safe.city]);
+  if (safe.selectedCity) {
+    query = query.contains(SITTER_WORKING_CITIES_COLUMN, [safe.selectedCity]);
   }
 
   let { data, error } = await query;
@@ -355,8 +353,8 @@ async function runBrowseParentSitterSearchDirect(
       .from(SITTER_PROFILES_TABLE)
       .select(fallbackSelect)
       .eq("is_public", true);
-    if (safe.city) {
-      fallbackQuery = fallbackQuery.contains(SITTER_WORKING_CITIES_COLUMN, [safe.city]);
+    if (safe.selectedCity) {
+      fallbackQuery = fallbackQuery.contains(SITTER_WORKING_CITIES_COLUMN, [safe.selectedCity]);
     }
     const fallback = await fallbackQuery;
     data = fallback.data as typeof data;
