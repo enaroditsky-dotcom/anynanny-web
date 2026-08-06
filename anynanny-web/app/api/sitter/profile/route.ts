@@ -69,7 +69,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase.from(PROFILES_TABLE).select("role").eq("id", user.id).maybeSingle();
+    const { data: profile } = await supabase.from(PROFILES_TABLE).select("role, avatar_url").eq("id", user.id).maybeSingle();
     if (!userIsSitter(profile, user)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -83,7 +83,12 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json({ profile: data as SitterProfileRow | null });
+    const mergedProfile = {
+      ...(data || {}),
+      avatar_url: profile?.avatar_url ?? (data as any)?.avatar_url ?? null
+    };
+
+    return NextResponse.json({ profile: mergedProfile as SitterProfileRow | null });
   } catch (err) {
     console.error("[api/sitter/profile GET] exception:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
@@ -111,7 +116,29 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await request.json()) as Partial<SitterProfileRow>;
+    const body = (await request.json()) as Partial<SitterProfileRow> & { avatar_url?: string | null };
+
+    if (body.avatar_url !== undefined) {
+      const { error: avatarUpdateError } = await supabase
+        .from(PROFILES_TABLE)
+        .update({
+          avatar_url: body.avatar_url ? body.avatar_url.trim() : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", user.id);
+
+      if (avatarUpdateError) {
+        console.error("[api/sitter/profile PUT avatar]", {
+          userId: user.id,
+          message: avatarUpdateError.message
+        });
+
+        return NextResponse.json(
+          { error: "שמירת תמונת הפרופיל נכשלה." },
+          { status: 400 }
+        );
+      }
+    }
 
     const fk = SITTER_PROFILES_USER_COLUMN;
     const table = getSitterProfilesTable() as typeof SITTER_PROFILES_TABLE;
@@ -128,8 +155,6 @@ export async function PUT(request: Request) {
             ? false
             : null;
 
-    // Only merge fields that exist on production sitter_profiles.
-    // Do not include legal_no_criminal_declaration — missing on some schemas.
     const merged: Record<string, unknown> = {
       first_name: body.first_name !== undefined ? body.first_name : prev.first_name ?? null,
       last_name: body.last_name !== undefined ? body.last_name : prev.last_name ?? null,
@@ -155,7 +180,6 @@ export async function PUT(request: Request) {
           ? normalizePreferredAges(body.preferred_ages)
           : normalizePreferredAges(prev.preferred_ages),
       has_car: body.has_car !== undefined ? Boolean(body.has_car) : Boolean(prev.has_car),
-      // Always a JS string[] for Postgres text[] — never a comma-separated string.
       languages:
         body.languages !== undefined
           ? normalizeSitterLanguages(body.languages)
@@ -195,7 +219,6 @@ export async function PUT(request: Request) {
       isExpertOnlyServiceKind(t)
     );
     if (isExpertProfile) {
-      // Babysitter-only skills — never persist for consultants / doulas.
       merged.has_car = false;
       merged.homework_help = false;
       merged.light_cooking = false;
@@ -251,7 +274,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: lastError || "שמירת הפרופיל נכשלה." }, { status: 400 });
     }
 
-    return NextResponse.json({ profile: data });
+    const { data: updatedProfileData } = await supabase.from(PROFILES_TABLE).select("avatar_url").eq("id", user.id).maybeSingle();
+
+    const finalResult = {
+      ...data,
+      avatar_url: updatedProfileData?.avatar_url ?? null
+    };
+
+    return NextResponse.json({ profile: finalResult });
   } catch (err) {
     console.error("[api/sitter/profile PUT] exception:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

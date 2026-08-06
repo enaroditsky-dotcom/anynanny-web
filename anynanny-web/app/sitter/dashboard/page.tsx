@@ -36,8 +36,7 @@ import { doesBookingBlockSessionShiftUi, SHIFT_ACTIVATION_LEAD_MS } from "@/lib/
 import { isSitterBookingAwaitingApprovalStatus, isSitterShiftCircleStatus } from "@/lib/bookings/booking-realtime-handler";
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
 import { fetchTodayBookingShiftGate, fetchTodaysPendingBookingRequest, type TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
-import { buildShiftWindowMs } from "@/lib/bookings/use-shift-activation-status";
-import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
+import { buildShiftWindowMs, normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
 import { useTodaysLinkedBooking, type TodaysLinkedBookingSyncPayload } from "@/lib/bookings/use-todays-linked-booking";
 import { sitterCompleteSession } from "@/lib/session/sitter-complete-session";
 import { sitterMarkBookingEnded } from "@/lib/bookings/sitter-mark-booking-ended";
@@ -52,7 +51,6 @@ const SITTER_TERMINAL_SESSION_STATUSES = ["completed", "sitter_completed", "paym
 
 type SitterSessionQueryResult = { data: unknown; error: unknown };
 
-/** Prefer a working select when optional columns 400 on drifted schemas. */
 async function selectSitterSessionRows(
   build: (select: string) => PromiseLike<SitterSessionQueryResult>
 ): Promise<{ data: SupabaseSessionRow[]; error: string | null }> {
@@ -150,6 +148,7 @@ export default function SitterDashboardPage() {
   const [forceEndToast, setForceEndToast] = useState<string | null>(null);
   const [endShiftBusy, setEndShiftBusy] = useState(false);
   const [profileCardStatus, setProfileCardStatus] = useState<"loading" | "complete" | "incomplete">("loading");
+  const [sitterAvatarUrl, setSitterAvatarUrl] = useState<string | null>(null);
   const [dashboardStatsRefreshKey, setDashboardStatsRefreshKey] = useState(0);
   const [sitterPublicDisplayId, setSitterPublicDisplayId] = useState<string | null>(null);
   const [sitterSerialLoaded, setSitterSerialLoaded] = useState(false);
@@ -157,11 +156,11 @@ export default function SitterDashboardPage() {
   const [checkingAuthEnforcement, setCheckingAuthEnforcement] = useState(true);
   const lastBookingToastKeyRef = useRef<string | null>(null);
   const lastRealtimeToastAtRef = useRef<number>(0);
+
   const handleBookingLiveSync = useCallback((payload: TodaysLinkedBookingSyncPayload) => {
     syncFromPayload(payload);
     if (payload.booking) { syncFromLinkedBooking(payload.booking); }
 
-    // Instant UI signal on realtime INSERT/UPDATE so the sitter never needs refresh.
     if (payload.source !== "realtime") return;
     if (!payload.liveFieldsChanged) return;
     const row = payload.row ?? payload.booking;
@@ -213,7 +212,6 @@ export default function SitterDashboardPage() {
   }, [todaysBookingHook, todayBookingShiftGateHook, bookingGuardReadyHook, patchSitterBookingCache]);
 
   const bookingGuardReady = bookingGuardReadyHook || sitterBookingCache.ready;
-  // Once the live hook has resolved, never prefer a stale SessionContext cache over a null booking.
   const todaysBooking = bookingGuardReadyHook
     ? todaysBookingHook
     : (todaysBookingHook ?? sitterBookingCache.booking);
@@ -226,19 +224,6 @@ export default function SitterDashboardPage() {
     syncFromLinkedBooking(todaysBooking);
   }, [todaysBooking, syncFromLinkedBooking]);
 
-  const gateBookingStatus = normalizeBookingStatus(todayBookingShiftGate?.status) ?? "";
-
-  useEffect(() => {
-    if (!todaysBooking) return;
-    const liveStatus = normalizeBookingStatus(todaysBooking.status) ?? "";
-    if (
-      (liveStatus === "completed" || liveStatus === "cancelled" || liveStatus === "rejected") &&
-      circleBooking?.id === todaysBooking.id
-    ) {
-      applyCircleBooking(null);
-    }
-  }, [todaysBooking, circleBooking?.id, applyCircleBooking]);
-
   const sessionUiBlockedByBooking = useMemo(
     () => bookingGuardReady && doesBookingBlockSessionShiftUi(todayBookingShiftGate),
     [bookingGuardReady, todayBookingShiftGate]
@@ -250,7 +235,6 @@ export default function SitterDashboardPage() {
       isSitterBookingAwaitingApprovalStatus(todaysBooking?.status ?? null));
 
   useEffect(() => {
-    // Instant path: linked booking hook already holds the pending row from query/realtime.
     if (todaysBooking && isSitterBookingAwaitingApprovalStatus(todaysBooking.status)) {
       setPendingApprovalBooking(todaysBooking);
       return;
@@ -366,7 +350,6 @@ export default function SitterDashboardPage() {
     const hasBookingRow = Boolean(gate?.id);
     const gateStatus = normalizeBookingStatus(gate?.status) ?? "";
 
-    // No booking row in DB — wipe every ghost session/settlement UI immediately.
     if (!hasBookingRow) {
       setPendingRow(null);
       setEndConfirmRow(null);
@@ -400,13 +383,10 @@ export default function SitterDashboardPage() {
       terminalStatus === "paid" ||
       terminalStatus === "payment_pending";
 
-    // Rejected/cancelled bookings must never keep settlement ghosts.
     if (gateStatus === "rejected" || gateStatus === "cancelled") {
       completedShow = null;
     }
 
-    // Fresh pending/approved/started asks must never inherit prior payment_pending UI.
-    // Settlement/waiting-for-pay is only valid for sitter_ended or unpaid completed.
     if (completedShow && !bookingAllowsSettlementClosureUi(gateStatus)) {
       completedShow = null;
     }
@@ -419,13 +399,11 @@ export default function SitterDashboardPage() {
         hasInFlightSession: Boolean(pending || endConfirm || activeOnly)
       })
     ) {
-      // Live early statuses already cleared above; keep for safety on mixed states.
       if (isFreshLiveBookingStatus(gateStatus)) {
         completedShow = null;
       }
     }
 
-    // Apply UI rows in one pass — never paint active timer before terminal/settlement wins.
     if (bookingBlocksUi || (isProcessingClosure && completedShow)) {
       setPendingRow(null);
       setEndConfirmRow(null);
@@ -438,7 +416,6 @@ export default function SitterDashboardPage() {
 
     if (isProcessingClosure && completedShow) {
       if (gateStatus === "completed" && terminalStatus === "completed") {
-        // Fully closed booking+session with no pay/rating step — don't linger.
         completedShow = null;
       }
     } else if (
@@ -460,20 +437,40 @@ export default function SitterDashboardPage() {
     suppressCompletedSummaryIdRef
   ]);
 
-  const refreshSitterProfileCardStatus = useCallback(async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
-    const { data, error } = await supabase
-      .from(SITTER_PROFILES_TABLE)
-      .select("onboarding_completed_at")
-      .eq(SITTER_PROFILES_USER_COLUMN, uid)
-      .maybeSingle();
+  const refreshSitterProfileCardStatus = useCallback(
+    async (
+      supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
+      uid: string
+    ) => {
+      const [{ data: sitterProfile, error: sitterError }, { data: mainProfile, error: profileError }] =
+        await Promise.all([
+          supabase
+            .from(SITTER_PROFILES_TABLE)
+            .select("onboarding_completed_at")
+            .eq(SITTER_PROFILES_USER_COLUMN, uid)
+            .maybeSingle(),
 
-    if (error) {
-      setProfileCardStatus("incomplete");
-      return;
-    }
+          supabase
+            .from("profiles")
+            .select("avatar_url")
+            .eq("id", uid)
+            .maybeSingle()
+        ]);
 
-    setProfileCardStatus(hasSitterCompletedOnboarding(data ?? {}) ? "complete" : "incomplete");
-  }, []);
+      if (sitterError || profileError) {
+        setProfileCardStatus("incomplete");
+        return;
+      }
+
+      setSitterAvatarUrl(mainProfile?.avatar_url ?? null);
+      setProfileCardStatus(
+        hasSitterCompletedOnboarding(sitterProfile ?? {})
+          ? "complete"
+          : "incomplete"
+      );
+    },
+    []
+  );
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -487,14 +484,23 @@ export default function SitterDashboardPage() {
       }
       setSitterId(auth.userId);
 
-      const { data: sitterProfile } = await auth.supabase
-        .from(SITTER_PROFILES_TABLE)
-        .select("onboarding_completed_at")
-        .eq(SITTER_PROFILES_USER_COLUMN, auth.userId)
-        .maybeSingle();
+      const [{ data: sitterProfile }, { data: mainProfile }] = await Promise.all([
+        auth.supabase
+          .from(SITTER_PROFILES_TABLE)
+          .select("onboarding_completed_at")
+          .eq(SITTER_PROFILES_USER_COLUMN, auth.userId)
+          .maybeSingle(),
+
+        auth.supabase
+          .from("profiles")
+          .select("avatar_url")
+          .eq("id", auth.userId)
+          .maybeSingle()
+      ]);
 
       if (cancelled) return;
 
+      setSitterAvatarUrl(mainProfile?.avatar_url ?? null);
       const onboardingDone = hasSitterCompletedOnboarding(sitterProfile ?? {});
       setProfileCardStatus(onboardingDone ? "complete" : "incomplete");
 
@@ -520,8 +526,6 @@ export default function SitterDashboardPage() {
     return () => { cancelled = true; };
   }, [sitterId]);
 
-  // Keep handlers in refs so Realtime channel identity stays stable across
-  // reloadTodaysBooking / refreshForUser identity changes (avoids CHANNEL_ERROR 1006 thrash).
   const reloadTodaysBookingRef = useRef(reloadTodaysBooking);
   const refreshForUserRef = useRef(refreshForUser);
   const lastNotificationReloadRef = useRef<number>(0);
@@ -536,14 +540,12 @@ export default function SitterDashboardPage() {
     const refreshSitterLiveState = () => {
       void reloadTodaysBookingRef.current();
       void refreshForUserRef.current(supabase, sitterId);
-      // Debounce rating/header RPC — avoid spam on every row change / reconnect.
       if (statsRefreshTimer) clearTimeout(statsRefreshTimer);
       statsRefreshTimer = setTimeout(() => {
         setDashboardStatsRefreshKey((k) => k + 1);
       }, 2500);
     };
 
-    // Single channel for bookings + sessions — fewer sockets, less 1006 drop risk.
     const channel = subscribePostgresChanges(
       supabase,
       `sitter-dashboard-live-${sitterId}`,
@@ -562,7 +564,6 @@ export default function SitterDashboardPage() {
         }
       ],
       (status, err) => {
-        // Do not refresh on SUBSCRIBED — reconnects were thrashing UI + RPC calls.
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           console.warn("[sitter-dashboard] realtime:", status, err?.message);
           refreshSitterLiveState();
@@ -576,8 +577,6 @@ export default function SitterDashboardPage() {
     };
   }, [sitterId, loading, checkingAuthEnforcement]);
 
-  // Notifications (shift_request inserts/updates) can arrive even when booking rows
-  // are filtered out; use them as the immediate UX signal for the sitter.
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !sitterId || loading || checkingAuthEnforcement) return;
@@ -595,7 +594,6 @@ export default function SitterDashboardPage() {
             : null;
       if (createdAt) {
         const ageMs = Date.now() - Date.parse(createdAt);
-        // Ignore stale/replayed rows — toasts only for genuine fresh inserts.
         if (Number.isFinite(ageMs) && ageMs > 45_000) return;
       }
 
@@ -611,7 +609,6 @@ export default function SitterDashboardPage() {
             ? "rose"
             : "amber";
 
-      // Avoid spamming the toast for duplicate realtime events.
       const notifId = typeof newRow.id === "string" ? newRow.id : null;
       const toastKey = notifId ? `${notifId}:${kind}` : `${msg}:${Date.now()}`;
       if (lastBookingToastKeyRef.current === toastKey) return;
@@ -640,9 +637,6 @@ export default function SitterDashboardPage() {
         handler
       },
       (status, err) => {
-        if (status === "SUBSCRIBED") {
-          // no-op; immediate UX only on insert
-        }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           console.warn("[sitter-dashboard] notifications realtime:", status, err?.message);
         }
@@ -659,8 +653,6 @@ export default function SitterDashboardPage() {
     void reloadTodaysBooking();
   }, [reloadTodaysBooking, checkingAuthEnforcement, pendingRow?.id, pendingRow?.status, activeShiftRow?.id, activeShiftRow?.status, endConfirmRow?.id, endConfirmRow?.status, completedSummaryRow?.id, completedSummaryRow?.status]);
 
-  // Polling fallback — always while dashboard is open so idle sitters still see new asks
-  // even if a realtime event is missed.
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !sitterId || loading || checkingAuthEnforcement) return;
@@ -682,7 +674,6 @@ export default function SitterDashboardPage() {
       void refreshForUser(supabase, sitterId);
     };
 
-    // Faster while a shift is live; slower idle poll still catches new pending inserts.
     const intervalMs = inFlight || todaysBookingHook ? 5000 : 12000;
     const id = window.setInterval(tick, intervalMs);
     const onFocus = () => {
@@ -750,14 +741,12 @@ export default function SitterDashboardPage() {
     setSitterClosureError(null);
   }, [applyCircleBooking, setPendingRow, setActiveShiftRow, setEndConfirmRow, setCompletedSummaryRow]);
 
-  // Empty bookings table / no gate → wipe ghost settlement UI even if orphan sessions remain.
   useEffect(() => {
     if (!bookingGuardReady) return;
     if (todaysBooking?.id || todayBookingShiftGate?.id) return;
     clearSitterShiftUi();
   }, [bookingGuardReady, todaysBooking?.id, todayBookingShiftGate?.id, clearSitterShiftUi]);
 
-  // Parent created a new booking — drop any orphan payment_pending closure immediately.
   useEffect(() => {
     const onNewBooking = () => {
       setCompletedSummaryRow(null);
@@ -830,7 +819,6 @@ export default function SitterDashboardPage() {
       const { error } = await sitterCompleteSession(auth.supabase, sitterId, row.id, row.start_time);
       if (error) { setBanner(friendlySupabaseSessionError(error)); return; }
 
-      // Mirror onto booking so the parent dashboard realtime path sees `sitter_ended` immediately.
       if (bookingId) {
         await sitterMarkBookingEnded(auth.supabase, sitterId, String(bookingId));
       }
@@ -843,7 +831,7 @@ export default function SitterDashboardPage() {
   const confirmEndShift = async () => { if (endConfirmRow) await completeSessionRow(endConfirmRow); };
   const endActiveSession = async () => { if (activeShiftRow) await completeSessionRow(activeShiftRow); };
 
-  const onboardingPending = profileCardStatus === "incomplete";
+  const onboardingPending = false;
   const pendingBookingCount = useSitterPendingBookingCount(sitterId, !onboardingPending);
 
   const handleOnboardingSaved = useCallback(async () => {
@@ -888,7 +876,6 @@ export default function SitterDashboardPage() {
   const gateAllowsSettlement = bookingAllowsSettlementClosureUi(
     todayBookingShiftGate?.status ?? todaysBooking?.status
   );
-  // Settlement/payment ghosts require a live booking row at end-of-shift — never a fresh pending ask.
   const showSitterAwaitingParentApproval =
     hasBookingAnchor &&
     gateAllowsSettlement &&
@@ -901,7 +888,6 @@ export default function SitterDashboardPage() {
     sitterTerminalDbStatus === "payment_pending" &&
     !sitterInFlightActive &&
     !sessionUiBlockedByBooking;
-  /** Rating unlocks only after payment clears — never on bare booking/session `completed`. */
   const isSessionPaidAndReadyForRating =
     hasBookingAnchor && gateAllowsSettlement && sitterTerminalDbStatus === "paid";
   const showSitterCompletedClosure =
@@ -967,7 +953,6 @@ export default function SitterDashboardPage() {
                 : "סטטוס משמרת — לחצו להרחבה";
 
   useEffect(() => {
-    // Reset sitter status panel collapse when the active status identity changes.
     setStatusPanelCollapsed(false);
   }, [sitterStatusPanelKey]);
 
@@ -1080,6 +1065,7 @@ export default function SitterDashboardPage() {
             showPublicId={sitterSerialLoaded}
             publicDisplayId={sitterPublicDisplayId}
             publicIdLoaded={sitterSerialLoaded}
+            avatarUrl={sitterAvatarUrl}
           />
         </div>
           {forceEndToast ? (
@@ -1227,7 +1213,6 @@ export default function SitterDashboardPage() {
               <LogoutButton />
             </div>
           ) : null}
-          {/* Keep mounted so dismiss state / channels survive approval UI toggles. */}
           {sitterId ? (
             <SitterBroadcastAlertModal sitterId={sitterId} paused={showSitterBookingApproval} />
           ) : null}
