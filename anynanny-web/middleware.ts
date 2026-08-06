@@ -15,5 +15,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"]
+  // מוציא את כל נתיבי ה־auth וקבצים סטטיים מהבדיקה הקפדנית של ה־Middleware
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|auth/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"]
 };

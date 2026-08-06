@@ -10,7 +10,7 @@ import {
   isRpcKnownMissing,
   markRpcMissing
 } from "@/lib/supabase/rpc-availability";
-import { Star } from "lucide-react";
+import { Star, User } from "lucide-react";
 
 type SitterDashboardStats = {
   avg_rating: number | null;
@@ -49,6 +49,7 @@ type SitterDashboardHeaderProps = {
   showPublicId?: boolean;
   publicDisplayId?: string | null;
   publicIdLoaded?: boolean;
+  avatarUrl?: string | null;
   children?: ReactNode;
 };
 
@@ -60,6 +61,7 @@ export function SitterDashboardHeader({
   showPublicId = false,
   publicDisplayId = null,
   publicIdLoaded = false,
+  avatarUrl = null,
   children
 }: SitterDashboardHeaderProps) {
   const [loadState, setLoadState] = useState<LoadState>("idle");
@@ -135,9 +137,20 @@ export function SitterDashboardHeader({
     <header className="px-0" dir="rtl">
       <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
         <div className="flex items-center justify-between">
-          <h1 className={`text-lg font-bold text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}>
-            {greeting}
-          </h1>
+          <div className="flex items-center gap-3">
+            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="תמונת פרופיל" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                  <User className="h-6 w-6" />
+                </div>
+              )}
+            </div>
+            <h1 className={`text-lg font-bold text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}>
+              {greeting}
+            </h1>
+          </div>
           {showIdPill && displayIdValue ? (
             <span
               className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-[11px] font-bold text-purple-800"

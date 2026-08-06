@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Camera, User } from "lucide-react";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import {
   PersonalAreaSection,
@@ -16,21 +16,8 @@ import {
   yesNoLabel
 } from "@/components/personal-area/personal-area-ui";
 import { SitterBankDetailsSection } from "@/components/sitter/SitterBankDetailsSection";
-import { ExpertRegistrationFields } from "@/components/sitter/expert-registration-fields";
-import { EXPERT_SERVICE_VISUALS } from "@/components/sitter/expert-service-icons";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
-import {
-  expertDraftToProfilePatch,
-  EXPERT_BIO_MAX_LENGTH,
-  isExpertOnlyServiceKind,
-  normalizeExpertServiceTypes,
-  normalizePricingModel,
-  normalizeServiceLocations,
-  SERVICE_LOCATION_OPTIONS,
-  validateExpertProfileDraft,
-  type ExpertProfileDraft
-} from "@/lib/sitter/expert-profile";
 import {
   formatPreferredAgesDisplay,
   formatPreferredAgesRange,
@@ -45,6 +32,7 @@ import {
   type SitterLanguage,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type FormState = {
   first_name: string;
@@ -60,11 +48,6 @@ type FormState = {
   military_service: string;
   years_experience: string;
   hourly_rate_nis: string;
-  package_price_nis: string;
-  pricing_model: "hourly" | "package";
-  service_type: ExpertProfileDraft["serviceType"] | "babysitter";
-  service_locations: ExpertProfileDraft["serviceLocations"];
-  certifications: string;
   preferred_ages: string;
   languages: SitterLanguage[];
   has_car: boolean;
@@ -76,6 +59,7 @@ type FormState = {
   legal_no_criminal_declaration: boolean;
   working_cities: IsraelCity[];
   nanny_serial: string;
+  avatar_url: string;
 };
 
 type EditKey =
@@ -99,28 +83,7 @@ type EditKey =
   | "visibility"
   | "skills"
   | "legal"
-  | "expert_profile";
-
-function formToExpertDraft(form: FormState): ExpertProfileDraft {
-  const serviceType = isExpertOnlyServiceKind(form.service_type)
-    ? form.service_type
-    : "lactation_consultant";
-  return {
-    serviceType,
-    serviceLocations: form.service_locations,
-    pricingModel: form.pricing_model,
-    hourlyRateNis: form.hourly_rate_nis,
-    packagePriceNis: form.package_price_nis,
-    bio: form.bio,
-    certifications: form.certifications
-  };
-}
-
-function isExpertForm(form: FormState): boolean {
-  if (isExpertOnlyServiceKind(form.service_type)) return true;
-  // Fallback when service_types were not loaded but CONS- serial already assigned.
-  return /^CONS-/i.test(String(form.nanny_serial ?? "").trim());
-}
+  | "avatar";
 
 function militaryToForm(value: unknown): string {
   if (value === true || value === "true" || value === "כן") return "כן";
@@ -202,13 +165,6 @@ function PreferredAgesEditor({
 }
 
 function profileToForm(profile: SitterProfileRow | null): FormState {
-  const types = normalizeExpertServiceTypes(profile?.service_types);
-  const serial = String(profile?.nanny_serial ?? "").trim();
-  const primary =
-    types.find((t) => isExpertOnlyServiceKind(t)) ??
-    (/^CONS-/i.test(serial) ? "lactation_consultant" : null) ??
-    types[0] ??
-    "babysitter";
   return {
     first_name: profile?.first_name ?? "",
     last_name: profile?.last_name ?? "",
@@ -228,11 +184,6 @@ function profileToForm(profile: SitterProfileRow | null): FormState {
     military_service: militaryToForm(profile?.military_service),
     years_experience: profile?.years_experience != null ? String(profile.years_experience) : "",
     hourly_rate_nis: profile?.hourly_rate_nis != null ? String(profile.hourly_rate_nis) : "",
-    package_price_nis: profile?.package_price_nis != null ? String(profile.package_price_nis) : "",
-    pricing_model: normalizePricingModel(profile?.pricing_model),
-    service_type: primary,
-    service_locations: normalizeServiceLocations(profile?.service_locations),
-    certifications: profile?.certifications ?? "",
     preferred_ages: formatPreferredAgesDisplay(profile?.preferred_ages),
     languages: normalizeSitterLanguages(profile?.languages),
     has_car: Boolean(profile?.has_car),
@@ -243,12 +194,13 @@ function profileToForm(profile: SitterProfileRow | null): FormState {
     referee_phone_2: profile?.referee_phone_2 ?? "",
     legal_no_criminal_declaration: Boolean(profile?.legal_no_criminal_declaration),
     working_cities: normalizeWorkingCities(profile?.working_cities),
-    nanny_serial: profile?.nanny_serial ?? ""
+    nanny_serial: profile?.nanny_serial ?? "",
+    avatar_url: String(profile?.avatar_url ?? "")
   };
 }
 
 function formToPayload(form: FormState): Record<string, unknown> {
-  const base: Record<string, unknown> = {
+  return {
     first_name: form.first_name.trim(),
     last_name: form.last_name.trim(),
     birth_date: form.birth_date || null,
@@ -266,28 +218,15 @@ function formToPayload(form: FormState): Record<string, unknown> {
     has_car: form.has_car,
     homework_help: form.homework_help,
     light_cooking: form.light_cooking,
-    bio: form.bio.trim().slice(0, EXPERT_BIO_MAX_LENGTH) || null,
+    bio: form.bio.trim().slice(0, 500) || null,
     referee_phone_1: form.referee_phone_1.trim() || null,
     referee_phone_2: form.referee_phone_2.trim() || null,
-    working_cities: form.working_cities
+    working_cities: form.working_cities,
+    avatar_url: form.avatar_url.trim() || null,
+    service_types: ["babysitter"],
+    pricing_model: "hourly",
+    hourly_rate_nis: form.hourly_rate_nis.trim() ? Number(form.hourly_rate_nis) : null
   };
-
-  if (isExpertForm(form)) {
-    Object.assign(base, expertDraftToProfilePatch(formToExpertDraft(form)));
-    // Babysitter-only skills — never persist for expert / consultant / doula accounts.
-    base.has_car = false;
-    base.homework_help = false;
-    base.light_cooking = false;
-  } else {
-    base.service_types = ["babysitter"];
-    base.pricing_model = "hourly";
-    base.hourly_rate_nis = form.hourly_rate_nis.trim() ? Number(form.hourly_rate_nis) : null;
-    base.package_price_nis = null;
-    base.service_locations = [];
-    base.certifications = form.certifications.trim() || null;
-  }
-
-  return base;
 }
 
 type Props = {
@@ -303,6 +242,7 @@ export function SitterPersonalArea({ userId }: Props) {
   const [form, setForm] = useState<FormState>(profileToForm(null));
   const [editKey, setEditKey] = useState<EditKey | null>(null);
   const [draft, setDraft] = useState<FormState>(profileToForm(null));
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -321,7 +261,9 @@ export function SitterPersonalArea({ userId }: Props) {
         setLoading(false);
         return;
       }
-      setForm(profileToForm(json.profile ?? null));
+      const loadedForm = profileToForm(json.profile ?? null);
+      setForm(loadedForm);
+      setDraft(loadedForm);
     } catch (err) {
       setError(err instanceof Error ? err.message : "טעינת הפרופיל נכשלה.");
     } finally {
@@ -335,14 +277,13 @@ export function SitterPersonalArea({ userId }: Props) {
 
   const openEdit = useCallback(
     (key: EditKey) => {
-      if (key === "skills" && isExpertForm(form)) return;
       setModalError(null);
       setSuccess(null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       setDraft({
         ...form,
         working_cities: [...form.working_cities],
         languages: [...form.languages],
-        service_locations: [...form.service_locations],
         preferred_ages:
           key === "preferred_ages"
             ? formatPreferredAgesDisplay(form.preferred_ages) || formatPreferredAgesRange(1, 12)
@@ -354,15 +295,63 @@ export function SitterPersonalArea({ userId }: Props) {
   );
 
   const closeEdit = useCallback(() => {
-    if (saving) return;
+    if (saving || uploadingAvatar) return;
     setEditKey(null);
     setModalError(null);
-  }, [saving]);
+  }, [saving, uploadingAvatar]);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setModalError("גודל הקובץ חייב להיות עד 5MB.");
+      return;
+    }
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setModalError("יש להעלות תמונה בפורמט JPEG, PNG או WEBP בלבד.");
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setModalError(null);
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        throw new Error("חיבור ל־Supabase אינו זמין.");
+      }
+
+      const fileExt = file.name.split(".").pop();
+      const filePath = `${userId}/avatar.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      const publicUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+
+      setDraft((prev) => ({ ...prev, avatar_url: publicUrl }));
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : "העלאת התמונה נכשלה.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleSave = useCallback(async () => {
     if (!userId || !editKey) return;
 
-    if (!draft.first_name.trim() || !draft.last_name.trim()) {
+    if (editKey !== "avatar" && (!draft.first_name.trim() || !draft.last_name.trim())) {
       setModalError("יש למלא שם פרטי ושם משפחה.");
       return;
     }
@@ -370,14 +359,6 @@ export function SitterPersonalArea({ userId }: Props) {
     if (editKey === "working_cities" && draft.working_cities.length === 0) {
       setModalError("יש לבחור לפחות עיר אחת.");
       return;
-    }
-
-    if (editKey === "expert_profile" || (editKey === "bio" && isExpertForm(draft))) {
-      const expertError = validateExpertProfileDraft(formToExpertDraft(draft));
-      if (expertError) {
-        setModalError(expertError);
-        return;
-      }
     }
 
     setSaving(true);
@@ -397,7 +378,9 @@ export function SitterPersonalArea({ userId }: Props) {
         return;
       }
 
-      setForm(profileToForm(json.profile ?? null));
+      const updatedForm = profileToForm(json.profile ?? null);
+      setForm(updatedForm);
+      setDraft(updatedForm);
       setEditKey(null);
       setSuccess("הפרטים עודכנו בהצלחה");
     } catch (err) {
@@ -436,7 +419,9 @@ export function SitterPersonalArea({ userId }: Props) {
   ].join(" · ");
 
   const modalTitle =
-    editKey === "first_name"
+    editKey === "avatar"
+      ? "עדכון תמונת פרופיל"
+      : editKey === "first_name"
       ? "שינוי שם פרטי"
       : editKey === "last_name"
         ? "שינוי שם משפחה"
@@ -476,40 +461,46 @@ export function SitterPersonalArea({ userId }: Props) {
                                           ? "שינוי כישורים"
                                           : editKey === "legal"
                                             ? "שינוי הצהרה"
-                                            : editKey === "expert_profile"
-                                              ? "שינוי פרופיל מקצועי"
-                                              : "";
-
-  const expert = isExpertForm(form);
-  const priceLabel =
-    form.pricing_model === "package"
-      ? form.package_price_nis
-        ? `₪${form.package_price_nis} · חבילה`
-        : ""
-      : form.hourly_rate_nis
-        ? `₪${form.hourly_rate_nis} · שעתי`
-        : "";
-  const locationsLabel = form.service_locations
-    .map((id) => SERVICE_LOCATION_OPTIONS.find((o) => o.id === id)?.labelHe)
-    .filter(Boolean)
-    .join(" · ");
-  const serviceTypeLabel =
-    form.service_type in EXPERT_SERVICE_VISUALS
-      ? EXPERT_SERVICE_VISUALS[form.service_type as keyof typeof EXPERT_SERVICE_VISUALS].labelHe
-      : "";
+                                            : "";
 
   return (
     <div className="space-y-4 pb-4" dir="rtl">
       <section className="rounded-2xl border border-[#C5A059]/25 bg-gradient-to-l from-[#FFF8EA] to-white p-4 shadow-soft">
-        <p className="text-xs font-semibold text-[#B8860B]">
-          {expert ? "אזור אישי · יועצת / דולה" : "אזור אישי · שמרטפית"}
-        </p>
-        <h2 className="mt-1 text-lg font-extrabold text-[#001F3F]">{displayName}</h2>
-        {form.nanny_serial ? (
-          <p className="mt-1 font-mono text-xs font-semibold text-slate-500" dir="ltr">
-            {form.nanny_serial}
-          </p>
-        ) : null}
+        <div className="flex items-center gap-4">
+          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-[#C5A059]/40 bg-slate-100 shadow-sm">
+            {form.avatar_url ? (
+              <img src={form.avatar_url} alt={displayName} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-slate-400">
+                <User className="h-8 w-8" />
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => openEdit("avatar")}
+              className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition hover:opacity-100"
+              title="שנה תמונה"
+            >
+              <Camera className="h-5 w-5" />
+            </button>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-[#B8860B]">אזור אישי · בייביסיטר</p>
+            <h2 className="mt-1 text-lg font-extrabold text-[#001F3F]">{displayName}</h2>
+            {form.nanny_serial ? (
+              <p className="mt-0.5 font-mono text-xs font-semibold text-slate-500" dir="ltr">
+                {form.nanny_serial}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => openEdit("avatar")}
+              className="mt-1.5 text-xs font-medium text-[#C5A059] underline hover:text-[#b08b4c]"
+            >
+              החלפת תמונת פרופיל
+            </button>
+          </div>
+        </div>
       </section>
 
       {error ? (
@@ -521,7 +512,7 @@ export function SitterPersonalArea({ userId }: Props) {
         </p>
       ) : null}
 
-      <PersonalAreaSection title="פרטים אישיים" description="הפרטים שנשמרו בשאלון ופרופיל מקצועי">
+      <PersonalAreaSection title="פרטים אישיים" description="הפרטים שנשמרו בשאלון ובפרופיל">
         <PersonalStaticRow label="שם פרטי" value={form.first_name} onEdit={() => openEdit("first_name")} />
         <PersonalStaticRow label="שם משפחה" value={form.last_name} onEdit={() => openEdit("last_name")} />
         <PersonalStaticRow
@@ -551,25 +542,21 @@ export function SitterPersonalArea({ userId }: Props) {
       </PersonalAreaSection>
 
       <PersonalAreaSection title="רקע מקצועי" accent="emerald">
-        {!expert ? (
-          <PersonalStaticRow
-            label="שנות ניסיון"
-            value={form.years_experience}
-            onEdit={() => openEdit("years_experience")}
-          />
-        ) : null}
         <PersonalStaticRow
-          label={expert ? "תמחור" : "תעריף שעתי"}
-          value={priceLabel || (form.hourly_rate_nis ? `₪${form.hourly_rate_nis}` : "")}
-          onEdit={() => openEdit(expert ? "expert_profile" : "hourly_rate_nis")}
+          label="שנות ניסיון"
+          value={form.years_experience}
+          onEdit={() => openEdit("years_experience")}
         />
-        {!expert ? (
-          <PersonalStaticRow
-            label="שירות צבאי / לאומי"
-            value={form.military_service}
-            onEdit={() => openEdit("military_service")}
-          />
-        ) : null}
+        <PersonalStaticRow
+          label="תעריף שעתי"
+          value={form.hourly_rate_nis ? `₪${form.hourly_rate_nis}` : ""}
+          onEdit={() => openEdit("hourly_rate_nis")}
+        />
+        <PersonalStaticRow
+          label="שירות צבאי / לאומי"
+          value={form.military_service}
+          onEdit={() => openEdit("military_service")}
+        />
         <PersonalStaticRow
           label="גילאים מועדפים"
           value={formatPreferredAgesDisplay(form.preferred_ages)}
@@ -597,40 +584,15 @@ export function SitterPersonalArea({ userId }: Props) {
         />
       </PersonalAreaSection>
 
-      {expert ? (
-        <PersonalAreaSection
-          title="שירות מקצועי"
-          accent="emerald"
-          description="סוג השירות, מיקום השירות והסמכות"
-          action={<PersonalChangeLink onClick={() => openEdit("expert_profile")} />}
-        >
-          <div className="space-y-2 text-[14px] font-medium text-[#001F3F]">
-            <p>{serviceTypeLabel || "לא נבחר סוג שירות"}</p>
-            <p className={locationsLabel ? "" : "italic text-slate-400"}>
-              {locationsLabel || "לא נבחרו מיקומי שירות"}
-            </p>
-            <p
-              className={`whitespace-pre-wrap ${
-                form.certifications.trim() ? "" : "italic text-slate-400"
-              }`}
-            >
-              {form.certifications.trim() || "לא הוגדרו הסמכות"}
-            </p>
-          </div>
-        </PersonalAreaSection>
-      ) : null}
-
-      {!expert ? (
-        <PersonalAreaSection
-          title="כישורים"
-          accent="emerald"
-          action={<PersonalChangeLink onClick={() => openEdit("skills")} />}
-        >
-          <p className={`text-[14px] ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
-            {skillsLabel || "לא הוגדרו כישורים נוספים"}
-          </p>
-        </PersonalAreaSection>
-      ) : null}
+      <PersonalAreaSection
+        title="כישורים"
+        accent="emerald"
+        action={<PersonalChangeLink onClick={() => openEdit("skills")} />}
+      >
+        <p className={`text-[14px] ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
+          {skillsLabel || "לא הוגדרו כישורים נוספים"}
+        </p>
+      </PersonalAreaSection>
 
       <PersonalAreaSection
         title="אודותיי"
@@ -691,13 +653,46 @@ export function SitterPersonalArea({ userId }: Props) {
       <SitterBankDetailsSection sitterId={userId} />
 
       <PersonalEditModal
-        open={editKey != null && !(editKey === "skills" && expert)}
+        open={editKey != null}
         title={modalTitle}
         onClose={closeEdit}
         onSave={handleSave}
-        saving={saving}
+        saving={saving || uploadingAvatar}
         error={modalError}
       >
+        {editKey === "avatar" ? (
+          <div className="flex flex-col items-center justify-center space-y-4 py-2">
+            <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-slate-200 bg-slate-100 shadow-inner">
+              {draft.avatar_url ? (
+                <img src={draft.avatar_url} alt="תמונת פרופיל" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                  <User className="h-12 w-12" />
+                </div>
+              )}
+              {uploadingAvatar && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#001F3F]" />
+                </div>
+              )}
+            </div>
+
+            <label className="cursor-pointer rounded-xl bg-[#001F3F] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#001F3F]/90">
+              {uploadingAvatar ? "מעלה תמונה..." : "בחר תמונה מהמכשיר"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarUpload}
+                disabled={uploadingAvatar}
+              />
+            </label>
+            <p className="text-center text-[11px] text-slate-500">
+              פורמטים מותרים: JPG, PNG, WEBP (עד 5MB)
+            </p>
+          </div>
+        ) : null}
+
         {editKey === "first_name" ||
         editKey === "last_name" ||
         editKey === "id_number" ||
@@ -860,37 +855,19 @@ export function SitterPersonalArea({ userId }: Props) {
             <textarea
               className={personalTextareaClassName}
               value={draft.bio}
-              maxLength={EXPERT_BIO_MAX_LENGTH}
+              maxLength={500}
               onChange={(e) =>
                 setDraft((prev) => ({
                   ...prev,
-                  bio: e.target.value.slice(0, EXPERT_BIO_MAX_LENGTH)
+                  bio: e.target.value.slice(0, 500)
                 }))
               }
               autoFocus
             />
             <p className="mt-1 text-[11px] text-slate-400">
-              {draft.bio.length}/{EXPERT_BIO_MAX_LENGTH}
+              {draft.bio.length}/500
             </p>
           </PersonalField>
-        ) : null}
-
-        {editKey === "expert_profile" ? (
-          <ExpertRegistrationFields
-            value={formToExpertDraft(draft)}
-            onChange={(next) =>
-              setDraft((prev) => ({
-                ...prev,
-                service_type: next.serviceType,
-                service_locations: next.serviceLocations,
-                pricing_model: next.pricingModel,
-                hourly_rate_nis: next.hourlyRateNis,
-                package_price_nis: next.packagePriceNis,
-                bio: next.bio,
-                certifications: next.certifications
-              }))
-            }
-          />
         ) : null}
 
         {editKey === "working_cities" ? (
@@ -916,7 +893,7 @@ export function SitterPersonalArea({ userId }: Props) {
           </div>
         ) : null}
 
-        {editKey === "skills" && !expert ? (
+        {editKey === "skills" ? (
           <div className="space-y-2">
             <PersonalCheckbox
               checked={draft.has_car}
