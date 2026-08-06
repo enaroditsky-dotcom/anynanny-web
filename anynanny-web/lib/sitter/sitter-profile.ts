@@ -296,6 +296,8 @@ export type SitterProfileRow = {
   user_id?: string;
   /** Assigned on insert; babysitter AN-1001+ or expert CONS-1001+. */
   nanny_serial?: string | null;
+  /** Profile image URL stored on the linked public.profiles row and merged by the profile API. */
+  avatar_url?: string | null;
   first_name: string | null;
   last_name: string | null;
   show_full_name: boolean;
