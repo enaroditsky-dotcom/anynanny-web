@@ -41,6 +41,16 @@ function HomeInner() {
   const isManual = searchParams.get("manual") === "true";
 
   useEffect(() => {
+    // בדיקת שגיאות גם ב-Query (סימן שאלה) וגם ב-Hash (סימן סולם של Supabase)
+    const hash = window.location.hash;
+    const search = window.location.search;
+    
+    if (hash.includes('error') || search.includes('error')) {
+      const queryString = search ? search : `?${hash.replace('#', '')}`;
+      router.replace(`/auth/verified${queryString}`);
+      return;
+    }
+
     if (isManual) return;
     try {
       const activeRole = localStorage.getItem("active_role");
@@ -54,7 +64,7 @@ function HomeInner() {
     } catch {
       /* ignore */
     }
-  }, [isManual, router]);
+  }, [isManual, router, searchParams]);
 
   const navigateWithPath = (action: "login" | "register", path: LandingPath) => {
     const profileRole = path === "parent" ? "parent" : "sitter";
