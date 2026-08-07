@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Calendar, ArrowRight } from "lucide-react";
+import { Calendar, ArrowRight, User } from "lucide-react";
 import { getSitterProfilesTable, formatSitterDisplayName } from "@/lib/sitter/sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import {
@@ -70,7 +70,20 @@ export default function ParentSitterProfileView() {
           setErrorMsg("הפרופיל אינו נמצא.");
           setProfile(null);
         } else {
-          setProfile(data);
+          const profileData = { ...data };
+          // שליפת התמונה בנפרד מטבלת ה-profiles הראשית (כדי להימנע משגיאות schema)
+          const targetUserId = profileData.user_id || profileData.id || sitterId;
+          const { data: mainProfile } = await supabase
+            .from("profiles")
+            .select("avatar_url")
+            .eq("id", targetUserId)
+            .maybeSingle();
+
+          if (mainProfile?.avatar_url) {
+            profileData.avatar_url = mainProfile.avatar_url;
+          }
+
+          setProfile(profileData);
         }
       } catch (err) {
         setErrorMsg("שגיאה בטעינת הפרופיל.");
@@ -133,11 +146,26 @@ export default function ParentSitterProfileView() {
         <p className="text-right text-sm text-rose-700 px-1">{errorMsg}</p>
       ) : profile ? (
         <div className="rounded-3xl border border-navy-header/12 bg-white p-5 shadow-soft space-y-4">
+          {/* הוספת תמונת הפרופיל בראש כרטיסיית המידע */}
+          <div className="flex items-center gap-4">
+            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                  <User className="h-8 w-8" />
+                </div>
+              )}
+            </div>
+            <div className="text-right space-y-0.5 min-w-0 flex-1">
+              <h1 className="text-xl font-bold text-[#001F3F] truncate">{displayName}</h1>
+              {serialDisplay && (
+                <p className="text-xs font-semibold text-violet-600">מזהה: {serialDisplay}</p>
+              )}
+            </div>
+          </div>
+
           <div className="text-right space-y-1">
-            <h1 className="text-xl font-bold text-[#001F3F]">{displayName}</h1>
-            {serialDisplay && (
-              <p className="text-xs font-semibold text-violet-600">מזהה: {serialDisplay}</p>
-            )}
             <div className="flex items-center gap-1 text-xs text-slate-600 pt-1" dir="rtl">
               <span className="font-semibold text-slate-700">{experienceLabel}</span>
             </div>

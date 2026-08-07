@@ -35,7 +35,6 @@ function parseRpcJson(raw: unknown): Record<string, unknown> | null {
   return unwrapRpcProfilePayload(raw);
 }
 
-/** RPC may return a single object, JSON string, or array — take the first row. */
 export function unwrapRpcProfilePayload(data: unknown): Record<string, unknown> | null {
   if (data == null) return null;
   if (Array.isArray(data)) {
@@ -84,10 +83,6 @@ function pickWorkingCities(row: Record<string, unknown>): SitterProfilePublic["w
   return normalizeWorkingCities(raw);
 }
 
-/**
- * Normalize `get_sitter_profile_public` / `sitter_profiles` row into UI state.
- * Accepts RPC aliases: years_of_experience, transportation_mode, camelCase drift.
- */
 export function normalizeSitterProfilePublic(
   raw: Record<string, unknown>,
   fallbackId: string
@@ -197,9 +192,7 @@ async function fetchSitterProfileDirect(
     read = safeSupabaseRead(
       await supabase
         .from(SITTER_PROFILES_TABLE)
-        .select(
-          "id, first_name, last_name, bio, hourly_rate_nis, pricing_model, package_price_nis, years_experience, is_public, updated_at"
-        )
+        .select("id, first_name, last_name, bio, hourly_rate_nis, pricing_model, package_price_nis, years_experience, is_public, updated_at")
         .eq(fk, sitterId)
         .eq("is_public", true)
         .maybeSingle(),
@@ -207,45 +200,27 @@ async function fetchSitterProfileDirect(
     );
   }
 
-  if (read.error) {
-    read = safeSupabaseRead(
-      await supabase
-        .from(SITTER_PROFILES_TABLE)
-        .select("id, first_name, last_name, bio, hourly_rate_nis, years_experience, is_public, updated_at")
-        .eq(fk, sitterId)
-        .eq("is_public", true)
-        .maybeSingle(),
-      "sitter profile direct minimal"
-    );
-  }
-
   if (read.error || !read.data) {
     return null;
   }
 
-  return normalizeSitterProfilePublic(read.data as Record<string, unknown>, sitterId);
+  const profileData = {
+    ...(read.data as Record<string, unknown>)
+  };
+
+  const { data: mainProfile } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", sitterId)
+    .maybeSingle();
+
+  if (mainProfile?.avatar_url) {
+    profileData.avatar_url = mainProfile.avatar_url;
+  }
+
+  return normalizeSitterProfilePublic(profileData, sitterId);
 }
 
-export function formatTransportationMode(
-  mode: string | null | undefined,
-  hasCar?: boolean
-): string | null {
-  const m = (mode ?? "").trim().toLowerCase();
-  if (hasCar || m === "self" || m === "עצמאית") return "עצמאית";
-  if (m === "taxi" || m === "needs_taxi" || m.includes("מונית")) return "צריכה מונית";
-  if (!m || m === "all" || m === "הכל") return null;
-  return mode?.trim() ?? null;
-}
-
-export type ParentSitterProfileLoadResult = {
-  profile: SitterProfilePublic | null;
-  reviews: PublicSitterReview[];
-  error: string | null;
-};
-
-/**
- * Parent profile: direct `sitter_profiles` read first; RPC only when table row is missing.
- */
 export async function fetchParentSitterProfile(
   supabase: SupabaseClient,
   sitterId: string
@@ -265,10 +240,6 @@ export async function fetchParentSitterProfile(
           profile = null;
         }
       }
-    } else if (!isPostgrestMissingFunctionError(profErr.message)) {
-      // Prefer a soft miss over hard 400 when RPC is schema-incompatible;
-      // callers can still show cards from list/direct reads.
-      console.warn("[fetchParentSitterProfile] get_sitter_profile_public:", profErr.message);
     }
   }
 
@@ -277,15 +248,11 @@ export async function fetchParentSitterProfile(
   }
 
   const reviews = await fetchSitterPublicReviews(supabase, sitterId, 10);
-
   return { profile, reviews, error: null };
 }
 
-/** Prefer joined first/last, then RPC display_name. */
-export function resolveParentSitterDisplayName(profile: SitterProfilePublic): string {
-  const combined = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
-  if (combined) return combined;
-  const display = profile.display_name?.trim();
-  if (display && display.toLowerCase() !== "user") return display;
-  return "בייביסיטר";
-}
+export type ParentSitterProfileLoadResult = {
+  profile: SitterProfilePublic | null;
+  reviews: PublicSitterReview[];
+  error: string | null;
+};
