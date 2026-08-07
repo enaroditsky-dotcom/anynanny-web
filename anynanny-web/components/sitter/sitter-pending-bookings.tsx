@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BellRing, CalendarClock, Check, X } from "lucide-react";
+import { BellRing, CalendarClock, Check, X, MapPin, Users, ShieldCheck, ShieldAlert } from "lucide-react";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { ActionToast } from "@/components/ui/action-toast";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
@@ -41,6 +41,16 @@ type Props = {
   }) => void;
 };
 
+type ParentDetails = {
+  first_name?: string | null;
+  avatar_url?: string | null;
+  children_count?: number | null;
+  children_ages?: string | null;
+  identity_verified?: boolean;
+  address?: string | null;
+  address_visible?: boolean;
+};
+
 export function SitterPendingBookings({ sitterId, disabled = false, onResponded }: Props) {
   const [bookings, setBookings] = useState<PendingBookingView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +60,8 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
   const [newBookingFlash, setNewBookingFlash] = useState(false);
   const [respondToast, setRespondToast] = useState<string | null>(null);
   const [respondToastApproved, setRespondToastApproved] = useState(true);
+  
+  const [parentDetailsMap, setParentDetailsMap] = useState<Record<string, ParentDetails>>({});
   const initialLoadDoneRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -71,6 +83,47 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
     setBookings(rows);
     setLoadError(error);
     setLoading(false);
+
+    if (rows && rows.length > 0) {
+      const previewEntries = await Promise.all(
+        rows.map(async (booking) => {
+          try {
+            const response = await fetch(
+              `/api/sitter/bookings/${encodeURIComponent(booking.id)}/parent-preview`,
+              {
+                method: "GET",
+                cache: "no-store"
+              }
+            );
+
+            if (!response.ok) {
+              return [booking.parent_id, null] as const;
+            }
+
+            const json = (await response.json()) as {
+              parent?: ParentDetails;
+            };
+
+            return [
+              booking.parent_id,
+              json.parent ?? null
+            ] as const;
+          } catch {
+            return [booking.parent_id, null] as const;
+          }
+        })
+      );
+
+      const nextParentDetailsMap: Record<string, ParentDetails> = {};
+      for (const [parentId, details] of previewEntries) {
+        if (parentId && details) {
+          nextParentDetailsMap[parentId] = details;
+        }
+      }
+      setParentDetailsMap(nextParentDetailsMap);
+    } else {
+      setParentDetailsMap({});
+    }
   }, [sitterId]);
 
   useEffect(() => {
@@ -303,20 +356,94 @@ export function SitterPendingBookings({ sitterId, disabled = false, onResponded 
         </p>
       ) : (
         <ul className="mt-4 space-y-3">
-          {bookings.map((booking) => {
+          {bookings.map((booking: any) => {
             const busy = actingId === booking.id;
+            const parentInfo = parentDetailsMap[booking.parent_id] || {};
+
             return (
               <li
                 key={booking.id}
-                className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/90 p-4 text-right shadow-sm"
+                className="rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/90 p-4 text-right shadow-sm space-y-2.5"
               >
-                <p className="text-sm font-bold text-[#001F3F]">
-                  {booking.parent_full_name ?? "הורה"}
-                </p>
-                <p className="mt-1 text-xs font-medium text-slate-600 tabular-nums">
-                  {formatBookingSchedule(booking)}
-                </p>
-                <p className="mt-0.5 text-[11px] text-slate-500">
+                <div>
+                  <p className="text-sm font-bold text-[#001F3F]">
+                    {booking.parent_full_name ?? "הורה"}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-slate-600 tabular-nums">
+                    {formatBookingSchedule(booking)}
+                  </p>
+                </div>
+
+                {/* פרופיל הורה בטוח לפני אישור המשמרת */}
+                <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5 text-xs">
+                  <div className="flex flex-row-reverse items-center gap-2.5">
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                      {parentInfo.avatar_url ? (
+                        <img
+                          src={parentInfo.avatar_url}
+                          alt={parentInfo.first_name || "הורה"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-sm font-bold text-slate-400">
+                          {parentInfo.first_name?.charAt(0) || "ה"}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1 text-right">
+                      <p className="font-bold text-[#001F3F]">
+                        {parentInfo.first_name || booking.parent_full_name || "הורה"}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        פרטי המשפחה המזמינה
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-2">
+                    <div className="flex flex-row-reverse items-center justify-end gap-1.5 text-slate-700">
+                      <Users className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+                      <span className="font-semibold">ילדים:</span>
+                      <span>
+                        {parentInfo.children_count != null
+                          ? `${parentInfo.children_count} ילדים`
+                          : "לא צוין מספר"}
+                        {parentInfo.children_ages
+                          ? ` · גילאים: ${parentInfo.children_ages}`
+                          : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    {parentInfo.identity_verified ? (
+                      <div className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
+                        <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                        <span>זהות ההורה אומתה</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 font-medium text-amber-700">
+                        <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                        <span>זהות ההורה טרם אומתה</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {parentInfo.address_visible && parentInfo.address ? (
+                    <div className="flex flex-row-reverse items-center justify-end gap-1.5 border-t border-slate-100 pt-2 text-slate-700">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+                      <span className="font-semibold">כתובת:</span>
+                      <span>{parentInfo.address}</span>
+                    </div>
+                  ) : (
+                    <p className="border-t border-slate-100 pt-2 text-right text-[11px] text-slate-400">
+                      הכתובת המלאה תוצג לאחר אישור המשמרת.
+                    </p>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500">
                   התקבלה{" "}
                   {new Date(booking.created_at).toLocaleDateString("he-IL", {
                     day: "numeric",

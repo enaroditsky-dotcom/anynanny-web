@@ -72,12 +72,13 @@ import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-car
 import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, X } from "lucide-react";
 
 const BOOKING_LIVE_SELECT =
-  "id, parent_id, sitter_id, status, booking_date, start_time, end_time, created_at, updated_at";
+  "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, created_at, updated_at";
 
 /** Only values allowed by `bookings_status_check` — invalid enums cause PostgREST 400. */
 const LIVE_BOOKING_FETCH_STATUSES = [
   "pending",
   "approved",
+  "rejected",
   "sitter_started",
   "parent_started",
   "sitter_ended"
@@ -165,10 +166,14 @@ function pickParentDashboardBooking(
     if (hit) return hit;
   }
 
+  // Also catch rejected bookings if they are recent/relevant to show the rejection note
+  const rejectedHit = rows.find((b) => normalizeStatus(b.status) === "rejected" && b.rejection_note);
+  if (rejectedHit) return rejectedHit;
+
   const preferId = opts?.preferBookingId ? String(opts.preferBookingId) : null;
   if (preferId) {
     const preferred = rows.find((b) => String(b.id) === preferId);
-    if (preferred && (isBookingDueForParentActiveShiftUi(preferred) || isUnpaidCompletedBooking(preferred))) {
+    if (preferred && (isBookingDueForParentActiveShiftUi(preferred) || isUnpaidCompletedBooking(preferred) || normalizeStatus(preferred.status) === "rejected")) {
       return preferred;
     }
   }
@@ -187,7 +192,7 @@ function pickParentDashboardBooking(
   const futurePending = rows.find((b) => isFutureScheduledBooking(b));
   if (futurePending) return futurePending;
 
-  return dueLive[0] ?? null;
+  return dueLive[0] ?? rows[0] ?? null;
 }
 
 function sessionMatchesBookingSitter(
@@ -213,7 +218,6 @@ function isTerminalSessionStatus(status: unknown): boolean {
 }
 
 function isConfirmableBooking(status: unknown): boolean {
-  // Parent may confirm arrival only after the sitter marked "I have arrived".
   return isParentArrivalConfirmableStatus(status as BookingRow["status"]);
 }
 
@@ -265,7 +269,6 @@ function sessionRank(status: unknown): number {
   return 0;
 }
 
-/** Never let a weaker poll/realtime snapshot overwrite a stronger local session. */
 function preferStrongerSession(
   current: SupabaseSessionRow | null,
   incoming: SupabaseSessionRow | null,
@@ -278,7 +281,6 @@ function preferStrongerSession(
   if (preferSitter) {
     const curMatch = String(current.sitter_id ?? "") === preferSitter;
     const inMatch = String(incoming.sitter_id ?? "") === preferSitter;
-    // Stale settlement/active from another sitter must not override the live shift.
     if (curMatch && !inMatch) return current;
     if (!curMatch && inMatch) return incoming;
   }
@@ -286,7 +288,6 @@ function preferStrongerSession(
   const incomingRank = sessionRank(incoming.status);
   const currentRank = sessionRank(current.status);
   if (String(current.id) === String(incoming.id)) {
-    // Stronger status always wins field-by-field — never spread a weaker status last.
     return incomingRank >= currentRank
       ? { ...current, ...incoming }
       : { ...incoming, ...current };
@@ -298,9 +299,9 @@ export function ParentDashboardClient({
   initialPreferences,
   initialActiveBooking
 }: {
-  initialProfiles: any[];
+  initialProfiles?: any[];
   initialPreferences: ParentPreferences & { parentSerial?: string };
-  initialBusySlots: ParentBusySlot[];
+  initialBusySlots?: ParentBusySlot[];
   initialActiveBooking?: BookingRow | null;
 }) {
   const { nowMs } = useSession();
@@ -310,7 +311,6 @@ export function ParentDashboardClient({
   const [parentSerial, setParentSerial] = useState<string>(initialPreferences.parentSerial || "");
   const [statusCardCollapsed, setStatusCardCollapsed] = useState(false);
   const [dismissedStatusKey, setDismissedStatusKey] = useState<string | null>(null);
-  /** Empty on SSR/hydration — load sessionStorage after mount to avoid mismatches. */
   const [dismissedScheduledBookingIds, setDismissedScheduledBookingIds] = useState<Set<string>>(
     () => new Set()
   );
@@ -339,7 +339,6 @@ export function ParentDashboardClient({
   const bookingStatusWatchRef = useRef<{ id: string; status: string } | null>(null);
   const refreshInFlightRef = useRef(false);
   const refreshQueuedRef = useRef(false);
-  /** Once set, polls/realtime cannot clear settlement back to an active timer. */
   const settlementLockRef = useRef<SettlementStep | null>(null);
   const activeSessionRef = useRef<SupabaseSessionRow | null>(null);
   const activeBookingRef = useRef<BookingRow | null>(null);
@@ -363,7 +362,6 @@ export function ParentDashboardClient({
 
   const refreshParentOnboardingStatus = useCallback(
     async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
-      // Avoid selecting missing columns / querying non-existent parent_profiles (404).
       const { data, error } = await supabase
         .from("profiles")
         .select("first_name, last_name")
@@ -412,7 +410,6 @@ export function ParentDashboardClient({
           ? String(activeSessionRef.current.id)
           : null;
 
-        // 1) Bookings — authoritative. Empty/missing live booking ⇒ no active timer.
         let bookingRows: BookingRow[] = [];
         let bookingQueryFailed = false;
         const bookingFull = await supabase
@@ -440,7 +437,6 @@ export function ParentDashboardClient({
           bookingRows = (bookingFull.data as BookingRow[] | null) ?? [];
         }
 
-        // Don't wipe UI on transient query failures — only on successful empty/terminal reads.
         if (bookingQueryFailed) {
           continue;
         }
@@ -456,7 +452,6 @@ export function ParentDashboardClient({
           booking && isBookingDueForParentActiveShiftUi(booking)
         );
         const futureScheduled = Boolean(booking && isFutureScheduledBooking(booking));
-        // Only same-day / in-progress bookings drive arrival + timer UI.
         const hasLiveBooking = Boolean(
           booking && isLiveInFlightBooking(bookingStatus) && dueForActiveShift
         );
@@ -465,7 +460,6 @@ export function ParentDashboardClient({
         const isFreshLiveShift =
           hasLiveBooking && isFreshLiveBookingStatus(bookingStatus);
 
-        // A brand-new / in-progress booking must never inherit prior payment/rating UI.
         if (isFreshLiveShift) {
           if (locked) {
             clearSettlementLock();
@@ -480,7 +474,6 @@ export function ParentDashboardClient({
           }
         }
 
-        // 2) If we still hold a local session id, verify it still exists (deleted/completed ⇒ drop).
         if (localSessionId) {
           const byId = await supabase
             .from(SESSIONS_TABLE)
@@ -494,7 +487,6 @@ export function ParentDashboardClient({
           if (!byId.error) {
             const row = (byId.data as SupabaseSessionRow | null) ?? null;
             if (!row || isTerminalSessionStatus(row.status)) {
-              // Session gone or fully closed — idle unless a live/payable booking still needs UI.
               if (!hasLiveBooking && !hasUnpaidCompleted) {
                 clearToIdleDashboard();
                 continue;
@@ -502,7 +494,6 @@ export function ParentDashboardClient({
               setActiveSession(null);
               activeSessionRef.current = null;
             } else if (isActiveSessionRow(row) && !hasLiveBooking) {
-              // Orphan active session with no booking row — never keep the timer.
               clearToIdleDashboard();
               continue;
             } else if (
@@ -510,7 +501,6 @@ export function ParentDashboardClient({
               (SESSION_SETTLEMENT_STATUSES.has(normalizeStatus(row.status)) ||
                 SESSION_AWAITING_PARENT_END.has(normalizeStatus(row.status)))
             ) {
-              // Stale settlement session id from a prior shift — drop it for the new booking.
               setActiveSession(null);
               activeSessionRef.current = null;
             } else {
@@ -523,9 +513,9 @@ export function ParentDashboardClient({
           }
         }
 
-        // 3) No live booking and no unpaid-completed recovery ⇒ idle dashboard.
-        if (!hasLiveBooking && !hasUnpaidCompleted) {
-          // Settlement lock only survives if payment_pending/paid session still exists.
+        const isRejectedWithNote = bookingStatus === "rejected" && Boolean(booking?.rejection_note);
+
+        if (!hasLiveBooking && !hasUnpaidCompleted && !isRejectedWithNote) {
           if (locked) {
             const settlementSession = await fetchLatestParentSessionRow(supabase, uid, {
               statuses: [...SESSION_SETTLEMENT_STATUSES],
@@ -540,7 +530,6 @@ export function ParentDashboardClient({
               activeSessionRef.current = settlementSession.row;
               const st = normalizeStatus(settlementSession.row.status);
               if (st === "paid") {
-                // Rating-before-payment: paid means checkout finished — idle.
                 clearToIdleDashboard();
               } else if (st === "payment_pending") {
                 const rated = await parentHasRatedSession(
@@ -553,8 +542,16 @@ export function ParentDashboardClient({
               continue;
             }
           }
-          // Future/long-term approved (or pending) — keep as scheduled, no arrival/timer.
           if (booking && futureScheduled) {
+            setActiveBooking(booking);
+            activeBookingRef.current = booking;
+            setActiveSession(null);
+            activeSessionRef.current = null;
+            clearSettlementLock();
+            continue;
+          }
+
+          if (isRejectedWithNote && booking) {
             setActiveBooking(booking);
             activeBookingRef.current = booking;
             setActiveSession(null);
@@ -572,7 +569,13 @@ export function ParentDashboardClient({
           activeBookingRef.current = booking;
         }
 
-        // Fresh pending/approved/started shifts: never attach orphan payment_pending rows.
+        if (isRejectedWithNote) {
+          clearToIdleDashboard();
+          setActiveBooking(booking);
+          activeBookingRef.current = booking;
+          continue;
+        }
+
         if (isFreshLiveShift) {
           clearSettlementLock();
 
@@ -582,7 +585,6 @@ export function ParentDashboardClient({
             continue;
           }
 
-          // sitter_started / parent_started — active timer sessions only (no settlement).
           if (!booking?.id) {
             clearToIdleDashboard();
             continue;
@@ -606,7 +608,6 @@ export function ParentDashboardClient({
           continue;
         }
 
-        // 4) Settlement / awaiting-end for the live (or unpaid-completed) booking.
         const settlementSession = await fetchLatestParentSessionRow(supabase, uid, {
           statuses: [...SESSION_SETTLEMENT_FETCH_STATUSES],
           orderBy: "created_at",
@@ -641,11 +642,9 @@ export function ParentDashboardClient({
               clearToIdleDashboard();
             } else if (st === "payment_pending" && next?.id) {
               const rated = await parentHasRatedSession(supabase, String(next.id), uid);
-              // Keep an explicit payment lock if parent already rated; otherwise force rating first.
               lockSettlement(rated ? "payment" : "rating");
             }
           } else if (!settlementRow) {
-            // Locked but DB no longer has a payable session — don't keep a ghost timer.
             const st = normalizeStatus(activeSessionRef.current?.status);
             if (!SESSION_SETTLEMENT_STATUSES.has(st)) {
               clearToIdleDashboard();
@@ -673,7 +672,6 @@ export function ParentDashboardClient({
           continue;
         }
 
-        // 5) Booking-linked session — required for timer; no orphan active rows.
         if (!booking?.id) {
           clearToIdleDashboard();
           continue;
@@ -692,7 +690,6 @@ export function ParentDashboardClient({
 
         if (byBooking.row) {
           const rowStatus = normalizeStatus(byBooking.row.status);
-          // Never promote settlement rows onto a non-closure booking.
           if (
             !bookingAllowsSettlementUi &&
             (SESSION_SETTLEMENT_STATUSES.has(rowStatus) ||
@@ -720,12 +717,10 @@ export function ParentDashboardClient({
             settlementLockRef.current = null;
             setSettlementStep(null);
           }
-          // else active timer only while booking is parent_started / live
           continue;
         }
 
         if (liveClosureRequested) {
-          // Booking says end-requested; keep booking, drop timer-only session if missing.
           if (isActiveSessionRow(activeSessionRef.current)) {
             setActiveSession(null);
             activeSessionRef.current = null;
@@ -735,7 +730,6 @@ export function ParentDashboardClient({
           continue;
         }
 
-        // Live booking but no session row — clear ghost timer, keep booking for confirm-start UI.
         setActiveSession(null);
         activeSessionRef.current = null;
         settlementLockRef.current = null;
@@ -755,7 +749,6 @@ export function ParentDashboardClient({
 
     setReleasingStuckShift(true);
     setShiftError(null);
-    // Clear local UI immediately so the dashboard feels responsive.
     clearToIdleDashboard();
     clearHypPendingCheckout();
     clearPaymentError();
@@ -765,7 +758,6 @@ export function ParentDashboardClient({
       if (auth.ok) {
         await resetStuckShiftsForParent(auth.supabase, auth.userId);
         await refreshLiveShiftState(auth.userId).catch(() => undefined);
-        // Ensure idle even if refresh re-hydrated a racey row before cancel landed.
         clearToIdleDashboard();
       }
     } catch (err) {
@@ -788,7 +780,6 @@ export function ParentDashboardClient({
         return;
       }
       clearToIdleDashboard();
-      // Seed the fresh pending booking id so the next poll doesn't sticky-prefer a prior row.
       const seeded = {
         id: detail.bookingId,
         parent_id: detail.parentId ?? parentId,
@@ -806,7 +797,6 @@ export function ParentDashboardClient({
     };
     window.addEventListener(ANYNANNY_NEW_BOOKING_EVENT, onNewBooking);
 
-    // Soft-nav from book modal: event may have fired before this page mounted.
     const pendingMarker = consumeNewBookingMarker();
     if (pendingMarker) applyNewBooking(pendingMarker);
 
@@ -843,7 +833,6 @@ export function ParentDashboardClient({
       const prevStatus = normalizeStatus(prev?.status);
       const bookingId = next?.id != null ? String(next.id) : "";
 
-      // Instant non-blocking toast when sitter accepts a pending request.
       if (
         payload.eventType === "UPDATE" &&
         nextStatus === "approved" &&
@@ -892,14 +881,12 @@ export function ParentDashboardClient({
   }, [parentId, refreshLiveShiftState]);
 
   useEffect(() => {
-    // sitterAcceptedToast auto-dismiss
     if (!sitterAcceptedToast) return;
     const t = window.setTimeout(() => setSitterAcceptedToast(null), 7000);
     return () => window.clearTimeout(t);
   }, [sitterAcceptedToast]);
 
   useEffect(() => {
-    // Watch booking status transitions for accept toast (polling / missed realtime old-row).
     const id = activeBooking?.id ? String(activeBooking.id) : null;
     const status = normalizeStatus(activeBooking?.status);
     const prev = bookingStatusWatchRef.current;
@@ -917,7 +904,6 @@ export function ParentDashboardClient({
     }
   }, [activeBooking?.id, activeBooking?.status]);
 
-  // Polling fallback — while any shift UI is mounted. Empty DB must clear ghost timers.
   useEffect(() => {
     if (!parentId) return;
     const locked = settlementLockRef.current != null;
@@ -1117,16 +1103,13 @@ export function ParentDashboardClient({
         clearHypPendingCheckout();
         setHypCheckoutUrl(null);
         setShiftError(null);
-        // Refresh settlement / session state after immediate saved-card charge.
         window.location.assign("/parent/dashboard?paid=1");
         return;
       }
-      // Stash ids so Hyp return (no dynamic SuccessUrl) can still finalize after reload.
       saveHypPendingCheckout({
         bookingId: String(activeBooking.id),
         sessionId: String(activeSession.id)
       });
-      // Open real HYP sandbox — never finalize here.
       setHypCheckoutUrl(result.checkoutUrl);
     } catch (e) {
       console.error("[handlePayShift]", e);
@@ -1165,13 +1148,11 @@ export function ParentDashboardClient({
         return;
       }
       markParentSessionRatedLocally(String(activeSession.id));
-      // Rating must complete before payment UI is revealed.
       lockSettlement("payment");
     },
     [activeSession?.id, lockSettlement]
   );
 
-  // Load saved Hyp cards when parent reaches settlement payment step.
   useEffect(() => {
     if (settlementStep !== "payment") return;
     let cancelled = false;
@@ -1196,7 +1177,6 @@ export function ParentDashboardClient({
         setSavedPaymentMethods(methods);
         const defaultMethod = methods.find((m) => m.is_default) ?? methods[0] ?? null;
         setSelectedSavedMethodId(defaultMethod?.id ?? null);
-        // Wallet preference wins; otherwise fall back to saved card when present.
         if (!preferred && defaultMethod) setPaymentMethod("credit_card");
       } catch (error) {
         console.warn("[parent-dashboard] saved payment methods:", error);
@@ -1210,7 +1190,6 @@ export function ParentDashboardClient({
     };
   }, [settlementStep, parentId]);
 
-  // Return from Hyp sandbox (iframe breakout or redirect).
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -1290,7 +1269,6 @@ export function ParentDashboardClient({
         return;
       }
 
-      // complete-client may have already finalized — still call (idempotent) unless paid=1.
       if (!alreadyPaidFlag) {
         const result = await finalizeHypCheckoutFromClient({
           search: params,
@@ -1323,15 +1301,13 @@ export function ParentDashboardClient({
   }, [parentId, refreshLiveShiftState, lockSettlement, clearToIdleDashboard]);
 
   const awaitingEndApproval = isAwaitingEndApproval(activeBooking, activeSession);
-  // Never show payment/rating while a fresh pending/approved/started booking is the active one.
   const inSettlement =
     (settlementStep === "rating" ||
       settlementStep === "payment" ||
       isSettlementSession(activeSession)) &&
-    !["pending", "approved", "sitter_started", "parent_started"].includes(
+    !["pending", "approved", "rejected", "sitter_started", "parent_started"].includes(
       normalizeStatus(activeBooking?.status)
     );
-  // Time-window checks use the wall clock — defer until after mount so SSR HTML matches hydrate.
   const dueForActiveShiftUi = Boolean(
     hasHydrated && activeBooking && isBookingDueForParentActiveShiftUi(activeBooking)
   );
@@ -1344,7 +1320,9 @@ export function ParentDashboardClient({
       isFutureScheduledBooking(activeBooking) &&
       !isScheduledConfirmed
   );
-  // Timer requires a live DB booking due now — never from future scheduled or orphan session.
+  const isRejectedBooking = Boolean(
+    activeBooking && normalizeStatus(activeBooking.status) === "rejected"
+  );
   const showLiveTimer =
     dueForActiveShiftUi &&
     isLiveTimerBooking(activeBooking?.status) &&
@@ -1391,12 +1369,12 @@ export function ParentDashboardClient({
 
   const onboardingPending = profileCardStatus === "incomplete";
   const firstName = prefs.parentName ? prefs.parentName.trim().split(" ")[0] : "הורה";
-  // Live shift UI only for due bookings; future approved shows as scheduled confirmation.
   const showLiveShiftCard =
     (dueForActiveShiftUi && Boolean(activeBooking)) ||
     showLiveTimer ||
     awaitingEndApproval ||
-    inSettlement;
+    inSettlement ||
+    isRejectedBooking;
   const showScheduledCard = isScheduledConfirmed || isScheduledPending;
   const showShiftCard = showLiveShiftCard || showScheduledCard;
   const statusCardKey = activeBooking?.id
@@ -1429,30 +1407,34 @@ export function ParentDashboardClient({
     if (statusCardKey) setDismissedStatusKey(statusCardKey);
     setStatusCardCollapsed(false);
   };
-  const statusCollapsedSummary = inSettlement
-    ? settlementStep === "payment"
-      ? "תשלום ממתין — לחצו להרחבה"
-      : "דירוג ממתין — לחצו להרחבה"
-    : awaitingEndApproval
-      ? "ממתין לאישור סיום משמרת"
-      : showLiveTimer
-        ? `משמרת פעילה · ${liveTimerText}`
-        : isScheduledConfirmed
-          ? "המשמרת נקבעה — לחצו להרחבה"
-          : isScheduledPending
-            ? "בקשה עתידית ממתינה — לחצו להרחבה"
-            : isWaitingForSitterArrival(activeBooking)
-              ? "ממתינים להגעת הבייביסיטר"
-              : "סטטוס משמרת — לחצו להרחבה";
-  const statusCardTone =
-    awaitingEndApproval || (inSettlement && settlementStep === "payment")
+
+  const statusCollapsedSummary = isRejectedBooking
+    ? "הבקשה נדחתה — לחצו להרחבה"
+    : inSettlement
+      ? settlementStep === "payment"
+        ? "תשלום ממתין — לחצו להרחבה"
+        : "דירוג ממתין — לחצו להרחבה"
+      : awaitingEndApproval
+        ? "ממתין לאישור סיום משמרת"
+        : showLiveTimer
+          ? `משמרת פעילה · ${liveTimerText}`
+          : isScheduledConfirmed
+            ? "המשמרת נקבעה — לחצו להרחבה"
+            : isScheduledPending
+              ? "בקשה עתידית ממתינה — לחצו להרחבה"
+              : isWaitingForSitterArrival(activeBooking)
+                ? "ממתינים להגעת הבייביסיטר"
+                : "סטטוס משמרת — לחצו להרחבה";
+
+  const statusCardTone = isRejectedBooking
+    ? "rose"
+    : awaitingEndApproval || (inSettlement && settlementStep === "payment")
       ? "rose"
       : isScheduledPending || isWaitingForSitterArrival(activeBooking)
         ? "amber"
         : "emerald";
 
   useEffect(() => {
-    // Reset collapse when the active status identity changes.
     setStatusCardCollapsed(false);
   }, [statusCardKey]);
 
@@ -1555,7 +1537,18 @@ export function ParentDashboardClient({
                 </p>
               ) : null}
 
-              {inSettlement && settlementStep !== "payment" ? (
+              {isRejectedBooking ? (
+                <div className="flex w-full flex-col items-start gap-2">
+                  <div className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                    <p className="font-semibold text-rose-800">
+                      הבקשה נדחתה על ידי הבייביסיטר
+                    </p>
+                    {activeBooking?.rejection_note ? (
+                      <p className="mt-1">{activeBooking.rejection_note}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : inSettlement && settlementStep !== "payment" ? (
                 <div className="flex w-full flex-col items-center gap-3">
                   <p className="text-sm font-bold text-emerald-900">דרגו את הבייביסיטר לפני התשלום</p>
                   <ParentSessionRatingPanel
@@ -1702,16 +1695,15 @@ export function ParentDashboardClient({
             </DashboardStatusCard>
           ) : null}
 
-          {/* Always available — status cards are non-blocking. */}
           <div className="space-y-2 pt-1">
-              <Link
-                href="/parent/search"
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-[#001F3F] py-3 px-2 text-xs font-bold text-white shadow-md transition hover:bg-[#001F3F]/90"
-              >
-                <Search className="h-4 w-4" />
-                חיפוש נני
-              </Link>
-            </div>
+            <Link
+              href="/parent/search"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-[#001F3F] py-3 px-2 text-xs font-bold text-white shadow-md transition hover:bg-[#001F3F]/90"
+            >
+              <Search className="h-4 w-4" />
+              חיפוש נני
+            </Link>
+          </div>
 
           <div className="pt-2 flex flex-col gap-2">
             {showLiveShiftCard ? (
