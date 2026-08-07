@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 
@@ -125,7 +126,10 @@ export async function GET(
       .maybeSingle();
 
     if (bookingError) {
-      console.error("[parent-preview] booking:", bookingError.message);
+      console.error(
+        "[parent-preview] booking:",
+        bookingError.message
+      );
 
       return NextResponse.json(
         { error: "טעינת ההזמנה נכשלה." },
@@ -167,7 +171,10 @@ export async function GET(
 
     if (status !== "pending" && status !== "approved") {
       return NextResponse.json(
-        { error: "Parent preview is not available for this booking" },
+        {
+          error:
+            "Parent preview is not available for this booking"
+        },
         { status: 403 }
       );
     }
@@ -185,13 +192,27 @@ export async function GET(
 
     /*
      * 6. מידע משפחתי.
+     *
+     * משתמשים בטיפוס מפורש כדי למנוע את שגיאת
+     * ה-TypeScript שנוצרה בין הקריאה הראשית ל-fallback.
      */
-    let { data: parentDetails, error: parentDetailsError } = await supabase
+    const primaryParentRead = await supabase
       .from("parent_profiles")
-      .select("id, address, children_count, children_ages, is_verified")
+      .select(
+        "id, address, children_count, children_ages, is_verified"
+      )
       .eq("id", parentId)
       .maybeSingle();
 
+    let parentDetails: ParentProfileRow | null =
+      (primaryParentRead.data as ParentProfileRow | null) ?? null;
+
+    let parentDetailsError = primaryParentRead.error;
+
+    /*
+     * fallback למקרה שהקישור לטבלת parent_profiles
+     * מבוסס user_id במקום id.
+     */
     if (parentDetailsError || !parentDetails) {
       const fallback = await supabase
         .from("parent_profiles")
@@ -202,12 +223,21 @@ export async function GET(
         .maybeSingle();
 
       if (!fallback.error) {
-        parentDetails = fallback.data as ParentProfileRow | null;
+        parentDetails =
+          (fallback.data as ParentProfileRow | null) ?? null;
+
         parentDetailsError = null;
       }
     }
 
-    const details = (parentDetails ?? {}) as ParentProfileRow;
+    if (parentDetailsError) {
+      console.warn(
+        "[parent-preview] parent_profiles:",
+        parentDetailsError.message
+      );
+    }
+
+    const details: ParentProfileRow = parentDetails ?? {};
 
     /*
      * 7. כתובת מלאה נחשפת רק לאחר שהנני אישרה.
@@ -217,10 +247,14 @@ export async function GET(
     return NextResponse.json({
       parent: {
         first_name:
-          String(publicParentProfile?.first_name ?? "").trim() || null,
+          String(
+            publicParentProfile?.first_name ?? ""
+          ).trim() || null,
 
         avatar_url:
-          String(publicParentProfile?.avatar_url ?? "").trim() || null,
+          String(
+            publicParentProfile?.avatar_url ?? ""
+          ).trim() || null,
 
         children_count:
           details.children_count != null
@@ -242,7 +276,10 @@ export async function GET(
       }
     });
   } catch (error) {
-    console.error("[parent-preview] exception:", error);
+    console.error(
+      "[parent-preview] exception:",
+      error
+    );
 
     return NextResponse.json(
       { error: "Server error" },
