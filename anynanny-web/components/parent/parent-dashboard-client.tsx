@@ -110,6 +110,7 @@ const POLL_MS = 5000;
 type SettlementStep = "payment" | "rating";
 
 const DISMISSED_SCHEDULED_STATUS_KEY = "anynanny_dismissed_scheduled_status_v1";
+const DISMISSED_REJECTED_STATUS_KEY = "anynanny_dismissed_rejected_status_v1";
 
 function readDismissedScheduledBookingIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -130,6 +131,33 @@ function persistDismissedScheduledBookingId(bookingId: string): void {
     const next = readDismissedScheduledBookingIds();
     next.add(bookingId);
     window.sessionStorage.setItem(DISMISSED_SCHEDULED_STATUS_KEY, JSON.stringify([...next]));
+  } catch {
+    /* ignore */
+  }
+}
+
+function readDismissedRejectedBookingIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(DISMISSED_REJECTED_STATUS_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === "string" && id.trim().length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
+function persistDismissedRejectedBookingId(bookingId: string): void {
+  if (!bookingId.trim() || typeof window === "undefined") return;
+  try {
+    const next = readDismissedRejectedBookingIds();
+    next.add(bookingId);
+    window.localStorage.setItem(
+      DISMISSED_REJECTED_STATUS_KEY,
+      JSON.stringify([...next])
+    );
   } catch {
     /* ignore */
   }
@@ -314,6 +342,9 @@ export function ParentDashboardClient({
   const [dismissedScheduledBookingIds, setDismissedScheduledBookingIds] = useState<Set<string>>(
     () => new Set()
   );
+  const [dismissedRejectedBookingIds, setDismissedRejectedBookingIds] = useState<Set<string>>(
+    () => new Set()
+  );
   const [hasHydrated, setHasHydrated] = useState(false);
   const [parentId, setParentId] = useState<string | null>(
     initialActiveBooking?.parent_id ? String(initialActiveBooking.parent_id) : null
@@ -358,6 +389,7 @@ export function ParentDashboardClient({
   useEffect(() => {
     setHasHydrated(true);
     setDismissedScheduledBookingIds(readDismissedScheduledBookingIds());
+    setDismissedRejectedBookingIds(readDismissedRejectedBookingIds());
   }, []);
 
   const refreshParentOnboardingStatus = useCallback(
@@ -1383,24 +1415,41 @@ export function ParentDashboardClient({
       ? `settlement:${settlementStep ?? "open"}`
       : null;
   const scheduledBookingId = activeBooking?.id ? String(activeBooking.id) : null;
+  const rejectedBookingId = isRejectedBooking && activeBooking?.id ? String(activeBooking.id) : null;
+
   const scheduledBannerDismissed = Boolean(
     hasHydrated &&
       scheduledBookingId &&
       (isScheduledConfirmed || isScheduledPending) &&
       dismissedScheduledBookingIds.has(scheduledBookingId)
   );
+  const rejectedBannerDismissed = Boolean(
+    hasHydrated &&
+      rejectedBookingId &&
+      dismissedRejectedBookingIds.has(rejectedBookingId)
+  );
+
   const statusCardVisible =
     hasHydrated &&
     showShiftCard &&
     !scheduledBannerDismissed &&
+    !rejectedBannerDismissed &&
     (!statusCardKey || dismissedStatusKey !== statusCardKey);
 
-  const dismissScheduledStatusBanner = () => {
+  const dismissStatusBanner = () => {
     if (scheduledBookingId && (isScheduledConfirmed || isScheduledPending)) {
       persistDismissedScheduledBookingId(scheduledBookingId);
       setDismissedScheduledBookingIds((prev) => {
         const next = new Set(prev);
         next.add(scheduledBookingId);
+        return next;
+      });
+    }
+    if (rejectedBookingId && isRejectedBooking) {
+      persistDismissedRejectedBookingId(rejectedBookingId);
+      setDismissedRejectedBookingIds((prev) => {
+        const next = new Set(prev);
+        next.add(rejectedBookingId);
         return next;
       });
     }
@@ -1494,7 +1543,7 @@ export function ParentDashboardClient({
             <div className="grid grid-cols-3 gap-2 pt-1">
               <Link
                 href="/parent/calendar"
-                onClick={dismissScheduledStatusBanner}
+                onClick={dismissStatusBanner}
                 className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
               >
                 <Calendar className="h-5 w-5 shrink-0 text-emerald-600" />
@@ -1528,7 +1577,7 @@ export function ParentDashboardClient({
               collapsedSummary={statusCollapsedSummary}
               collapsed={statusCardCollapsed}
               onToggleCollapse={() => setStatusCardCollapsed((v) => !v)}
-              onDismiss={dismissScheduledStatusBanner}
+              onDismiss={dismissStatusBanner}
               tone={statusCardTone}
             >
               {shiftError ? (
@@ -1646,7 +1695,7 @@ export function ParentDashboardClient({
                   ) : null}
                   <Link
                     href="/parent/calendar"
-                    onClick={dismissScheduledStatusBanner}
+                    onClick={dismissStatusBanner}
                     className="mt-1 text-xs font-bold text-emerald-700 underline underline-offset-2"
                   >
                     מעבר ליומן
@@ -1663,7 +1712,7 @@ export function ParentDashboardClient({
                   ) : null}
                   <Link
                     href="/parent/calendar"
-                    onClick={dismissScheduledStatusBanner}
+                    onClick={dismissStatusBanner}
                     className="mt-1 text-xs font-bold text-amber-800 underline underline-offset-2"
                   >
                     מעבר ליומן
