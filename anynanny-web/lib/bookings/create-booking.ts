@@ -126,8 +126,10 @@ export async function createBooking(
 
     if (
       lower.includes("hourly_rate_nis") &&
-      (lower.includes("column") ||
-        lower.includes("schema cache"))
+      (
+        lower.includes("column") ||
+        lower.includes("schema cache")
+      )
     ) {
       return {
         booking: null,
@@ -143,7 +145,7 @@ export async function createBooking(
   }
 
   return {
-    booking: data as BookingRow,
+    booking: data as unknown as BookingRow,
     error: null
   };
 }

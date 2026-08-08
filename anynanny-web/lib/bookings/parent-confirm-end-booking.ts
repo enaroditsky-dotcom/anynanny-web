@@ -338,7 +338,7 @@ export async function parentConfirmEndBooking(
 
       if (existingSession) {
         sessionRow =
-          existingSession as SupabaseSessionRow;
+        existingSession as unknown as SupabaseSessionRow;
 
         /*
          * חשוב:
@@ -488,7 +488,7 @@ export async function parentConfirmEndBooking(
 
     if (latest) {
       sessionRow =
-        latest as SupabaseSessionRow;
+      latest as unknown as SupabaseSessionRow;
 
       const latestSessionId =
         String(sessionRow.id);
