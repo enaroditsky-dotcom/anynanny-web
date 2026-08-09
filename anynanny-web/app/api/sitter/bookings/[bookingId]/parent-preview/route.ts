@@ -4,7 +4,14 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
-import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
+import {
+  fetchUserRatingSummary,
+  type UserRatingSummary
+} from "@/lib/ratings/fetch-user-rating-summary";
+import {
+  isProfileRole,
+  PROFILES_TABLE
+} from "@/lib/supabase/profiles";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +41,8 @@ function userIsSitter(
     const metadataRole = user.user_metadata?.role;
 
     role =
-      typeof metadataRole === "string" && isProfileRole(metadataRole)
+      typeof metadataRole === "string" &&
+      isProfileRole(metadataRole)
         ? metadataRole
         : undefined;
   }
@@ -45,8 +53,11 @@ function userIsSitter(
 async function supabaseFromCookies() {
   const cookieStore = await cookies();
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  const anon =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anon) {
     throw new Error(
@@ -61,9 +72,19 @@ async function supabaseFromCookies() {
       },
 
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
-        });
+        cookiesToSet.forEach(
+          ({
+            name,
+            value,
+            options
+          }) => {
+            cookieStore.set(
+              name,
+              value,
+              options
+            );
+          }
+        );
       }
     }
   });
@@ -71,57 +92,99 @@ async function supabaseFromCookies() {
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ bookingId: string }> }
+  context: {
+    params: Promise<{
+      bookingId: string;
+    }>;
+  }
 ) {
   try {
-    const { bookingId } = await context.params;
+    const { bookingId } =
+      await context.params;
 
     if (!bookingId) {
       return NextResponse.json(
-        { error: "Missing booking id" },
-        { status: 400 }
+        {
+          error:
+            "Missing booking id"
+        },
+        {
+          status: 400
+        }
       );
     }
 
-    const supabase = await supabaseFromCookies();
+    const supabase =
+      await supabaseFromCookies();
 
     /*
-     * 1. מי המשתמש המחובר?
+     * 1.
+     * מי המשתמש המחובר?
      */
     const {
-      data: { user },
+      data: {
+        user
+      },
       error: authError
-    } = await supabase.auth.getUser();
+    } =
+      await supabase.auth.getUser();
 
-    if (authError || !user) {
+    if (
+      authError ||
+      !user
+    ) {
       return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
+        {
+          error:
+            "Unauthorized"
+        },
+        {
+          status: 401
+        }
       );
     }
 
     /*
-     * 2. רק נני יכולה להשתמש ב-endpoint הזה
+     * 2.
+     * רק נני יכולה להשתמש ב-endpoint הזה.
      */
-    const { data: viewerProfile } = await supabase
+    const {
+      data: viewerProfile
+    } = await supabase
       .from(PROFILES_TABLE)
       .select("role")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!userIsSitter(viewerProfile, user)) {
+    if (
+      !userIsSitter(
+        viewerProfile,
+        user
+      )
+    ) {
       return NextResponse.json(
-        { error: "Forbidden" },
-        { status: 403 }
+        {
+          error:
+            "Forbidden"
+        },
+        {
+          status: 403
+        }
       );
     }
 
     /*
-     * 3. שליפת ההזמנה עצמה
+     * 3.
+     * שליפת ההזמנה עצמה.
      */
-    const { data: bookingData, error: bookingError } = await supabase
+    const {
+      data: bookingData,
+      error: bookingError
+    } = await supabase
       .from(BOOKINGS_TABLE)
-      .select("id, parent_id, sitter_id, status")
+      .select(
+        "id, parent_id, sitter_id, status"
+      )
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -132,147 +195,269 @@ export async function GET(
       );
 
       return NextResponse.json(
-        { error: "טעינת ההזמנה נכשלה." },
-        { status: 400 }
+        {
+          error:
+            "טעינת ההזמנה נכשלה."
+        },
+        {
+          status: 400
+        }
       );
     }
 
     if (!bookingData) {
       return NextResponse.json(
-        { error: "Booking not found" },
-        { status: 404 }
+        {
+          error:
+            "Booking not found"
+        },
+        {
+          status: 404
+        }
       );
     }
 
-    const booking = bookingData as BookingAccessRow;
+    const booking =
+      bookingData as BookingAccessRow;
 
     /*
-     * 4. בדיקת הרשאה קריטית:
-     * הנני יכולה לראות רק הורה של הזמנה ששייכת לה.
+     * 4.
+     * בדיקת הרשאה:
+     * הנני יכולה לראות רק הורה
+     * של הזמנה ששייכת לה.
      */
-    if (booking.sitter_id !== user.id) {
+    if (
+      booking.sitter_id !==
+      user.id
+    ) {
       return NextResponse.json(
-        { error: "Forbidden" },
-        { status: 403 }
+        {
+          error:
+            "Forbidden"
+        },
+        {
+          status: 403
+        }
       );
     }
 
-    if (!booking.parent_id) {
+    if (
+      !booking.parent_id
+    ) {
       return NextResponse.json(
-        { error: "Parent not found" },
-        { status: 404 }
+        {
+          error:
+            "Parent not found"
+        },
+        {
+          status: 404
+        }
       );
     }
 
     /*
-     * כרגע endpoint זה מיועד להזמנה ממתינה או מאושרת.
+     * Parent preview זמין רק
+     * להזמנה ממתינה או מאושרת.
      */
-    const status = String(booking.status ?? "").toLowerCase();
+    const status =
+      String(
+        booking.status ?? ""
+      ).toLowerCase();
 
-    if (status !== "pending" && status !== "approved") {
+    if (
+      status !== "pending" &&
+      status !== "approved"
+    ) {
       return NextResponse.json(
         {
           error:
             "Parent preview is not available for this booking"
         },
-        { status: 403 }
+        {
+          status: 403
+        }
       );
     }
 
-    const parentId = booking.parent_id;
+    const parentId =
+      booking.parent_id;
 
     /*
-     * 5. מידע כללי ובטוח מטבלת profiles.
+     * 5.
+     * דירוג ההורה.
      */
-    const { data: publicParentProfile } = await supabase
+    let parentRatingSummary: UserRatingSummary =
+      {
+        average: 0,
+        count: 0
+      };
+
+    try {
+      parentRatingSummary =
+        await fetchUserRatingSummary(
+          supabase,
+          parentId
+        );
+    } catch (error) {
+      console.warn(
+        "[parent-preview] parent rating:",
+        error
+      );
+    }
+
+    /*
+     * 6.
+     * מידע כללי ובטוח מטבלת profiles.
+     */
+    const {
+      data:
+        publicParentProfile
+    } = await supabase
       .from(PROFILES_TABLE)
-      .select("first_name, last_name, avatar_url")
-      .eq("id", parentId)
-      .maybeSingle();
-
-    /*
-     * 6. מידע משפחתי.
-     *
-     * משתמשים בטיפוס מפורש כדי למנוע את שגיאת
-     * ה-TypeScript שנוצרה בין הקריאה הראשית ל-fallback.
-     */
-    const primaryParentRead = await supabase
-      .from("parent_profiles")
       .select(
-        "id, address, children_count, children_ages, is_verified"
+        "first_name, last_name, avatar_url"
       )
       .eq("id", parentId)
       .maybeSingle();
 
-    let parentDetails: ParentProfileRow | null =
-      (primaryParentRead.data as ParentProfileRow | null) ?? null;
+    /*
+     * 7.
+     * מידע משפחתי.
+     */
+    const primaryParentRead =
+      await supabase
+        .from(
+          "parent_profiles"
+        )
+        .select(
+          "id, address, children_count, children_ages, is_verified"
+        )
+        .eq(
+          "id",
+          parentId
+        )
+        .maybeSingle();
 
-    let parentDetailsError = primaryParentRead.error;
+    let parentDetails:
+      | ParentProfileRow
+      | null =
+      (primaryParentRead.data as
+        | ParentProfileRow
+        | null) ?? null;
+
+    let parentDetailsError =
+      primaryParentRead.error;
 
     /*
-     * fallback למקרה שהקישור לטבלת parent_profiles
+     * fallback למקרה שהקישור
      * מבוסס user_id במקום id.
      */
-    if (parentDetailsError || !parentDetails) {
-      const fallback = await supabase
-        .from("parent_profiles")
-        .select(
-          "user_id, address, children_count, children_ages, is_verified"
-        )
-        .eq("user_id", parentId)
-        .maybeSingle();
+    if (
+      parentDetailsError ||
+      !parentDetails
+    ) {
+      const fallback =
+        await supabase
+          .from(
+            "parent_profiles"
+          )
+          .select(
+            "user_id, address, children_count, children_ages, is_verified"
+          )
+          .eq(
+            "user_id",
+            parentId
+          )
+          .maybeSingle();
 
       if (!fallback.error) {
         parentDetails =
-          (fallback.data as ParentProfileRow | null) ?? null;
+          (fallback.data as
+            | ParentProfileRow
+            | null) ?? null;
 
-        parentDetailsError = null;
+        parentDetailsError =
+          null;
       }
     }
 
-    if (parentDetailsError) {
+    if (
+      parentDetailsError
+    ) {
       console.warn(
         "[parent-preview] parent_profiles:",
         parentDetailsError.message
       );
     }
 
-    const details: ParentProfileRow = parentDetails ?? {};
+    const details:
+      ParentProfileRow =
+      parentDetails ?? {};
 
     /*
-     * 7. כתובת מלאה נחשפת רק לאחר שהנני אישרה.
+     * 8.
+     * כתובת מלאה נחשפת רק
+     * לאחר שהנני אישרה.
      */
-    const bookingApproved = status === "approved";
+    const bookingApproved =
+      status === "approved";
 
     return NextResponse.json({
       parent: {
         first_name:
           String(
-            publicParentProfile?.first_name ?? ""
+            publicParentProfile
+              ?.first_name ??
+              ""
           ).trim() || null,
 
         avatar_url:
           String(
-            publicParentProfile?.avatar_url ?? ""
+            publicParentProfile
+              ?.avatar_url ??
+              ""
           ).trim() || null,
 
+        rating_average:
+          Number(
+            parentRatingSummary.average ??
+              0
+          ),
+
+        rating_count:
+          Number(
+            parentRatingSummary.count ??
+              0
+          ),
+
         children_count:
-          details.children_count != null
-            ? Number(details.children_count)
+          details.children_count !=
+          null
+            ? Number(
+                details.children_count
+              )
             : null,
 
         children_ages:
-          String(details.children_ages ?? "").trim() || null,
+          String(
+            details.children_ages ??
+              ""
+          ).trim() || null,
 
         identity_verified:
-          details.is_verified === true,
+          details.is_verified ===
+          true,
 
         address:
           bookingApproved
-            ? String(details.address ?? "").trim() || null
+            ? String(
+                details.address ??
+                  ""
+              ).trim() || null
             : null,
 
-        address_visible: bookingApproved
+        address_visible:
+          bookingApproved
       }
     });
   } catch (error) {
@@ -282,8 +467,13 @@ export async function GET(
     );
 
     return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
+      {
+        error:
+          "Server error"
+      },
+      {
+        status: 500
+      }
     );
   }
 }

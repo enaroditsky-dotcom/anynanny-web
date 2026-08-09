@@ -3,61 +3,77 @@ import {
   HYP_SANDBOX_SUCCESS_CARD,
   isHypTestTerminalMasof
 } from "@/lib/billing/hyp/sandbox-test-cards";
-import { buildHypPaymentMethodSignEntries } from "@/lib/billing/hyp/payment-method-flags";
+
+import {
+  buildHypPaymentMethodSignEntries
+} from "@/lib/billing/hyp/payment-method-flags";
 
 /**
- * Hyp Pay APISign integration (official Pay Page API).
+ * HYP Pay APISign integration.
  *
- * Spec: https://developers.hyp.co.il/pay/getting-started/creating-a-payment-page
- * Sandbox cards: https://developers.hyp.co.il/pay/getting-started/testing-environments
+ * PAYMENT SAFETY RULES:
  *
- * Wire auth fields (only these are valid for APISign):
- *   Masof = terminal id
- *   KEY   = API key / password signature
- *   PassP = API password
- *
- * Dashboard "User" (gARkb) is console identity — it is NOT an APISign parameter.
- * Sending SuccessUrl/ErrorUrl for an unregistered origin returns CCode=902
- * ("request origin does not match terminal settings").
- *
- * Configure success/fail URLs in the Hyp terminal dashboard to:
- *   {APP_ORIGIN}/parent/checkout/complete?checkout=success
- *
- * Sandbox happy-path card (NOT 4580…4580 — that card is intentionally declined):
- *   5253360311315452 · exp 12/29 · CVV 493 · ID 890108558 · ~10 NIS
+ * 1. AnyNanny requires a trusted return URL from HYP.
+ * 2. We never convert iframe navigation into payment success.
+ * 3. We never retry CCode=902 by silently removing SuccessUrl/ErrorUrl.
+ * 4. Booking/session are finalized only after an explicit successful
+ *    payment response is received by the completion flow.
  */
 
 export type HypCredentials = {
-  /** Terminal ID → Masof */
+  /** Terminal ID -> Masof */
   masof: string;
-  /** Dashboard console user (stored for ops; not sent on APISign by default) */
+
+  /** Dashboard/API user */
   user: string;
-  /** API key / password signature → KEY */
+
+  /** API signature key -> KEY */
   key: string;
-  /** API password → PassP */
+
+  /** API password -> PassP */
   passP: string;
+
   payBaseUrl: string;
 };
 
 export type HypCreateTransactionInput = {
   amountNis: number;
+
   bookingId: string;
-  /** Double-Shake session id — echoed back as MoreData on Hyp return/IPN. */
-  shiftSessionId?: string | null;
-  description?: string;
-  paymentMethod?: string;
-  pageLang?: "HEB" | "ENG";
-  /** Israeli ID — prefilled with Hyp sandbox success-card ID in test mode. */
-  userId?: string | null;
-  clientName?: string | null;
-  clientLastName?: string | null;
+
   /**
-   * Only sent when HYP_ALLOW_DYNAMIC_RETURN_URLS=true AND the domain is
-   * whitelisted on the Hyp terminal. Otherwise omit (configure in dashboard).
+   * AnyNanny Double-Shake Session ID.
+   * Sent as MoreData so it can be recovered on HYP return.
+   */
+  shiftSessionId?: string | null;
+
+  description?: string;
+
+  paymentMethod?: string;
+
+  pageLang?: "HEB" | "ENG";
+
+  userId?: string | null;
+
+  clientName?: string | null;
+
+  clientLastName?: string | null;
+
+  /**
+   * AnyNanny payment-success return target.
    */
   successUrl?: string | null;
+
+  /**
+   * AnyNanny payment failure/cancel return target.
+   */
   cancelUrl?: string | null;
-  /** Internal: retry without SuccessUrl/ErrorUrl after CCode=902. */
+
+  /**
+   * Retained only for compatibility.
+   *
+   * Normal checkout flows should never set this to true.
+   */
   omitReturnUrls?: boolean;
 };
 
@@ -68,83 +84,193 @@ export type HypCreateTransactionResult = {
   order: string;
 };
 
-const PAY_HOST = "https://pay.hyp.co.il/p/";
-const HYP_FETCH_TIMEOUT_MS = 20_000;
+const PAY_HOST =
+  "https://pay.hyp.co.il/p/";
 
-/** Exact dedicated API credentials from the Hyp terminal dashboard. */
+const HYP_FETCH_TIMEOUT_MS =
+  20_000;
+
+/**
+ * Compatibility export.
+ *
+ * Real credentials must come from Environment Variables.
+ */
 export const HYP_DASHBOARD_API_CREDENTIALS = {
-  masof: "0086229230",
-  user: "gARkb",
-  passP: "hyp1234",
-  key: "2d09e1542a8955f3b582777ff6e31aecb14da51b"
+  masof:
+    String(
+      process.env.HYP_MASOF ??
+        process.env.HYP_TERMINAL_ID ??
+        ""
+    ).trim(),
+
+  user:
+    String(
+      process.env.HYP_USER ??
+        process.env.HYP_USERNAME ??
+        ""
+    ).trim(),
+
+  passP:
+    String(
+      process.env.HYP_PASSP ??
+        ""
+    ).trim(),
+
+  key:
+    String(
+      process.env.HYP_API_KEY ??
+        process.env.HYP_KEY ??
+        ""
+    ).trim()
 } as const;
 
-const CONSOLE_LOGIN_PASSWORD = "lqkPWCS3";
+function envFlag(
+  name: string
+): boolean {
+  const value =
+    String(
+      process.env[name] ??
+        ""
+    )
+      .trim()
+      .toLowerCase();
 
-function envFlag(name: string): boolean {
-  const v = String(process.env[name] ?? "")
-    .trim()
-    .toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
+  return (
+    value === "1" ||
+    value === "true" ||
+    value === "yes"
+  );
 }
 
-function trimEnv(name: string): string {
-  return String(process.env[name] ?? "").trim();
+function trimEnv(
+  name: string
+): string {
+  return String(
+    process.env[name] ??
+      ""
+  ).trim();
 }
 
 function resolvePayBaseUrl(): string {
-  const raw = trimEnv("HYP_PAY_BASE_URL") || trimEnv("HYP_API_URL") || PAY_HOST;
-  if (/sandbox\.hyp\.co\.il\/api/i.test(raw) || /\/api\/v1\/payment/i.test(raw)) {
+  const raw =
+    trimEnv(
+      "HYP_PAY_BASE_URL"
+    ) ||
+    trimEnv(
+      "HYP_API_URL"
+    ) ||
+    PAY_HOST;
+
+  /*
+   * APISign hosted pay page uses /p/.
+   */
+  if (
+    /sandbox\.hyp\.co\.il\/api/i.test(
+      raw
+    ) ||
+    /\/api\/v1\/payment/i.test(
+      raw
+    )
+  ) {
     return PAY_HOST;
   }
+
   try {
-    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    if (!url.pathname || url.pathname === "/") url.pathname = "/p/";
+    const url =
+      new URL(
+        raw.includes(
+          "://"
+        )
+          ? raw
+          : `https://${raw}`
+      );
+
+    if (
+      !url.pathname ||
+      url.pathname ===
+        "/"
+    ) {
+      url.pathname =
+        "/p/";
+    }
+
     url.search = "";
     url.hash = "";
-    const href = url.toString();
-    return href.endsWith("/") ? href : `${href}/`;
+
+    const href =
+      url.toString();
+
+    return href.endsWith(
+      "/"
+    )
+      ? href
+      : `${href}/`;
   } catch {
     return PAY_HOST;
   }
 }
 
 /**
- * Credentials for APISign. Always uses dedicated dashboard API values
- * (never the console login password).
+ * Resolve HYP credentials from environment variables.
  */
 export function getHypCredentials(): HypCredentials {
-  // Hard preference for the known-good dashboard API values so a bad/stale
-  // process env cannot swap in the console login password.
-  const masof = HYP_DASHBOARD_API_CREDENTIALS.masof;
-  const user = HYP_DASHBOARD_API_CREDENTIALS.user;
-  const key = HYP_DASHBOARD_API_CREDENTIALS.key;
-  const passP = HYP_DASHBOARD_API_CREDENTIALS.passP;
+  const masof =
+    trimEnv(
+      "HYP_MASOF"
+    ) ||
+    trimEnv(
+      "HYP_TERMINAL_ID"
+    );
 
-  // Allow env override only when values are clearly the dedicated API fields.
-  const envMasof = trimEnv("HYP_MASOF") || trimEnv("HYP_TERMINAL_ID");
-  const envKey = trimEnv("HYP_API_KEY") || trimEnv("HYP_KEY");
-  const envPassP = trimEnv("HYP_PASSP"); // never HYP_PASS
-  const envUser = trimEnv("HYP_USER") || trimEnv("HYP_USERNAME");
+  const key =
+    trimEnv(
+      "HYP_API_KEY"
+    ) ||
+    trimEnv(
+      "HYP_KEY"
+    );
 
-  const resolved: HypCredentials = {
-    masof: envMasof || masof,
-    user: envUser || user,
-    key: envKey || key,
-    passP: envPassP || passP,
-    payBaseUrl: resolvePayBaseUrl()
+  const passP =
+    trimEnv(
+      "HYP_PASSP"
+    );
+
+  const user =
+    trimEnv(
+      "HYP_USER"
+    ) ||
+    trimEnv(
+      "HYP_USERNAME"
+    );
+
+  const resolved:
+    HypCredentials = {
+    masof,
+    user,
+    key,
+    passP,
+
+    payBaseUrl:
+      resolvePayBaseUrl()
   };
 
-  if (resolved.passP === CONSOLE_LOGIN_PASSWORD || resolved.key === CONSOLE_LOGIN_PASSWORD) {
+  if (
+    !resolved.masof ||
+    !resolved.key ||
+    !resolved.passP
+  ) {
     throw new Error(
-      "Hyp PassP/KEY must be the dedicated API credentials, not the console login password."
+      "HYP credentials incomplete. HYP_MASOF, HYP_API_KEY and HYP_PASSP are required."
     );
   }
-  if (resolved.key.length < 32) {
-    throw new Error("Hyp KEY must be the full API Key / Password Signature from the dashboard.");
-  }
-  if (!resolved.masof || !resolved.key || !resolved.passP) {
-    throw new Error("Hyp credentials incomplete (Masof, KEY, PassP required).");
+
+  if (
+    resolved.key.length <
+    16
+  ) {
+    throw new Error(
+      "HYP_API_KEY appears invalid or incomplete."
+    );
   }
 
   return resolved;
@@ -152,205 +278,588 @@ export function getHypCredentials(): HypCredentials {
 
 export function isHypConfigured(): boolean {
   try {
-    const c = getHypCredentials();
-    return Boolean(c.masof && c.key && c.passP);
+    const credentials =
+      getHypCredentials();
+
+    return Boolean(
+      credentials.masof &&
+        credentials.key &&
+        credentials.passP
+    );
   } catch {
     return false;
   }
 }
 
 /**
- * Sandbox/test mode: dedicated test Masof (00100…), explicit env flag, or
- * the shared demo credentials shipped for local integration.
+ * Detect sandbox/test mode.
  */
-export function isHypSandboxMode(creds?: HypCredentials): boolean {
-  if (envFlag("HYP_TEST_MODE") || envFlag("HYP_SANDBOX")) return true;
+export function isHypSandboxMode(
+  creds?: HypCredentials
+): boolean {
+  if (
+    envFlag(
+      "HYP_TEST_MODE"
+    ) ||
+    envFlag(
+      "HYP_SANDBOX"
+    )
+  ) {
+    return true;
+  }
+
   try {
-    const c = creds ?? getHypCredentials();
-    if (isHypTestTerminalMasof(c.masof)) return true;
-    // Shared demo terminal used in this project (PassP=hyp1234).
-    if (c.masof === HYP_DASHBOARD_API_CREDENTIALS.masof && c.passP === HYP_DASHBOARD_API_CREDENTIALS.passP) {
-      return true;
-    }
-    return false;
+    const credentials =
+      creds ??
+      getHypCredentials();
+
+    return isHypTestTerminalMasof(
+      credentials.masof
+    );
   } catch {
     return false;
   }
 }
 
-function formatHypAmount(amountNis: number): string {
-  const n = Math.max(0.5, Number(amountNis) || 0);
-  return Number.isInteger(n) ? String(n) : n.toFixed(2);
-}
+function formatHypAmount(
+  amountNis: number
+): string {
+  const amount =
+    Math.max(
+      0.5,
+      Number(
+        amountNis
+      ) || 0
+    );
 
-function hypOrderFromBookingId(bookingId: string): string {
-  // Hyp Order is often capped (~20). Full booking UUID lives in Info instead.
-  const compact = bookingId.replace(/[^a-zA-Z0-9]/g, "");
-  return compact.slice(0, 20) || `ord${Date.now()}`.slice(0, 20);
-}
-
-/** Hyp expects capitalized True/False (not lowercase boolean strings). */
-function hypTrueFalse(value: boolean): "True" | "False" {
-  return value ? "True" : "False";
+  return Number.isInteger(
+    amount
+  )
+    ? String(amount)
+    : amount.toFixed(
+        2
+      );
 }
 
 /**
- * Build an application/x-www-form-urlencoded body in stable insertion order.
- * Uses encodeURIComponent (RFC3988) which Hyp accepts for APISign.
+ * HYP Order is intentionally compact.
+ *
+ * Full Booking UUID is kept in Info.
  */
-function encodeHypForm(entries: Array<[string, string]>): string {
+function hypOrderFromBookingId(
+  bookingId: string
+): string {
+  const compact =
+    bookingId.replace(
+      /[^a-zA-Z0-9]/g,
+      ""
+    );
+
+  return (
+    compact.slice(
+      0,
+      20
+    ) ||
+    `ord${Date.now()}`.slice(
+      0,
+      20
+    )
+  );
+}
+
+function hypTrueFalse(
+  value: boolean
+): "True" | "False" {
+  return value
+    ? "True"
+    : "False";
+}
+
+/**
+ * Build application/x-www-form-urlencoded
+ * while preserving parameter insertion order.
+ */
+function encodeHypForm(
+  entries: Array<
+    [string, string]
+  >
+): string {
   return entries
-    .filter(([, v]) => v !== undefined && v !== null && String(v).length > 0)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .filter(
+      ([, value]) =>
+        value !==
+          undefined &&
+        value !==
+          null &&
+        String(
+          value
+        ).length >
+          0
+    )
+    .map(
+      ([key, value]) =>
+        `${encodeURIComponent(
+          key
+        )}=${encodeURIComponent(
+          String(value)
+        )}`
+    )
     .join("&");
 }
 
-function readCCode(body: string): string | null {
-  const match = body.match(/(?:^|&)CCode=([^&]*)/i);
-  return match ? decodeURIComponent(match[1] ?? "").trim() : null;
+function readCCode(
+  body: string
+): string | null {
+  const match =
+    body.match(
+      /(?:^|&)CCode=([^&]*)/i
+    );
+
+  return match
+    ? decodeURIComponent(
+        match[1] ??
+          ""
+      ).trim()
+    : null;
 }
 
-function isHypSignSuccessBody(body: string): boolean {
-  const text = body.trim().replace(/^\?/, "");
-  if (!text) return false;
-  const ccode = readCCode(text);
-  if (ccode != null && ccode !== "" && ccode !== "0") return false;
-  if (/^error[=:]/i.test(text)) return false;
-  return /(?:^|&)signature=/i.test(text) || /(?:^|&)action=pay(?:&|$)/i.test(text);
+function isSuccessfulCCode(
+  value:
+    | string
+    | null
+): boolean {
+  const code =
+    String(
+      value ?? ""
+    ).trim();
+
+  return (
+    code === "0" ||
+    code === "00"
+  );
 }
 
-function authFailureMessage(body: string): string {
-  const ccode = readCCode(body);
-  if (ccode === "902") {
+/**
+ * Validates APISign result.
+ *
+ * This does NOT mean the card payment itself succeeded.
+ * It only means HYP accepted the APISign request.
+ */
+function isHypSignSuccessBody(
+  body: string
+): boolean {
+  const text =
+    body
+      .trim()
+      .replace(
+        /^\?/,
+        ""
+      );
+
+  if (!text) {
+    return false;
+  }
+
+  const cCode =
+    readCCode(
+      text
+    );
+
+  if (
+    cCode != null &&
+    cCode !== "" &&
+    !isSuccessfulCCode(
+      cCode
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    /^error[=:]/i.test(
+      text
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    /(?:^|&)signature=/i.test(
+      text
+    ) ||
+    /(?:^|&)action=pay(?:&|$)/i.test(
+      text
+    )
+  );
+}
+
+function authFailureMessage(
+  body: string
+): string {
+  const cCode =
+    readCCode(
+      body
+    );
+
+  if (
+    cCode ===
+    "902"
+  ) {
     return (
-      "Hyp authentication failed (CCode=902): request origin does not match terminal settings. " +
-      "Do not send SuccessUrl/ErrorUrl unless that domain is whitelisted on the Hyp terminal. " +
-      "Configure return URLs in the Hyp dashboard, and verify Masof/KEY/PassP."
+      "HYP authentication failed (CCode=902): " +
+      "the SuccessUrl/ErrorUrl origin is not allowed by the HYP terminal. " +
+      "Configure/whitelist the AnyNanny HTTPS return domain in HYP. " +
+      "Checkout will not continue without a trusted return URL."
     );
   }
-  if (ccode) {
-    return `Hyp APISign rejected the request (CCode=${ccode}): ${body.slice(0, 160)}`;
+
+  if (cCode) {
+    return (
+      `HYP APISign rejected the request (CCode=${cCode}): ` +
+      body.slice(
+        0,
+        160
+      )
+    );
   }
+
   return body
-    ? `Hyp APISign rejected the request: ${body.slice(0, 180)}`
-    : "Hyp APISign returned an empty response.";
+    ? `HYP APISign rejected the request: ${body.slice(
+        0,
+        180
+      )}`
+    : "HYP APISign returned an empty response.";
 }
 
-/** Strip KEY/PassP while preserving original parameter order (required for pay URL). */
-export function stripSecretsPreserveOrder(signedQuery: string): string {
+/**
+ * Remove KEY and PassP before exposing the payment URL
+ * to the browser.
+ */
+export function stripSecretsPreserveOrder(
+  signedQuery: string
+): string {
   return signedQuery
-    .replace(/^\?/, "")
+    .replace(
+      /^\?/,
+      ""
+    )
     .split("&")
-    .filter((part) => {
-      const key = decodeURIComponent((part.split("=")[0] ?? "").replace(/\+/g, " "));
-      return key !== "KEY" && key !== "PassP" && key !== "Key" && key !== "Passp";
-    })
+    .filter(
+      (part) => {
+        const key =
+          decodeURIComponent(
+            (
+              part.split(
+                "="
+              )[0] ??
+              ""
+            ).replace(
+              /\+/g,
+              " "
+            )
+          );
+
+        return (
+          key !== "KEY" &&
+          key !== "PassP" &&
+          key !== "Key" &&
+          key !== "Passp"
+        );
+      }
+    )
     .join("&");
 }
 
 /**
- * Official APISign payload:
- * action=APISign&What=SIGN&Sign=True&Masof&KEY&PassP&Amount&...
+ * Build official HYP APISign parameters.
  */
 export function buildHypApiSignEntries(
   creds: HypCredentials,
   input: HypCreateTransactionInput,
   order: string
 ): Array<[string, string]> {
-  const amount = formatHypAmount(input.amountNis);
-  const allowDynamicReturns = envFlag("HYP_ALLOW_DYNAMIC_RETURN_URLS");
-  const includeUser = envFlag("HYP_INCLUDE_USER_IN_APISIGN");
+  const amount =
+    formatHypAmount(
+      input.amountNis
+    );
 
-  const entries: Array<[string, string]> = [
-    // Exact order from Hyp docs examples.
-    ["action", "APISign"],
-    ["What", "SIGN"],
-    ["Sign", hypTrueFalse(true)],
-    ["Masof", creds.masof],
-    ["KEY", creds.key],
-    ["PassP", creds.passP]
+  const includeUser =
+    envFlag(
+      "HYP_INCLUDE_USER_IN_APISIGN"
+    );
+
+  const entries:
+    Array<
+      [string, string]
+    > = [
+    [
+      "action",
+      "APISign"
+    ],
+    [
+      "What",
+      "SIGN"
+    ],
+    [
+      "Sign",
+      hypTrueFalse(
+        true
+      )
+    ],
+    [
+      "Masof",
+      creds.masof
+    ],
+    [
+      "KEY",
+      creds.key
+    ],
+    [
+      "PassP",
+      creds.passP
+    ]
   ];
 
-  // Dashboard User is NOT part of official APISign. Opt-in only.
-  if (includeUser && creds.user) {
-    entries.push(["User", creds.user]);
+  if (
+    includeUser &&
+    creds.user
+  ) {
+    entries.push([
+      "User",
+      creds.user
+    ]);
   }
 
   entries.push(
-    ["Amount", amount],
-    ["Coin", "1"],
-    ["Order", order],
-    // Full booking UUID — returned on success redirect / IPN as Info.
-    ["Info", input.bookingId],
-    ["PageLang", input.pageLang ?? "HEB"],
-    ["UTF8", hypTrueFalse(true)],
-    ["UTF8out", hypTrueFalse(true)],
-    ["Tash", "1"]
+    [
+      "Amount",
+      amount
+    ],
+    [
+      "Coin",
+      "1"
+    ],
+    [
+      "Order",
+      order
+    ],
+
+    /**
+     * Full Booking UUID.
+     */
+    [
+      "Info",
+      input.bookingId
+    ],
+
+    [
+      "PageLang",
+      input.pageLang ??
+        "HEB"
+    ],
+    [
+      "UTF8",
+      hypTrueFalse(
+        true
+      )
+    ],
+    [
+      "UTF8out",
+      hypTrueFalse(
+        true
+      )
+    ],
+    [
+      "Tash",
+      "1"
+    ]
   );
 
-  // Open Bit / PayBox / card according to the rail the user clicked.
-  // (Previously paymentMethod was accepted but never signed into the request.)
-  for (const entry of buildHypPaymentMethodSignEntries(input.paymentMethod)) {
-    const key = entry[0];
-    // Wallet rails already set Tash/FixTash — avoid duplicate Tash keys.
-    if (key === "Tash") {
-      const existing = entries.findIndex(([k]) => k === "Tash");
-      if (existing >= 0) entries[existing] = entry;
-      else entries.push(entry);
+  /**
+   * Payment rail flags:
+   * credit card / Bit / PayBox.
+   */
+  for (
+    const entry
+    of buildHypPaymentMethodSignEntries(
+      input.paymentMethod
+    )
+  ) {
+    const key =
+      entry[0];
+
+    if (
+      key ===
+      "Tash"
+    ) {
+      const existing =
+        entries.findIndex(
+          ([existingKey]) =>
+            existingKey ===
+            "Tash"
+        );
+
+      if (
+        existing >=
+        0
+      ) {
+        entries[
+          existing
+        ] = entry;
+      } else {
+        entries.push(
+          entry
+        );
+      }
+
       continue;
     }
-    entries.push(entry);
-  }
 
-  // Prefill Israeli ID in sandbox so the payment page matches the success test card.
-  // (Hyp requires this ID with the approved sandbox Mastercard.)
-  const sandbox = isHypSandboxMode(creds);
-  const userId =
-    input.userId?.trim() ||
-    (sandbox ? HYP_SANDBOX_SUCCESS_CARD.israeliId : "") ||
-    "";
-  if (userId) {
-    entries.push(["UserId", userId]);
-  }
-  if (input.clientName?.trim()) {
-    entries.push(["ClientName", input.clientName.trim().slice(0, 50)]);
-  } else if (sandbox) {
-    entries.push(["ClientName", "AnyNanny"]);
-  }
-  if (input.clientLastName?.trim()) {
-    entries.push(["ClientLName", input.clientLastName.trim().slice(0, 50)]);
-  } else if (sandbox) {
-    entries.push(["ClientLName", "Sandbox"]);
-  }
-
-  if (sandbox && Number(amount) > HYP_SANDBOX_RECOMMENDED_AMOUNT_NIS * 5) {
-    console.warn(
-      `[Hyp] Sandbox amount ${amount} NIS is high — official guidance is ~${HYP_SANDBOX_RECOMMENDED_AMOUNT_NIS} NIS with the shared test card.`
+    entries.push(
+      entry
     );
   }
 
-  const shiftSessionId = input.shiftSessionId?.trim();
-  if (shiftSessionId) {
-    // Echoed on return so /api/hyp/complete can mark the correct sessions row paid.
-    entries.push(["MoreData", `Session_${shiftSessionId}`]);
+  const sandbox =
+    isHypSandboxMode(
+      creds
+    );
+
+  const userId =
+    input.userId?.trim() ||
+    (
+      sandbox
+        ? HYP_SANDBOX_SUCCESS_CARD.israeliId
+        : ""
+    ) ||
+    "";
+
+  if (userId) {
+    entries.push([
+      "UserId",
+      userId
+    ]);
   }
 
-  if (input.description?.trim()) {
-    entries.push(["Fild1", input.description.trim().slice(0, 100)]);
+  if (
+    input.clientName?.trim()
+  ) {
+    entries.push([
+      "ClientName",
+      input.clientName
+        .trim()
+        .slice(
+          0,
+          50
+        )
+    ]);
+  } else if (
+    sandbox
+  ) {
+    entries.push([
+      "ClientName",
+      "AnyNanny"
+    ]);
   }
 
-  // Prefer app return URLs so finalize runs. May 902 if origin isn't whitelisted —
-  // createHypTransaction retries without these fields.
-  const includeReturns =
-    allowDynamicReturns ||
-    envFlag("HYP_FORCE_RETURN_URLS") ||
-    (isHypSandboxMode(creds) && Boolean(input.successUrl?.trim()));
+  if (
+    input.clientLastName?.trim()
+  ) {
+    entries.push([
+      "ClientLName",
+      input.clientLastName
+        .trim()
+        .slice(
+          0,
+          50
+        )
+    ]);
+  } else if (
+    sandbox
+  ) {
+    entries.push([
+      "ClientLName",
+      "Sandbox"
+    ]);
+  }
 
-  if (includeReturns && !input.omitReturnUrls) {
-    if (input.successUrl?.trim()) entries.push(["SuccessUrl", input.successUrl.trim()]);
-    if (input.cancelUrl?.trim()) {
-      entries.push(["ErrorUrl", input.cancelUrl.trim()]);
-      entries.push(["CancelUrl", input.cancelUrl.trim()]);
+  if (
+    sandbox &&
+    Number(amount) >
+      HYP_SANDBOX_RECOMMENDED_AMOUNT_NIS *
+        5
+  ) {
+    console.warn(
+      `[HYP] Sandbox amount ${amount} NIS is high. ` +
+        `Recommended test amount is around ${HYP_SANDBOX_RECOMMENDED_AMOUNT_NIS} NIS.`
+    );
+  }
+
+  const shiftSessionId =
+    input.shiftSessionId?.trim();
+
+  if (
+    shiftSessionId
+  ) {
+    /**
+     * Allows AnyNanny to recover the exact Session
+     * after HYP returns.
+     */
+    entries.push([
+      "MoreData",
+      `Session_${shiftSessionId}`
+    ]);
+  }
+
+  if (
+    input.description?.trim()
+  ) {
+    entries.push([
+      "Fild1",
+      input.description
+        .trim()
+        .slice(
+          0,
+          100
+        )
+    ]);
+  }
+
+  /**
+   * Trusted return URLs.
+   */
+  const successUrl =
+    input.successUrl?.trim() ??
+    "";
+
+  const cancelUrl =
+    input.cancelUrl?.trim() ??
+    "";
+
+  if (
+    !input.omitReturnUrls
+  ) {
+    if (
+      successUrl
+    ) {
+      entries.push([
+        "SuccessUrl",
+        successUrl
+      ]);
+    }
+
+    if (
+      cancelUrl
+    ) {
+      entries.push([
+        "ErrorUrl",
+        cancelUrl
+      ]);
+
+      entries.push([
+        "CancelUrl",
+        cancelUrl
+      ]);
     }
   }
 
@@ -360,139 +869,447 @@ export function buildHypApiSignEntries(
 async function requestApiSign(
   payBaseUrl: string,
   formBody: string,
-  method: "GET" | "POST",
+  method:
+    | "GET"
+    | "POST",
   signal: AbortSignal
 ): Promise<string> {
-  if (method === "POST") {
-    const response = await fetch(payBaseUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "text/plain,*/*"
-      },
-      body: formBody,
-      redirect: "follow",
-      signal,
-      cache: "no-store"
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(`Hyp APISign HTTP ${response.status}`);
+  if (
+    method ===
+    "POST"
+  ) {
+    const response =
+      await fetch(
+        payBaseUrl,
+        {
+          method:
+            "POST",
+
+          headers: {
+            "Content-Type":
+              "application/x-www-form-urlencoded",
+
+            Accept:
+              "text/plain,*/*"
+          },
+
+          body:
+            formBody,
+
+          redirect:
+            "follow",
+
+          signal,
+
+          cache:
+            "no-store"
+        }
+      );
+
+    const text =
+      await response.text();
+
+    if (
+      !response.ok
+    ) {
+      throw new Error(
+        `HYP APISign HTTP ${response.status}`
+      );
     }
+
     return text;
   }
 
-  const response = await fetch(`${payBaseUrl}?${formBody}`, {
-    method: "GET",
-    headers: { Accept: "text/plain,*/*" },
-    redirect: "follow",
-    signal,
-    cache: "no-store"
-  });
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`Hyp APISign HTTP ${response.status}`);
+  const response =
+    await fetch(
+      `${payBaseUrl}?${formBody}`,
+      {
+        method:
+          "GET",
+
+        headers: {
+          Accept:
+            "text/plain,*/*"
+        },
+
+        redirect:
+          "follow",
+
+        signal,
+
+        cache:
+          "no-store"
+      }
+    );
+
+  const text =
+    await response.text();
+
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      `HYP APISign HTTP ${response.status}`
+    );
   }
+
   return text;
 }
 
 /**
- * Create Hyp hosted checkout URL via APISign → pay.
+ * Create HYP hosted checkout:
+ *
+ * APISign -> signed HYP query -> hosted payment URL.
  */
 export async function createHypTransaction(
   input: HypCreateTransactionInput
 ): Promise<HypCreateTransactionResult> {
-  const creds = getHypCredentials();
-  const order = hypOrderFromBookingId(input.bookingId);
+  const creds =
+    getHypCredentials();
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), HYP_FETCH_TIMEOUT_MS);
-
-  async function signOnce(omitReturnUrls: boolean): Promise<string> {
-    const entries = buildHypApiSignEntries(
-      creds,
-      { ...input, omitReturnUrls },
-      order
+  const order =
+    hypOrderFromBookingId(
+      input.bookingId
     );
-    const formBody = encodeHypForm(entries);
-    let raw = "";
-    let lastError: unknown = null;
 
-    for (const method of ["GET", "POST"] as const) {
+  if (
+    !input.successUrl?.trim() &&
+    !input.omitReturnUrls
+  ) {
+    throw new Error(
+      "HYP checkout requires a SuccessUrl. Payment cannot start without a trusted AnyNanny return URL."
+    );
+  }
+
+  /**
+   * TEMPORARY DIAGNOSTIC LOG
+   *
+   * This is the important line for the current Retry bug.
+   *
+   * We want to see exactly which URLs AnyNanny is passing
+   * into HYP.
+   *
+   * Safe to log: contains no KEY or PassP.
+   */
+  console.info(
+    "[HYP] return URL debug",
+    {
+      bookingId:
+        input.bookingId,
+
+      successUrl:
+        input.successUrl ??
+        null,
+
+      cancelUrl:
+        input.cancelUrl ??
+        null,
+
+      omitReturnUrls:
+        Boolean(
+          input.omitReturnUrls
+        )
+    }
+  );
+
+  const controller =
+    new AbortController();
+
+  const timeoutId =
+    setTimeout(
+      () =>
+        controller.abort(),
+      HYP_FETCH_TIMEOUT_MS
+    );
+
+  async function signOnce(
+    omitReturnUrls: boolean
+  ): Promise<string> {
+    const entries =
+      buildHypApiSignEntries(
+        creds,
+        {
+          ...input,
+          omitReturnUrls
+        },
+        order
+      );
+
+    const formBody =
+      encodeHypForm(
+        entries
+      );
+
+    let raw = "";
+
+    let lastError:
+      unknown = null;
+
+    for (
+      const method
+      of [
+        "GET",
+        "POST"
+      ] as const
+    ) {
       try {
-        raw = await requestApiSign(creds.payBaseUrl, formBody, method, controller.signal);
-        if (isHypSignSuccessBody(raw)) return raw.trim().replace(/^\?/, "");
-        lastError = new Error(authFailureMessage(raw.trim()));
-        // 902 with SuccessUrl → caller may retry without return URLs.
-        if (readCCode(raw) === "902") {
+        raw =
+          await requestApiSign(
+            creds.payBaseUrl,
+            formBody,
+            method,
+            controller.signal
+          );
+
+        if (
+          isHypSignSuccessBody(
+            raw
+          )
+        ) {
+          return raw
+            .trim()
+            .replace(
+              /^\?/,
+              ""
+            );
+        }
+
+        lastError =
+          new Error(
+            authFailureMessage(
+              raw.trim()
+            )
+          );
+
+        if (
+          readCCode(
+            raw
+          ) ===
+          "902"
+        ) {
           throw lastError;
         }
-      } catch (error) {
-        lastError = error;
+      } catch (
+        error
+      ) {
+        lastError =
+          error;
+
+        const message =
+          error instanceof
+          Error
+            ? error.message
+            : String(error);
+
+        /**
+         * We never work around a rejected return URL
+         * by removing it.
+         */
+        if (
+          /CCode=902|origin does not match/i.test(
+            message
+          )
+        ) {
+          throw error;
+        }
       }
     }
 
-    throw lastError instanceof Error
+    throw lastError instanceof
+      Error
       ? lastError
-      : new Error(authFailureMessage(raw.trim()));
+      : new Error(
+          authFailureMessage(
+            raw.trim()
+          )
+        );
   }
 
   try {
-    let signedQuery = "";
-    let usedReturnUrls = Boolean(input.successUrl?.trim()) && !input.omitReturnUrls;
+    let signedQuery =
+      "";
+
+    const usedReturnUrls =
+      Boolean(
+        input.successUrl?.trim()
+      ) &&
+      !input.omitReturnUrls;
 
     try {
-      signedQuery = await signOnce(Boolean(input.omitReturnUrls));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (usedReturnUrls && /CCode=902|origin does not match/i.test(message)) {
-        console.warn(
-          "[Hyp] APISign CCode=902 with SuccessUrl — retrying without dynamic return URLs (terminal demo thank-you may load; client will finalize)."
+      signedQuery =
+        await signOnce(
+          Boolean(
+            input.omitReturnUrls
+          )
         );
-        signedQuery = await signOnce(true);
-        usedReturnUrls = false;
-      } else {
-        throw error;
+    } catch (
+      error
+    ) {
+      const message =
+        error instanceof
+        Error
+          ? error.message
+          : String(error);
+
+      if (
+        /CCode=902|origin does not match/i.test(
+          message
+        )
+      ) {
+        console.error(
+          "[HYP] Return URL rejected by terminal",
+          {
+            masof:
+              creds.masof,
+
+            bookingId:
+              input.bookingId,
+
+            successUrl:
+              input.successUrl ??
+              null,
+
+            cancelUrl:
+              input.cancelUrl ??
+              null
+          }
+        );
+
+        throw new Error(
+          "HYP rejected the AnyNanny return URL (CCode=902). " +
+            "The checkout was stopped because AnyNanny cannot safely verify the payment without a trusted return URL."
+        );
       }
+
+      throw error;
     }
 
-    if (!isHypSignSuccessBody(signedQuery)) {
-      console.error("[Hyp] APISign failed", {
-        masof: creds.masof,
-        user: creds.user,
-        keyLen: creds.key.length,
-        keyPrefix: creds.key.slice(0, 8),
-        passPLen: creds.passP.length,
-        dynamicReturns: usedReturnUrls,
-        body: signedQuery.slice(0, 400)
-      });
-      throw new Error(authFailureMessage(signedQuery));
+    if (
+      !isHypSignSuccessBody(
+        signedQuery
+      )
+    ) {
+      console.error(
+        "[HYP] APISign failed",
+        {
+          masof:
+            creds.masof,
+
+          user:
+            creds.user,
+
+          keyLength:
+            creds.key.length,
+
+          passPLength:
+            creds.passP.length,
+
+          returnUrls:
+            usedReturnUrls,
+
+          body:
+            signedQuery.slice(
+              0,
+              400
+            )
+        }
+      );
+
+      throw new Error(
+        authFailureMessage(
+          signedQuery
+        )
+      );
     }
 
-    const safeQuery = stripSecretsPreserveOrder(signedQuery);
-    const checkoutUrl = `${creds.payBaseUrl}?${safeQuery}`;
+    const safeQuery =
+      stripSecretsPreserveOrder(
+        signedQuery
+      );
 
-    console.info("[Hyp] APISign ok", {
-      payBase: creds.payBaseUrl,
-      masof: creds.masof,
-      order,
-      bookingId: input.bookingId,
-      returnUrls: usedReturnUrls
-    });
+    const checkoutUrl =
+      `${creds.payBaseUrl}?${safeQuery}`;
+
+    console.info(
+      "[HYP] APISign ok",
+      {
+        payBase:
+          creds.payBaseUrl,
+
+        masof:
+          creds.masof,
+
+        order,
+
+        bookingId:
+          input.bookingId,
+
+        returnUrls:
+          usedReturnUrls
+      }
+    );
+
+    /**
+     * SECOND DEBUG POINT.
+     *
+     * Confirms the values still exist after APISign succeeds.
+     */
+    console.info(
+      "[HYP] return URL debug after sign",
+      {
+        successUrl:
+          input.successUrl ??
+          null,
+
+        cancelUrl:
+          input.cancelUrl ??
+          null,
+
+        returnUrls:
+          usedReturnUrls
+      }
+    );
 
     return {
       checkoutUrl,
-      signedQuery: safeQuery,
+
+      signedQuery:
+        safeQuery,
+
       order,
-      sessionId: `hyp_${order}_${Date.now()}`
+
+      sessionId:
+        `hyp_${order}_${Date.now()}`
     };
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("Hyp payment initiation timed out.");
+  } catch (
+    error
+  ) {
+    if (
+      error instanceof
+        Error &&
+      error.name ===
+        "AbortError"
+    ) {
+      throw new Error(
+        "HYP payment initiation timed out."
+      );
     }
-    if (error instanceof Error) throw error;
-    throw new Error(`Hyp payment network error: ${String(error)}`);
+
+    if (
+      error instanceof
+      Error
+    ) {
+      throw error;
+    }
+
+    throw new Error(
+      `HYP payment network error: ${String(
+        error
+      )}`
+    );
   } finally {
-    clearTimeout(timeoutId);
+    clearTimeout(
+      timeoutId
+    );
   }
 }

@@ -6,42 +6,85 @@ import {
   Eye,
   ShieldAlert,
   ShieldCheck,
+  Star,
   User,
   Users,
   X
 } from "lucide-react";
+
 import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
+
 import {
   resolveShiftTimeWindow,
   sitterHasOverlappingActiveShift,
   SITTER_OVERLAP_APPROVE_MESSAGE
 } from "@/lib/bookings/sitter-shift-overlap";
+
 import {
   formatBookingSchedule,
   updateBookingStatus,
   type PendingBookingView
 } from "@/lib/bookings/sitter-pending-bookings";
+
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Props = {
   sitterId: string;
   booking: TodaysLinkedBookingView;
+
   onResponded?: (result: {
     status: "approved" | "rejected";
     booking: PendingBookingView | null;
   }) => void;
+
   onError?: (message: string) => void;
 };
 
 type ParentPreview = {
   first_name?: string | null;
   avatar_url?: string | null;
+
+  rating_average?: number | null;
+  rating_count?: number | null;
+
   children_count?: number | null;
   children_ages?: string | null;
+
   identity_verified?: boolean;
+
   address?: string | null;
   address_visible?: boolean;
 };
+
+function normalizeRatingAverage(
+  value: unknown
+): number | null {
+  const numeric = Number(value);
+
+  if (
+    !Number.isFinite(numeric) ||
+    numeric <= 0
+  ) {
+    return null;
+  }
+
+  return numeric;
+}
+
+function normalizeRatingCount(
+  value: unknown
+): number {
+  const numeric = Number(value);
+
+  if (
+    !Number.isFinite(numeric) ||
+    numeric <= 0
+  ) {
+    return 0;
+  }
+
+  return Math.floor(numeric);
+}
 
 export function SitterShiftApprovalCard({
   sitterId,
@@ -49,133 +92,241 @@ export function SitterShiftApprovalCard({
   onResponded,
   onError
 }: Props) {
-  const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [busy, setBusy] =
+    useState(false);
 
-  const [showParentDetails, setShowParentDetails] = useState(false);
-  const [parentInfo, setParentInfo] = useState<ParentPreview | null>(null);
-  const [loadingParentInfo, setLoadingParentInfo] = useState(false);
-  const [parentInfoError, setParentInfoError] = useState<string | null>(null);
+  const [
+    actionError,
+    setActionError
+  ] = useState<string | null>(
+    null
+  );
 
-  const loadParentInfo = async () => {
-    if (loadingParentInfo) return;
+  const [
+    showParentDetails,
+    setShowParentDetails
+  ] = useState(false);
 
-    setLoadingParentInfo(true);
-    setParentInfoError(null);
+  const [
+    parentInfo,
+    setParentInfo
+  ] =
+    useState<ParentPreview | null>(
+      null
+    );
 
-    try {
-      const response = await fetch(
-        `/api/sitter/bookings/${encodeURIComponent(
-          booking.id
-        )}/parent-preview`,
-        {
-          method: "GET",
-          cache: "no-store"
-        }
-      );
+  const [
+    loadingParentInfo,
+    setLoadingParentInfo
+  ] = useState(false);
 
-      const json = (await response.json()) as {
-        parent?: ParentPreview;
-        error?: string;
-      };
+  const [
+    parentInfoError,
+    setParentInfoError
+  ] = useState<string | null>(
+    null
+  );
 
-      if (!response.ok) {
-        setParentInfo(null);
-        setParentInfoError(
-          json.error || "לא ניתן לטעון את פרטי ההורה."
-        );
+  const loadParentInfo =
+    async () => {
+      if (loadingParentInfo) {
         return;
       }
 
-      setParentInfo(json.parent ?? null);
+      setLoadingParentInfo(
+        true
+      );
 
-      if (!json.parent) {
-        setParentInfoError("לא נמצאו פרטי הורה להצגה.");
-      }
-    } catch (err) {
-      console.error("[SitterShiftApprovalCard parent-preview]", err);
-      setParentInfo(null);
-      setParentInfoError("שגיאה בטעינת פרטי ההורה.");
-    } finally {
-      setLoadingParentInfo(false);
-    }
-  };
+      setParentInfoError(
+        null
+      );
 
-  const openParentDetails = () => {
-    setShowParentDetails(true);
-    void loadParentInfo();
-  };
+      try {
+        const response =
+          await fetch(
+            `/api/sitter/bookings/${encodeURIComponent(
+              booking.id
+            )}/parent-preview`,
+            {
+              method: "GET",
+              cache: "no-store"
+            }
+          );
 
-  const closeParentDetails = () => {
-    setShowParentDetails(false);
-  };
+        const json =
+          (await response.json()) as {
+            parent?: ParentPreview;
+            error?: string;
+          };
 
-  const handleRespond = async (
-    status: "approved" | "rejected"
-  ) => {
-    if (busy) return;
+        if (!response.ok) {
+          setParentInfo(null);
 
-    const supabase = getSupabaseBrowserClient();
+          setParentInfoError(
+            json.error ||
+              "לא ניתן לטעון את פרטי ההורה."
+          );
 
-    if (!supabase) {
-      const message = "Supabase לא זמין";
-      setActionError(message);
-      onError?.(message);
-      return;
-    }
+          return;
+        }
 
-    if (status === "approved") {
-      const proposedWindow = resolveShiftTimeWindow(booking);
-
-      if (proposedWindow) {
-        const hasOverlap = await sitterHasOverlappingActiveShift(
-          supabase,
-          sitterId,
-          proposedWindow,
-          { bookingId: booking.id }
+        setParentInfo(
+          json.parent ?? null
         );
 
-        if (hasOverlap) {
-          console.warn(
-            "[AnyNanny Overlap Sitter Safe-Guard]:",
-            SITTER_OVERLAP_APPROVE_MESSAGE
+        if (!json.parent) {
+          setParentInfoError(
+            "לא נמצאו פרטי הורה להצגה."
           );
         }
+      } catch (err) {
+        console.error(
+          "[SitterShiftApprovalCard parent-preview]",
+          err
+        );
+
+        setParentInfo(null);
+
+        setParentInfoError(
+          "שגיאה בטעינת פרטי ההורה."
+        );
+      } finally {
+        setLoadingParentInfo(
+          false
+        );
       }
-    }
+    };
 
-    setBusy(true);
-    setActionError(null);
+  const openParentDetails =
+    () => {
+      setShowParentDetails(
+        true
+      );
 
-    const { row, error } = await updateBookingStatus(
-      supabase,
-      sitterId,
-      booking.id,
-      status
+      void loadParentInfo();
+    };
+
+  const closeParentDetails =
+    () => {
+      setShowParentDetails(
+        false
+      );
+    };
+
+  const handleRespond =
+    async (
+      status:
+        | "approved"
+        | "rejected"
+    ) => {
+      if (busy) {
+        return;
+      }
+
+      const supabase =
+        getSupabaseBrowserClient();
+
+      if (!supabase) {
+        const message =
+          "Supabase לא זמין";
+
+        setActionError(
+          message
+        );
+
+        onError?.(message);
+
+        return;
+      }
+
+      if (
+        status ===
+        "approved"
+      ) {
+        const proposedWindow =
+          resolveShiftTimeWindow(
+            booking
+          );
+
+        if (proposedWindow) {
+          const hasOverlap =
+            await sitterHasOverlappingActiveShift(
+              supabase,
+              sitterId,
+              proposedWindow,
+              {
+                bookingId:
+                  booking.id
+              }
+            );
+
+          if (hasOverlap) {
+            console.warn(
+              "[AnyNanny Overlap Sitter Safe-Guard]:",
+              SITTER_OVERLAP_APPROVE_MESSAGE
+            );
+          }
+        }
+      }
+
+      setBusy(true);
+      setActionError(null);
+
+      const {
+        row,
+        error
+      } =
+        await updateBookingStatus(
+          supabase,
+          sitterId,
+          booking.id,
+          status
+        );
+
+      setBusy(false);
+
+      if (error) {
+        setActionError(error);
+
+        onError?.(error);
+
+        return;
+      }
+
+      const respondedBooking =
+        row
+          ? ({
+              ...booking,
+              ...row,
+              status,
+              parent_full_name:
+                booking.partner_full_name
+            } as PendingBookingView)
+          : null;
+
+      onResponded?.({
+        status,
+        booking:
+          respondedBooking
+      });
+    };
+
+  const ratingAverage =
+    normalizeRatingAverage(
+      parentInfo
+        ?.rating_average
     );
 
-    setBusy(false);
+  const ratingCount =
+    normalizeRatingCount(
+      parentInfo
+        ?.rating_count
+    );
 
-    if (error) {
-      setActionError(error);
-      onError?.(error);
-      return;
-    }
+  const hasRating =
+    ratingAverage != null &&
+    ratingCount > 0;
 
-    const respondedBooking = row
-      ? ({
-          ...booking,
-          ...row,
-          status,
-          parent_full_name: booking.partner_full_name
-        } as PendingBookingView)
-      : null;
-
-    onResponded?.({
-      status,
-      booking: respondedBooking
-    });
-  };
   return (
     <>
       <div
@@ -188,25 +339,37 @@ export function SitterShiftApprovalCard({
           </p>
 
           <p className="text-sm font-bold text-[#001F3F]">
-            {booking.partner_full_name ?? "הורה"}
+            {booking.partner_full_name ??
+              "הורה"}
           </p>
 
           <button
             type="button"
-            onClick={openParentDetails}
+            onClick={
+              openParentDetails
+            }
             className="mt-1 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-xs font-bold text-violet-700 transition hover:bg-violet-50 hover:text-violet-900"
           >
-            <Eye className="h-4 w-4 shrink-0" aria-hidden />
+            <Eye
+              className="h-4 w-4 shrink-0"
+              aria-hidden
+            />
+
             פרטי ההורה
           </button>
         </div>
 
         <p className="text-right text-sm font-semibold text-slate-700">
-          {booking.schedule_label || formatBookingSchedule(booking)}
+          {booking.schedule_label ||
+            formatBookingSchedule(
+              booking
+            )}
         </p>
 
         <p className="text-right text-xs leading-relaxed text-slate-600">
-          יש לאשר או לדחות את הבקשה לפני שתוכלו להתחיל את המשמרת.
+          יש לאשר או לדחות את
+          הבקשה לפני שתוכלו
+          להתחיל את המשמרת.
         </p>
 
         {actionError ? (
@@ -219,20 +382,38 @@ export function SitterShiftApprovalCard({
           <button
             type="button"
             disabled={busy}
-            onClick={() => void handleRespond("approved")}
+            onClick={() =>
+              void handleRespond(
+                "approved"
+              )
+            }
             className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-xl bg-[#001F3F] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-50"
           >
-            <Check className="h-4 w-4 shrink-0" aria-hidden />
-            {busy ? "מעדכנים…" : "אשר בקשה"}
+            <Check
+              className="h-4 w-4 shrink-0"
+              aria-hidden
+            />
+
+            {busy
+              ? "מעדכנים…"
+              : "אשר בקשה"}
           </button>
 
           <button
             type="button"
             disabled={busy}
-            onClick={() => void handleRespond("rejected")}
+            onClick={() =>
+              void handleRespond(
+                "rejected"
+              )
+            }
             className="inline-flex flex-row-reverse items-center justify-center gap-2 rounded-xl border-2 border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-800 transition hover:bg-rose-50 disabled:opacity-50"
           >
-            <X className="h-4 w-4 shrink-0" aria-hidden />
+            <X
+              className="h-4 w-4 shrink-0"
+              aria-hidden
+            />
+
             דחה בקשה
           </button>
         </div>
@@ -244,12 +425,16 @@ export function SitterShiftApprovalCard({
           role="dialog"
           aria-modal="true"
           aria-labelledby="parent-details-title"
-          onClick={closeParentDetails}
+          onClick={
+            closeParentDetails
+          }
         >
           <div
             className="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl"
             dir="rtl"
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) =>
+              event.stopPropagation()
+            }
           >
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <h2
@@ -261,7 +446,9 @@ export function SitterShiftApprovalCard({
 
               <button
                 type="button"
-                onClick={closeParentDetails}
+                onClick={
+                  closeParentDetails
+                }
                 aria-label="סגור"
                 className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
               >
@@ -279,7 +466,9 @@ export function SitterShiftApprovalCard({
               ) : parentInfoError ? (
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
                   <p className="text-sm text-rose-800">
-                    {parentInfoError}
+                    {
+                      parentInfoError
+                    }
                   </p>
                 </div>
               ) : parentInfo ? (
@@ -288,8 +477,13 @@ export function SitterShiftApprovalCard({
                     <div className="h-24 w-24 overflow-hidden rounded-full border-2 border-slate-200 bg-slate-100 shadow-sm">
                       {parentInfo.avatar_url ? (
                         <img
-                          src={parentInfo.avatar_url}
-                          alt={parentInfo.first_name || "הורה"}
+                          src={
+                            parentInfo.avatar_url
+                          }
+                          alt={
+                            parentInfo.first_name ||
+                            "הורה"
+                          }
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -306,15 +500,52 @@ export function SitterShiftApprovalCard({
                     </h3>
 
                     <div className="mt-2">
+                      {hasRating ? (
+                        <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800">
+                          <Star
+                            className="h-4 w-4 fill-amber-400 text-amber-400"
+                            aria-hidden
+                          />
+
+                          <span>
+                            {ratingAverage.toFixed(
+                              1
+                            )}
+                          </span>
+
+                          <span className="font-medium text-amber-700">
+                            ·{" "}
+                            {ratingCount ===
+                            1
+                              ? "חוות דעת אחת"
+                              : `${ratingCount} חוות דעת`}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-500">
+                          <Star
+                            className="h-4 w-4 text-slate-300"
+                            aria-hidden
+                          />
+
+                          טרם דורג
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-2">
                       {parentInfo.identity_verified ? (
                         <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
                           <ShieldCheck className="h-4 w-4" />
+
                           זהות ההורה אומתה
                         </div>
                       ) : (
                         <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">
                           <ShieldAlert className="h-4 w-4" />
-                          זהות ההורה טרם אומתה
+
+                          זהות ההורה טרם
+                          אומתה
                         </div>
                       )}
                     </div>
@@ -332,7 +563,8 @@ export function SitterShiftApprovalCard({
                         </p>
 
                         <p className="mt-0.5 text-sm font-bold text-[#001F3F]">
-                          {parentInfo.children_count != null
+                          {parentInfo.children_count !=
+                          null
                             ? `${parentInfo.children_count} ילדים`
                             : "מספר הילדים לא צוין"}
                         </p>
@@ -354,20 +586,26 @@ export function SitterShiftApprovalCard({
                       </p>
 
                       <p className="mt-1 text-sm font-bold text-[#001F3F]">
-                        {parentInfo.address}
+                        {
+                          parentInfo.address
+                        }
                       </p>
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-slate-200 bg-white p-4 text-right">
                       <p className="text-xs leading-relaxed text-slate-500">
-                        הכתובת המלאה תוצג לאחר אישור המשמרת.
+                        הכתובת המלאה תוצג
+                        לאחר אישור
+                        המשמרת.
                       </p>
                     </div>
                   )}
 
                   <button
                     type="button"
-                    onClick={closeParentDetails}
+                    onClick={
+                      closeParentDetails
+                    }
                     className="w-full rounded-xl bg-[#001F3F] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110"
                   >
                     סגור
@@ -375,7 +613,8 @@ export function SitterShiftApprovalCard({
                 </div>
               ) : (
                 <p className="py-8 text-center text-sm text-slate-500">
-                  לא נמצאו פרטי הורה להצגה.
+                  לא נמצאו פרטי הורה
+                  להצגה.
                 </p>
               )}
             </div>

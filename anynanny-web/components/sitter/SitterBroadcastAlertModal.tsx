@@ -2,146 +2,361 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
+import {
+  removeRealtimeChannel,
+  subscribePostgresChanges
+} from "@/lib/supabase/subscribe-postgres-changes";
 import { areSoundAlertsEnabled } from "@/lib/settings/notification-preferences";
 import { Zap } from "lucide-react";
 
 interface BroadcastAlertModalProps {
   sitterId: string;
+
   /** Hide overlay without unmounting (preserves dismissed ids + channel). */
   paused?: boolean;
 }
 
-type ActiveAlert = { id: string; city: string; service_type: string; created_at?: string };
+type ActiveAlert = {
+  id: string;
+  city: string;
+  service_type: string;
+  created_at?: string;
+};
 
 const DISMISSED_STORAGE_KEY = "anynanny_broadcast_dismissed_v1";
+
+/**
+ * Broadcasts remain eligible for recovery for up to 10 minutes.
+ */
 const ALERT_MAX_AGE_MS = 10 * 60 * 1000;
-const FRESH_EVENT_MAX_AGE_MS = 45 * 1000;
-const FALLBACK_POLL_MS = 60_000;
+
+/**
+ * If Realtime misses the INSERT, the fallback poll may still open
+ * a recently-created broadcast.
+ *
+ * Must be longer than FALLBACK_POLL_MS.
+ */
+const FRESH_EVENT_MAX_AGE_MS = 90 * 1000;
+
+/**
+ * Realtime is primary.
+ * Polling is only a fallback when an INSERT event is missed.
+ */
+const FALLBACK_POLL_MS = 10_000;
 
 function readDismissedIds(): Set<string> {
-  if (typeof window === "undefined") return new Set();
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+
   try {
-    const raw = window.sessionStorage.getItem(DISMISSED_STORAGE_KEY);
-    if (!raw) return new Set();
+    const raw = window.sessionStorage.getItem(
+      DISMISSED_STORAGE_KEY
+    );
+
+    if (!raw) {
+      return new Set();
+    }
+
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((id): id is string => typeof id === "string" && id.trim().length > 0));
+
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+
+    return new Set(
+      parsed.filter(
+        (id): id is string =>
+          typeof id === "string" &&
+          id.trim().length > 0
+      )
+    );
   } catch {
     return new Set();
   }
 }
 
-function persistDismissedIds(ids: Set<string>): void {
-  if (typeof window === "undefined") return;
+function persistDismissedIds(
+  ids: Set<string>
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
   try {
-    window.sessionStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify([...ids]));
+    window.sessionStorage.setItem(
+      DISMISSED_STORAGE_KEY,
+      JSON.stringify([...ids])
+    );
   } catch {
     /* ignore */
   }
 }
 
-function isFreshIso(createdAt: string | null | undefined, maxAgeMs: number): boolean {
-  if (!createdAt) return false;
-  const t = Date.parse(createdAt);
-  if (!Number.isFinite(t)) return false;
-  return Date.now() - t <= maxAgeMs;
+function isFreshIso(
+  createdAt: string | null | undefined,
+  maxAgeMs: number
+): boolean {
+  if (!createdAt) {
+    return false;
+  }
+
+  const timestamp = Date.parse(createdAt);
+
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+
+  const ageMs = Date.now() - timestamp;
+
+  return ageMs >= 0 && ageMs <= maxAgeMs;
 }
 
 function playAlertSound(): void {
-  if (!areSoundAlertsEnabled()) return;
+  if (!areSoundAlertsEnabled()) {
+    return;
+  }
+
   try {
     const AudioCtx =
       window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
+      (
+        window as unknown as {
+          webkitAudioContext?: typeof AudioContext;
+        }
+      ).webkitAudioContext;
+
+    if (!AudioCtx) {
+      return;
+    }
+
     const audioCtx = new AudioCtx();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
+
     osc.type = "sine";
-    osc.frequency.setValueAtTime(659.25, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+    osc.frequency.setValueAtTime(
+      659.25,
+      audioCtx.currentTime
+    );
+
+    gain.gain.setValueAtTime(
+      0.15,
+      audioCtx.currentTime
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.01,
+      audioCtx.currentTime + 0.3
+    );
+
     osc.connect(gain);
     gain.connect(audioCtx.destination);
+
     osc.start();
     osc.stop(audioCtx.currentTime + 0.3);
   } catch {
-    /* autoplay may be blocked */
+    /*
+     * Browser autoplay restrictions may block sound.
+     * The visual alert must still work.
+     */
   }
 }
 
 /**
  * Incoming AnyNanny Now broadcast modal.
- * Opens only for genuine fresh INSERT events (or a slow catch-up poll for missed inserts).
- * Dismiss persists across remounts via sessionStorage.
+ *
+ * Primary delivery:
+ * Supabase Realtime INSERT.
+ *
+ * Recovery:
+ * lightweight polling every 10 seconds in case the realtime
+ * event was missed while the tab/network was temporarily unavailable.
+ *
+ * Dismissed alerts persist across component remounts in sessionStorage.
  */
-export function SitterBroadcastAlertModal({ sitterId, paused = false }: BroadcastAlertModalProps) {
-  const [activeAlert, setActiveAlert] = useState<ActiveAlert | null>(null);
-  const [sitterCities, setSitterCities] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const dismissedAlertIdsRef = useRef<Set<string>>(readDismissedIds());
-  const activeAlertIdRef = useRef<string | null>(null);
-  const pausedRef = useRef(paused);
+export function SitterBroadcastAlertModal({
+  sitterId,
+  paused = false
+}: BroadcastAlertModalProps) {
+  const [activeAlert, setActiveAlert] =
+    useState<ActiveAlert | null>(null);
+
+  const [sitterCities, setSitterCities] =
+    useState<string[]>([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const dismissedAlertIdsRef =
+    useRef<Set<string>>(
+      readDismissedIds()
+    );
+
+  const activeAlertIdRef =
+    useRef<string | null>(null);
+
+  const pausedRef =
+    useRef(paused);
+
   pausedRef.current = paused;
-  activeAlertIdRef.current = activeAlert?.id ?? null;
+
+  activeAlertIdRef.current =
+    activeAlert?.id ?? null;
 
   const citiesKey = useMemo(
     () =>
-      [...new Set(sitterCities.map((c) => c.trim()).filter(Boolean))]
-        .sort((a, b) => a.localeCompare(b, "he"))
+      [
+        ...new Set(
+          sitterCities
+            .map((city) => city.trim())
+            .filter(Boolean)
+        )
+      ]
+        .sort((a, b) =>
+          a.localeCompare(b, "he")
+        )
         .join("|"),
     [sitterCities]
   );
-  const stableCities = useMemo(() => (citiesKey ? citiesKey.split("|") : []), [citiesKey]);
 
-  const dismissAlertId = (id: string | null | undefined) => {
-    if (!id) return;
+  const stableCities = useMemo(
+    () =>
+      citiesKey
+        ? citiesKey.split("|")
+        : [],
+    [citiesKey]
+  );
+
+  const dismissAlertId = (
+    id: string | null | undefined
+  ) => {
+    if (!id) {
+      return;
+    }
+
     dismissedAlertIdsRef.current.add(id);
-    persistDismissedIds(dismissedAlertIdsRef.current);
+
+    persistDismissedIds(
+      dismissedAlertIdsRef.current
+    );
   };
 
-  const clearActiveIfMatch = (id?: string | null) => {
-    setActiveAlert((prev) => {
-      if (!prev) return null;
-      if (id && prev.id !== id) return prev;
+  const clearActiveIfMatch = (
+    id?: string | null
+  ) => {
+    setActiveAlert((previous) => {
+      if (!previous) {
+        return null;
+      }
+
+      if (
+        id &&
+        previous.id !== id
+      ) {
+        return previous;
+      }
+
       return null;
     });
   };
 
-  const tryOpenAlert = (alert: ActiveAlert, { playSound }: { playSound: boolean }) => {
-    if (!alert.id) return;
-    if (dismissedAlertIdsRef.current.has(alert.id)) return;
-    if (pausedRef.current) return;
-    setActiveAlert((prev) => {
-      if (prev?.id === alert.id) return prev;
+  const tryOpenAlert = (
+    alert: ActiveAlert,
+    {
+      playSound
+    }: {
+      playSound: boolean;
+    }
+  ) => {
+    if (!alert.id) {
+      return;
+    }
+
+    if (
+      dismissedAlertIdsRef.current.has(
+        alert.id
+      )
+    ) {
+      return;
+    }
+
+    if (pausedRef.current) {
+      return;
+    }
+
+    setActiveAlert((previous) => {
+      if (previous?.id === alert.id) {
+        return previous;
+      }
+
       return alert;
     });
-    if (playSound) playAlertSound();
+
+    if (playSound) {
+      playAlertSound();
+    }
   };
 
+  /*
+   * Load sitter working cities.
+   */
   useEffect(() => {
-    if (!sitterId) return;
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
+    if (!sitterId) {
+      return;
+    }
+
+    const supabase =
+      getSupabaseBrowserClient();
+
+    if (!supabase) {
+      return;
+    }
 
     let cancelled = false;
+
     void (async () => {
-      const { data, error } = await supabase
+      const {
+        data,
+        error
+      } = await supabase
         .from("sitter_profiles")
         .select("working_cities")
         .eq("id", sitterId)
         .limit(1);
 
-      if (cancelled || error) return;
-      const profile = data && data.length > 0 ? data[0] : null;
+      if (
+        cancelled ||
+        error
+      ) {
+        return;
+      }
+
+      const profile =
+        data &&
+        data.length > 0
+          ? data[0]
+          : null;
+
       const cities =
-        profile?.working_cities && Array.isArray(profile.working_cities)
+        profile?.working_cities &&
+        Array.isArray(
+          profile.working_cities
+        )
           ? profile.working_cities.filter(
-              (c: unknown): c is string => typeof c === "string" && c.trim().length > 0
+              (
+                city: unknown
+              ): city is string =>
+                typeof city ===
+                  "string" &&
+                city.trim().length > 0
             )
           : [];
-      // Never invent a default city — empty means no broadcast subscription.
+
+      /*
+       * Never invent a default city.
+       * Empty means no broadcast subscription.
+       */
       setSitterCities(cities);
     })();
 
@@ -150,176 +365,435 @@ export function SitterBroadcastAlertModal({ sitterId, paused = false }: Broadcas
     };
   }, [sitterId]);
 
+  /*
+   * Realtime + fallback polling.
+   */
   useEffect(() => {
-    if (!sitterId || stableCities.length === 0) return;
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-
-    const catchUpActiveAlerts = async ({ allowOpen }: { allowOpen: boolean }) => {
-      const since = new Date(Date.now() - ALERT_MAX_AGE_MS).toISOString();
-      const { data: alertsData, error } = await supabase
-        .from("broadcast_alerts")
-        .select("id, city, service_type, status, created_at")
-        .in("city", stableCities)
-        .eq("status", "active")
-        .gte("created_at", since)
-        .order("created_at", { ascending: false })
-        .limit(5);
-
-      if (error) {
-        console.warn("[sitter broadcast] alerts catch-up:", error.message);
-        return;
-      }
-
-      const rows = alertsData ?? [];
-      const valid = rows.find(
-        (alert) =>
-          alert?.id &&
-          !dismissedAlertIdsRef.current.has(alert.id) &&
-          isFreshIso(alert.created_at, ALERT_MAX_AGE_MS)
-      );
-
-      const currentId = activeAlertIdRef.current;
-      if (currentId && !rows.some((a) => a.id === currentId && a.status === "active")) {
-        clearActiveIfMatch(currentId);
-      }
-
-      if (!allowOpen || !valid) return;
-
-      // Catch-up only opens very fresh alerts (missed INSERT while briefly offline).
-      if (!isFreshIso(valid.created_at, FRESH_EVENT_MAX_AGE_MS)) return;
-
-      tryOpenAlert(
-        {
-          id: String(valid.id),
-          city: String(valid.city ?? ""),
-          service_type: String(valid.service_type ?? ""),
-          created_at: valid.created_at ? String(valid.created_at) : undefined
-        },
-        { playSound: false }
-      );
-    };
-
-    void catchUpActiveAlerts({ allowOpen: true });
-    const pollInterval = window.setInterval(() => {
-      void catchUpActiveAlerts({ allowOpen: true });
-    }, FALLBACK_POLL_MS);
-
-    const channels = stableCities.map((city) =>
-      subscribePostgresChanges(
-        supabase,
-        `sitter-broadcast-room-${city}`,
-        [
-          {
-            event: "INSERT",
-            table: "broadcast_alerts",
-            filter: `city=eq.${city}`,
-            handler: (payload) => {
-              const next = payload.new as {
-                id?: string;
-                status?: string;
-                city?: string;
-                service_type?: string;
-                created_at?: string;
-              } | null;
-              if (!next?.id || next.status !== "active") return;
-              if (next.created_at && !isFreshIso(next.created_at, ALERT_MAX_AGE_MS)) return;
-              tryOpenAlert(
-                {
-                  id: next.id,
-                  city: next.city ?? city,
-                  service_type: next.service_type ?? "",
-                  created_at: next.created_at
-                },
-                { playSound: true }
-              );
-            }
-          },
-          {
-            event: "UPDATE",
-            table: "broadcast_alerts",
-            filter: `city=eq.${city}`,
-            handler: (payload) => {
-              const next = payload.new as { id?: string; status?: string } | null;
-              if (!next?.id) return;
-              if (
-                next.status === "expired" ||
-                next.status === "filled" ||
-                next.status === "paused" ||
-                next.status === "cancelled"
-              ) {
-                dismissAlertId(next.id);
-                clearActiveIfMatch(next.id);
-              }
-            }
-          }
-        ],
-        undefined,
-        { maxRetries: 3 }
-      )
-    );
-
-    return () => {
-      window.clearInterval(pollInterval);
-      channels.forEach((channel) => removeRealtimeChannel(supabase, channel));
-    };
-  }, [sitterId, citiesKey, stableCities]);
-
-  // If paused (e.g. booking approval UI), hide overlay but keep subscription alive.
-  useEffect(() => {
-    if (paused) setActiveAlert(null);
-  }, [paused]);
-
-  const handleAccept = async () => {
-    if (!activeAlert) return;
-    setLoading(true);
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setLoading(false);
+    if (
+      !sitterId ||
+      stableCities.length === 0
+    ) {
       return;
     }
 
-    const alertId = activeAlert.id;
-    try {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) {
-        alert("שגיאת הזדהות, אנא התחבר מחדש.");
+    const supabase =
+      getSupabaseBrowserClient();
+
+    if (!supabase) {
+      return;
+    }
+
+    let disposed = false;
+
+    const catchUpActiveAlerts =
+      async ({
+        allowOpen
+      }: {
+        allowOpen: boolean;
+      }) => {
+        if (disposed) {
+          return;
+        }
+
+        const since =
+          new Date(
+            Date.now() -
+              ALERT_MAX_AGE_MS
+          ).toISOString();
+
+        const {
+          data: alertsData,
+          error
+        } = await supabase
+          .from("broadcast_alerts")
+          .select(
+            "id, city, service_type, status, created_at"
+          )
+          .in(
+            "city",
+            stableCities
+          )
+          .eq(
+            "status",
+            "active"
+          )
+          .gte(
+            "created_at",
+            since
+          )
+          .order(
+            "created_at",
+            {
+              ascending: false
+            }
+          )
+          .limit(5);
+
+        if (
+          disposed
+        ) {
+          return;
+        }
+
+        if (error) {
+          console.warn(
+            "[sitter broadcast] alerts catch-up:",
+            error.message
+          );
+          return;
+        }
+
+        const rows =
+          alertsData ?? [];
+
+        const valid =
+          rows.find(
+            (alert) =>
+              alert?.id &&
+              !dismissedAlertIdsRef.current.has(
+                alert.id
+              ) &&
+              isFreshIso(
+                alert.created_at,
+                ALERT_MAX_AGE_MS
+              )
+          );
+
+        const currentId =
+          activeAlertIdRef.current;
+
+        if (
+          currentId &&
+          !rows.some(
+            (alert) =>
+              alert.id ===
+                currentId &&
+              alert.status ===
+                "active"
+          )
+        ) {
+          clearActiveIfMatch(
+            currentId
+          );
+        }
+
+        if (
+          !allowOpen ||
+          !valid
+        ) {
+          return;
+        }
+
+        /*
+         * Poll recovery should only open a recent broadcast,
+         * not an old active row from many minutes ago.
+         */
+        if (
+          !isFreshIso(
+            valid.created_at,
+            FRESH_EVENT_MAX_AGE_MS
+          )
+        ) {
+          return;
+        }
+
+        tryOpenAlert(
+          {
+            id: String(
+              valid.id
+            ),
+            city: String(
+              valid.city ?? ""
+            ),
+            service_type:
+              String(
+                valid.service_type ??
+                  ""
+              ),
+            created_at:
+              valid.created_at
+                ? String(
+                    valid.created_at
+                  )
+                : undefined
+          },
+          {
+            playSound: false
+          }
+        );
+      };
+
+    /*
+     * Immediate recovery on mount.
+     */
+    void catchUpActiveAlerts({
+      allowOpen: true
+    });
+
+    /*
+     * Faster fallback than before.
+     * If realtime misses an INSERT, recovery occurs within ~10 seconds.
+     */
+    const pollInterval =
+      window.setInterval(() => {
+        void catchUpActiveAlerts({
+          allowOpen: true
+        });
+      }, FALLBACK_POLL_MS);
+
+    /*
+     * Primary realtime delivery.
+     */
+    const channels =
+      stableCities.map((city) =>
+        subscribePostgresChanges(
+          supabase,
+          `sitter-broadcast-room-${city}`,
+          [
+            {
+              event: "INSERT",
+              table:
+                "broadcast_alerts",
+              filter:
+                `city=eq.${city}`,
+              handler: (
+                payload
+              ) => {
+                const next =
+                  payload.new as
+                    | {
+                        id?: string;
+                        status?: string;
+                        city?: string;
+                        service_type?: string;
+                        created_at?: string;
+                      }
+                    | null;
+
+                if (
+                  !next?.id ||
+                  next.status !==
+                    "active"
+                ) {
+                  return;
+                }
+
+                if (
+                  next.created_at &&
+                  !isFreshIso(
+                    next.created_at,
+                    ALERT_MAX_AGE_MS
+                  )
+                ) {
+                  return;
+                }
+
+                tryOpenAlert(
+                  {
+                    id: next.id,
+                    city:
+                      next.city ??
+                      city,
+                    service_type:
+                      next.service_type ??
+                      "",
+                    created_at:
+                      next.created_at
+                  },
+                  {
+                    playSound: true
+                  }
+                );
+              }
+            },
+            {
+              event: "UPDATE",
+              table:
+                "broadcast_alerts",
+              filter:
+                `city=eq.${city}`,
+              handler: (
+                payload
+              ) => {
+                const next =
+                  payload.new as
+                    | {
+                        id?: string;
+                        status?: string;
+                      }
+                    | null;
+
+                if (
+                  !next?.id
+                ) {
+                  return;
+                }
+
+                if (
+                  next.status ===
+                    "expired" ||
+                  next.status ===
+                    "filled" ||
+                  next.status ===
+                    "paused" ||
+                  next.status ===
+                    "cancelled"
+                ) {
+                  dismissAlertId(
+                    next.id
+                  );
+
+                  clearActiveIfMatch(
+                    next.id
+                  );
+                }
+              }
+            }
+          ],
+          undefined,
+          {
+            maxRetries: 3
+          }
+        )
+      );
+
+    return () => {
+      disposed = true;
+
+      window.clearInterval(
+        pollInterval
+      );
+
+      channels.forEach(
+        (channel) =>
+          removeRealtimeChannel(
+            supabase,
+            channel
+          )
+      );
+    };
+  }, [
+    sitterId,
+    citiesKey,
+    stableCities
+  ]);
+
+  /*
+   * If paused, for example while another booking approval UI is open,
+   * hide the overlay but keep the subscription alive.
+   */
+  useEffect(() => {
+    if (paused) {
+      setActiveAlert(null);
+    }
+  }, [paused]);
+
+  const handleAccept =
+    async () => {
+      if (!activeAlert) {
+        return;
+      }
+
+      setLoading(true);
+
+      const supabase =
+        getSupabaseBrowserClient();
+
+      if (!supabase) {
         setLoading(false);
         return;
       }
 
-      const { error } = await supabase
-        .from("broadcast_responses")
-        .insert([{ alert_id: alertId, sitter_id: user.id }]);
+      const alertId =
+        activeAlert.id;
 
-      if (error && error.code !== "23505") {
-        throw error;
+      try {
+        const {
+          data: {
+            user
+          }
+        } =
+          await supabase.auth.getUser();
+
+        if (!user) {
+          alert(
+            "שגיאת הזדהות, אנא התחבר מחדש."
+          );
+
+          setLoading(false);
+          return;
+        }
+
+        const {
+          error
+        } = await supabase
+          .from(
+            "broadcast_responses"
+          )
+          .insert([
+            {
+              alert_id:
+                alertId,
+              sitter_id:
+                user.id
+            }
+          ]);
+
+        /*
+         * 23505 = duplicate response.
+         * Treat it as already accepted.
+         */
+        if (
+          error &&
+          error.code !==
+            "23505"
+        ) {
+          throw error;
+        }
+
+        alert(
+          "אישור הזמינות נשלח בהצלחה להורה!"
+        );
+      } catch (error) {
+        console.error(
+          "Error accepting broadcast:",
+          error
+        );
+      } finally {
+        dismissAlertId(
+          alertId
+        );
+
+        setActiveAlert(null);
+        setLoading(false);
       }
-      alert("אישור הזמינות נשלח בהצלחה להורה!");
-    } catch (err) {
-      console.error("Error accepting broadcast:", err);
-    } finally {
-      dismissAlertId(alertId);
+    };
+
+  const handleDismiss =
+    () => {
+      dismissAlertId(
+        activeAlert?.id
+      );
+
       setActiveAlert(null);
-      setLoading(false);
-    }
-  };
+    };
 
-  const handleDismiss = () => {
-    dismissAlertId(activeAlert?.id);
-    setActiveAlert(null);
-  };
-
-  if (paused || !activeAlert) return null;
+  if (
+    paused ||
+    !activeAlert
+  ) {
+    return null;
+  }
 
   const serviceName =
-    activeAlert.service_type === "lactation"
+    activeAlert.service_type ===
+    "lactation"
       ? "יועצת הנקה"
-      : activeAlert.service_type === "sleep"
+      : activeAlert.service_type ===
+          "sleep"
         ? "יועצת שינה"
-        : activeAlert.service_type === "doula"
+        : activeAlert.service_type ===
+            "doula"
           ? "דולה"
           : "בייביסיטר";
 
@@ -338,12 +812,21 @@ export function SitterBroadcastAlertModal({ sitterId, paused = false }: Broadcas
           </div>
 
           <div className="space-y-1">
-            <h3 className="text-base font-black text-slate-800">⚡ קריאת ברק מיידית בסביבה!</h3>
+            <h3 className="text-base font-black text-slate-800">
+              ⚡ קריאת ברק מיידית בסביבה!
+            </h3>
+
             <p className="text-xs font-semibold text-red-600">
-              הורה ב{activeAlert.city} מחפש מענה מעכשיו לעכשיו!
+              הורה ב
+              {activeAlert.city}{" "}
+              מחפש מענה מעכשיו לעכשיו!
             </p>
+
             <p className="text-xs text-slate-500">
-              התפקיד הנדרש: <span className="font-bold text-navy-header">{serviceName}</span>
+              התפקיד הנדרש:{" "}
+              <span className="font-bold text-navy-header">
+                {serviceName}
+              </span>
             </p>
           </div>
 
@@ -351,17 +834,23 @@ export function SitterBroadcastAlertModal({ sitterId, paused = false }: Broadcas
             <button
               type="button"
               disabled={loading}
-              onClick={() => void handleAccept()}
-              className="w-full rounded-2xl bg-[#001F3F] py-3 text-xs font-bold text-white shadow-md transition hover:brightness-110 active:scale-[0.97]"
+              onClick={() =>
+                void handleAccept()
+              }
+              className="w-full rounded-2xl bg-[#001F3F] py-3 text-xs font-bold text-white shadow-md transition hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "שולח מענה..." : "אני פנויה, הציגו אותי להורה!"}
+              {loading
+                ? "שולח מענה..."
+                : "אני פנויה, הציגו אותי להורה!"}
             </button>
 
             <button
               type="button"
               disabled={loading}
-              onClick={handleDismiss}
-              className="w-full rounded-2xl border border-slate-200 bg-white py-2 text-[11px] font-bold text-slate-400 transition hover:bg-slate-50"
+              onClick={
+                handleDismiss
+              }
+              className="w-full rounded-2xl border border-slate-200 bg-white py-2 text-[11px] font-bold text-slate-400 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               התעלם / לא רלוונטי
             </button>
