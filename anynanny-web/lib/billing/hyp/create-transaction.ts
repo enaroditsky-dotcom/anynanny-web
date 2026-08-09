@@ -984,12 +984,7 @@ export async function createHypTransaction(
   /**
    * TEMPORARY DIAGNOSTIC LOG
    *
-   * This is the important line for the current Retry bug.
-   *
-   * We want to see exactly which URLs AnyNanny is passing
-   * into HYP.
-   *
-   * Safe to log: contains no KEY or PassP.
+   * Shows the return URLs supplied by AnyNanny BEFORE APISign.
    */
   console.info(
     "[HYP] return URL debug",
@@ -1227,6 +1222,57 @@ export async function createHypTransaction(
         signedQuery
       );
 
+    /**
+     * NEW DIAGNOSTIC:
+     *
+     * Inspect the actual query returned by HYP APISign.
+     *
+     * This does NOT expose KEY / PassP because safeQuery has already
+     * stripped those secrets.
+     *
+     * This lets us determine whether HYP preserved the return URLs
+     * in the signed payment query.
+     */
+    const signedParams =
+      new URLSearchParams(
+        safeQuery
+      );
+
+    console.info(
+      "[HYP] signed return URLs",
+      {
+        hasSuccessUrl:
+          signedParams.has(
+            "SuccessUrl"
+          ),
+
+        hasErrorUrl:
+          signedParams.has(
+            "ErrorUrl"
+          ),
+
+        hasCancelUrl:
+          signedParams.has(
+            "CancelUrl"
+          ),
+
+        successUrl:
+          signedParams.get(
+            "SuccessUrl"
+          ),
+
+        errorUrl:
+          signedParams.get(
+            "ErrorUrl"
+          ),
+
+        cancelUrl:
+          signedParams.get(
+            "CancelUrl"
+          )
+      }
+    );
+
     const checkoutUrl =
       `${creds.payBaseUrl}?${safeQuery}`;
 
@@ -1250,9 +1296,8 @@ export async function createHypTransaction(
     );
 
     /**
-     * SECOND DEBUG POINT.
-     *
-     * Confirms the values still exist after APISign succeeds.
+     * Confirms the URLs supplied by AnyNanny still exist
+     * after the APISign request has completed.
      */
     console.info(
       "[HYP] return URL debug after sign",
