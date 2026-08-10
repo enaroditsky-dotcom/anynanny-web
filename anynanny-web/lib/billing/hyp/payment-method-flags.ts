@@ -3,124 +3,444 @@ import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-metho
 /**
  * Map AnyNanny checkout rails → Hyp Pay APISign flags.
  *
- * Hyp Pay docs: `hideBtns=True` hides digital-wallet buttons (Bit / Apple / Google).
- * Hyp / CreditGuard PPS pages also honor `defaultPaymentMethod` + `paymentMethods`
- * (same shape as Hyp Enterprise `uiCustomData`) when the terminal serves the modern page.
- *
- * @see https://developers.hyp.co.il/pay/common-use-cases/customizing-payment-page-design
- * @see https://developers.hyp.co.il/enterprise/changing-the-default-payment-page-appearance/managing-payment-methods
+ * Hyp Pay docs:
+ * - `hideBtns=True` hides digital-wallet buttons.
+ * - `ppsJSONConfig` can configure payment-page behavior.
+ * - iframe integrations should include `frameAncestorURLs`
+ *   pointing to the merchant website that embeds the HYP page.
  */
 
-export type HypPaymentMethodRail = CheckoutPaymentMethod | string;
+export type HypPaymentMethodRail =
+  | CheckoutPaymentMethod
+  | string;
 
-function hypTrueFalse(value: boolean): "True" | "False" {
-  return value ? "True" : "False";
+const DEFAULT_FRAME_ANCESTOR_URL =
+  "https://www.anynanny.org";
+
+function hypTrueFalse(
+  value: boolean
+): "True" | "False" {
+  return value
+    ? "True"
+    : "False";
 }
 
-function normalizeRail(raw: string | null | undefined): string {
-  return String(raw ?? "credit_card")
+function normalizeRail(
+  raw: string | null | undefined
+): string {
+  return String(
+    raw ?? "credit_card"
+  )
     .trim()
     .toLowerCase()
-    .replace(/[\s-]+/g, "_");
-}
-
-function buildUiCustomDataJson(input: {
-  defaultPaymentMethod: string;
-  hideTypes: string[];
-}): string {
-  return JSON.stringify({
-    uiCustomData: {
-      defaultPaymentMethod: input.defaultPaymentMethod,
-      paymentMethods: input.hideTypes.map((type) => ({ type, hidden: true }))
-    }
-  });
+    .replace(
+      /[\s-]+/g,
+      "_"
+    );
 }
 
 /**
- * Extra APISign entries so the hosted page opens the rail the user clicked.
- * Safe to append after the core Amount/Info/Tash fields.
+ * Merchant origin allowed to embed the HYP payment page.
+ *
+ * Prefer NEXT_PUBLIC_APP_URL so Preview/Production can override it.
+ * Production fallback is www.anynanny.org.
+ */
+function resolveFrameAncestorUrl(): string {
+  const raw =
+    String(
+      process.env.NEXT_PUBLIC_APP_URL ??
+        DEFAULT_FRAME_ANCESTOR_URL
+    ).trim();
+
+  if (!raw) {
+    return DEFAULT_FRAME_ANCESTOR_URL;
+  }
+
+  try {
+    const url =
+      new URL(raw);
+
+    return url.origin;
+  } catch {
+    return DEFAULT_FRAME_ANCESTOR_URL;
+  }
+}
+
+type HypUiCustomData = {
+  defaultPaymentMethod?: string;
+  paymentMethods?: Array<{
+    type: string;
+    hidden: boolean;
+  }>;
+};
+
+/**
+ * Build the JSON sent as ppsJSONConfig.
+ *
+ * frameAncestorURLs is intentionally top-level.
+ * uiCustomData remains nested, as expected by HYP.
+ */
+function buildPpsJsonConfig(
+  uiCustomData?: HypUiCustomData
+): string {
+  const payload: {
+    frameAncestorURLs: string;
+    uiCustomData?: HypUiCustomData;
+  } = {
+    frameAncestorURLs:
+      resolveFrameAncestorUrl()
+  };
+
+  if (uiCustomData) {
+    payload.uiCustomData =
+      uiCustomData;
+  }
+
+  return JSON.stringify(
+    payload
+  );
+}
+
+function buildUiCustomData(input: {
+  defaultPaymentMethod: string;
+  hideTypes: string[];
+}): HypUiCustomData {
+  return {
+    defaultPaymentMethod:
+      input.defaultPaymentMethod,
+
+    paymentMethods:
+      input.hideTypes.map(
+        (type) => ({
+          type,
+          hidden: true
+        })
+      )
+  };
+}
+
+/**
+ * Extra APISign entries so the hosted page opens the rail
+ * selected by the user.
+ *
+ * ppsJSONConfig is included for ALL hosted checkout methods
+ * so HYP knows which merchant origin is allowed to embed
+ * the payment page in an iframe.
  */
 export function buildHypPaymentMethodSignEntries(
-  paymentMethod: HypPaymentMethodRail | null | undefined
+  paymentMethod:
+    | HypPaymentMethodRail
+    | null
+    | undefined
 ): Array<[string, string]> {
-  const rail = normalizeRail(paymentMethod);
-  const entries: Array<[string, string]> = [];
+  const rail =
+    normalizeRail(
+      paymentMethod
+    );
 
-  if (rail === "bit") {
-    // Show wallet buttons; open Bit UI immediately when the terminal supports it.
-    entries.push(["hideBtns", hypTrueFalse(false)]);
-    // Bit does not support installments — lock to a single charge.
-    entries.push(["Tash", "1"]);
-    entries.push(["FixTash", hypTrueFalse(true)]);
-    entries.push(["defaultPaymentMethod", "bit"]);
-    // Legacy Yaad-style enable flag (ignored when unsupported; echoed when supported).
-    entries.push(["Bit", hypTrueFalse(true)]);
+  const entries:
+    Array<
+      [string, string]
+    > = [];
+
+  if (
+    rail ===
+    "bit"
+  ) {
+    /*
+     * Show wallet buttons and open Bit when supported.
+     */
+    entries.push([
+      "hideBtns",
+      hypTrueFalse(
+        false
+      )
+    ]);
+
+    /*
+     * Bit does not support installments.
+     */
+    entries.push([
+      "Tash",
+      "1"
+    ]);
+
+    entries.push([
+      "FixTash",
+      hypTrueFalse(
+        true
+      )
+    ]);
+
+    entries.push([
+      "defaultPaymentMethod",
+      "bit"
+    ]);
+
+    /*
+     * Legacy Yaad/HYP enable flag.
+     */
+    entries.push([
+      "Bit",
+      hypTrueFalse(
+        true
+      )
+    ]);
+
     entries.push([
       "ppsJSONConfig",
-      buildUiCustomDataJson({
-        defaultPaymentMethod: "bit",
-        hideTypes: ["applepay", "googlepay", "paybox", "ipr", "pcp", "a2a"]
-      })
+
+      buildPpsJsonConfig(
+        buildUiCustomData({
+          defaultPaymentMethod:
+            "bit",
+
+          hideTypes: [
+            "applepay",
+            "googlepay",
+            "paybox",
+            "ipr",
+            "pcp",
+            "a2a"
+          ]
+        })
+      )
     ]);
-    const bitTmp = String(process.env.HYP_BIT_TMP ?? "").trim();
-    if (bitTmp) entries.push(["tmp", bitTmp]);
+
+    const bitTmp =
+      String(
+        process.env.HYP_BIT_TMP ??
+          ""
+      ).trim();
+
+    if (bitTmp) {
+      entries.push([
+        "tmp",
+        bitTmp
+      ]);
+    }
+
     return entries;
   }
 
-  if (rail === "paybox") {
-    entries.push(["hideBtns", hypTrueFalse(false)]);
-    entries.push(["Tash", "1"]);
-    entries.push(["FixTash", hypTrueFalse(true)]);
-    entries.push(["defaultPaymentMethod", "paybox"]);
-    entries.push(["PayBox", hypTrueFalse(true)]);
+  if (
+    rail ===
+    "paybox"
+  ) {
+    entries.push([
+      "hideBtns",
+      hypTrueFalse(
+        false
+      )
+    ]);
+
+    entries.push([
+      "Tash",
+      "1"
+    ]);
+
+    entries.push([
+      "FixTash",
+      hypTrueFalse(
+        true
+      )
+    ]);
+
+    entries.push([
+      "defaultPaymentMethod",
+      "paybox"
+    ]);
+
+    entries.push([
+      "PayBox",
+      hypTrueFalse(
+        true
+      )
+    ]);
+
     entries.push([
       "ppsJSONConfig",
-      buildUiCustomDataJson({
-        defaultPaymentMethod: "paybox",
-        hideTypes: ["applepay", "googlepay", "bit", "ipr", "pcp", "a2a"]
-      })
+
+      buildPpsJsonConfig(
+        buildUiCustomData({
+          defaultPaymentMethod:
+            "paybox",
+
+          hideTypes: [
+            "applepay",
+            "googlepay",
+            "bit",
+            "ipr",
+            "pcp",
+            "a2a"
+          ]
+        })
+      )
     ]);
-    const payboxTmp = String(process.env.HYP_PAYBOX_TMP ?? "").trim();
-    if (payboxTmp) entries.push(["tmp", payboxTmp]);
+
+    const payboxTmp =
+      String(
+        process.env.HYP_PAYBOX_TMP ??
+          ""
+      ).trim();
+
+    if (payboxTmp) {
+      entries.push([
+        "tmp",
+        payboxTmp
+      ]);
+    }
+
     return entries;
   }
 
-  // credit_card / wallet / unknown → card form only (no competing wallet chrome).
-  entries.push(["hideBtns", hypTrueFalse(true)]);
-  if (rail === "credit_card" || rail === "wallet" || !rail) {
-    entries.push(["defaultPaymentMethod", "creditcard"]);
+  /**
+   * credit_card / wallet / unknown
+   *
+   * Card form only — no competing wallet chrome.
+   */
+  entries.push([
+    "hideBtns",
+    hypTrueFalse(
+      true
+    )
+  ]);
+
+  if (
+    rail ===
+      "credit_card" ||
+    rail ===
+      "wallet" ||
+    !rail
+  ) {
+    entries.push([
+      "defaultPaymentMethod",
+      "creditcard"
+    ]);
   }
+
+  /**
+   * IMPORTANT:
+   *
+   * Even ordinary card checkout needs ppsJSONConfig
+   * because the page is embedded inside the AnyNanny iframe.
+   */
+  entries.push([
+    "ppsJSONConfig",
+
+    buildPpsJsonConfig({
+      defaultPaymentMethod:
+        "creditcard"
+    })
+  ]);
+
   return entries;
 }
 
 export function hypPaymentMethodDescription(
-  paymentMethod: HypPaymentMethodRail | null | undefined,
-  purpose: "deposit" | "payment_method" | "checkout" = "checkout"
+  paymentMethod:
+    | HypPaymentMethodRail
+    | null
+    | undefined,
+
+  purpose:
+    | "deposit"
+    | "payment_method"
+    | "checkout" =
+    "checkout"
 ): string {
-  const rail = normalizeRail(paymentMethod);
-  if (purpose === "payment_method") {
-    if (rail === "bit") return "רישום / תשלום Bit — AnyNanny (HYP)";
-    if (rail === "paybox") return "רישום / תשלום PayBox — AnyNanny (HYP)";
+  const rail =
+    normalizeRail(
+      paymentMethod
+    );
+
+  if (
+    purpose ===
+    "payment_method"
+  ) {
+    if (
+      rail ===
+      "bit"
+    ) {
+      return "רישום / תשלום Bit — AnyNanny (HYP)";
+    }
+
+    if (
+      rail ===
+      "paybox"
+    ) {
+      return "רישום / תשלום PayBox — AnyNanny (HYP)";
+    }
+
     return "שמירת אמצעי תשלום — AnyNanny (Visa / Mastercard / Isracard / Amex)";
   }
-  if (purpose === "deposit") {
-    if (rail === "bit") return "טעינת ארנק ב־Bit — AnyNanny";
-    if (rail === "paybox") return "טעינת ארנק ב־PayBox — AnyNanny";
+
+  if (
+    purpose ===
+    "deposit"
+  ) {
+    if (
+      rail ===
+      "bit"
+    ) {
+      return "טעינת ארנק ב־Bit — AnyNanny";
+    }
+
+    if (
+      rail ===
+      "paybox"
+    ) {
+      return "טעינת ארנק ב־PayBox — AnyNanny";
+    }
+
     return "טעינת ארנק דיגיטלי — AnyNanny";
   }
-  if (rail === "bit") return "תשלום משמרת ב־Bit — AnyNanny";
-  if (rail === "paybox") return "תשלום משמרת ב־PayBox — AnyNanny";
+
+  if (
+    rail ===
+    "bit"
+  ) {
+    return "תשלום משמרת ב־Bit — AnyNanny";
+  }
+
+  if (
+    rail ===
+    "paybox"
+  ) {
+    return "תשלום משמרת ב־PayBox — AnyNanny";
+  }
+
   return "תשלום משמרת AnyNanny";
 }
 
-/** Bit rejects amounts above ₪5,000 on the hosted page. */
+/**
+ * Bit rejects amounts above ₪5,000
+ * on the hosted payment page.
+ */
 export function validateHypWalletAmount(
-  paymentMethod: HypPaymentMethodRail | null | undefined,
+  paymentMethod:
+    | HypPaymentMethodRail
+    | null
+    | undefined,
+
   amountNis: number
 ): string | null {
-  const rail = normalizeRail(paymentMethod);
-  if (rail === "bit" && Number.isFinite(amountNis) && amountNis > 5000) {
+  const rail =
+    normalizeRail(
+      paymentMethod
+    );
+
+  if (
+    rail ===
+      "bit" &&
+    Number.isFinite(
+      amountNis
+    ) &&
+    amountNis >
+      5000
+  ) {
     return "תשלום ב־Bit מוגבל עד ₪5,000. בחרו כרטיס או PayBox לסכום גבוה יותר.";
   }
+
   return null;
 }
