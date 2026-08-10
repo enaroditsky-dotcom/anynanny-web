@@ -203,7 +203,8 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
   const paymentMethodId = String(body.paymentMethodId ?? "").trim();
 
   // Charge a previously saved Hyp card (no hosted pay page).
-  if (paymentMethodId) {
+  // Never apply a saved-card charge when the parent explicitly chose Bit / PayBox.
+  if (paymentMethodId && paymentMethod === "credit_card") {
     const secret = await getParentPaymentMethodSecret(supabase, user.id, paymentMethodId);
     if (secret.error || !secret.method) {
       return NextResponse.json(

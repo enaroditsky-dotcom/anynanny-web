@@ -6,6 +6,7 @@ import {
   computePlatformFeeFromParentTotal,
   type ParentPaymentSplit
 } from "@/lib/billing/platform-fee";
+import { hypPaymentMethodDescription } from "@/lib/billing/hyp/payment-method-flags";
 import {
   formatParentCheckoutError,
   postParentCheckoutSession
@@ -58,9 +59,13 @@ export function usePaymentExecutor() {
           bookingId: params.bookingId,
           amountMinorUnits,
           currency: "ils",
-          description: "תשלום משמרת AnyNanny",
+          description: hypPaymentMethodDescription(params.paymentMethod, "checkout"),
           paymentMethod: params.paymentMethod,
-          paymentMethodId: params.paymentMethodId ?? undefined,
+          // Saved-card token charge is credit-card only. Bit / PayBox must open hosted HYP.
+          paymentMethodId:
+            params.paymentMethod === "credit_card"
+              ? (params.paymentMethodId ?? undefined)
+              : undefined,
           shiftDetails: {
             sessionId: params.sessionId,
             elapsedSeconds: params.elapsedSeconds

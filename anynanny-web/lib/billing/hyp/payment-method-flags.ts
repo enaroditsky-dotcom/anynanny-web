@@ -149,6 +149,9 @@ export function buildHypPaymentMethodSignEntries(
   ) {
     /*
      * Show wallet buttons and open Bit when supported.
+     * Hyp Enterprise: uiCustomData.defaultPaymentMethod=bit opens Bit
+     * immediately (skips the credit-card form). Classic hideBtns=False
+     * keeps the Bit button visible when Bit is enabled on the terminal.
      */
     entries.push([
       "hideBtns",
@@ -170,11 +173,6 @@ export function buildHypPaymentMethodSignEntries(
       hypTrueFalse(
         true
       )
-    ]);
-
-    entries.push([
-      "defaultPaymentMethod",
-      "bit"
     ]);
 
     /*
@@ -247,35 +245,32 @@ export function buildHypPaymentMethodSignEntries(
     ]);
 
     entries.push([
-      "defaultPaymentMethod",
-      "paybox"
-    ]);
-
-    entries.push([
       "PayBox",
       hypTrueFalse(
         true
       )
     ]);
 
+    /*
+     * Hyp Enterprise documents defaultPaymentMethod values:
+     * creditcard | applepay | googlepay | bit | ipr | pcp | a2a.
+     * "paybox" is NOT a documented value — sending it makes the hosted
+     * page fall back to the credit-card form. Prefer legacy PayBox=True
+     * (above) plus ppsJSONConfig that only hides competing wallets.
+     */
     entries.push([
       "ppsJSONConfig",
 
-      buildPpsJsonConfig(
-        buildUiCustomData({
-          defaultPaymentMethod:
-            "paybox",
-
-          hideTypes: [
-            "applepay",
-            "googlepay",
-            "bit",
-            "ipr",
-            "pcp",
-            "a2a"
-          ]
-        })
-      )
+      buildPpsJsonConfig({
+        paymentMethods: [
+          { type: "applepay", hidden: true },
+          { type: "googlepay", hidden: true },
+          { type: "bit", hidden: true },
+          { type: "ipr", hidden: true },
+          { type: "pcp", hidden: true },
+          { type: "a2a", hidden: true }
+        ]
+      })
     ]);
 
     const payboxTmp =
@@ -306,24 +301,11 @@ export function buildHypPaymentMethodSignEntries(
     )
   ]);
 
-  if (
-    rail ===
-      "credit_card" ||
-    rail ===
-      "wallet" ||
-    !rail
-  ) {
-    entries.push([
-      "defaultPaymentMethod",
-      "creditcard"
-    ]);
-  }
-
   /**
    * IMPORTANT:
    *
    * Even ordinary card checkout needs ppsJSONConfig
-   * because the page is embedded inside the AnyNanny iframe.
+   * because the page may be embedded / use PPS UI.
    */
   entries.push([
     "ppsJSONConfig",

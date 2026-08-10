@@ -1361,8 +1361,17 @@ export function ParentDashboardClient({
         const methods = Array.isArray(json.methods) ? json.methods : [];
         setSavedPaymentMethods(methods);
         const defaultMethod = methods.find((m) => m.is_default) ?? methods[0] ?? null;
-        setSelectedSavedMethodId(defaultMethod?.id ?? null);
-        if (!preferred && defaultMethod) setPaymentMethod("credit_card");
+        /*
+         * Bit / PayBox are hosted HYP rails — never auto-select a saved card
+         * alongside them, or checkout will charge the card (or open card UI)
+         * instead of the selected wallet rail.
+         */
+        if (preferred === "bit" || preferred === "paybox") {
+          setSelectedSavedMethodId(null);
+        } else {
+          setSelectedSavedMethodId(defaultMethod?.id ?? null);
+          if (!preferred && defaultMethod) setPaymentMethod("credit_card");
+        }
       } catch (error) {
         console.warn("[parent-dashboard] saved payment methods:", error);
         if (!cancelled) setSavedPaymentMethods([]);
