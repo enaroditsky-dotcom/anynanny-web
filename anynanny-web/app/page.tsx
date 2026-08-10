@@ -150,15 +150,15 @@ function HomeInner() {
                 onClick={() =>
                   navigateWithPath("login", path.id)
                 }
-                className={`flex min-h-[74px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center transition hover:brightness-[0.99] active:scale-[0.98] sm:min-h-[82px] sm:rounded-2xl ${path.accent}`}
+                className={`flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition hover:brightness-[0.99] active:scale-[0.98] sm:min-h-[92px] sm:rounded-2xl ${path.accent}`}
               >
                 <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-9 sm:w-9 ${path.iconWrap}`}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-10 sm:w-10 ${path.iconWrap}`}
                 >
                   <PathIcon path={path.id} />
                 </span>
 
-                <span className="block text-xs font-bold leading-tight sm:text-sm">
+                <span className="block text-sm font-bold leading-tight sm:text-[15px]">
                   כניסת {path.title}
                 </span>
               </button>
@@ -167,7 +167,7 @@ function HomeInner() {
         </section>
 
         {/* Register */}
-        <section className="w-full shrink-0 rounded-2xl border border-dashed border-slate-300/90 bg-[#FDFBF6]/90 p-3 shadow-sm sm:p-4">
+        <section className="w-full shrink-0 px-1 pt-1 sm:px-1.5 sm:pt-1.5">
           <h2 className="text-center text-sm font-extrabold text-navy-header">
             הרשמה
           </h2>

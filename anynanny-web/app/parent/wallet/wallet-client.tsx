@@ -7,14 +7,13 @@ import {
   ArrowDownLeft,
   Loader2,
   RefreshCw,
-  ArrowLeft,
   ChevronLeft,
   CheckCircle2,
   X
 } from "lucide-react";
-import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { PageBackLink } from "@/components/navigation/page-back-link";
 import { ActionToast } from "@/components/ui/action-toast";
 import {
   EMPTY_METHOD_HINT,
@@ -315,7 +314,8 @@ export default function ParentWalletClient() {
   return (
     <MainLayout>
       <div className="mx-auto w-full max-w-md space-y-5" dir="rtl">
-        <div className="w-full flex justify-between items-center px-1 pt-2">
+        <div className="flex w-full items-center justify-between gap-3 px-1 pt-2" dir="ltr">
+          <PageBackLink href="/parent/dashboard" />
           <button
             type="button"
             onClick={() => void fetchWalletData()}
@@ -325,14 +325,6 @@ export default function ParentWalletClient() {
           >
             <RefreshCw className={`w-4 h-4 ${isPageLoading ? "animate-spin" : ""}`} />
           </button>
-
-          <Link
-            href="/parent/dashboard"
-            className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 transition-colors font-medium"
-          >
-            <span>חזרה לדשבורד</span>
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
         </div>
 
         <header className="px-1 text-right">

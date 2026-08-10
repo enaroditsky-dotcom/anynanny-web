@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import ChatInterface from "@/components/chat/ChatInterface";
+import { PageBackLink } from "@/components/navigation/page-back-link";
 import { verifyBookingChatParticipant } from "@/lib/chat/booking-messages";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -87,15 +87,13 @@ export function BookingChatHeader({ bookingId, backHref }: { bookingId: string; 
   }, [bookingId, user?.id]);
 
   return (
-    <div className="flex items-center justify-between">
-      <Link
-        href={backHref}
-        className="inline-flex items-center gap-1 rounded-full border border-navy-header/20 bg-white px-3 py-1.5 text-xs font-semibold text-navy-header shadow-sm transition hover:bg-brand-cream"
-      >
-        <ArrowRight className="h-4 w-4" />
-        חזרה
-      </Link>
-      <h1 className="text-lg font-bold text-navy-header">{title}</h1>
+    <div className="space-y-2">
+      <div className="flex w-full items-center justify-between gap-3" dir="ltr">
+        <PageBackLink href={backHref} />
+        <h1 className="text-right text-lg font-bold text-navy-header" dir="rtl">
+          {title}
+        </h1>
+      </div>
     </div>
   );
 }

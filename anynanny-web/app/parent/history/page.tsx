@@ -10,7 +10,6 @@ import {
 import {
   Calendar,
   Loader2,
-  ArrowRight,
   RefreshCw,
   Clock3,
   WalletCards,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { useRouter } from "next/navigation";
+import { PageBackButton } from "@/components/navigation/page-back-link";
 
 import {
   removeRealtimeChannel,
@@ -839,23 +839,8 @@ export default function ParentHistoryPage() {
       className="w-full space-y-4 px-4 pb-4 pt-2"
       dir="rtl"
     >
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() =>
-            router.push(
-              "/parent/dashboard"
-            )
-          }
-          className="flex items-center gap-1.5 text-xs font-bold text-slate-500 transition-colors hover:text-slate-800"
-        >
-          <ArrowRight className="h-4 w-4" />
-
-          <span>
-            חזרה לדשבורד
-          </span>
-        </button>
-
+      <div className="flex items-center justify-between gap-3" dir="ltr">
+        <PageBackButton onClick={() => router.push("/parent/dashboard")} />
         <button
           type="button"
           onClick={() =>

@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { BookingCalendarPanel } from "@/components/bookings/booking-calendar-panel";
 import {
   isUpcomingOrActiveCalendarShift,
@@ -170,13 +169,9 @@ export default function ParentCalendarPage() {
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden" dir="rtl">
       <div className="shrink-0 pb-3">
-        <Link
-          href="/parent/dashboard"
-          className="flex items-center gap-1 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
-        >
-          <span>חזרה לדשבורד</span>
-          <ArrowLeft className="h-4 w-4" aria-hidden />
-        </Link>
+        <PageBackRow>
+          <PageBackLink href="/parent/dashboard" />
+        </PageBackRow>
       </div>
 
       <BookingCalendarPanel

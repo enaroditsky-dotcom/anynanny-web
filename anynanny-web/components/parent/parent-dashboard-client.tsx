@@ -1784,7 +1784,7 @@ export function ParentDashboardClient({
                   />
                 </div>
               ) : inSettlement && settlementStep === "payment" ? (
-                <div className="flex w-full flex-col items-center gap-3">
+                <div className="flex w-full flex-col items-stretch gap-3">
                   <PaymentFactory
                     elapsedSeconds={settlementElapsedSeconds}
                     sitterBaseNis={paymentSplit.sitterBaseNis}

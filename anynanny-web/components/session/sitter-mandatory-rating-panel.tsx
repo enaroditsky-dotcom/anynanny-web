@@ -37,7 +37,7 @@ export function SitterMandatoryRatingPanel({
         onClick={() => void onComplete(rating)}
         className="w-full max-w-[17rem] rounded-xl bg-[#001F3F] px-5 py-3 text-sm font-bold text-white shadow-md shadow-[#001F3F]/25 ring-1 ring-[#001F3F]/20 transition hover:brightness-110 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
       >
-        {busy ? "שומרים…" : "סיום וחזרה לדשבורד"}
+        {busy ? "שומרים…" : "סיום וחזרה"}
       </button>
     </div>
   );

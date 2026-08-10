@@ -370,7 +370,7 @@ export default function ParentCheckoutCompleteClient() {
           }
           className="mt-5 w-full rounded-xl bg-[#001F3F] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110"
         >
-          חזרה לדשבורד
+          חזרה לדף הבית
         </button>
       </div>
     </main>
