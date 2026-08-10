@@ -7,7 +7,6 @@ import { ParentOnboardingWizard } from "@/components/parent/parent-onboarding-wi
 import { ParentSessionTimerCircle } from "@/components/session/parent-double-shake-idle-circle";
 import { ParentSessionRatingPanel } from "@/components/session/parent-session-rating-panel";
 import { DoubleShakeCircleButton } from "@/components/session/double-shake-circle-button";
-import { HypCheckoutFrame } from "@/components/billing/HypCheckoutFrame";
 import { PaymentFactory } from "@/components/billing/PaymentFactory";
 import { useSession } from "@/context/SessionContext";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
@@ -420,7 +419,6 @@ export function ParentDashboardClient({
   const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string | null>(null);
   const [ratingBusy, setRatingBusy] = useState(false);
   const [ratingError, setRatingError] = useState<string | null>(null);
-  const [hypCheckoutUrl, setHypCheckoutUrl] = useState<string | null>(null);
   const [sitterAcceptedToast, setSitterAcceptedToast] = useState<string | null>(null);
   const lastSitterAcceptedToastKeyRef = useRef<string | null>(null);
   const bookingStatusWatchRef = useRef<{ id: string; status: string } | null>(null);
@@ -1282,16 +1280,22 @@ export function ParentDashboardClient({
       }
       if (result.paidImmediately) {
         clearHypPendingCheckout();
-        setHypCheckoutUrl(null);
         setShiftError(null);
         window.location.assign("/parent/dashboard?paid=1");
         return;
       }
+      const checkoutUrl = String(result.checkoutUrl ?? "").trim();
+      if (!checkoutUrl) {
+        setShiftError("לא התקבל קישור לתשלום מ-HYP. נסו שוב.");
+        return;
+      }
+      // Persist booking/session before leaving so /parent/checkout/complete can recover them.
+      // Do NOT mark paid here — finalization requires a real successful HYP CCode on return.
       saveHypPendingCheckout({
         bookingId: String(activeBooking.id),
         sessionId: String(activeSession.id)
       });
-      setHypCheckoutUrl(result.checkoutUrl);
+      window.location.assign(checkoutUrl);
     } catch (e) {
       console.error("[handlePayShift]", e);
       setShiftError("שגיאה בעיבוד התשלום. נסו שוב.");
@@ -1410,7 +1414,6 @@ export function ParentDashboardClient({
     };
 
     if (checkout === "cancel") {
-      setHypCheckoutUrl(null);
       setShiftError("התשלום בוטל. ניתן לנסות שוב.");
       lockSettlement("payment");
       cleanUrl();
@@ -1419,7 +1422,6 @@ export function ParentDashboardClient({
 
     let cancelled = false;
     void (async () => {
-      setHypCheckoutUrl(null);
       const hyp = parseHypReturnParams(params);
       const pending = readHypPendingCheckout();
       const alreadyPaidFlag = params.get("paid") === "1";
@@ -1471,7 +1473,6 @@ export function ParentDashboardClient({
       clearHypPendingCheckout();
       if (sessionId) clearParentSessionRatedLocally(String(sessionId));
       clearToIdleDashboard();
-      setHypCheckoutUrl(null);
       if (parentId) await refreshLiveShiftState(parentId);
       cleanUrl();
     })();
@@ -1780,7 +1781,7 @@ export function ParentDashboardClient({
                     selectedSavedMethodId={selectedSavedMethodId}
                     onSelectSavedMethod={setSelectedSavedMethodId}
                     savedMethodsLoading={savedPaymentMethodsLoading}
-                    busy={paymentBusy || Boolean(hypCheckoutUrl)}
+                    busy={paymentBusy}
                     bookingReady={Boolean(activeBooking?.id && activeSession?.id)}
                     errorMessage={paymentError ?? shiftError}
                     onConfirm={() => void handlePayShift()}
@@ -1940,29 +1941,6 @@ export function ParentDashboardClient({
         </div>
       </div>
 
-      {hypCheckoutUrl && activeBooking?.id ? (
-        <HypCheckoutFrame
-          checkoutUrl={hypCheckoutUrl}
-          bookingId={String(activeBooking.id)}
-          sessionId={activeSession?.id ? String(activeSession.id) : null}
-          onClose={() => {
-            setHypCheckoutUrl(null);
-            setShiftError("התשלום לא הושלם. ניתן לנסות שוב.");
-            lockSettlement("payment");
-          }}
-          onPaid={async () => {
-            const sid = activeSessionRef.current?.id
-              ? String(activeSessionRef.current.id)
-              : null;
-            if (sid) clearParentSessionRatedLocally(sid);
-            clearHypPendingCheckout();
-            clearToIdleDashboard();
-            setHypCheckoutUrl(null);
-            setShiftError(null);
-            if (parentId) await refreshLiveShiftState(parentId);
-          }}
-        />
-      ) : null}
     </main>
   );
 }

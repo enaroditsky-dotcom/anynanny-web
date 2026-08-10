@@ -110,6 +110,10 @@ export default function ParentCheckoutCompleteClient() {
 
       /*
        * CANCEL
+       *
+       * Never mark paid. Keep pending checkout so the return page /
+       * dashboard can still recover bookingId/sessionId for retry.
+       * Retry must POST /api/checkout again for a fresh HYP URL.
        */
       if (
         checkout ===
@@ -126,7 +130,10 @@ export default function ParentCheckoutCompleteClient() {
 
         if (!cancelled) {
           setMessage(
-            "התשלום בוטל. לא חויבת. ניתן לחזור ולנסות שוב."
+            "התשלום בוטל. לא חויבת. מחזירים לדשבורד…"
+          );
+          router.replace(
+            "/parent/dashboard?checkout=cancel"
           );
         }
 
@@ -157,7 +164,10 @@ export default function ParentCheckoutCompleteClient() {
 
         if (!cancelled) {
           setMessage(
-            "התשלום נדחה. לא חויבת. ניתן לחזור ולנסות שוב או לבחור אמצעי תשלום אחר."
+            "התשלום נדחה. לא חויבת. מחזירים לדשבורד…"
+          );
+          router.replace(
+            "/parent/dashboard?checkout=cancel"
           );
         }
 
@@ -355,7 +365,7 @@ export default function ParentCheckoutCompleteClient() {
           type="button"
           onClick={() =>
             router.replace(
-              "/parent/dashboard"
+              "/parent/dashboard?checkout=cancel"
             )
           }
           className="mt-5 w-full rounded-xl bg-[#001F3F] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110"

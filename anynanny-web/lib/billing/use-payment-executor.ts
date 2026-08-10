@@ -27,7 +27,7 @@ export type PaymentExecutorResult =
   | {
       success: true;
       paymentSplit: ParentPaymentSplit;
-      /** Hyp hosted checkout URL for iframe / redirect. Null when saved card charged immediately. */
+      /** Hyp hosted checkout URL for full-page redirect. Null when saved card charged immediately. */
       checkoutUrl: string | null;
       hypSessionId: string;
       paidImmediately?: boolean;
