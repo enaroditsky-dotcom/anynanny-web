@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageCircle, UserRound, Settings, Zap } from "lucide-react";
+import { Home, MessageCircle, UserRound, Settings, Zap } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useWalletNotification } from "@/features/wallet/hooks/useWalletNotification";
 import { useChatNotification } from "@/features/chat/hooks/useChatNotification";
@@ -12,16 +12,16 @@ type NavItem = {
   href: string;
   label: string;
   match: (path: string) => boolean;
-  Icon: typeof LayoutDashboard;
+  Icon: typeof Home;
   badgeKey?: "messages" | "wallet" | "pending";
 };
 
 const parentSideItems: NavItem[] = [
   {
     href: "/parent/dashboard",
-    label: "דשבורד",
+    label: "בית",
     match: (p) => p === "/parent/dashboard",
-    Icon: LayoutDashboard
+    Icon: Home
   },
   {
     href: "/parent/messages",
@@ -48,9 +48,9 @@ const parentSideItems: NavItem[] = [
 const sitterItems: NavItem[] = [
   {
     href: "/sitter/dashboard",
-    label: "דשבורד",
+    label: "בית",
     match: (p) => p === "/sitter/dashboard",
-    Icon: LayoutDashboard,
+    Icon: Home,
     badgeKey: "pending"
   },
   {
