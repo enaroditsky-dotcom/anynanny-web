@@ -1590,6 +1590,10 @@ export function ParentDashboardClient({
     !rejectedBannerDismissed &&
     (!statusCardKey || dismissedStatusKey !== statusCardKey);
 
+  // Expanded Active Shift panel: free vertical space by hiding shortcuts / external actions.
+  const isActiveShiftExpanded = statusCardVisible && !statusCardCollapsed;
+  const shouldHideDashboardActions = isActiveShiftExpanded;
+
   const dismissStatusBanner = () => {
     if (scheduledBookingId && (isScheduledConfirmed || isScheduledPending)) {
       persistDismissedScheduledBookingId(scheduledBookingId);
@@ -1701,36 +1705,38 @@ export function ParentDashboardClient({
               </div>
             ) : null}
 
-            <div className="grid grid-cols-3 gap-2 pt-1">
-              <Link
-                href="/parent/calendar"
-                onClick={dismissStatusBanner}
-                className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
-              >
-                <Calendar className="h-5 w-5 shrink-0 text-emerald-600" />
-                <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
-                  יומן תיאום המשמרות
-                </span>
-              </Link>
-              <Link
-                href="/parent/wallet"
-                className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
-              >
-                <Wallet className="h-5 w-5 shrink-0 text-emerald-600" />
-                <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
-                  הארנק שלי
-                </span>
-              </Link>
-              <Link
-                href="/parent/history"
-                className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
-              >
-                <History className="h-5 w-5 shrink-0 text-[#001F3F]" />
-                <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
-                  היסטוריית משמרות
-                </span>
-              </Link>
-            </div>
+            {!shouldHideDashboardActions ? (
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <Link
+                  href="/parent/calendar"
+                  onClick={dismissStatusBanner}
+                  className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
+                >
+                  <Calendar className="h-5 w-5 shrink-0 text-emerald-600" />
+                  <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                    יומן תיאום המשמרות
+                  </span>
+                </Link>
+                <Link
+                  href="/parent/wallet"
+                  className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
+                >
+                  <Wallet className="h-5 w-5 shrink-0 text-emerald-600" />
+                  <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                    הארנק שלי
+                  </span>
+                </Link>
+                <Link
+                  href="/parent/history"
+                  className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
+                >
+                  <History className="h-5 w-5 shrink-0 text-[#001F3F]" />
+                  <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                    היסטוריית משמרות
+                  </span>
+                </Link>
+              </div>
+            ) : null}
           </div>
 
           {statusCardVisible ? (
@@ -1905,39 +1911,43 @@ export function ParentDashboardClient({
             </DashboardStatusCard>
           ) : null}
 
-          <div className="space-y-2 pt-1">
-            <Link
-              href="/parent/search"
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-[#001F3F] py-3 px-2 text-xs font-bold text-white shadow-md transition hover:bg-[#001F3F]/90"
-            >
-              <Search className="h-4 w-4" />
-              חיפוש נני
-            </Link>
-          </div>
+          {!shouldHideDashboardActions ? (
+            <>
+              <div className="space-y-2 pt-1">
+                <Link
+                  href="/parent/search"
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-[#001F3F] py-3 px-2 text-xs font-bold text-white shadow-md transition hover:bg-[#001F3F]/90"
+                >
+                  <Search className="h-4 w-4" />
+                  חיפוש נני
+                </Link>
+              </div>
 
-          <div className="pt-2 flex flex-col gap-2">
-            {showLiveShiftCard ? (
-              <button
-                type="button"
-                disabled={releasingStuckShift}
-                onClick={() => void handleReleaseStuckShift()}
-                className="w-full rounded-xl border border-amber-300 bg-amber-50/50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 shadow-2xs disabled:opacity-60"
-              >
-                {releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                const supabase = getSupabaseBrowserClient();
-                if (supabase) void supabase.auth.signOut().then(() => (window.location.href = "/login"));
-              }}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50/30 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 shadow-2xs"
-            >
-              <LogOut className="h-4 w-4" />
-              התנתקות
-            </button>
-          </div>
+              <div className="pt-2 flex flex-col gap-2">
+                {showLiveShiftCard ? (
+                  <button
+                    type="button"
+                    disabled={releasingStuckShift}
+                    onClick={() => void handleReleaseStuckShift()}
+                    className="w-full rounded-xl border border-amber-300 bg-amber-50/50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 shadow-2xs disabled:opacity-60"
+                  >
+                    {releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const supabase = getSupabaseBrowserClient();
+                    if (supabase) void supabase.auth.signOut().then(() => (window.location.href = "/login"));
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50/30 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 shadow-2xs"
+                >
+                  <LogOut className="h-4 w-4" />
+                  התנתקות
+                </button>
+              </div>
+            </>
+          ) : null}
         </div>
       </div>
 
