@@ -199,110 +199,117 @@ export function sessionEndValue(
   );
 }
 
+/** Legacy unlinked sessions may match a booking only inside this window. */
+const LEGACY_SESSION_MATCH_MAX_MS = 2 * 60 * 60 * 1000;
+
+/** Closest start must beat the runner-up by this much, or the match is ambiguous. */
+const LEGACY_SESSION_MATCH_MIN_LEAD_MS = 10 * 60 * 1000;
+
+function sessionBookingId(
+  session: HistorySessionRow
+): string | null {
+  const value = session.booking_id;
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 /**
  * מקשר Booking ל-Session הנכון.
  *
  * עדיפות ראשונה תמיד לקישור מפורש booking_id.
- * ה-fallbacks קיימים רק לתאימות עם Sessions ישנים.
+ * ה-fallbacks קיימים רק לתאימות עם Sessions ישנים ללא booking_id.
  */
 export function resolveSessionForBooking(
   booking: HistoryBookingRef,
   sessions: HistorySessionRow[]
 ): HistorySessionRow | undefined {
-  const directlyLinked =
-    sessions.find(
-      (session) =>
-        session.booking_id === booking.id ||
-        session.id === booking.id
-    );
+  const directlyLinked = sessions.find(
+    (session) => sessionBookingId(session) === booking.id
+  );
 
   if (directlyLinked) {
     return directlyLinked;
   }
 
-  let candidates = sessions;
+  const sameId = sessions.find(
+    (session) => session.id === booking.id
+  );
+
+  if (sameId) {
+    return sameId;
+  }
+
+  const scheduledStart = bookingDateTimeMs(
+    booking.booking_date,
+    booking.start_time
+  );
+
+  if (scheduledStart == null) {
+    return undefined;
+  }
+
+  let candidates = sessions.filter(
+    (session) => sessionBookingId(session) == null
+  );
 
   if (booking.sitter_id) {
     candidates = candidates.filter(
-      (session) =>
-        session.sitter_id === booking.sitter_id
+      (session) => session.sitter_id === booking.sitter_id
     );
   }
 
   if (booking.parent_id) {
-    const sameParent =
-      candidates.filter(
-        (session) =>
-          !session.parent_id ||
-          session.parent_id === booking.parent_id
-      );
+    const sameParent = candidates.filter(
+      (session) =>
+        !session.parent_id ||
+        session.parent_id === booking.parent_id
+    );
 
     if (sameParent.length > 0) {
       candidates = sameParent;
     }
   }
 
-  if (candidates.length === 0) {
+  const scored = candidates
+    .map((session) => {
+      const start = timestampMs(sessionStartValue(session));
+      if (start == null) {
+        return null;
+      }
+      return {
+        session,
+        delta: Math.abs(start - scheduledStart)
+      };
+    })
+    .filter(
+      (
+        row
+      ): row is {
+        session: HistorySessionRow;
+        delta: number;
+      } => row != null && row.delta <= LEGACY_SESSION_MATCH_MAX_MS
+    )
+    .sort((left, right) => left.delta - right.delta);
+
+  if (scored.length === 0) {
     return undefined;
   }
 
-  const bookingDate =
-    booking.booking_date?.slice(0, 10);
-
-  if (bookingDate) {
-    const sameDate =
-      candidates.find(
-        (session) =>
-          localDateKey(
-            sessionStartValue(session)
-          ) === bookingDate
-      );
-
-    if (sameDate) {
-      return sameDate;
-    }
+  if (scored.length === 1) {
+    return scored[0].session;
   }
 
-  const scheduledStart =
-    bookingDateTimeMs(
-      booking.booking_date,
-      booking.start_time
-    );
-
-  if (scheduledStart == null) {
-    return candidates[0];
+  if (
+    scored[1].delta - scored[0].delta >=
+    LEGACY_SESSION_MATCH_MIN_LEAD_MS
+  ) {
+    return scored[0].session;
   }
 
-  return candidates.reduce(
-    (closest, session) => {
-      const currentStart =
-        timestampMs(
-          sessionStartValue(session)
-        );
-
-      const closestStart =
-        timestampMs(
-          sessionStartValue(closest)
-        );
-
-      if (currentStart == null) {
-        return closest;
-      }
-
-      if (closestStart == null) {
-        return session;
-      }
-
-      return Math.abs(
-        currentStart - scheduledStart
-      ) <
-        Math.abs(
-          closestStart - scheduledStart
-        )
-        ? session
-        : closest;
-    }
-  );
+  return undefined;
 }
 
 export function formatShiftTime(
