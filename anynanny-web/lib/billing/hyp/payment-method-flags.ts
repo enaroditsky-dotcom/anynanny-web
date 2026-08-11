@@ -175,6 +175,11 @@ export function buildHypPaymentMethodSignEntries(
       )
     ]);
 
+    entries.push([
+      "defaultPaymentMethod",
+      "bit"
+    ]);
+
     /*
      * Legacy Yaad/HYP enable flag.
      */
