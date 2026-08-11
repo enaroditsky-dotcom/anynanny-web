@@ -4,6 +4,15 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MainLayout } from "@components/layout/MainLayout";
 import { createBooking } from "@/lib/bookings/create-booking";
+import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
+import {
+  broadcastRadarHref,
+  fetchActiveBroadcastForParent,
+  fetchPendingRequestedSitterIds,
+  findApprovedBroadcastLinkedBooking,
+  formatBroadcastElapsed,
+  markActiveBroadcastFilled
+} from "@/lib/broadcast/parent-active-broadcast";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   removeRealtimeChannel,
@@ -16,7 +25,8 @@ import {
   Clock,
   AlertCircle,
   RefreshCw,
-  PauseCircle
+  PauseCircle,
+  ChevronDown
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -52,10 +62,11 @@ function BroadcastRadarContent() {
   const searchParams = useSearchParams();
   const supabase = getSupabaseBrowserClient();
 
-  const alertId = searchParams.get("alertId");
+  const alertIdParam = searchParams.get("alertId");
+  const [alertId, setAlertId] = useState<string | null>(alertIdParam);
 
   const rawCity = searchParams.get("city") || "חיפה";
-  const city = decodeURIComponent(rawCity);
+  const [city, setCity] = useState(decodeURIComponent(rawCity));
 
   const type = searchParams.get("type") || "sitter";
 
@@ -63,16 +74,33 @@ function BroadcastRadarContent() {
   const [dots, setDots] = useState(".");
   const [isExpired, setIsExpired] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isFilled, setIsFilled] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [selectingSitterId, setSelectingSitterId] = useState<string | null>(
     null
   );
+  const [requestedSitterIds, setRequestedSitterIds] = useState<string[]>([]);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [parentId, setParentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAlertId(alertIdParam);
+  }, [alertIdParam]);
+
+  useEffect(() => {
+    if (isExpired || isPaused || isFilled) return;
+    const tick = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [isExpired, isPaused, isFilled]);
 
   /*
    * Waiting dots animation.
    */
   useEffect(() => {
-    if (isExpired || isPaused) {
+    if (isExpired || isPaused || isFilled) {
       return;
     }
 
@@ -83,13 +111,105 @@ function BroadcastRadarContent() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [isExpired, isPaused]);
+  }, [isExpired, isPaused, isFilled]);
 
   /*
-   * Listen for Broadcast status changes.
+   * Restore the parent's existing active broadcast when the URL is incomplete,
+   * then listen for status changes. Does not create a new broadcast.
    */
   useEffect(() => {
-    if (!alertId || alertId === "null" || !supabase) {
+    if (!supabase) {
+      return;
+    }
+
+    let disposed = false;
+
+    const applyStatus = (status: string | undefined) => {
+      if (status === "expired" || status === "cancelled") {
+        setIsExpired(true);
+      } else if (status === "paused") {
+        setIsPaused(true);
+      } else if (status === "filled") {
+        setIsFilled(true);
+      }
+    };
+
+    const hydrateFromActive = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+      if (!user || disposed) return;
+      setParentId(user.id);
+
+      const missingId = !alertId || alertId === "null" || alertId === "simulation-id";
+      if (missingId) {
+        const { broadcast } = await fetchActiveBroadcastForParent(supabase, user.id);
+        if (disposed) return;
+        if (broadcast) {
+          setAlertId(broadcast.id);
+          setCity(broadcast.city);
+          setStartedAt(broadcast.created_at);
+          router.replace(broadcastRadarHref(broadcast));
+          return;
+        }
+      }
+
+      if (!alertId || alertId === "null") {
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("broadcast_alerts")
+        .select("id, parent_id, city, service_type, status, created_at")
+        .eq("id", alertId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("[broadcast radar] status:", error.message);
+        return;
+      }
+
+      if (!data) return;
+
+      if (typeof data.city === "string" && data.city.trim()) {
+        setCity(data.city);
+      }
+      if (typeof data.created_at === "string") {
+        setStartedAt(data.created_at);
+      }
+      applyStatus(data.status);
+
+      if (data.status === "active" && data.created_at) {
+        const confirmed = await findApprovedBroadcastLinkedBooking(
+          supabase,
+          user.id,
+          alertId,
+          String(data.created_at)
+        );
+        if (disposed) return;
+        if (confirmed) {
+          await markActiveBroadcastFilled(supabase, alertId, user.id);
+          if (!disposed) {
+            setIsFilled(true);
+          }
+          return;
+        }
+
+        const pendingIds = await fetchPendingRequestedSitterIds(
+          supabase,
+          user.id,
+          alertId,
+          String(data.created_at)
+        );
+        if (!disposed) {
+          setRequestedSitterIds(pendingIds);
+        }
+      }
+    };
+
+    void hydrateFromActive();
+
+    if (!alertId || alertId === "null") {
       return;
     }
 
@@ -103,42 +223,26 @@ function BroadcastRadarContent() {
         handler: (payload) => {
           const next = payload.new as {
             status?: string;
+            city?: string;
+            created_at?: string;
           };
 
-          if (next.status === "expired" || next.status === "cancelled") {
-            setIsExpired(true);
-          } else if (next.status === "paused") {
-            setIsPaused(true);
+          if (typeof next.city === "string" && next.city.trim()) {
+            setCity(next.city);
           }
+          if (typeof next.created_at === "string") {
+            setStartedAt(next.created_at);
+          }
+          applyStatus(next.status);
         }
       }
     );
 
-    const checkCurrentStatus = async () => {
-      const { data, error } = await supabase
-        .from("broadcast_alerts")
-        .select("status, created_at")
-        .eq("id", alertId)
-        .maybeSingle();
-
-      if (error) {
-        console.warn("[broadcast radar] status:", error.message);
-        return;
-      }
-
-      if (data?.status === "expired" || data?.status === "cancelled") {
-        setIsExpired(true);
-      } else if (data?.status === "paused") {
-        setIsPaused(true);
-      }
-    };
-
-    void checkCurrentStatus();
-
     return () => {
+      disposed = true;
       removeRealtimeChannel(supabase, alertChannel);
     };
-  }, [alertId, supabase]);
+  }, [alertId, router, supabase]);
 
   /*
    * Add a sitter that responded to the Broadcast.
@@ -214,13 +318,86 @@ function BroadcastRadarContent() {
   };
 
   /*
+   * Sitter ACCEPT/CONFIRM is bookings.status → approved
+   * (updateBookingStatus). Parent select only creates pending.
+   */
+  useEffect(() => {
+    if (!alertId || alertId === "null" || !parentId || !startedAt || !supabase) {
+      return;
+    }
+    if (isExpired || isPaused || isFilled) {
+      return;
+    }
+
+    let disposed = false;
+
+    const checkConfirmation = async () => {
+      const confirmed = await findApprovedBroadcastLinkedBooking(
+        supabase,
+        parentId,
+        alertId,
+        startedAt
+      );
+      if (disposed || !confirmed) return;
+      await markActiveBroadcastFilled(supabase, alertId, parentId);
+      if (!disposed) {
+        setIsFilled(true);
+      }
+    };
+
+    void checkConfirmation();
+
+    const bookingChannel = subscribePostgresChanges(
+      supabase,
+      `radar-bookings-${alertId}`,
+      {
+        event: "UPDATE",
+        table: "bookings",
+        filter: `parent_id=eq.${parentId}`,
+        handler: (payload) => {
+          const next = payload.new as {
+            status?: string;
+            sitter_id?: string;
+          };
+          if (next.status === "rejected" && next.sitter_id) {
+            const sitterId = String(next.sitter_id);
+            setRequestedSitterIds((previous) =>
+              previous.filter((id) => id !== sitterId)
+            );
+            return;
+          }
+          if (next.status === "approved") {
+            void checkConfirmation();
+          }
+        }
+      }
+    );
+
+    const poll = window.setInterval(() => {
+      void checkConfirmation();
+    }, 2500);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(poll);
+      removeRealtimeChannel(supabase, bookingChannel);
+    };
+  }, [alertId, parentId, startedAt, isExpired, isPaused, isFilled, supabase]);
+
+  useEffect(() => {
+    if (!isFilled) return;
+    setBroadcastMinimized(false);
+    router.replace("/parent/dashboard");
+  }, [isFilled, router]);
+
+  /*
    * Initial response load + polling + Realtime.
    *
    * Realtime gives immediate feedback.
    * Polling provides a fallback if a realtime event is missed.
    */
   useEffect(() => {
-    if (!alertId || alertId === "null" || isExpired || !supabase) {
+    if (!alertId || alertId === "null" || isExpired || isFilled || !supabase) {
       return;
     }
 
@@ -292,7 +469,7 @@ function BroadcastRadarContent() {
 
       removeRealtimeChannel(supabase, channel);
     };
-  }, [alertId, isExpired, supabase]);
+  }, [alertId, isExpired, isFilled, supabase]);
 
   /*
    * Pause the Broadcast while keeping the current responses.
@@ -316,6 +493,7 @@ function BroadcastRadarContent() {
         throw error;
       }
 
+      setBroadcastMinimized(false);
       setIsPaused(true);
     } catch (error) {
       console.error("[broadcast radar] pause:", error);
@@ -342,7 +520,7 @@ function BroadcastRadarContent() {
       return;
     }
 
-    if (selectingSitterId) {
+    if (selectingSitterId || requestedSitterIds.includes(sitter.id)) {
       return;
     }
 
@@ -415,44 +593,17 @@ function BroadcastRadarContent() {
       }
 
       /*
-       * Only after the Booking was created successfully
-       * do we mark the Broadcast as filled.
-       *
-       * This prevents the Broadcast from disappearing
-       * if Booking creation fails.
+       * Parent selection only creates a pending booking.
+       * The broadcast stays active until the sitter approves
+       * (bookings.status = approved) or the parent stops the search.
        */
-      const { error: broadcastUpdateError } = await supabase
-        .from("broadcast_alerts")
-        .update({
-          status: "filled"
-        })
-        .eq("id", alertId);
-
-      if (broadcastUpdateError) {
-        console.warn(
-          "[broadcast radar] booking created but broadcast status update failed:",
-          broadcastUpdateError.message
-        );
-      }
-
-      /*
-       * IMPORTANT:
-       *
-       * Do NOT create a row in the old "chats" table here.
-       *
-       * The previous implementation was producing:
-       *
-       * /rest/v1/chats -> 404
-       *
-       * Chat creation will be connected separately to
-       * the current chat_rooms/chat_messages architecture.
-       */
-
-      alert(
-        `מזל טוב! סגרת משמרת מיידית מול ${sitter.name}. המשמרת תואמה בהצלחה.`
+      setRequestedSitterIds((previous) =>
+        previous.includes(sitter.id) ? previous : [...previous, sitter.id]
       );
 
-      router.push("/parent/dashboard");
+      alert(
+        `הבקשה נשלחה אל ${sitter.name}. החיפוש ממשיך עד שהנני תאשר את המשמרת.`
+      );
     } catch (error) {
       console.error(
         "❌ Error completing broadcast booking flow:",
@@ -470,6 +621,15 @@ function BroadcastRadarContent() {
     }
   };
 
+  const handleMinimize = () => {
+    setBroadcastMinimized(true);
+    router.push("/parent/dashboard");
+  };
+
+  const elapsedLabel = startedAt
+    ? formatBroadcastElapsed(startedAt, nowMs)
+    : null;
+
   const serviceLabel =
     type === "lactation"
       ? "יועצת הנקה"
@@ -478,6 +638,14 @@ function BroadcastRadarContent() {
         : type === "doula"
           ? "דולה"
           : "בייביסיטר";
+
+  if (isFilled) {
+    return (
+      <div className="py-12 text-center text-xs font-bold text-slate-400">
+        המשמרת אושרה. החיפוש הסתיים.
+      </div>
+    );
+  }
 
   return (
     <div
@@ -515,6 +683,17 @@ function BroadcastRadarContent() {
       ) : (
         <>
           <div className="relative space-y-3 overflow-hidden rounded-3xl border border-[#FF8A8A]/20 bg-gradient-to-br from-[#FFF5F5] to-[#FFF0F0] p-5 text-center shadow-sm">
+            {!isPaused ? (
+              <button
+                type="button"
+                onClick={handleMinimize}
+                className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-[#FF8A8A]/20 bg-white/90 text-slate-600 shadow-sm transition hover:bg-white active:scale-95"
+                aria-label="מזעור החיפוש"
+              >
+                <ChevronDown className="h-5 w-5" aria-hidden />
+              </button>
+            ) : null}
+
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#FF8A8A] text-white shadow-md">
               <Zap className="h-6 w-6 fill-white" />
             </div>
@@ -529,9 +708,15 @@ function BroadcastRadarContent() {
               <p className="text-xs font-medium text-slate-500">
                 {isPaused
                   ? "התוצאות נשמרו לפניך - בחר את המטפלת המועדפת"
-                  : `מחפשים עבורך ${serviceLabel} מעכשיו לעכשיו`}
+                  : `מחפשים נני · ${serviceLabel} מעכשיו לעכשיו`}
               </p>
             </div>
+
+            {!isPaused && elapsedLabel ? (
+              <p className="text-xs font-bold tabular-nums text-[#FF8A8A]">
+                ⏱ {elapsedLabel}
+              </p>
+            ) : null}
 
             {!isPaused ? (
               <div className="flex items-center justify-center gap-1.5 pt-1 text-sm font-bold text-[#FF8A8A]">
@@ -599,6 +784,7 @@ function BroadcastRadarContent() {
                 {responders.map((sitter) => {
                   const selecting =
                     selectingSitterId === sitter.id;
+                  const requested = requestedSitterIds.includes(sitter.id);
 
                   return (
                     <div
@@ -636,6 +822,7 @@ function BroadcastRadarContent() {
                         type="button"
                         disabled={
                           selecting ||
+                          requested ||
                           selectingSitterId !== null ||
                           sitter.hourlyRate == null
                         }
@@ -645,8 +832,10 @@ function BroadcastRadarContent() {
                         className="rounded-xl bg-navy-header px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#001F3F]/90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {selecting
-                          ? "סוגר..."
-                          : "בחירה וסגירה"}
+                          ? "שולח..."
+                          : requested
+                            ? "בקשה נשלחה"
+                            : "שליחת בקשה"}
                       </button>
                     </div>
                   );

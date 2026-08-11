@@ -4,6 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { MainLayout } from "@components/layout/MainLayout";
 import { Zap, MapPin } from "lucide-react";
+import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
+import {
+  broadcastRadarHref,
+  fetchActiveBroadcastForParent
+} from "@/lib/broadcast/parent-active-broadcast";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const ALL_ISRAELI_CITIES = [
@@ -31,6 +36,24 @@ export default function ParentBroadcastSetupPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const reuseActive = async () => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { broadcast } = await fetchActiveBroadcastForParent(supabase, user.id);
+      if (!broadcast || cancelled) return;
+      setBroadcastMinimized(false);
+      router.replace(broadcastRadarHref(broadcast));
+    };
+    void reuseActive();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   const handleStartBroadcast = async () => {
     setIsBroadcasting(true);
     try {
@@ -41,13 +64,24 @@ export default function ParentBroadcastSetupPage() {
       }
 
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push(`/parent/search/broadcast-radar?city=${encodeURIComponent(city)}&alertId=simulation-id`);
+        return;
+      }
+
+      const { broadcast: existing } = await fetchActiveBroadcastForParent(supabase, user.id);
+      if (existing) {
+        setBroadcastMinimized(false);
+        router.replace(broadcastRadarHref(existing));
+        return;
+      }
 
       // שימוש בטבלה האמיתית הקיימת broadcast_alerts
       const { data, error } = await supabase
         .from("broadcast_alerts")
         .insert([
           {
-            parent_id: user?.id,
+            parent_id: user.id,
             city: city,
             status: "active",
             service_type: "sitter"
@@ -62,6 +96,7 @@ export default function ParentBroadcastSetupPage() {
         return;
       }
 
+      setBroadcastMinimized(false);
       router.push(`/parent/search/broadcast-radar?city=${encodeURIComponent(city)}&alertId=${data.id}`);
     } catch (err) {
       console.error("Broadcast start error:", err);

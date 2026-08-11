@@ -71,6 +71,7 @@ import {
   subscribePostgresChanges
 } from "@/lib/supabase/subscribe-postgres-changes";
 import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
+import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
 import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, User, X } from "lucide-react";
 
 const BOOKING_LIVE_SELECT =
@@ -1664,7 +1665,7 @@ export function ParentDashboardClient({
   }, [statusCardKey]);
 
   return (
-    <main className="relative mx-auto max-w-md space-y-4 p-4 pb-32 overflow-y-auto min-h-screen" dir="rtl">
+    <main className="relative mx-auto max-w-md space-y-4 p-4 pb-[calc(8rem+var(--anynanny-now-dock,0px))] overflow-y-auto min-h-screen" dir="rtl">
       {onboardingPending ? (
         <div className="absolute inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
           <div className="w-full max-w-sm my-auto">
@@ -1971,6 +1972,7 @@ export function ParentDashboardClient({
                   type="button"
                   onClick={() => {
                     const supabase = getSupabaseBrowserClient();
+                    setBroadcastMinimized(false);
                     if (supabase) void supabase.auth.signOut().then(() => (window.location.href = "/login"));
                   }}
                   className="w-full flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50/30 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 shadow-2xs"
