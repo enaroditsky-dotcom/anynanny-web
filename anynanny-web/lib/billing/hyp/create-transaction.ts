@@ -356,10 +356,7 @@ function hypOrderFromBookingId(
     );
 
   return (
-    compact.slice(
-      0,
-      20
-    ) ||
+    compact ||
     `ord${Date.now()}`.slice(
       0,
       20
