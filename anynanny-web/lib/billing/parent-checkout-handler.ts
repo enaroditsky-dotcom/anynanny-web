@@ -183,7 +183,8 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
   let successUrl: string;
   let cancelUrl: string;
   try {
-    // Iframe-friendly return page breaks out to the parent dashboard on success/cancel.
+    // Identity-only query params — not proof of payment. Finalization still
+    // requires a verified HYP success (CCode) on the complete page / API.
     successUrl = resolveCheckoutRedirectUrl(
       request,
       body.successUrl,
@@ -200,6 +201,18 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
   }
 
   const shiftSessionId = body.shiftDetails?.sessionId?.trim();
+
+  const successReturn = new URL(successUrl);
+  successReturn.searchParams.set("bookingId", bookingId);
+  if (shiftSessionId) {
+    successReturn.searchParams.set("shiftSessionId", shiftSessionId);
+  }
+  successUrl = successReturn.toString();
+
+  const cancelReturn = new URL(cancelUrl);
+  cancelReturn.searchParams.set("bookingId", bookingId);
+  cancelUrl = cancelReturn.toString();
+
   const paymentMethodId = String(body.paymentMethodId ?? "").trim();
 
   // Charge a previously saved Hyp card (no hosted pay page).
