@@ -42,6 +42,10 @@ import { sitterCompleteSession } from "@/lib/session/sitter-complete-session";
 import { sitterMarkBookingEnded } from "@/lib/bookings/sitter-mark-booking-ended";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
 import { submitSessionRating } from "@/lib/ratings/submit-session-rating";
+import {
+  markSitterSessionRatedLocally,
+  sitterHasRatedSession
+} from "@/lib/ratings/sitter-session-rated";
 import { useSitterPendingBookingCount } from "@/lib/bookings/use-sitter-pending-booking-count";
 import { useSession } from "@/context/SessionContext";
 
@@ -373,6 +377,29 @@ export default function SitterDashboardPage() {
         completedShow = null;
       } else {
         completedShow = c;
+      }
+    }
+
+    // READ-ONLY suppress: never re-prompt after a ratings row exists for this sitter/session.
+    if (completedShow?.id) {
+      const alreadyRated = await sitterHasRatedSession(supabase, String(completedShow.id), uid);
+      if (alreadyRated) {
+        completedShow = null;
+      }
+    }
+
+    // Pair terminal session to today's settlement booking — do not resurface an old paid twin.
+    if (completedShow && gate) {
+      const sessionParent =
+        completedShow.parent_id != null ? String(completedShow.parent_id).trim() : "";
+      const gateParent = gate.parent_id != null ? String(gate.parent_id).trim() : "";
+      if (sessionParent && gateParent && sessionParent !== gateParent) {
+        completedShow = null;
+      } else {
+        const linkedBookingId = readSessionLinkedBookingId(completedShow);
+        if (linkedBookingId && gate.id && linkedBookingId !== String(gate.id)) {
+          completedShow = null;
+        }
       }
     }
 
@@ -719,6 +746,7 @@ export default function SitterDashboardPage() {
     setSitterClosureError(null);
     const result = await submitSessionRating(supabase, { sessionId: sid, role: SITTER_ROLE, rating });
     if (!result.ok) { setSitterClosureError(result.error); setSitterClosureBusy(false); return; }
+    markSitterSessionRatedLocally(sid);
     dismissCompletedSession(sid, "sitter");
     suppressCompletedSummaryIdRef.current = sid;
     applyCircleBooking(null);
