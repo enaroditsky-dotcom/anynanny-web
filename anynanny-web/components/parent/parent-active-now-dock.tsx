@@ -1,15 +1,11 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { ActiveNowBroadcastBar } from "@/components/parent/active-now-broadcast-bar";
-import {
-  isBroadcastMinimized,
-  setBroadcastMinimized,
-  subscribeBroadcastMinimized
-} from "@/lib/broadcast/broadcast-minimize-preference";
+import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
 import {
   broadcastRadarHref,
   countBroadcastResponses,
@@ -27,10 +23,10 @@ import {
 const DOCK_OFFSET = "5.75rem";
 
 /**
- * Persistent AnyNanny Now chrome for parent routes.
- * Active/searching state comes from broadcast_alerts, not React or storage.
- * The bar is portaled to document.body so route-transition transforms
- * and shell overflow cannot clip or trap position:fixed.
+ * Persistent AnyNanny Now chrome.
+ * Authoritative visibility: active broadcast_alerts row exists
+ * and the parent is not on the full radar or start screen.
+ * Does not auto-redirect dashboard → radar.
  */
 export function ParentActiveNowDock() {
   const pathname = usePathname();
@@ -38,11 +34,6 @@ export function ParentActiveNowDock() {
   const { user, isLoading } = useAuth();
   const parentId = user?.id ?? null;
   const supabase = getSupabaseBrowserClient();
-  const minimized = useSyncExternalStore(
-    subscribeBroadcastMinimized,
-    isBroadcastMinimized,
-    () => false
-  );
 
   const [broadcast, setBroadcast] = useState<ParentActiveBroadcast | null>(null);
   const [responseCount, setResponseCount] = useState(0);
@@ -50,10 +41,9 @@ export function ParentActiveNowDock() {
   const [ready, setReady] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
 
+  const onParentRoute = pathname.startsWith("/parent/");
   const onRadar = pathname.startsWith("/parent/search/broadcast-radar");
   const onStart = pathname === "/parent/broadcast" || pathname.startsWith("/parent/broadcast/");
-  const onDashboard =
-    pathname === "/parent/dashboard" || pathname.startsWith("/parent/dashboard/");
 
   useEffect(() => {
     setPortalReady(true);
@@ -61,7 +51,7 @@ export function ParentActiveNowDock() {
 
   useEffect(() => {
     if (isLoading) return;
-    if (!parentId || !supabase) {
+    if (!parentId || !supabase || !onParentRoute) {
       setBroadcast(null);
       setResponseCount(0);
       setReady(true);
@@ -153,7 +143,7 @@ export function ParentActiveNowDock() {
       removeRealtimeChannel(supabase, responseChannel);
       removeRealtimeChannel(supabase, bookingChannel);
     };
-  }, [isLoading, parentId, supabase]);
+  }, [isLoading, parentId, supabase, onParentRoute]);
 
   useEffect(() => {
     if (!broadcast) return;
@@ -163,23 +153,7 @@ export function ParentActiveNowDock() {
     return () => window.clearInterval(tick);
   }, [broadcast?.id]);
 
-  /*
-   * Login / refresh restore: open the full radar only when the parent
-   * is on the dashboard and has NOT explicitly minimized.
-   * Minimize sets the preference first, then navigates here — do not bounce back.
-   */
-  useEffect(() => {
-    if (!ready || !broadcast || !onDashboard || onRadar || minimized) return;
-    router.replace(broadcastRadarHref(broadcast));
-  }, [ready, broadcast, onDashboard, onRadar, minimized, router]);
-
-  const showBar = Boolean(
-    broadcast &&
-      ready &&
-      !onRadar &&
-      !onStart &&
-      (minimized || !onDashboard)
-  );
+  const showBar = Boolean(broadcast && ready && onParentRoute && !onRadar && !onStart);
 
   useEffect(() => {
     document.documentElement.style.setProperty(

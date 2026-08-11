@@ -8,6 +8,7 @@ import { AppShellHeader } from "@/components/app-shell-header";
 import { AppShellSessionHydration } from "@/components/app-shell-session-hydration";
 import { AppShellStableBoundary } from "@/components/app-shell-stable-boundary";
 import { BottomNav } from "@/components/bottom-nav";
+import { ParentActiveNowDock } from "@/components/parent/parent-active-now-dock";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
 import SessionProvider from "@/context/SessionContext";
 
@@ -77,6 +78,7 @@ const SHELL_BOTTOM_NAV_PADDING =
  * so wallet/chat/realtime effects do not remount unnecessarily.
  */
 const StableBottomNav = memo(BottomNav);
+const StableParentActiveNowDock = memo(ParentActiveNowDock);
 
 export function AppShellGate({
   children
@@ -177,6 +179,7 @@ export function AppShellGate({
             )}
           </div>
 
+          <StableParentActiveNowDock />
           <StableBottomNav />
         </div>
       </AppShellStableBoundary>
