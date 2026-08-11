@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { ActiveNowBroadcastBar } from "@/components/parent/active-now-broadcast-bar";
 import {
   isBroadcastMinimized,
-  setBroadcastMinimized
+  setBroadcastMinimized,
+  subscribeBroadcastMinimized
 } from "@/lib/broadcast/broadcast-minimize-preference";
 import {
   broadcastRadarHref,
@@ -22,9 +24,13 @@ import {
   subscribePostgresChanges
 } from "@/lib/supabase/subscribe-postgres-changes";
 
+const DOCK_OFFSET = "5.75rem";
+
 /**
  * Persistent AnyNanny Now chrome for parent routes.
  * Active/searching state comes from broadcast_alerts, not React or storage.
+ * The bar is portaled to document.body so route-transition transforms
+ * and shell overflow cannot clip or trap position:fixed.
  */
 export function ParentActiveNowDock() {
   const pathname = usePathname();
@@ -32,17 +38,26 @@ export function ParentActiveNowDock() {
   const { user, isLoading } = useAuth();
   const parentId = user?.id ?? null;
   const supabase = getSupabaseBrowserClient();
+  const minimized = useSyncExternalStore(
+    subscribeBroadcastMinimized,
+    isBroadcastMinimized,
+    () => false
+  );
 
   const [broadcast, setBroadcast] = useState<ParentActiveBroadcast | null>(null);
   const [responseCount, setResponseCount] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [ready, setReady] = useState(false);
-  const redirectingRef = useRef(false);
+  const [portalReady, setPortalReady] = useState(false);
 
   const onRadar = pathname.startsWith("/parent/search/broadcast-radar");
   const onStart = pathname === "/parent/broadcast" || pathname.startsWith("/parent/broadcast/");
   const onDashboard =
     pathname === "/parent/dashboard" || pathname.startsWith("/parent/dashboard/");
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   useEffect(() => {
     if (isLoading) return;
@@ -148,37 +163,39 @@ export function ParentActiveNowDock() {
     return () => window.clearInterval(tick);
   }, [broadcast?.id]);
 
+  /*
+   * Login / refresh restore: open the full radar only when the parent
+   * is on the dashboard and has NOT explicitly minimized.
+   * Minimize sets the preference first, then navigates here — do not bounce back.
+   */
   useEffect(() => {
-    if (!ready || !broadcast || !onDashboard || onRadar) return;
-    if (isBroadcastMinimized()) return;
-    if (redirectingRef.current) return;
-    redirectingRef.current = true;
+    if (!ready || !broadcast || !onDashboard || onRadar || minimized) return;
     router.replace(broadcastRadarHref(broadcast));
-  }, [ready, broadcast, onDashboard, onRadar, router]);
+  }, [ready, broadcast, onDashboard, onRadar, minimized, router]);
 
-  useEffect(() => {
-    redirectingRef.current = false;
-  }, [pathname]);
-
-  const showBar = Boolean(broadcast) && ready && !onRadar && !onStart && (
-    isBroadcastMinimized() || !onDashboard
+  const showBar = Boolean(
+    broadcast &&
+      ready &&
+      !onRadar &&
+      !onStart &&
+      (minimized || !onDashboard)
   );
 
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--anynanny-now-dock",
-      showBar ? "5.75rem" : "0px"
+      showBar ? DOCK_OFFSET : "0px"
     );
     return () => {
       document.documentElement.style.setProperty("--anynanny-now-dock", "0px");
     };
   }, [showBar]);
 
-  if (!showBar || !broadcast) {
+  if (!showBar || !broadcast || !portalReady || typeof document === "undefined") {
     return null;
   }
 
-  return (
+  return createPortal(
     <ActiveNowBroadcastBar
       broadcast={broadcast}
       responseCount={responseCount}
@@ -187,6 +204,7 @@ export function ParentActiveNowDock() {
         setBroadcastMinimized(false);
         router.push(broadcastRadarHref(broadcast));
       }}
-    />
+    />,
+    document.body
   );
 }

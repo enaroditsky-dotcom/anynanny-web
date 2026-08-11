@@ -623,7 +623,7 @@ function BroadcastRadarContent() {
 
   const handleMinimize = () => {
     setBroadcastMinimized(true);
-    router.push("/parent/dashboard");
+    router.replace("/parent/dashboard");
   };
 
   const elapsedLabel = startedAt
