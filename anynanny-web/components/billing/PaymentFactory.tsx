@@ -1,6 +1,7 @@
 "use client";
 
-import { CreditCard, Loader2, Smartphone, Wallet } from "lucide-react";
+import Image from "next/image";
+import { CreditCard, Loader2 } from "lucide-react";
 import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-method";
 import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
 import { formatElapsed } from "@/lib/session/protocol";
@@ -9,16 +10,34 @@ const PAYMENT_OPTIONS: {
   id: CheckoutPaymentMethod;
   label: string;
   hint: string;
-  icon: typeof CreditCard;
+  logoSrc: string;
+  logoAlt: string;
+  logoShape: "circle" | "rounded";
 }[] = [
   {
     id: "credit_card",
     label: "כרטיס אשראי חדש",
     hint: "Visa · Mastercard · Isracard · Amex (+ Apple Pay / Google Pay אם זמין ב-HYP)",
-    icon: CreditCard
+    logoSrc: "/wallet/anny-avatar.png",
+    logoAlt: "AnyNanny",
+    logoShape: "circle"
   },
-  { id: "bit", label: "Bit", hint: "נפתח ישירות למסך Bit ב־HYP", icon: Smartphone },
-  { id: "paybox", label: "PayBox", hint: "נפתח ישירות למסך PayBox ב־HYP", icon: Wallet }
+  {
+    id: "bit",
+    label: "Bit",
+    hint: "נפתח ישירות למסך Bit ב־HYP",
+    logoSrc: "/wallet/bit-logo.png",
+    logoAlt: "Bit",
+    logoShape: "rounded"
+  },
+  {
+    id: "paybox",
+    label: "PayBox",
+    hint: "נפתח ישירות למסך PayBox ב־HYP",
+    logoSrc: "/wallet/paybox-logo.png",
+    logoAlt: "PayBox",
+    logoShape: "rounded"
+  }
 ];
 
 export type PaymentFactoryProps = {
@@ -44,7 +63,7 @@ export function PaymentFactory({
   elapsedSeconds,
   sitterBaseNis,
   parentTotalNis,
-  platformFeeNis,
+  platformFeeNis: _platformFeeNis,
   selectedMethod,
   onSelectMethod,
   savedMethods = [],
@@ -75,7 +94,6 @@ export function PaymentFactory({
             </p>
             <div className="space-y-0.5 text-[11px] font-medium leading-relaxed text-white/75 sm:text-xs">
               <p>בסיס ₪{sitterBaseNis.toFixed(2)}</p>
-              <p>עמלת פלטפורמה (10%): ₪{platformFeeNis.toFixed(2)}</p>
             </div>
           </div>
 
@@ -130,7 +148,7 @@ export function PaymentFactory({
             ) : null}
 
             <div className="grid grid-cols-1 gap-2.5">
-              {PAYMENT_OPTIONS.map(({ id, label, hint, icon: Icon }) => {
+              {PAYMENT_OPTIONS.map(({ id, label, hint, logoSrc, logoAlt, logoShape }) => {
                 const selected = !usingSavedCard && selectedMethod === id;
                 return (
                   <button
@@ -147,8 +165,18 @@ export function PaymentFactory({
                         : "border-white/15 bg-white/5 text-white/90 hover:border-white/30 hover:bg-white/10"
                     } disabled:cursor-not-allowed disabled:opacity-45`}
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                      <Icon className="h-5 w-5" aria-hidden />
+                    <span
+                      className={`relative h-10 w-10 shrink-0 overflow-hidden bg-white ${
+                        logoShape === "circle" ? "rounded-full" : "rounded-xl"
+                      }`}
+                    >
+                      <Image
+                        src={logoSrc}
+                        alt={logoAlt}
+                        fill
+                        className="object-cover"
+                        sizes="40px"
+                      />
                     </span>
                     <span className="min-w-0 flex-1 space-y-0.5 text-right">
                       <span className="block text-[15px] leading-tight">{label}</span>
