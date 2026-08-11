@@ -71,7 +71,7 @@ import {
   subscribePostgresChanges
 } from "@/lib/supabase/subscribe-postgres-changes";
 import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
-import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, X } from "lucide-react";
+import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, User, X } from "lucide-react";
 
 const BOOKING_LIVE_SELECT =
   "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, hourly_rate_nis, created_at, updated_at";
@@ -376,18 +376,23 @@ function preferStrongerSession(
 
 export function ParentDashboardClient({
   initialPreferences,
-  initialActiveBooking
+  initialActiveBooking,
+  initialAvatarUrl = null
 }: {
   initialProfiles?: any[];
   initialPreferences: ParentPreferences & { parentSerial?: string };
   initialBusySlots?: ParentBusySlot[];
   initialActiveBooking?: BookingRow | null;
+  initialAvatarUrl?: string | null;
 }) {
   const { nowMs } = useSession();
   const { executePayment, busy: paymentBusy, error: paymentError, clearError: clearPaymentError } =
     usePaymentExecutor();
   const [prefs, setPrefs] = useState(initialPreferences);
   const [parentSerial, setParentSerial] = useState<string>(initialPreferences.parentSerial || "");
+  const [parentAvatarUrl, setParentAvatarUrl] = useState<string | null>(
+    initialAvatarUrl?.trim() || null
+  );
   const [statusCardCollapsed, setStatusCardCollapsed] = useState(false);
   const [dismissedStatusKey, setDismissedStatusKey] = useState<string | null>(null);
   const [dismissedScheduledBookingIds, setDismissedScheduledBookingIds] = useState<Set<string>>(
@@ -462,15 +467,19 @@ export function ParentDashboardClient({
     async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("first_name, last_name")
+        .select("first_name, last_name, avatar_url")
         .eq("id", uid)
         .maybeSingle();
 
-      if (!error && data?.first_name) {
-        setPrefs((prev) => ({
-          ...prev,
-          parentName: `${data.first_name} ${data.last_name || ""}`.trim()
-        }));
+      if (!error && data) {
+        if (data.first_name) {
+          setPrefs((prev) => ({
+            ...prev,
+            parentName: `${data.first_name} ${data.last_name || ""}`.trim()
+          }));
+        }
+        const avatar = typeof data.avatar_url === "string" ? data.avatar_url.trim() : "";
+        setParentAvatarUrl(avatar || null);
       }
 
       const { publicId } = await fetchProfilePublicId(supabase, uid, "parent");
@@ -1668,7 +1677,22 @@ export function ParentDashboardClient({
         <div className="mx-auto max-w-sm rounded-3xl bg-white p-5 shadow-sm border border-slate-200/80 space-y-4">
           <div className="rounded-2xl bg-slate-50/70 p-4 border border-slate-100 space-y-3">
             <div className="flex items-center justify-between">
-              <h1 className="text-lg font-bold text-slate-900">שלום, {firstName}!</h1>
+              <div className="flex items-center gap-3">
+                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
+                  {parentAvatarUrl ? (
+                    <img
+                      src={parentAvatarUrl}
+                      alt="תמונת פרופיל"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-slate-400">
+                      <User className="h-6 w-6" />
+                    </div>
+                  )}
+                </div>
+                <h1 className="text-lg font-bold text-slate-900">שלום, {firstName}!</h1>
+              </div>
               <span
                 className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[11px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200"
                 dir="ltr"

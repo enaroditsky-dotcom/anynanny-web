@@ -9,6 +9,7 @@ export type ProfileRow = {
   first_name: string | null;
   last_name: string | null;
   role: ProfileRole;
+  avatar_url?: string | null;
   balance: number;
   /** Unified public identifier (e.g. AN_1001 / P_1001). */
   public_id?: string | null;
