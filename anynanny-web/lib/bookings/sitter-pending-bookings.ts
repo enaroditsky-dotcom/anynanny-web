@@ -5,6 +5,7 @@ import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 export type PendingBookingView = BookingRow & {
   parent_full_name: string | null;
+  rejection_note?: string | null;
 };
 
 export function formatBookingSchedule(booking: Pick<PendingBookingView, "booking_date" | "start_time" | "end_time">): string {
@@ -30,7 +31,7 @@ export async function fetchPendingBookingsForSitter(
 ): Promise<{ bookings: PendingBookingView[]; error: string | null }> {
   const { data: rows, error } = await supabase
     .from(BOOKINGS_TABLE)
-    .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status, created_at, updated_at")
+    .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status, rejection_note, created_at, updated_at")
     .eq("sitter_id", sitterId)
     .eq("status", "pending")
     .order("created_at", { ascending: false });
@@ -79,13 +80,22 @@ export async function updateBookingStatus(
   bookingId: string,
   status: Extract<BookingStatus, "approved" | "rejected">
 ): Promise<{ row: BookingRow | null; error: string | null }> {
+  const patch = {
+    status,
+    rejection_note:
+      status === "rejected"
+        ? "היי, תודה על הפנייה. לצערי לא אוכל לקבל את הבקשה הפעם. מקווה שנוכל להסתדר בפעם אחרת."
+        : null,
+    updated_at: new Date().toISOString()
+  };
+
   const { data, error } = await supabase
     .from(BOOKINGS_TABLE)
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq("id", bookingId)
     .eq("sitter_id", sitterId)
     .eq("status", "pending")
-    .select(BOOKING_SELECT_MINIMAL)
+    .select(`${BOOKING_SELECT_MINIMAL}, rejection_note`)
     .maybeSingle();
 
   if (error) {

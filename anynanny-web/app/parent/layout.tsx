@@ -5,7 +5,7 @@ import { SessionRoleBoundary } from "@/context/SessionContext";
 export default function ParentLayout({ children }: { children: ReactNode }) {
   return (
     <SessionRoleBoundary role="parent">
-       {children}
+      {children}
     </SessionRoleBoundary>
   );
 }

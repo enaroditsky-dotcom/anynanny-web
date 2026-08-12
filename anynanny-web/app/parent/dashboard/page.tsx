@@ -41,6 +41,7 @@ export default async function ParentDashboardPage() {
         }}
         initialBusySlots={[]}
         initialActiveBooking={null}
+        initialAvatarUrl={null}
       />
     );
   }
@@ -69,10 +70,12 @@ export default async function ParentDashboardPage() {
 
   let activeBooking: BookingRow | null = null;
   let initialProfiles: NannyProfile[] = [];
+  let initialAvatarUrl: string | null = null;
 
   if (parentId) {
     // Prefer lean selects first to avoid 400 spam when optional columns are absent.
     const profileSelectAttempts = [
+      "first_name, last_name, address, avatar_url",
       "first_name, last_name, address",
       "first_name, last_name",
       "first_name, last_name, address, parent_serial",
@@ -91,6 +94,7 @@ export default async function ParentDashboardPage() {
           isPostgrestMissingColumnError(error.message, "parent_serial") ||
           isPostgrestMissingColumnError(error.message, "parent_public_id") ||
           isPostgrestMissingColumnError(error.message, "address") ||
+          isPostgrestMissingColumnError(error.message, "avatar_url") ||
           isPostgrestSchemaDriftError(error.message)
         ) {
           continue;
@@ -110,6 +114,8 @@ export default async function ParentDashboardPage() {
           initialPreferences.locationLabel =
             String((address as { city?: string }).city || "").trim() || "ישראל";
         }
+        const avatar = typeof row.avatar_url === "string" ? row.avatar_url.trim() : "";
+        if (avatar) initialAvatarUrl = avatar;
       }
       break;
     }
@@ -204,6 +210,7 @@ export default async function ParentDashboardPage() {
       initialPreferences={initialPreferences}
       initialBusySlots={initialBusySlots}
       initialActiveBooking={activeBooking}
+      initialAvatarUrl={initialAvatarUrl}
     />
   );
 }

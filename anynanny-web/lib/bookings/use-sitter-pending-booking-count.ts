@@ -19,6 +19,9 @@ export function useSitterPendingBookingCount(sitterId: string | null, enabled = 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
 
+    // הוספת השהיה קטנה למניעת מצב שבו השאילתא רצה לפני שהשרת סיים לעדכן את הסטטוס
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
     const { bookings } = await fetchPendingBookingsForSitter(supabase, sitterId);
     setCount(bookings.length);
   }, [sitterId, enabled]);

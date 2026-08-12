@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { ArrowRight, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { fetchBookingChatInboxForRole, type BookingChatInboxRow } from "@/lib/chat/booking-messages";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
@@ -62,15 +63,11 @@ function BookingChatInbox({
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <Link
-          href={dashboardHref}
-          className="inline-flex items-center gap-1 rounded-full border border-navy-header/20 bg-white px-3 py-1.5 text-xs font-semibold text-navy-header shadow-sm transition hover:bg-brand-cream"
-        >
-          <ArrowRight className="h-4 w-4" />
-          חזרה לדשבורד
-        </Link>
-        <h1 className="text-lg font-bold text-navy-header">הודעות</h1>
+      <div className="space-y-2">
+        <PageBackRow>
+          <PageBackLink href={dashboardHref} />
+        </PageBackRow>
+        <h1 className="text-right text-lg font-bold text-navy-header">הודעות</h1>
       </div>
 
       {loadingInbox ? (

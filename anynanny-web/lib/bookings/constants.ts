@@ -16,7 +16,10 @@ export const SITTER_FORCE_END_ADMIN_NOTE =
 export const SITTER_FORCE_END_SUCCESS_MESSAGE =
   "המשמרת נסגרה ודווחה לבדיקה. האפליקציה שוחררה" as const;
 
-export type BookingPaymentStatus = "unpaid" | "pending_checkout" | "paid";
+export type BookingPaymentStatus =
+  | "unpaid"
+  | "pending_checkout"
+  | "paid";
 
 export type BookingRow = {
   id: string;
@@ -26,14 +29,25 @@ export type BookingRow = {
   start_time: string;
   end_time: string;
   status: BookingStatus;
+
+  /** Snapshot of sitter rate at booking time — canonical for live + settlement. */
+  hourly_rate_nis?: number | null;
+
   actual_start_time?: string | null;
   actual_end_time?: string | null;
+
   requires_admin_review?: boolean;
   admin_notes?: string | null;
+
   payment_status?: BookingPaymentStatus;
   paid_at?: string | null;
   stripe_checkout_session_id?: string | null;
+
   parent_notified_at?: string | null;
+
+  // הודעת דחייה אוטומטית מהנני
+  rejection_note?: string | null;
+
   created_at: string;
   updated_at: string;
 };

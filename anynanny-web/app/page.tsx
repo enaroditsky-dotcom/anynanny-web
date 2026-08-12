@@ -1,15 +1,18 @@
 ﻿"use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, Users } from "lucide-react";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 
 type LandingPath = "parent" | "sitter";
 
 function PathIcon({ path }: { path: LandingPath }) {
-  if (path === "parent") return <Users className="h-6 w-6 stroke-[1.75]" aria-hidden />;
-  return <Baby className="h-6 w-6 stroke-[1.75]" aria-hidden />;
+  if (path === "parent") {
+    return <Users className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />;
+  }
+
+  return <Baby className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />;
 }
 
 const PATHS: Array<{
@@ -23,15 +26,19 @@ const PATHS: Array<{
     id: "parent",
     title: "הורים",
     subtitle: "חיפוש בייביסיטר",
-    accent: "border-[#FF8A8A]/35 bg-[#FF8A8A]/10 text-[#C45C5C]",
-    iconWrap: "bg-[#FF8A8A]/15 text-[#FF8A8A] ring-[#FF8A8A]/25"
+    accent:
+      "border-[#FF8A8A]/35 bg-[#FF8A8A]/10 text-[#C45C5C]",
+    iconWrap:
+      "bg-[#FF8A8A]/15 text-[#FF8A8A] ring-[#FF8A8A]/25"
   },
   {
     id: "sitter",
     title: "בייביסיטר",
     subtitle: "קבלת משמרות ועבודה",
-    accent: "border-navy-header/20 bg-[#001F3F]/5 text-navy-header",
-    iconWrap: "bg-[#001F3F]/10 text-navy-header ring-navy-header/15"
+    accent:
+      "border-navy-header/20 bg-[#001F3F]/5 text-navy-header",
+    iconWrap:
+      "bg-[#001F3F]/10 text-navy-header ring-navy-header/15"
   }
 ];
 
@@ -41,23 +48,29 @@ function HomeInner() {
   const isManual = searchParams.get("manual") === "true";
 
   useEffect(() => {
-    // בדיקת שגיאות גם ב-Query (סימן שאלה) וגם ב-Hash (סימן סולם של Supabase)
+    // בדיקת שגיאות גם ב-Query וגם ב-Hash של Supabase
     const hash = window.location.hash;
     const search = window.location.search;
-    
-    if (hash.includes('error') || search.includes('error')) {
-      const queryString = search ? search : `?${hash.replace('#', '')}`;
+
+    if (hash.includes("error") || search.includes("error")) {
+      const queryString = search
+        ? search
+        : `?${hash.replace("#", "")}`;
+
       router.replace(`/auth/verified${queryString}`);
       return;
     }
 
     if (isManual) return;
+
     try {
       const activeRole = localStorage.getItem("active_role");
+
       if (activeRole === "parent") {
         router.replace("/parent/dashboard");
         return;
       }
+
       if (activeRole === "sitter") {
         router.replace("/sitter/dashboard");
       }
@@ -66,88 +79,124 @@ function HomeInner() {
     }
   }, [isManual, router, searchParams]);
 
-  const navigateWithPath = (action: "login" | "register", path: LandingPath) => {
+  const navigateWithPath = (
+    action: "login" | "register",
+    path: LandingPath
+  ) => {
     const profileRole = path === "parent" ? "parent" : "sitter";
+
     setUserRoleChoice(profileRole);
+
     try {
-      localStorage.setItem("anynanny_service_track", path === "sitter" ? "babysitter" : "parent");
+      localStorage.setItem(
+        "anynanny_service_track",
+        path === "sitter" ? "babysitter" : "parent"
+      );
     } catch {
       /* ignore */
     }
-    const qs = new URLSearchParams({ role: profileRole, track: "babysitter" });
+
+    const qs = new URLSearchParams({
+      role: profileRole,
+      track: "babysitter"
+    });
+
     router.push(`/${action}?${qs.toString()}`);
   };
 
   return (
     <main
-      className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden overscroll-none"
+      className="min-h-[100dvh] w-full overflow-y-auto bg-[#FDFBF6] px-4 py-3 sm:py-5"
       dir="rtl"
-      suppressHydrationWarning
     >
-      <div className="mx-auto flex h-full w-full max-w-md flex-col items-center justify-between gap-2 px-3 py-2.5 text-center sm:justify-center sm:gap-4 sm:py-5">
-        <header className="flex shrink-0 flex-col items-center gap-0.5 sm:gap-1.5">
-          <h1 className="text-3xl font-black tracking-tight text-navy-header sm:text-5xl">AnyNanny</h1>
-          <p className="text-xs font-medium text-slate-600 sm:text-base">למצוא זמן לחיים</p>
-        </header>
+      <div className="mx-auto flex min-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col items-center justify-center gap-3 sm:min-h-[calc(100dvh-2.5rem)] sm:gap-4">
+        {/* Brand */}
+        <div className="shrink-0 text-center">
+          <h1 className="text-3xl font-extrabold tracking-tight text-navy-header sm:text-4xl">
+            AnyNanny
+          </h1>
 
+          <p className="mt-0.5 text-xs font-medium text-slate-500 sm:text-sm">
+            למצוא זמן לחיים
+          </p>
+        </div>
+
+        {/* Anny */}
         <div className="flex shrink-0 justify-center">
-          <div className="relative flex h-[min(28vh,200px)] w-[min(28vh,200px)] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-navy-header/20 bg-white shadow-md sm:h-[240px] sm:w-[240px]">
+          <div className="relative flex h-[clamp(120px,20dvh,170px)] w-[clamp(120px,20dvh,170px)] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-navy-header/20 bg-white shadow-md sm:h-[180px] sm:w-[180px]">
             <img
               src="/anynanny-clean-transparent.png.jpg"
-              alt="לוגו AnyNanny"
-              className="h-full w-full object-contain p-2 sm:p-3"
+              alt="AnyNanny"
+              className="h-full w-full object-contain p-2"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = "/anynanny_clean.jpg";
+                (e.target as HTMLImageElement).src =
+                  "/anynanny_clean.jpg";
               }}
             />
           </div>
         </div>
 
-        <section className="w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:rounded-3xl sm:p-5">
-          <h2 className="text-xl font-extrabold tracking-tight text-navy-header sm:text-3xl">כניסה</h2>
-          <div className="mt-2.5 grid grid-cols-2 gap-2 sm:mt-4">
+        {/* Login */}
+        <section className="w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:p-4">
+          <h2 className="text-center text-xl font-extrabold tracking-tight text-navy-header sm:text-2xl">
+            כניסה
+          </h2>
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {PATHS.map((path) => (
               <button
                 key={`login-${path.id}`}
                 type="button"
-                onClick={() => navigateWithPath("login", path.id)}
-                className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-center transition hover:brightness-[0.99] active:scale-[0.98] sm:gap-2 sm:rounded-2xl sm:px-3 sm:py-4 ${path.accent}`}
+                onClick={() =>
+                  navigateWithPath("login", path.id)
+                }
+                className={`flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition hover:brightness-[0.99] active:scale-[0.98] sm:min-h-[92px] sm:rounded-2xl ${path.accent}`}
               >
                 <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-10 sm:w-10 sm:rounded-xl ${path.iconWrap}`}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-10 sm:w-10 ${path.iconWrap}`}
                 >
                   <PathIcon path={path.id} />
                 </span>
-                <span className="min-w-0">
-                  <span className="block text-xs font-bold leading-tight sm:text-sm">
-                    כניסת {path.title}
-                  </span>
+
+                <span className="block text-sm font-bold leading-tight sm:text-[15px]">
+                  כניסת {path.title}
                 </span>
               </button>
             ))}
           </div>
         </section>
 
-        <section className="w-full shrink-0 rounded-2xl border border-dashed border-slate-300/90 bg-[#FDFBF6]/90 p-3 shadow-sm sm:rounded-3xl sm:p-5">
-          <h2 className="text-sm font-extrabold text-navy-header">הרשמה</h2>
-          <p className="mt-0.5 text-[10px] leading-snug text-slate-500 sm:text-[11px]">
+        {/* Register */}
+        <section className="w-full shrink-0 px-1 pt-1 sm:px-1.5 sm:pt-1.5">
+          <h2 className="text-center text-sm font-extrabold text-navy-header">
+            הרשמה
+          </h2>
+
+          <p className="mt-0.5 text-center text-[10px] leading-snug text-slate-500 sm:text-[11px]">
             עדיין אין לכם חשבון? צרו את החשבון המתאים לכם
           </p>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3">
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {PATHS.map((path) => (
               <button
                 key={`register-${path.id}`}
                 type="button"
-                onClick={() => navigateWithPath("register", path.id)}
-                className={`flex flex-col items-center gap-1 rounded-xl border bg-white px-2 py-3 text-center shadow-sm transition hover:bg-slate-50 active:scale-[0.98] sm:gap-2 sm:rounded-2xl sm:px-3 sm:py-4 ${path.accent}`}
+                onClick={() =>
+                  navigateWithPath("register", path.id)
+                }
+                className={`flex min-h-[70px] flex-col items-center justify-center gap-1 rounded-xl border bg-white px-2 py-2.5 text-center shadow-sm transition hover:bg-slate-50 active:scale-[0.98] sm:min-h-[78px] sm:rounded-2xl ${path.accent}`}
               >
                 <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg ring-1 sm:h-10 sm:w-10 sm:rounded-xl ${path.iconWrap}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg ring-1 sm:h-9 sm:w-9 ${path.iconWrap}`}
                 >
                   <PathIcon path={path.id} />
                 </span>
-                <span className="min-w-0 space-y-0.5">
-                  <span className="block text-xs font-bold leading-tight sm:text-sm">{path.title}</span>
+
+                <span className="min-w-0">
+                  <span className="block text-xs font-bold leading-tight sm:text-sm">
+                    {path.title}
+                  </span>
+
                   <span className="block text-[10px] font-medium leading-snug opacity-75 sm:text-xs">
                     הרשמה
                   </span>
@@ -157,7 +206,7 @@ function HomeInner() {
           </div>
         </section>
 
-        <p className="max-w-sm shrink-0 text-pretty text-[10px] leading-snug text-slate-500 sm:text-sm">
+        <p className="max-w-sm shrink-0 text-center text-[10px] leading-snug text-slate-500 sm:text-xs">
           הורים ובייביסיטריות — כל הקהילה במקום אחד.
         </p>
       </div>
@@ -167,7 +216,16 @@ function HomeInner() {
 
 export default function HomePage() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center">טוען...</div>}>
+    <Suspense
+      fallback={
+        <main
+          className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF6]"
+          dir="rtl"
+        >
+          <p className="text-sm text-slate-500">טוען...</p>
+        </main>
+      }
+    >
       <HomeInner />
     </Suspense>
   );

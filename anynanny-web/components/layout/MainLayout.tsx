@@ -32,7 +32,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
 
       {/* Bottom padding clears fixed BottomNav + elevated AnyNanny Now FAB */}
       <main
-        className={`px-4 py-3 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] ${mainClassName ?? ""}`.trim()}
+        className={`px-4 py-3 pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))] ${mainClassName ?? ""}`.trim()}
       >
         {children}
       </main>

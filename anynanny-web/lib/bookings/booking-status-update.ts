@@ -3,7 +3,7 @@ import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/booki
 
 /** Columns present on the base `bookings` table (no optional migration columns). */
 export const BOOKING_SELECT_MINIMAL =
-  "id, parent_id, sitter_id, booking_date, start_time, end_time, status, created_at, updated_at" as const;
+  "id, parent_id, sitter_id, booking_date, start_time, end_time, status, hourly_rate_nis, created_at, updated_at" as const;
 
 const COMPLETED_BOOKING_STATUS: BookingStatus = "completed";
 

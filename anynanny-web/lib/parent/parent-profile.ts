@@ -28,6 +28,7 @@ export type ParentProfileData = {
   last_name: string;
   birth_date: string;
   phone: string;
+  avatar_url: string;
   address: ParentAddress;
   spouse: ParentSpouse | null;
   wedding_date: string;
@@ -36,10 +37,11 @@ export type ParentProfileData = {
 };
 
 export const PARENT_PROFILE_SELECT =
-  "id, first_name, last_name, birth_date, phone, address, spouse, wedding_date, children, special_events" as const;
+  "id, first_name, last_name, birth_date, phone, avatar_url, address, spouse, wedding_date, children, special_events" as const;
 
 export const PARENT_PROFILE_SELECT_FALLBACKS = [
   PARENT_PROFILE_SELECT,
+  "id, first_name, last_name, birth_date, phone, address, spouse, wedding_date, children, special_events",
   "id, first_name, last_name, birth_date, address, spouse, wedding_date, children, special_events",
   "id, first_name, last_name, birth_date, address, children",
   "id, first_name, last_name, birth_date, address",
@@ -129,6 +131,7 @@ export function parseParentProfileRow(raw: unknown, userId: string): ParentProfi
     last_name: asString(row.last_name),
     birth_date: asString(row.birth_date).slice(0, 10),
     phone: asString(row.phone ?? row.phone_number),
+    avatar_url: asString(row.avatar_url),
     address: parseParentAddress(row.address),
     spouse: parseParentSpouse(row.spouse),
     wedding_date: asString(row.wedding_date).slice(0, 10),

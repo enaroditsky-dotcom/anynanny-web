@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageCircle, UserRound, Settings, Zap } from "lucide-react";
+import { Home, MessageCircle, UserRound, Settings, Zap } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useWalletNotification } from "@/features/wallet/hooks/useWalletNotification";
 import { useChatNotification } from "@/features/chat/hooks/useChatNotification";
@@ -12,16 +12,16 @@ type NavItem = {
   href: string;
   label: string;
   match: (path: string) => boolean;
-  Icon: typeof LayoutDashboard;
+  Icon: typeof Home;
   badgeKey?: "messages" | "wallet" | "pending";
 };
 
 const parentSideItems: NavItem[] = [
   {
     href: "/parent/dashboard",
-    label: "דשבורד",
+    label: "בית",
     match: (p) => p === "/parent/dashboard",
-    Icon: LayoutDashboard
+    Icon: Home
   },
   {
     href: "/parent/messages",
@@ -48,9 +48,9 @@ const parentSideItems: NavItem[] = [
 const sitterItems: NavItem[] = [
   {
     href: "/sitter/dashboard",
-    label: "דשבורד",
+    label: "בית",
     match: (p) => p === "/sitter/dashboard",
-    Icon: LayoutDashboard,
+    Icon: Home,
     badgeKey: "pending"
   },
   {
@@ -105,7 +105,7 @@ function NavLink({
         if (badgeKey === "wallet") clearWalletNotification();
         if (badgeKey === "messages") clearChatNotification();
       }}
-      className={`flex min-w-0 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 py-1 text-[10px] font-semibold leading-tight transition ${
+      className={`flex min-w-0 w-full flex-col items-center justify-center gap-1.5 rounded-xl px-1 py-1.5 text-[12px] font-semibold leading-tight transition ${
         active ? "text-emerald-700" : "text-navy-header/70 hover:bg-slate-50 hover:text-navy-header"
       }`}
       aria-label={
@@ -119,7 +119,7 @@ function NavLink({
       }
     >
       <div className="relative">
-        <Icon className={`h-5 w-5 shrink-0 ${active ? "stroke-[2.25]" : "stroke-[1.85]"}`} aria-hidden />
+        <Icon className={`h-[26px] w-[26px] shrink-0 ${active ? "stroke-[2.25]" : "stroke-[1.85]"}`} aria-hidden />
         {showPendingBadge ? (
           <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white">
             {pendingBookingCount > 9 ? "9+" : pendingBookingCount}
@@ -128,7 +128,7 @@ function NavLink({
           <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
         ) : null}
       </div>
-      <span className="max-w-[4.75rem] truncate text-center">{label}</span>
+      <span className="max-w-[5.25rem] truncate text-center">{label}</span>
     </Link>
   );
 }

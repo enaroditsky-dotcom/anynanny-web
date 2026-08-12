@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
+import { PageBackButton, PageBackRow } from "@/components/navigation/page-back-link";
 import { navigateAfterAuth } from "@/lib/auth/redirect-after-sign-in";
 import {
   readLastUsedEmail,
@@ -133,12 +134,11 @@ function LoginInner() {
 
   return (
     <main className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4 py-2" dir="rtl" suppressHydrationWarning>
-      <button 
-        onClick={() => router.back()} 
-        className="w-full max-w-md mt-4 pr-6 text-right text-sm text-stone-500 hover:text-stone-900"
-      >
-        ← חזרה
-      </button>
+      <div className="w-full max-w-md px-4 pt-4">
+        <PageBackRow>
+          <PageBackButton onClick={() => router.back()} />
+        </PageBackRow>
+      </div>
 
       <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft" suppressHydrationWarning>
         <h1 className="text-center text-2xl font-bold text-navy-header">{loginHeadline}</h1>

@@ -171,6 +171,20 @@ const PARENT_ARRIVAL_ACTIVATE_PAYLOADS = (startIso: string): Record<string, unkn
   }
 ];
 
+function isMissingBookingIdColumn(error: string | null): boolean {
+  return isPostgrestMissingColumnError(error, "booking_id");
+}
+
+/** Merge booking_id when the column exists; callers retry without it on schema drift. */
+function withBookingId(
+  payload: Record<string, unknown>,
+  bookingId: string,
+  persist: boolean
+): Record<string, unknown> {
+  if (!persist || !bookingId) return payload;
+  return { ...payload, booking_id: bookingId };
+}
+
 /** Parent confirmed sitter arrival — activate session row (insert or update) with safe fallbacks. */
 export async function activateParentConfirmedSession(
   supabase: SupabaseClient,
@@ -181,17 +195,64 @@ export async function activateParentConfirmedSession(
     startIso: string;
   }
 ): Promise<{ row: SupabaseSessionRow | null; error: string | null }> {
+  const bookingId = params.bookingId.trim();
   const { row: existing } = await fetchSessionForBooking(supabase, {
     parentId: params.parentId,
-    bookingId: params.bookingId,
+    bookingId,
     statuses: ["pending", "active"],
     orderBy: "created_at",
     ascending: false
   });
 
-  let lastError: string | null = null;
+  // Finished bookings must never spawn a second session row (common twin-shift source).
+  if (!existing?.id) {
+    const bookingRead = safeSupabaseRead(
+      await supabase
+        .from(BOOKINGS_TABLE)
+        .select("id, status")
+        .eq("id", bookingId)
+        .maybeSingle(),
+      "booking status before session activate"
+    );
+    const bookingStatus = String(
+      (bookingRead.data as { status?: unknown } | null)?.status ?? ""
+    )
+      .trim()
+      .toLowerCase();
+    if (
+      bookingStatus === "sitter_ended" ||
+      bookingStatus === "completed" ||
+      bookingStatus === "cancelled" ||
+      bookingStatus === "rejected"
+    ) {
+      const { row: terminal } = await fetchSessionForBooking(supabase, {
+        parentId: params.parentId,
+        bookingId,
+        statuses: ["payment_pending", "paid", "completed", "sitter_completed"],
+        orderBy: "created_at",
+        ascending: false
+      });
+      if (terminal?.id && bookingId) {
+        const patched = await updateSessionReturningRow(
+          supabase,
+          String(terminal.id),
+          { booking_id: bookingId },
+          { parentId: params.parentId }
+        );
+        if (patched.row) return patched;
+      }
+      return {
+        row: terminal,
+        error: terminal ? null : "המשמרת כבר הסתיימה — לא נוצר סשן חדש."
+      };
+    }
+  }
 
-  for (const payload of PARENT_ARRIVAL_ACTIVATE_PAYLOADS(params.startIso)) {
+  let lastError: string | null = null;
+  let persistBookingId = Boolean(bookingId);
+
+  for (const base of PARENT_ARRIVAL_ACTIVATE_PAYLOADS(params.startIso)) {
+    const payload = withBookingId(base, bookingId, persistBookingId);
     if (existing?.id) {
       const updated = await updateSessionReturningRow(
         supabase,
@@ -202,6 +263,18 @@ export async function activateParentConfirmedSession(
       if (updated.row) {
         return updated;
       }
+      if (persistBookingId && isMissingBookingIdColumn(updated.error)) {
+        persistBookingId = false;
+        const retry = await updateSessionReturningRow(
+          supabase,
+          String(existing.id),
+          base,
+          { parentId: params.parentId }
+        );
+        if (retry.row) return retry;
+        lastError = retry.error;
+        continue;
+      }
       lastError = updated.error;
     } else {
       const inserted = await insertSessionReturningRow(supabase, {
@@ -211,6 +284,53 @@ export async function activateParentConfirmedSession(
       });
       if (inserted.row) {
         return inserted;
+      }
+      if (persistBookingId && isMissingBookingIdColumn(inserted.error)) {
+        persistBookingId = false;
+        const retry = await insertSessionReturningRow(supabase, {
+          parent_id: params.parentId,
+          sitter_id: params.sitterId,
+          ...base
+        });
+        if (retry.row) return retry;
+        lastError = retry.error;
+        continue;
+      }
+      // Unique open-session index: another pending/active row already exists — update it.
+      const uniqueHit =
+        /duplicate key|unique/i.test(String(inserted.error ?? "")) ||
+        String((inserted as { error?: string | null }).error ?? "").includes("23505");
+      if (uniqueHit) {
+        const { row: openRow } = await fetchSessionForBooking(supabase, {
+          parentId: params.parentId,
+          bookingId,
+          statuses: ["pending", "active"],
+          orderBy: "created_at",
+          ascending: false
+        });
+        if (openRow?.id) {
+          const updated = await updateSessionReturningRow(
+            supabase,
+            String(openRow.id),
+            payload,
+            { parentId: params.parentId }
+          );
+          if (updated.row) return updated;
+          if (persistBookingId && isMissingBookingIdColumn(updated.error)) {
+            persistBookingId = false;
+            const retry = await updateSessionReturningRow(
+              supabase,
+              String(openRow.id),
+              base,
+              { parentId: params.parentId }
+            );
+            if (retry.row) return retry;
+            lastError = retry.error;
+            continue;
+          }
+          lastError = updated.error;
+          continue;
+        }
       }
       lastError = inserted.error;
     }

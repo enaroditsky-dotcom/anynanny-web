@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { ArrowUpRight, ArrowDownLeft, Loader2, RefreshCw, ArrowLeft } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { PageBackLink } from "@/components/navigation/page-back-link";
 import { SitterPayoutWalletCards } from "@/components/sitter/SitterPayoutWalletCards";
 import { ActionToast } from "@/components/ui/action-toast";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -10,7 +11,6 @@ import {
   fetchSitterWalletView,
   type SitterWalletTransaction
 } from "@/lib/wallet/sitter-wallet";
-import Link from "next/link";
 
 export default function SitterWalletPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -106,7 +106,8 @@ export default function SitterWalletPage() {
   return (
     <div className="min-h-screen bg-slate-50 pb-12">
       <div className="mx-auto w-full max-w-md space-y-5 px-4 pt-4" dir="rtl">
-        <div className="flex w-full items-center justify-between px-1">
+        <div className="flex w-full items-center justify-between gap-3 px-1" dir="ltr">
+          <PageBackLink href="/sitter/dashboard" />
           <button
             type="button"
             onClick={() => void fetchWalletData()}
@@ -116,14 +117,6 @@ export default function SitterWalletPage() {
           >
             <RefreshCw className={`h-4 w-4 ${isPageLoading ? "animate-spin" : ""}`} />
           </button>
-
-          <Link
-            href="/sitter/dashboard"
-            className="flex items-center gap-1 text-xs font-semibold text-slate-500 transition-colors hover:text-slate-800"
-          >
-            <span>חזרה לדשבורד</span>
-            <ArrowLeft className="h-3.5 w-3.5" />
-          </Link>
         </div>
 
         <header className="px-1 text-right">

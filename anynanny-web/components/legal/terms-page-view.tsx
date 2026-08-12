@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { PageBackButton, PageBackRow } from "@/components/navigation/page-back-link";
 import { TermsOfServiceDocument } from "@/components/legal/terms-of-service-document";
 
 function TermsPageInner() {
@@ -28,17 +28,11 @@ function TermsPageInner() {
       dir="rtl"
       suppressHydrationWarning
     >
-      <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-3 border-b border-navy-header/10 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="inline-flex items-center gap-1.5 rounded-full border border-navy-header/20 bg-white px-3 py-1.5 text-xs font-semibold text-navy-header shadow-sm transition hover:bg-[#FDFBF6] active:scale-[0.98]"
-          aria-label="חזרה"
-        >
-          <ArrowRight className="h-4 w-4" aria-hidden />
-          חזרה
-        </button>
-        <p className="text-sm font-bold text-navy-header">תנאי שימוש</p>
+      <header className="sticky top-0 z-10 shrink-0 space-y-2 border-b border-navy-header/10 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm">
+        <PageBackRow>
+          <PageBackButton onClick={handleBack} />
+        </PageBackRow>
+        <p className="text-right text-sm font-bold text-navy-header">תנאי שימוש</p>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 pb-10">
@@ -52,11 +46,8 @@ export function TermsPageView() {
   return (
     <Suspense
       fallback={
-        <main
-          className="mx-auto flex h-full min-h-0 w-full max-w-md items-center justify-center bg-[#FDFBF6] py-16 text-sm text-slate-600"
-          dir="rtl"
-        >
-          טוען…
+        <main className="mx-auto flex min-h-[40vh] w-full max-w-md items-center justify-center bg-[#FDFBF6]" dir="rtl">
+          <p className="text-sm text-slate-600">טוען…</p>
         </main>
       }
     >

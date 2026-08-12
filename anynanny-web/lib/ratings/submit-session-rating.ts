@@ -77,6 +77,12 @@ export async function submitSessionRating(
   });
 
   if (insErr) {
+    // unique (session_id, from_user_id) — already rated; treat as success (idempotent).
+    const code = String((insErr as { code?: string }).code ?? "");
+    const msg = String(insErr.message ?? "");
+    if (code === "23505" || /duplicate key|unique/i.test(msg)) {
+      return { ok: true };
+    }
     return { ok: false, error: insErr.message || "שמירת הדירוג נכשלה." };
   }
 

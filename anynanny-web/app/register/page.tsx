@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { PageBackButton, PageBackRow, HOME_BACK_BUTTON_CLASS } from "@/components/navigation/page-back-link";
 import { ExpertRegistrationFields } from "@/components/sitter/expert-registration-fields";
 import { upsertProfileOnSignup } from "@/lib/auth/supabase-profile";
 import {
@@ -215,7 +216,7 @@ function RegisterInner() {
           </p>
           <Link
             href="/"
-            className="mt-4 inline-block text-sm font-semibold text-navy-header underline decoration-navy-header/30"
+            className={HOME_BACK_BUTTON_CLASS}
           >
             חזרה לדף הבית
           </Link>
@@ -226,13 +227,9 @@ function RegisterInner() {
 
   return (
     <main className="mx-auto max-w-md p-6 sm:p-8" dir="rtl">
-      <button
-        type="button"
-        onClick={() => router.push("/")}
-        className="mb-4 flex items-center gap-1 text-sm text-slate-500 hover:text-navy-header"
-      >
-        ← חזרה
-      </button>
+      <PageBackRow className="mb-4">
+        <PageBackButton onClick={() => router.push("/")} />
+      </PageBackRow>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
         <header className="mb-6 text-right">
