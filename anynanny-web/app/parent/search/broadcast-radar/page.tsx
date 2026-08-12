@@ -1,9 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBooking } from "@/lib/bookings/create-booking";
 import { BroadcastPanelControls } from "@/components/parent/broadcast-panel-controls";
+import { parentSitterProfilePathFromBroadcast } from "@/components/sitter/public-sitter-search-card";
 import { rememberActiveBroadcast } from "@/lib/broadcast/broadcast-active-snapshot";
 import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
 import { requestBroadcastStatusChange } from "@/lib/broadcast/broadcast-status-change";
@@ -14,6 +16,7 @@ import {
   findApprovedBroadcastLinkedBooking,
   formatBroadcastElapsed
 } from "@/lib/broadcast/parent-active-broadcast";
+import { fetchUserRatingSummary } from "@/lib/ratings/fetch-user-rating-summary";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   removeRealtimeChannel,
@@ -34,7 +37,7 @@ export const dynamic = "force-dynamic";
 interface RespondingSitter {
   id: string;
   name: string;
-  rating: number;
+  rating: number | null;
   experience: number;
   hourlyRate: number | null;
 }
@@ -274,7 +277,8 @@ function BroadcastRadarContent() {
     try {
       const [
         { data: nameRow, error: nameError },
-        { data: sitterProfile, error: sitterError }
+        { data: sitterProfile, error: sitterError },
+        ratingSummary
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -286,7 +290,9 @@ function BroadcastRadarContent() {
           .from("sitter_profiles")
           .select("hourly_rate_nis, years_experience")
           .eq("id", sitterId)
-          .maybeSingle()
+          .maybeSingle(),
+
+        fetchUserRatingSummary(supabase, sitterId)
       ]);
 
       if (nameError) {
@@ -315,6 +321,11 @@ function BroadcastRadarContent() {
           ? experienceRaw
           : 0;
 
+      const rating =
+        ratingSummary.count > 0 && ratingSummary.average > 0
+          ? ratingSummary.average
+          : null;
+
       setResponders((previous) => {
         if (previous.some((responder) => responder.id === sitterId)) {
           return previous;
@@ -325,7 +336,7 @@ function BroadcastRadarContent() {
           {
             id: sitterId,
             name: displayName,
-            rating: 5.0,
+            rating,
             experience,
             hourlyRate
           }
@@ -934,11 +945,18 @@ function BroadcastRadarContent() {
                           <h3 className="flex items-center gap-1 text-sm font-bold text-slate-800">
                             {sitter.name}
 
-                            <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
-                              <Star className="h-2.5 w-2.5 fill-current text-amber-500" />
+                            {sitter.rating != null ? (
+                              <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                                <Star className="h-2.5 w-2.5 fill-current text-amber-500" />
 
-                              {sitter.rating}
-                            </span>
+                                {sitter.rating.toFixed(1)}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                                <Star className="h-2.5 w-2.5 text-slate-300" />
+                                טרם דורג
+                              </span>
+                            )}
                           </h3>
 
                           <p className="text-[11px] font-medium text-slate-500">
@@ -949,6 +967,21 @@ function BroadcastRadarContent() {
                               ? `₪${sitter.hourlyRate}/שעה`
                               : "תעריף לא זמין"}
                           </p>
+
+                          <Link
+                            href={
+                              alertId
+                                ? parentSitterProfilePathFromBroadcast(sitter.id, {
+                                    alertId,
+                                    city,
+                                    serviceType: type
+                                  })
+                                : `/parent/sitter/${encodeURIComponent(sitter.id)}`
+                            }
+                            className="inline-block text-[11px] font-semibold text-[#0B6BCB] underline decoration-[#0B6BCB]/40 underline-offset-2 transition hover:text-[#08529a]"
+                          >
+                            כל המידע
+                          </Link>
                         </div>
                       </div>
 
