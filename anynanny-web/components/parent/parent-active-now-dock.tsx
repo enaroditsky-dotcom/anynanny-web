@@ -1,17 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { ActiveNowBroadcastBar } from "@/components/parent/active-now-broadcast-bar";
-import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
+import {
+  readRememberedActiveBroadcast,
+  rememberActiveBroadcast
+} from "@/lib/broadcast/broadcast-active-snapshot";
+import {
+  isBroadcastMinimized,
+  setBroadcastMinimized,
+  subscribeBroadcastMinimized
+} from "@/lib/broadcast/broadcast-minimize-preference";
+import { requestBroadcastStatusChange } from "@/lib/broadcast/broadcast-status-change";
 import {
   broadcastRadarHref,
   countBroadcastResponses,
   fetchActiveBroadcastForParent,
   findApprovedBroadcastLinkedBooking,
-  markActiveBroadcastFilled,
   type ParentActiveBroadcast
 } from "@/lib/broadcast/parent-active-broadcast";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -20,16 +28,19 @@ import {
   subscribePostgresChanges
 } from "@/lib/supabase/subscribe-postgres-changes";
 
-const DOCK_OFFSET = "5.75rem";
+/** Matches compact strip (~3.5rem) + small gap above bottom nav. */
+const DOCK_OFFSET = "3.75rem";
+
+function seedFromSnapshot(): ParentActiveBroadcast | null {
+  return readRememberedActiveBroadcast();
+}
 
 /**
  * Persistent AnyNanny Now chrome.
- * Authoritative visibility: active broadcast_alerts row exists
- * and the parent is not on the full radar or start screen.
- * Does not auto-redirect dashboard → radar.
+ * Visibility: active broadcast row exists and parent is not on radar/start.
+ * Minimize must never write broadcast business state.
  */
-export function ParentActiveNowDock() {
-  const pathname = usePathname();
+export function ParentActiveNowDock({ pathname }: { pathname: string }) {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const parentId = user?.id ?? null;
@@ -40,14 +51,35 @@ export function ParentActiveNowDock() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [ready, setReady] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
+  const broadcastRef = useRef<ParentActiveBroadcast | null>(null);
+  const loadGen = useRef(0);
+
+  broadcastRef.current = broadcast;
 
   const onParentRoute = pathname.startsWith("/parent/");
   const onRadar = pathname.startsWith("/parent/search/broadcast-radar");
-  const onStart = pathname === "/parent/broadcast" || pathname.startsWith("/parent/broadcast/");
+  const onStart =
+    pathname === "/parent/broadcast" || pathname.startsWith("/parent/broadcast/");
+  const canShowBar = onParentRoute && !onRadar && !onStart;
+  const onStartRef = useRef(onStart);
+  const canShowBarRef = useRef(canShowBar);
+  onStartRef.current = onStart;
+  canShowBarRef.current = canShowBar;
 
   useEffect(() => {
     setPortalReady(true);
   }, []);
+
+  // Instant paint after minimize: seed from warm snapshot before network returns.
+  useEffect(() => {
+    if (!canShowBar) return;
+    if (broadcastRef.current) return;
+    const remembered = seedFromSnapshot();
+    if (!remembered) return;
+    if (parentId && remembered.parent_id !== parentId) return;
+    setBroadcast(remembered);
+    setReady(true);
+  }, [canShowBar, pathname, parentId]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -55,47 +87,68 @@ export function ParentActiveNowDock() {
       setBroadcast(null);
       setResponseCount(0);
       setReady(true);
+      rememberActiveBroadcast(null);
       return;
     }
 
     let disposed = false;
 
-    const load = async () => {
-      const { broadcast: next } = await fetchActiveBroadcastForParent(supabase, parentId);
+    const applyActive = async (next: ParentActiveBroadcast | null) => {
       if (disposed) return;
-
       if (next) {
+        rememberActiveBroadcast(next);
+        setBroadcast(next);
+        const count = await countBroadcastResponses(supabase, next.id);
+        if (!disposed) setResponseCount(count);
+      } else {
+        rememberActiveBroadcast(null);
+        setBroadcast(null);
+        setResponseCount(0);
+      }
+      if (!disposed) setReady(true);
+    };
+
+    const load = async (opts?: { allowFill?: boolean }) => {
+      // Never fill while the parent is on the start screen — that path was
+      // clearing the active row and making minimize look like a reset.
+      const allowFill = opts?.allowFill !== false && !onStartRef.current;
+      const gen = ++loadGen.current;
+      const { broadcast: next } = await fetchActiveBroadcastForParent(supabase, parentId);
+      if (disposed || gen !== loadGen.current) return;
+
+      if (next && allowFill) {
         const confirmed = await findApprovedBroadcastLinkedBooking(
           supabase,
           parentId,
           next.id,
           next.created_at
         );
-        if (disposed) return;
+        if (disposed || gen !== loadGen.current) return;
         if (confirmed) {
-          await markActiveBroadcastFilled(supabase, next.id, parentId);
-          if (disposed) return;
-          setBroadcast(null);
-          setResponseCount(0);
-          setReady(true);
+          const filled = await requestBroadcastStatusChange("fill", next.id);
+          if (disposed || gen !== loadGen.current) return;
+          if (!filled.ok) {
+            console.warn("[broadcast dock] fill:", filled.error);
+            await applyActive(next);
+            return;
+          }
+          const { broadcast: stillActive } = await fetchActiveBroadcastForParent(
+            supabase,
+            parentId
+          );
+          if (disposed || gen !== loadGen.current) return;
+          await applyActive(stillActive);
           return;
         }
       }
 
-      setBroadcast(next);
-      if (next) {
-        const count = await countBroadcastResponses(supabase, next.id);
-        if (!disposed) setResponseCount(count);
-      } else {
-        setResponseCount(0);
-      }
-      if (!disposed) setReady(true);
+      await applyActive(next);
     };
 
-    void load();
+    void load({ allowFill: true });
 
     const poll = window.setInterval(() => {
-      void load();
+      void load({ allowFill: true });
     }, 2500);
 
     const alertChannel = subscribePostgresChanges(
@@ -106,7 +159,7 @@ export function ParentActiveNowDock() {
         table: "broadcast_alerts",
         filter: `parent_id=eq.${parentId}`,
         handler: () => {
-          void load();
+          void load({ allowFill: true });
         }
       }
     );
@@ -118,7 +171,7 @@ export function ParentActiveNowDock() {
         event: "INSERT",
         table: "broadcast_responses",
         handler: () => {
-          void load();
+          void load({ allowFill: false });
         }
       }
     );
@@ -131,19 +184,101 @@ export function ParentActiveNowDock() {
         table: "bookings",
         filter: `parent_id=eq.${parentId}`,
         handler: () => {
-          void load();
+          void load({ allowFill: true });
         }
       }
     );
 
+    const unsubscribeMinimized = subscribeBroadcastMinimized(() => {
+      if (!isBroadcastMinimized()) return;
+      // Minimize is UI-only: never fill/pause/cancel here.
+      const remembered = seedFromSnapshot() ?? broadcastRef.current;
+      if (remembered && remembered.parent_id === parentId) {
+        setBroadcast(remembered);
+        setReady(true);
+      }
+      void load({ allowFill: false });
+    });
+
     return () => {
       disposed = true;
       window.clearInterval(poll);
+      unsubscribeMinimized();
       removeRealtimeChannel(supabase, alertChannel);
       removeRealtimeChannel(supabase, responseChannel);
       removeRealtimeChannel(supabase, bookingChannel);
     };
   }, [isLoading, parentId, supabase, onParentRoute]);
+
+  // Landing on dashboard / other showable routes after leaving start/radar.
+  useEffect(() => {
+    if (isLoading || !parentId || !supabase || !canShowBar) return;
+    let cancelled = false;
+    const gen = ++loadGen.current;
+
+    const remembered = seedFromSnapshot() ?? broadcastRef.current;
+    if (remembered && remembered.parent_id === parentId) {
+      setBroadcast(remembered);
+      setReady(true);
+    }
+
+    void (async () => {
+      const { broadcast: next } = await fetchActiveBroadcastForParent(supabase, parentId);
+      if (cancelled || gen !== loadGen.current) return;
+
+      if (next) {
+        // Approval fill is allowed on dashboard landings, but if fill fails
+        // keep the active row so minimize never looks like a reset.
+        const confirmed = await findApprovedBroadcastLinkedBooking(
+          supabase,
+          parentId,
+          next.id,
+          next.created_at
+        );
+        if (cancelled || gen !== loadGen.current) return;
+        if (confirmed) {
+          const filled = await requestBroadcastStatusChange("fill", next.id);
+          if (cancelled || gen !== loadGen.current) return;
+          if (!filled.ok) {
+            console.warn("[broadcast dock] route fill:", filled.error);
+            rememberActiveBroadcast(next);
+            setBroadcast(next);
+            setResponseCount(await countBroadcastResponses(supabase, next.id));
+            setReady(true);
+            return;
+          }
+          const { broadcast: stillActive } = await fetchActiveBroadcastForParent(
+            supabase,
+            parentId
+          );
+          if (cancelled || gen !== loadGen.current) return;
+          rememberActiveBroadcast(stillActive);
+          setBroadcast(stillActive);
+          setResponseCount(
+            stillActive ? await countBroadcastResponses(supabase, stillActive.id) : 0
+          );
+          setReady(true);
+          return;
+        }
+
+        rememberActiveBroadcast(next);
+        setBroadcast(next);
+        setResponseCount(await countBroadcastResponses(supabase, next.id));
+        setReady(true);
+        return;
+      }
+
+      // Confirmed empty from server — clear.
+      rememberActiveBroadcast(null);
+      setBroadcast(null);
+      setResponseCount(0);
+      setReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, isLoading, parentId, supabase, canShowBar]);
 
   useEffect(() => {
     if (!broadcast) return;
@@ -153,7 +288,7 @@ export function ParentActiveNowDock() {
     return () => window.clearInterval(tick);
   }, [broadcast?.id]);
 
-  const showBar = Boolean(broadcast && ready && onParentRoute && !onRadar && !onStart);
+  const showBar = Boolean(broadcast && ready && canShowBar);
 
   useEffect(() => {
     document.documentElement.style.setProperty(

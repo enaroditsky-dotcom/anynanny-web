@@ -78,7 +78,9 @@ const SHELL_BOTTOM_NAV_PADDING =
  * so wallet/chat/realtime effects do not remount unnecessarily.
  */
 const StableBottomNav = memo(BottomNav);
-const StableParentActiveNowDock = memo(ParentActiveNowDock);
+// Do not memo the dock — it must always re-render with the latest pathname
+// so /parent/broadcast → dashboard minimize can show the compact bar.
+
 
 export function AppShellGate({
   children
@@ -179,7 +181,7 @@ export function AppShellGate({
             )}
           </div>
 
-          <StableParentActiveNowDock />
+          <ParentActiveNowDock pathname={pathname} />
           <StableBottomNav />
         </div>
       </AppShellStableBoundary>

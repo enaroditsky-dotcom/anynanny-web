@@ -1580,6 +1580,21 @@ export function ParentDashboardClient({
     awaitingEndApproval ||
     inSettlement ||
     isRejectedBooking;
+  /**
+   * Stuck-shift recovery is only for a genuine in-flight shift/session.
+   * Do not show it for rejected/pending-only cards (e.g. cancelled Broadcast
+   * leftovers or a rejected Broadcast request) — those are not stuck shifts.
+   */
+  const showStuckShiftReleaseButton =
+    showLiveTimer ||
+    awaitingEndApproval ||
+    inSettlement ||
+    (dueForActiveShiftUi &&
+      Boolean(activeBooking) &&
+      (bookingStatus === "approved" ||
+        bookingStatus === "sitter_started" ||
+        bookingStatus === "parent_started" ||
+        bookingStatus === "sitter_ended"));
   const showScheduledCard = isScheduledConfirmed || isScheduledPending;
   const showShiftCard = showLiveShiftCard || showScheduledCard;
   const statusCardKey = activeBooking?.id
@@ -1958,7 +1973,7 @@ export function ParentDashboardClient({
               </div>
 
               <div className="pt-2 flex flex-col gap-2">
-                {showLiveShiftCard ? (
+                {showStuckShiftReleaseButton ? (
                   <button
                     type="button"
                     disabled={releasingStuckShift}

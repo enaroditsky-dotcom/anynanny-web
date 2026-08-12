@@ -1,17 +1,18 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { MainLayout } from "@components/layout/MainLayout";
 import { createBooking } from "@/lib/bookings/create-booking";
+import { BroadcastPanelControls } from "@/components/parent/broadcast-panel-controls";
+import { rememberActiveBroadcast } from "@/lib/broadcast/broadcast-active-snapshot";
 import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
+import { requestBroadcastStatusChange } from "@/lib/broadcast/broadcast-status-change";
 import {
   broadcastRadarHref,
   fetchActiveBroadcastForParent,
-  fetchPendingRequestedSitterIds,
+  fetchBroadcastRequestStatuses,
   findApprovedBroadcastLinkedBooking,
-  formatBroadcastElapsed,
-  markActiveBroadcastFilled
+  formatBroadcastElapsed
 } from "@/lib/broadcast/parent-active-broadcast";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -25,8 +26,7 @@ import {
   Clock,
   AlertCircle,
   RefreshCw,
-  PauseCircle,
-  ChevronDown
+  PauseCircle
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +76,7 @@ function BroadcastRadarContent() {
   const [isPaused, setIsPaused] = useState(false);
   const [isFilled, setIsFilled] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [selectingSitterId, setSelectingSitterId] = useState<string | null>(
     null
   );
@@ -83,6 +84,8 @@ function BroadcastRadarContent() {
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [parentId, setParentId] = useState<string | null>(null);
+  const handledRejectionBookingIdsRef = useRef<Set<string>>(new Set());
+  const rejectionMinimizeLockRef = useRef(false);
 
   useEffect(() => {
     setAlertId(alertIdParam);
@@ -179,23 +182,36 @@ function BroadcastRadarContent() {
       }
       applyStatus(data.status);
 
-      if (data.status === "active" && data.created_at) {
-        const confirmed = await findApprovedBroadcastLinkedBooking(
-          supabase,
-          user.id,
-          alertId,
-          String(data.created_at)
-        );
-        if (disposed) return;
-        if (confirmed) {
-          await markActiveBroadcastFilled(supabase, alertId, user.id);
-          if (!disposed) {
-            setIsFilled(true);
+      if (data.status === "cancelled") {
+        router.replace("/parent/dashboard");
+        return;
+      }
+
+      if (
+        (data.status === "active" || data.status === "paused") &&
+        data.created_at
+      ) {
+        if (data.status === "active") {
+          const confirmed = await findApprovedBroadcastLinkedBooking(
+            supabase,
+            user.id,
+            alertId,
+            String(data.created_at)
+          );
+          if (disposed) return;
+          if (confirmed) {
+            const filled = await requestBroadcastStatusChange("fill", alertId);
+            if (filled.error) {
+              console.warn("[broadcast radar] fill:", filled.error);
+            }
+            if (!disposed && filled.ok) {
+              setIsFilled(true);
+            }
+            return;
           }
-          return;
         }
 
-        const pendingIds = await fetchPendingRequestedSitterIds(
+        const { pendingIds } = await fetchBroadcastRequestStatuses(
           supabase,
           user.id,
           alertId,
@@ -234,6 +250,9 @@ function BroadcastRadarContent() {
             setStartedAt(next.created_at);
           }
           applyStatus(next.status);
+          if (next.status === "cancelled") {
+            router.replace("/parent/dashboard");
+          }
         }
       }
     );
@@ -320,6 +339,9 @@ function BroadcastRadarContent() {
   /*
    * Sitter ACCEPT/CONFIRM is bookings.status → approved
    * (updateBookingStatus). Parent select only creates pending.
+   *
+   * Sitter REJECT → booking rejected, Broadcast stays active,
+   * auto-minimize to dashboard so the standard rejection card shows.
    */
   useEffect(() => {
     if (!alertId || alertId === "null" || !parentId || !startedAt || !supabase) {
@@ -331,6 +353,26 @@ function BroadcastRadarContent() {
 
     let disposed = false;
 
+    const warmAndMinimizeForRejection = (bookingId: string) => {
+      if (!bookingId || disposed) return;
+      if (handledRejectionBookingIdsRef.current.has(bookingId)) return;
+      if (rejectionMinimizeLockRef.current) return;
+
+      handledRejectionBookingIdsRef.current.add(bookingId);
+      rejectionMinimizeLockRef.current = true;
+
+      rememberActiveBroadcast({
+        id: alertId,
+        parent_id: parentId,
+        city,
+        service_type: type,
+        status: "active",
+        created_at: startedAt
+      });
+      setBroadcastMinimized(true);
+      router.replace("/parent/dashboard");
+    };
+
     const checkConfirmation = async () => {
       const confirmed = await findApprovedBroadcastLinkedBooking(
         supabase,
@@ -339,13 +381,41 @@ function BroadcastRadarContent() {
         startedAt
       );
       if (disposed || !confirmed) return;
-      await markActiveBroadcastFilled(supabase, alertId, parentId);
-      if (!disposed) {
-        setIsFilled(true);
+      const filled = await requestBroadcastStatusChange("fill", alertId);
+      if (disposed) return;
+      if (!filled.ok) {
+        console.warn("[broadcast radar] fill:", filled.error);
+        return;
+      }
+      setIsFilled(true);
+    };
+
+    const syncRequestStatuses = async (mode: "seed" | "watch" = "watch") => {
+      const { pendingIds, rejectedBookingIds } = await fetchBroadcastRequestStatuses(
+        supabase,
+        parentId,
+        alertId,
+        startedAt
+      );
+      if (disposed) return;
+      setRequestedSitterIds(pendingIds);
+
+      if (mode === "seed") {
+        for (const bookingId of rejectedBookingIds) {
+          handledRejectionBookingIdsRef.current.add(bookingId);
+        }
+        return;
+      }
+
+      for (const bookingId of rejectedBookingIds) {
+        if (handledRejectionBookingIdsRef.current.has(bookingId)) continue;
+        warmAndMinimizeForRejection(bookingId);
+        break;
       }
     };
 
     void checkConfirmation();
+    void syncRequestStatuses("seed");
 
     const bookingChannel = subscribePostgresChanges(
       supabase,
@@ -356,17 +426,37 @@ function BroadcastRadarContent() {
         filter: `parent_id=eq.${parentId}`,
         handler: (payload) => {
           const next = payload.new as {
+            id?: string;
             status?: string;
             sitter_id?: string;
           };
-          if (next.status === "rejected" && next.sitter_id) {
+          if (next.status === "rejected") {
+            const bookingId = String(next.id ?? "").trim();
+            const sitterId = String(next.sitter_id ?? "").trim();
+            if (sitterId) {
+              setRequestedSitterIds((previous) =>
+                previous.filter((id) => id !== sitterId)
+              );
+            }
+            if (bookingId) {
+              warmAndMinimizeForRejection(bookingId);
+            }
+            return;
+          }
+          if (next.status === "pending" && next.sitter_id) {
             const sitterId = String(next.sitter_id);
             setRequestedSitterIds((previous) =>
-              previous.filter((id) => id !== sitterId)
+              previous.includes(sitterId) ? previous : [...previous, sitterId]
             );
             return;
           }
-          if (next.status === "approved") {
+          if (
+            next.status === "approved" ||
+            next.status === "sitter_started" ||
+            next.status === "parent_started" ||
+            next.status === "sitter_ended" ||
+            next.status === "completed"
+          ) {
             void checkConfirmation();
           }
         }
@@ -375,6 +465,7 @@ function BroadcastRadarContent() {
 
     const poll = window.setInterval(() => {
       void checkConfirmation();
+      void syncRequestStatuses("watch");
     }, 2500);
 
     return () => {
@@ -382,7 +473,18 @@ function BroadcastRadarContent() {
       window.clearInterval(poll);
       removeRealtimeChannel(supabase, bookingChannel);
     };
-  }, [alertId, parentId, startedAt, isExpired, isPaused, isFilled, supabase]);
+  }, [
+    alertId,
+    parentId,
+    startedAt,
+    isExpired,
+    isPaused,
+    isFilled,
+    supabase,
+    city,
+    type,
+    router
+  ]);
 
   useEffect(() => {
     if (!isFilled) return;
@@ -473,31 +575,31 @@ function BroadcastRadarContent() {
 
   /*
    * Pause the Broadcast while keeping the current responses.
+   * Minimize must never call this — pause is an explicit parent stop.
    */
   const handlePauseBroadcast = async () => {
-    if (!alertId || isCancelling || !supabase) {
+    if (!alertId || alertId === "null" || isCancelling) {
       return;
     }
 
     setIsCancelling(true);
 
     try {
-      const { error } = await supabase
-        .from("broadcast_alerts")
-        .update({
-          status: "paused"
-        })
-        .eq("id", alertId);
+      const result = await requestBroadcastStatusChange("pause", alertId);
 
-      if (error) {
-        throw error;
+      if (!result.ok) {
+        console.error("[broadcast radar] pause:", {
+          alertId,
+          error: result.error,
+          row: result.row
+        });
+        throw new Error(result.error ?? "pause failed");
       }
 
       setBroadcastMinimized(false);
       setIsPaused(true);
     } catch (error) {
       console.error("[broadcast radar] pause:", error);
-
       alert("תקלה בעצירת החיפוש, נסה שנית.");
     } finally {
       setIsCancelling(false);
@@ -621,9 +723,46 @@ function BroadcastRadarContent() {
     }
   };
 
+  /** UI-only: keep DB status active; show compact dock on dashboard. */
   const handleMinimize = () => {
     setBroadcastMinimized(true);
+    if (alertId && parentId && startedAt) {
+      rememberActiveBroadcast({
+        id: alertId,
+        parent_id: parentId,
+        city,
+        service_type: type,
+        status: "active",
+        created_at: startedAt
+      });
+    }
     router.replace("/parent/dashboard");
+  };
+
+  const handleClosePaused = async () => {
+    if (!isPaused || !alertId || alertId === "null" || isClosing) {
+      return;
+    }
+
+    setIsClosing(true);
+    try {
+      const result = await requestBroadcastStatusChange("cancel", alertId);
+      if (!result.ok) {
+        console.error("[broadcast radar] close paused:", {
+          alertId,
+          error: result.error
+        });
+        throw new Error(result.error ?? "cancel failed");
+      }
+
+      setBroadcastMinimized(false);
+      router.replace("/parent/dashboard");
+    } catch (error) {
+      console.error("[broadcast radar] close paused:", error);
+      alert("תקלה בסגירת השידור, נסה שנית.");
+    } finally {
+      setIsClosing(false);
+    }
   };
 
   const elapsedLabel = startedAt
@@ -683,16 +822,11 @@ function BroadcastRadarContent() {
       ) : (
         <>
           <div className="relative space-y-3 overflow-hidden rounded-3xl border border-[#FF8A8A]/20 bg-gradient-to-br from-[#FFF5F5] to-[#FFF0F0] p-5 text-center shadow-sm">
-            {!isPaused ? (
-              <button
-                type="button"
-                onClick={handleMinimize}
-                className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-[#FF8A8A]/20 bg-white/90 text-slate-600 shadow-sm transition hover:bg-white active:scale-95"
-                aria-label="מזעור החיפוש"
-              >
-                <ChevronDown className="h-5 w-5" aria-hidden />
-              </button>
-            ) : null}
+            <BroadcastPanelControls
+              onMinimize={handleMinimize}
+              onClose={isPaused ? () => void handleClosePaused() : undefined}
+              closeDisabled={isClosing}
+            />
 
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#FF8A8A] text-white shadow-md">
               <Zap className="h-6 w-6 fill-white" />
@@ -866,16 +1000,14 @@ function BroadcastRadarContent() {
 
 export default function BroadcastRadarPage() {
   return (
-    <MainLayout>
-      <Suspense
-        fallback={
-          <div className="py-12 text-center text-xs font-bold text-slate-400">
-            טוען נתוני חיפוש...
-          </div>
-        }
-      >
-        <BroadcastRadarContent />
-      </Suspense>
-    </MainLayout>
+    <Suspense
+      fallback={
+        <div className="py-12 text-center text-xs font-bold text-slate-400">
+          טוען נתוני חיפוש...
+        </div>
+      }
+    >
+      <BroadcastRadarContent />
+    </Suspense>
   );
 }

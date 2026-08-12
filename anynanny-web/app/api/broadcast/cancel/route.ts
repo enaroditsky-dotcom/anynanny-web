@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+/**
+ * Legacy cancel endpoint — prefers paused→cancelled via /api/broadcast/status.
+ * Kept for older callers; still ownership-guarded.
+ */
 export async function POST(request: Request) {
   try {
     const { broadcastId } = await request.json();
@@ -9,20 +13,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "broadcastId is required." }, { status: 400 });
     }
 
-    // Use @supabase/ssr — auth-helpers JSON.parses `base64-...` cookies and crashes.
     const supabase = await createSupabaseServerClient();
-    if (!supabase) {
-      return NextResponse.json({ error: "Supabase unavailable" }, { status: 500 });
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("broadcast_alerts")
       .update({ status: "cancelled" })
-      .eq("id", broadcastId);
+      .eq("id", broadcastId)
+      .eq("parent_id", user.id)
+      .eq("status", "paused")
+      .select("id")
+      .maybeSingle();
 
     if (error) {
       console.error("Supabase cancel error:", error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!data) {
+      return NextResponse.json(
+        { error: "cancel affected 0 rows" },
+        { status: 409 }
+      );
     }
 
     return NextResponse.json({ success: true });

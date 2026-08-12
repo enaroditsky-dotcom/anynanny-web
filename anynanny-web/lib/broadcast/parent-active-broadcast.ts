@@ -75,21 +75,65 @@ export async function countBroadcastResponses(
   return count ?? 0;
 }
 
+/**
+ * Permanently close a paused Broadcast UI.
+ * Only the current paused row can be updated — never an active one.
+ * Uses existing terminal status `cancelled` so history/responses stay intact.
+ * Prefer requestBroadcastStatusChange("cancel") from the browser.
+ */
+export async function closePausedBroadcastForParent(
+  supabase: SupabaseClient,
+  alertId: string,
+  parentId: string
+): Promise<{ error: string | null }> {
+  const { data, error } = await supabase
+    .from(BROADCAST_ALERTS_TABLE)
+    .update({ status: "cancelled" })
+    .eq("id", alertId)
+    .eq("parent_id", parentId)
+    .eq("status", "paused")
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[broadcast close]", {
+      alertId,
+      parentId,
+      error
+    });
+    return { error: error.message };
+  }
+  if (!data) {
+    return { error: "לא ניתן לסגור שידור שאינו במצב עצור." };
+  }
+  return { error: null };
+}
+
 /** End an active search after the sitter confirms the shift. Does not delete history. */
 export async function markActiveBroadcastFilled(
   supabase: SupabaseClient,
   alertId: string,
   parentId: string
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(BROADCAST_ALERTS_TABLE)
     .update({ status: "filled" })
     .eq("id", alertId)
     .eq("parent_id", parentId)
-    .eq("status", ACTIVE_BROADCAST_STATUS);
+    .eq("status", ACTIVE_BROADCAST_STATUS)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
+    console.error("[broadcast fill]", {
+      alertId,
+      parentId,
+      error
+    });
     return { error: error.message };
+  }
+  if (!data) {
+    return { error: "broadcast fill affected 0 rows" };
   }
   return { error: null };
 }
@@ -124,36 +168,91 @@ export async function fetchPendingRequestedSitterIds(
   alertId: string,
   broadcastCreatedAt: string
 ): Promise<string[]> {
+  const { pendingIds } = await fetchBroadcastRequestStatuses(
+    supabase,
+    parentId,
+    alertId,
+    broadcastCreatedAt
+  );
+  return pendingIds;
+}
+
+/**
+ * Latest request outcome per responding sitter for this broadcast window.
+ * Pending is used for "בקשה נשלחה". Rejected booking ids drive
+ * auto-minimize to the dashboard rejection card (UI-only).
+ */
+export async function fetchBroadcastRequestStatuses(
+  supabase: SupabaseClient,
+  parentId: string,
+  alertId: string,
+  broadcastCreatedAt: string
+): Promise<{
+  pendingIds: string[];
+  rejectedIds: string[];
+  rejectedBookingIds: string[];
+}> {
   const responderIds = await fetchBroadcastResponderIds(supabase, alertId);
-  if (responderIds.length === 0) return [];
+  if (responderIds.length === 0) {
+    return { pendingIds: [], rejectedIds: [], rejectedBookingIds: [] };
+  }
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("sitter_id")
+    .select("id, sitter_id, status, created_at")
     .eq("parent_id", parentId)
-    .eq("status", "pending")
+    .in("status", ["pending", "rejected"])
     .gte("created_at", broadcastCreatedAt)
-    .in("sitter_id", responderIds);
+    .in("sitter_id", responderIds)
+    .order("created_at", { ascending: false });
 
   if (error) {
-    console.warn("[broadcast] pending requests:", error.message);
-    return [];
+    console.warn("[broadcast] request statuses:", error.message);
+    return { pendingIds: [], rejectedIds: [], rejectedBookingIds: [] };
   }
 
-  return [
-    ...new Set(
-      (data ?? [])
-        .map((row) => String((row as { sitter_id?: string }).sitter_id ?? "").trim())
-        .filter(Boolean)
-    )
-  ];
+  const pendingIds: string[] = [];
+  const rejectedIds: string[] = [];
+  const rejectedBookingIds: string[] = [];
+  const seenSitters = new Set<string>();
+
+  for (const row of data ?? []) {
+    const sitterId = String((row as { sitter_id?: string }).sitter_id ?? "").trim();
+    const status = String((row as { status?: string }).status ?? "").trim();
+    const bookingId = String((row as { id?: string }).id ?? "").trim();
+    if (!sitterId) continue;
+
+    if (status === "rejected" && bookingId) {
+      rejectedBookingIds.push(bookingId);
+    }
+
+    if (seenSitters.has(sitterId)) continue;
+    seenSitters.add(sitterId);
+    if (status === "pending") pendingIds.push(sitterId);
+    else if (status === "rejected") rejectedIds.push(sitterId);
+  }
+
+  return { pendingIds, rejectedIds, rejectedBookingIds };
 }
 
 /**
  * Real sitter confirmation for this broadcast: a responder's booking
- * created after the broadcast started is now `approved`.
+ * created after the broadcast started has been accepted (or progressed
+ * past acceptance into the live/completed shift lifecycle).
  * Bookings have no broadcast_id; this uses existing columns only.
+ *
+ * IMPORTANT: after approval the booking often advances quickly to
+ * sitter_started / parent_started ("המשמרת פעילה עכשיו"). Matching only
+ * `approved` misses that window and leaves the search bar stuck.
  */
+const BROADCAST_CONFIRMED_BOOKING_STATUSES = [
+  "approved",
+  "sitter_started",
+  "parent_started",
+  "sitter_ended",
+  "completed"
+] as const;
+
 export async function findApprovedBroadcastLinkedBooking(
   supabase: SupabaseClient,
   parentId: string,
@@ -165,9 +264,9 @@ export async function findApprovedBroadcastLinkedBooking(
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("id")
+    .select("id, status")
     .eq("parent_id", parentId)
-    .eq("status", "approved")
+    .in("status", [...BROADCAST_CONFIRMED_BOOKING_STATUSES])
     .gte("created_at", broadcastCreatedAt)
     .in("sitter_id", responderIds)
     .order("created_at", { ascending: false })
