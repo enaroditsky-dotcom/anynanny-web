@@ -64,6 +64,44 @@ type DateFilterMode =
   | "last_year"
   | "custom";
 
+/**
+ * History badge labels.
+ * "בפעילות" only when a real open session exists for a live booking status.
+ */
+function parentHistoryStatusLabel(
+  bookingStatus: string,
+  session: HistorySessionRow | null | undefined
+): string {
+  const status = String(bookingStatus ?? "").trim().toLowerCase();
+
+  if (status === "completed") return "שולם";
+  if (status === "rejected") return "נדחתה";
+  if (status === "cancelled") return "בוטלה";
+  if (status === "pending") return "ממתינה לאישור";
+  if (status === "approved") return "מאושרת";
+
+  const sessionStarted = Boolean(session && sessionStartValue(session));
+  const sessionEnded = Boolean(session && sessionEndValue(session));
+  const openLiveSession = sessionStarted && !sessionEnded;
+
+  if (
+    openLiveSession &&
+    (status === "parent_started" || status === "sitter_started")
+  ) {
+    return "בפעילות";
+  }
+
+  if (status === "parent_started" || status === "sitter_ended") {
+    return "ממתין לאישור";
+  }
+
+  if (status === "sitter_started") {
+    return "מאושרת";
+  }
+
+  return status || "מאושרת";
+}
+
 function toIsoDate(
   date: Date
 ): string {
@@ -535,24 +573,10 @@ export default function ParentHistoryPage() {
                       }
                     );
 
-                  let statusLabel =
-                    "בפעילות";
-
-                  if (
-                    booking.status ===
-                    "completed"
-                  ) {
-                    statusLabel =
-                      "שולם";
-                  }
-
-                  if (
-                    booking.status ===
-                    "parent_started"
-                  ) {
-                    statusLabel =
-                      "ממתין לאישור";
-                  }
+                  let statusLabel = parentHistoryStatusLabel(
+                    String(booking.status ?? ""),
+                    session
+                  );
 
                   return {
                     id:

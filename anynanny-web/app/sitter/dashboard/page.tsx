@@ -17,7 +17,7 @@ import { hasSitterCompletedOnboarding, SITTER_PROFILES_TABLE, SITTER_PROFILES_US
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
-import { HOURLY_RATE, SESSIONS_TABLE, SESSION_PENDING_START_STATUSES, computeLiveElapsedSecondsActive, type SupabaseSessionRow, formatElapsed } from "@/lib/session/protocol";
+import { SESSIONS_TABLE, SESSION_PENDING_START_STATUSES, computeLiveAccruedNis, computeLiveElapsedSecondsActive, resolveLiveHourlyRateNis, type SupabaseSessionRow, formatElapsed } from "@/lib/session/protocol";
 import { dismissCompletedSession, readDismissedCompletedSessionId, shouldSuppressStaleCompletedSession } from "@/lib/session/dismissed-completed";
 import { readSessionLinkedBookingId, SESSION_SELECT_FALLBACK_CHAIN, SESSIONS_PROTOCOL_SELECT_CORE } from "@/lib/session/sessions-query";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
@@ -820,7 +820,21 @@ export default function SitterDashboardPage() {
   }, [endConfirmRow, activeShiftRow, nowMs]);
 
   const liveTimerText = useMemo(() => formatElapsed(liveElapsed), [liveElapsed]);
-  const liveEarned = useMemo(() => ((liveElapsed / 3600) * HOURLY_RATE).toFixed(2), [liveElapsed]);
+
+  /** Same canonical rate as parent: booking.hourly_rate_nis snapshot (no hardcoded fallback). */
+  const liveHourlyRate = useMemo(() => {
+    return resolveLiveHourlyRateNis(
+      todaysBooking?.hourly_rate_nis ?? activeCircleBooking?.hourly_rate_nis
+    );
+  }, [
+    todaysBooking?.hourly_rate_nis,
+    activeCircleBooking?.hourly_rate_nis
+  ]);
+
+  const liveEarned = useMemo(() => {
+    if (liveHourlyRate == null) return "0.00";
+    return computeLiveAccruedNis(liveElapsed, liveHourlyRate);
+  }, [liveElapsed, liveHourlyRate]);
 
   const confirmStartShift = async () => {
     if (!pendingRow || !sitterId) return;

@@ -30,6 +30,9 @@ export type BookingRow = {
   end_time: string;
   status: BookingStatus;
 
+  /** Snapshot of sitter rate at booking time — canonical for live + settlement. */
+  hourly_rate_nis?: number | null;
+
   actual_start_time?: string | null;
   actual_end_time?: string | null;
 

@@ -19,6 +19,10 @@ import {
 } from "@/lib/bookings/booking-shift-ui";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import {
+  persistDismissedRejectedBookingId,
+  readDismissedRejectedBookingIds
+} from "@/lib/bookings/dismissed-rejected-bookings";
+import {
   ANYNANNY_NEW_BOOKING_EVENT,
   bookingAllowsSettlementClosureUi,
   consumeNewBookingMarker,
@@ -54,8 +58,10 @@ import {
   type UserRatingSummary
 } from "@/lib/ratings/fetch-user-rating-summary";
 import {
+  computeLiveAccruedNis,
   computeLiveElapsedSecondsActive,
   formatElapsed,
+  resolveLiveHourlyRateNis,
   SESSIONS_TABLE,
   type SupabaseSessionRow
 } from "@/lib/session/protocol";
@@ -110,7 +116,6 @@ const POLL_MS = 5000;
 type SettlementStep = "payment" | "rating";
 
 const DISMISSED_SCHEDULED_STATUS_KEY = "anynanny_dismissed_scheduled_status_v1";
-const DISMISSED_REJECTED_STATUS_KEY = "anynanny_dismissed_rejected_status_v1";
 
 function readDismissedScheduledBookingIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -136,33 +141,6 @@ function persistDismissedScheduledBookingId(bookingId: string): void {
   }
 }
 
-function readDismissedRejectedBookingIds(): Set<string> {
-  if (typeof window === "undefined") return new Set();
-  try {
-    const raw = window.localStorage.getItem(DISMISSED_REJECTED_STATUS_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((id): id is string => typeof id === "string" && id.trim().length > 0));
-  } catch {
-    return new Set();
-  }
-}
-
-function persistDismissedRejectedBookingId(bookingId: string): void {
-  if (!bookingId.trim() || typeof window === "undefined") return;
-  try {
-    const next = readDismissedRejectedBookingIds();
-    next.add(bookingId);
-    window.localStorage.setItem(
-      DISMISSED_REJECTED_STATUS_KEY,
-      JSON.stringify([...next])
-    );
-  } catch {
-    /* ignore */
-  }
-}
-
 function normalizeStatus(status: unknown): string {
   return String(status ?? "").trim().toLowerCase();
 }
@@ -175,11 +153,16 @@ function isUnpaidCompletedBooking(b: BookingRow): boolean {
   return normalizeStatus(b.status) === "completed" && paymentStatus !== "paid" && !paidAt;
 }
 
+function isRejectedWithNoteBooking(b: BookingRow): boolean {
+  return normalizeStatus(b.status) === "rejected" && Boolean(b.rejection_note);
+}
+
 function pickParentDashboardBooking(
   rows: BookingRow[],
   opts?: {
     preferBookingId?: string | null;
     settlementLocked?: boolean;
+    dismissedRejectedIds?: Set<string>;
   }
 ): BookingRow | null {
   if (!rows.length) return null;
@@ -187,6 +170,7 @@ function pickParentDashboardBooking(
   const preferId = opts?.preferBookingId
     ? String(opts.preferBookingId)
     : null;
+  const dismissedRejectedIds = opts?.dismissedRejectedIds ?? new Set<string>();
 
   // בזמן Settlement אסור לעבור להזמנה אחרת.
   if (opts?.settlementLocked) {
@@ -231,7 +215,10 @@ function pickParentDashboardBooking(
       (
         isBookingDueForParentActiveShiftUi(preferred) ||
         isUnpaidCompletedBooking(preferred) ||
-        normalizeStatus(preferred.status) === "rejected"
+        (
+          isRejectedWithNoteBooking(preferred) &&
+          !dismissedRejectedIds.has(String(preferred.id))
+        )
       )
     ) {
       return preferred;
@@ -248,8 +235,8 @@ function pickParentDashboardBooking(
 
   const rejectedHit = rows.find(
     (b) =>
-      normalizeStatus(b.status) === "rejected" &&
-      b.rejection_note
+      isRejectedWithNoteBooking(b) &&
+      !dismissedRejectedIds.has(String(b.id))
   );
 
   if (rejectedHit) {
@@ -402,6 +389,8 @@ export function ParentDashboardClient({
   const [dismissedRejectedBookingIds, setDismissedRejectedBookingIds] = useState<Set<string>>(
     () => new Set()
   );
+  const dismissedRejectedBookingIdsRef = useRef<Set<string>>(dismissedRejectedBookingIds);
+  dismissedRejectedBookingIdsRef.current = dismissedRejectedBookingIds;
   const [parentRatingSummary, setParentRatingSummary] = useState<UserRatingSummary>({
     average: 0,
     count: 0
@@ -436,17 +425,10 @@ export function ParentDashboardClient({
   activeSessionRef.current = activeSession;
   activeBookingRef.current = activeBooking;
 
-  const currentHourlyRate = useMemo(() => {
-    const rate = Number(
-      (activeBooking as BookingRow & {
-        hourly_rate_nis?: number | null;
-      })?.hourly_rate_nis
-    );
-
-    return Number.isFinite(rate) && rate > 0
-      ? rate
-      : null;
-  }, [activeBooking]);
+  const currentHourlyRate = useMemo(
+    () => resolveLiveHourlyRateNis(activeBooking?.hourly_rate_nis),
+    [activeBooking?.hourly_rate_nis]
+  );
 
   const lockSettlement = useCallback((step: SettlementStep) => {
     settlementLockRef.current = step;
@@ -461,8 +443,18 @@ export function ParentDashboardClient({
   useEffect(() => {
     setHasHydrated(true);
     setDismissedScheduledBookingIds(readDismissedScheduledBookingIds());
-    setDismissedRejectedBookingIds(readDismissedRejectedBookingIds());
   }, []);
+
+  useEffect(() => {
+    if (!parentId) {
+      setDismissedRejectedBookingIds(new Set());
+      dismissedRejectedBookingIdsRef.current = new Set();
+      return;
+    }
+    const dismissed = readDismissedRejectedBookingIds(parentId);
+    setDismissedRejectedBookingIds(dismissed);
+    dismissedRejectedBookingIdsRef.current = dismissed;
+  }, [parentId]);
 
   const refreshParentOnboardingStatus = useCallback(
     async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
@@ -588,9 +580,16 @@ export function ParentDashboardClient({
           continue;
         }
 
+        // Always re-read parent-scoped dismissals from localStorage so login/refresh
+        // cannot resurface a booking the parent already dismissed with X.
+        const dismissedRejectedIds = readDismissedRejectedBookingIds(uid);
+        dismissedRejectedBookingIdsRef.current = dismissedRejectedIds;
+        setDismissedRejectedBookingIds(dismissedRejectedIds);
+
         const booking = pickParentDashboardBooking(bookingRows, {
           preferBookingId: activeBookingRef.current?.id ?? null,
-          settlementLocked: settlementIsLocked()
+          settlementLocked: settlementIsLocked(),
+          dismissedRejectedIds
         });
         const bookingSitterId =
           booking?.sitter_id != null ? String(booking.sitter_id) : null;
@@ -1561,11 +1560,7 @@ export function ParentDashboardClient({
   const liveTimerText = useMemo(() => formatElapsed(liveElapsedSeconds), [liveElapsedSeconds]);
   const liveEarned = useMemo(() => {
     if (currentHourlyRate == null) return "0.00";
-
-    return (
-      (liveElapsedSeconds / 3600) *
-      currentHourlyRate
-    ).toFixed(2);
+    return computeLiveAccruedNis(liveElapsedSeconds, currentHourlyRate);
   }, [liveElapsedSeconds, currentHourlyRate]);
 
   const handleOnboardingSaved = async () => {
@@ -1638,10 +1633,12 @@ export function ParentDashboardClient({
       });
     }
     if (rejectedBookingId && isRejectedBooking) {
-      persistDismissedRejectedBookingId(rejectedBookingId);
+      // Persist only THIS booking id — new rejections remain visible.
+      persistDismissedRejectedBookingId(parentId, rejectedBookingId);
       setDismissedRejectedBookingIds((prev) => {
         const next = new Set(prev);
         next.add(rejectedBookingId);
+        dismissedRejectedBookingIdsRef.current = next;
         return next;
       });
     }

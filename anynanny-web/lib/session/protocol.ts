@@ -79,6 +79,26 @@ export function computeLiveElapsedSecondsActive(params: {
   return Math.max(0, Math.floor((endWallMs - params.startMs) / 1000));
 }
 
+/** Prefer booking snapshot rate; optional fallback only when snapshot is missing. */
+export function resolveLiveHourlyRateNis(
+  bookingHourlyRate: unknown,
+  fallbackRate?: number | null
+): number | null {
+  const rate = Number(bookingHourlyRate);
+  if (Number.isFinite(rate) && rate > 0) return rate;
+  const fallback = Number(fallbackRate);
+  if (Number.isFinite(fallback) && fallback > 0) return fallback;
+  return null;
+}
+
+/** Live accrued NIS from the same elapsedSeconds used by the timer. */
+export function computeLiveAccruedNis(
+  elapsedSeconds: number,
+  hourlyRateNis: number
+): string {
+  return ((Math.max(0, elapsedSeconds) / 3600) * hourlyRateNis).toFixed(2);
+}
+
 export function readSessionState(): SessionProtocolState {
   const raw = localStorage.getItem(SESSION_STATE_KEY);
   if (!raw) return { status: "idle" };
