@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
+import { fetchUserRatingSummary } from "@/lib/ratings/fetch-user-rating-summary";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
   formatPreferredAgesDisplay,
@@ -317,7 +318,27 @@ export async function fetchParentSitterProfile(
     return { profile: null, reviews: [], error: null };
   }
 
-  const reviews = await fetchSitterPublicReviews(supabase, sitterId, 10);
+  const [reviews, ratingSummary] = await Promise.all([
+    fetchSitterPublicReviews(supabase, sitterId, 10),
+    fetchUserRatingSummary(supabase, sitterId)
+  ]);
+
+  // Authoritative published ratings (same source as the ratings system).
+  // Direct sitter_profiles select does not include avg_rating/rating_count.
+  if (ratingSummary.count > 0 && ratingSummary.average > 0) {
+    profile = {
+      ...profile,
+      avg_rating: ratingSummary.average,
+      rating_count: ratingSummary.count
+    };
+  } else {
+    profile = {
+      ...profile,
+      avg_rating: null,
+      rating_count: 0
+    };
+  }
+
   return { profile, reviews, error: null };
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Calendar, ArrowRight, Star, User } from "lucide-react";
@@ -17,6 +17,7 @@ import {
   formatPublicLanguagesLabel
 } from "@/lib/sitter/public-search-card";
 import { formatSitterLanguagesDisplay } from "@/lib/sitter/sitter-profile";
+import { broadcastRadarHref } from "@/lib/broadcast/parent-active-broadcast";
 
 function formatReviewDate(iso: string): string {
   const t = Date.parse(iso);
@@ -31,6 +32,7 @@ function formatReviewDate(iso: string): string {
 export default function ParentSitterProfileView() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const sitterId = typeof params?.sitterId === "string" ? params.sitterId : "";
   const { isLoading, signedIn, effectiveRole } = useAuth();
 
@@ -39,6 +41,21 @@ export default function ParentSitterProfileView() {
   const [fetching, setFetching] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+
+  const fromBroadcast = searchParams.get("from") === "broadcast";
+  const broadcastAlertId = (searchParams.get("alertId") ?? "").trim();
+  const broadcastCity = (searchParams.get("city") ?? "").trim();
+  const broadcastType = (searchParams.get("type") ?? "sitter").trim() || "sitter";
+  const backToBroadcast =
+    fromBroadcast && broadcastAlertId.length > 0 && broadcastCity.length > 0
+      ? broadcastRadarHref({
+          id: broadcastAlertId,
+          city: broadcastCity,
+          service_type: broadcastType
+        })
+      : null;
+  const backHref = backToBroadcast ?? "/parent/search/results";
+  const backLabel = backToBroadcast ? "חזרה לשידור" : "חזרה לחיפוש";
 
   useEffect(() => {
     if (isLoading) return;
@@ -137,11 +154,11 @@ export default function ParentSitterProfileView() {
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-4 pb-24 px-2" dir="rtl">
       <div className="px-1">
         <Link
-          href="/parent/search/results"
+          href={backHref}
           className="inline-flex items-center gap-1.5 text-sm font-bold text-[#001F3F] transition hover:opacity-80"
         >
           <ArrowRight className="h-4 w-4" />
-          חזרה לחיפוש
+          {backLabel}
         </Link>
       </div>
 

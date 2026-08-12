@@ -24,6 +24,26 @@ export function parentSitterProfilePath(sitterId: string): string {
   return `/parent/sitter/${encodeURIComponent(id)}`;
 }
 
+/** Full public profile href when opened from an active Broadcast Radar session. */
+export function parentSitterProfilePathFromBroadcast(
+  sitterId: string,
+  broadcast: { alertId: string; city: string; serviceType?: string | null }
+): string {
+  const base = parentSitterProfilePath(sitterId);
+  if (base === "/parent/search") return base;
+
+  const params = new URLSearchParams({
+    from: "broadcast",
+    alertId: broadcast.alertId,
+    city: broadcast.city
+  });
+  const serviceType = (broadcast.serviceType ?? "").trim();
+  if (serviceType && serviceType !== "sitter") {
+    params.set("type", serviceType);
+  }
+  return `${base}?${params.toString()}`;
+}
+
 function resolveCardServiceKinds(sitter: PublicSitterSearchCard): ExpertServiceKind[] {
   const raw = sitter.service_types;
   if (!Array.isArray(raw) || raw.length === 0) return ["babysitter"];
