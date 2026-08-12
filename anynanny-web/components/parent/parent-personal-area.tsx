@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Loader2, Plus, Trash2, User, Wallet } from "lucide-react";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
+import { IdentityPersonalSection } from "@/components/identity/identity-personal-section";
+import { IdentityVerifiedBadgeLive } from "@/components/identity/verified-user-badge";
 import {
   PersonalAreaSection,
   PersonalChangeLink,
@@ -440,6 +442,7 @@ export function ParentPersonalArea() {
                   {publicId}
                 </p>
               ) : null}
+              <IdentityVerifiedBadgeLive userId={form.id} />
               <button
                 type="button"
                 onClick={() => openEdit("avatar")}
@@ -467,6 +470,8 @@ export function ParentPersonalArea() {
           {success}
         </p>
       ) : null}
+
+      <IdentityPersonalSection role="parent" userId={form.id} />
 
       <PersonalAreaSection title="פרטים אישיים" description="הפרטים שנשמרו בשאלון ההרשמה">
         <PersonalStaticRow label="שם פרטי" value={form.first_name} onEdit={() => openEdit("first_name")} />

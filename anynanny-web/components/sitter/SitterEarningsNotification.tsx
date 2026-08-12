@@ -114,10 +114,20 @@ export function SitterDashboardHeader({
       }
 
       // Soft fallback — rating aggregate without the missing RPC.
-      const { data: rows, error: ratingsErr } = await supabase
+      let { data: rows, error: ratingsErr } = await supabase
         .from(RATINGS_TABLE)
         .select("rating")
-        .eq("to_user_id", sitterId);
+        .eq("to_user_id", sitterId)
+        .not("published_at", "is", null);
+      if (cancelled) return;
+      if (ratingsErr && /published_at|schema cache|column/i.test(ratingsErr.message ?? "")) {
+        const legacy = await supabase
+          .from(RATINGS_TABLE)
+          .select("rating")
+          .eq("to_user_id", sitterId);
+        rows = legacy.data;
+        ratingsErr = legacy.error;
+      }
       if (cancelled) return;
       if (ratingsErr) {
         setLoadState("error");

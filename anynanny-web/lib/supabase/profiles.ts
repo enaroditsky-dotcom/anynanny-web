@@ -22,6 +22,11 @@ export type ProfileRow = {
   /** Legacy parent/sitter-specific ids (fallback when public_id is unset). */
   parent_public_id?: string | null;
   nanny_public_id?: string | null;
+  /** Phase 1 identity verification — never auto-set to verified. */
+  identity_verification_status?: "unverified" | "pending" | "verified" | "failed" | null;
+  identity_verified_at?: string | null;
+  identity_verification_method?: string | null;
+  identity_id_number?: string | null;
 };
 
 export function isProfileRole(v: string | null | undefined): v is ProfileRole {

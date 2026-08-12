@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Camera, User } from "lucide-react";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
+import { IdentityPersonalSection } from "@/components/identity/identity-personal-section";
+import { IdentityVerifiedBadgeLive } from "@/components/identity/verified-user-badge";
 import {
   PersonalAreaSection,
   PersonalChangeLink,
@@ -492,6 +494,7 @@ export function SitterPersonalArea({ userId }: Props) {
                 {form.nanny_serial}
               </p>
             ) : null}
+            <IdentityVerifiedBadgeLive userId={userId} />
             <button
               type="button"
               onClick={() => openEdit("avatar")}
@@ -511,6 +514,8 @@ export function SitterPersonalArea({ userId }: Props) {
           {success}
         </p>
       ) : null}
+
+      <IdentityPersonalSection role="sitter" userId={userId} />
 
       <PersonalAreaSection title="פרטים אישיים" description="הפרטים שנשמרו בשאלון ובפרופיל">
         <PersonalStaticRow label="שם פרטי" value={form.first_name} onEdit={() => openEdit("first_name")} />

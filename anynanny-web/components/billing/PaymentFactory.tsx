@@ -2,17 +2,23 @@
 
 import Image from "next/image";
 import { CreditCard, Loader2 } from "lucide-react";
-import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-method";
 import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
 import { formatElapsed } from "@/lib/session/protocol";
 
+type ParentCheckoutPaymentMethodUi =
+  | "credit_card"
+  | "bit"
+  | "apple_pay"
+  | "google_pay";
+
 const PAYMENT_OPTIONS: {
-  id: CheckoutPaymentMethod;
+  id: ParentCheckoutPaymentMethodUi;
   label: string;
   hint: string;
   logoSrc: string;
   logoAlt: string;
   logoShape: "circle" | "rounded";
+  logoFit?: "cover" | "contain";
 }[] = [
   {
     id: "credit_card",
@@ -31,12 +37,22 @@ const PAYMENT_OPTIONS: {
     logoShape: "rounded"
   },
   {
-    id: "paybox",
-    label: "PayBox",
-    hint: "נפתח ישירות למסך PayBox ב־HYP",
-    logoSrc: "/wallet/paybox-logo.png",
-    logoAlt: "PayBox",
-    logoShape: "rounded"
+    id: "apple_pay",
+    label: "Apple Pay",
+    hint: "תשלום דרך Apple Pay ב־HYP",
+    logoSrc: "/wallet/apple-pay-logo.png",
+    logoAlt: "Apple Pay",
+    logoShape: "rounded",
+    logoFit: "contain"
+  },
+  {
+    id: "google_pay",
+    label: "Google Pay",
+    hint: "תשלום דרך Google Pay ב־HYP",
+    logoSrc: "/wallet/google-pay-logo.png",
+    logoAlt: "Google Pay",
+    logoShape: "rounded",
+    logoFit: "contain"
   }
 ];
 
@@ -45,8 +61,8 @@ export type PaymentFactoryProps = {
   sitterBaseNis: number;
   parentTotalNis: number;
   platformFeeNis: number;
-  selectedMethod: CheckoutPaymentMethod;
-  onSelectMethod: (method: CheckoutPaymentMethod) => void;
+  selectedMethod: ParentCheckoutPaymentMethodUi;
+  onSelectMethod: (method: ParentCheckoutPaymentMethodUi) => void;
   savedMethods?: ParentPaymentMethod[];
   selectedSavedMethodId?: string | null;
   onSelectSavedMethod?: (methodId: string | null) => void;
@@ -148,7 +164,7 @@ export function PaymentFactory({
             ) : null}
 
             <div className="grid grid-cols-1 gap-2.5">
-              {PAYMENT_OPTIONS.map(({ id, label, hint, logoSrc, logoAlt, logoShape }) => {
+              {PAYMENT_OPTIONS.map(({ id, label, hint, logoSrc, logoAlt, logoShape, logoFit }) => {
                 const selected = !usingSavedCard && selectedMethod === id;
                 return (
                   <button
@@ -174,7 +190,11 @@ export function PaymentFactory({
                         src={logoSrc}
                         alt={logoAlt}
                         fill
-                        className="object-cover"
+                        className={
+                          logoFit === "contain"
+                            ? "object-contain p-1"
+                            : "object-cover"
+                        }
                         sizes="40px"
                       />
                     </span>

@@ -147,18 +147,82 @@ export async function fetchSitterPublicReviews(
   sitterId: string,
   limit = 10
 ): Promise<PublicSitterReview[]> {
+  const capped = Math.max(1, Math.min(limit, 20));
+
+  // Prefer security-definer RPC (published + non-empty comments only).
+  const { data: rpcJson, error: rpcErr } = await supabase.rpc("get_sitter_public_reviews", {
+    p_sitter_id: sitterId,
+    p_limit: capped
+  });
+
+  if (!rpcErr && rpcJson != null) {
+    const rows = Array.isArray(rpcJson)
+      ? rpcJson
+      : typeof rpcJson === "string"
+        ? (() => {
+            try {
+              return JSON.parse(rpcJson) as unknown[];
+            } catch {
+              return [];
+            }
+          })()
+        : [];
+    return rows
+      .map((row) => {
+        const r = row as Record<string, unknown>;
+        return {
+          rating: Number(r.rating),
+          comment: String(r.comment ?? "").trim(),
+          created_at: String(r.created_at ?? "")
+        };
+      })
+      .filter(
+        (row) =>
+          Number.isFinite(row.rating) &&
+          row.rating >= 1 &&
+          row.rating <= 5 &&
+          row.comment.length > 0
+      );
+  }
+
   const read = safeSupabaseRead(
     await supabase
       .from(RATINGS_TABLE)
       .select("rating, comment, created_at")
       .eq("to_user_id", sitterId)
+      .not("published_at", "is", null)
+      .not("comment", "is", null)
       .order("created_at", { ascending: false })
-      .limit(limit),
+      .limit(capped),
     "sitter public reviews direct"
   );
 
   if (read.error || !read.data) {
-    return [];
+    // Pre-migration fallback without published_at filter.
+    const legacy = safeSupabaseRead(
+      await supabase
+        .from(RATINGS_TABLE)
+        .select("rating, comment, created_at")
+        .eq("to_user_id", sitterId)
+        .not("comment", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(capped),
+      "sitter public reviews legacy"
+    );
+    if (legacy.error || !legacy.data) return [];
+    return (legacy.data as Array<Record<string, unknown>>)
+      .map((row) => ({
+        rating: Number(row.rating),
+        comment: String(row.comment ?? "").trim(),
+        created_at: String(row.created_at ?? "")
+      }))
+      .filter(
+        (row) =>
+          Number.isFinite(row.rating) &&
+          row.rating >= 1 &&
+          row.rating <= 5 &&
+          row.comment.length > 0
+      );
   }
 
   return (read.data as Array<Record<string, unknown>>)
@@ -167,7 +231,13 @@ export async function fetchSitterPublicReviews(
       comment: String(row.comment ?? "").trim(),
       created_at: String(row.created_at ?? "")
     }))
-    .filter((row) => Number.isFinite(row.rating) && row.rating >= 1 && row.rating <= 5);
+    .filter(
+      (row) =>
+        Number.isFinite(row.rating) &&
+        row.rating >= 1 &&
+        row.rating <= 5 &&
+        row.comment.length > 0
+    );
 }
 
 async function fetchSitterProfileDirect(

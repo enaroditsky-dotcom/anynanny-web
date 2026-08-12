@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Calendar, ArrowRight, User } from "lucide-react";
-import { getSitterProfilesTable, formatSitterDisplayName } from "@/lib/sitter/sitter-profile";
+import { Calendar, ArrowRight, Star, User } from "lucide-react";
+import {
+  formatSitterDisplayName,
+  type PublicSitterReview,
+  type SitterProfilePublic
+} from "@/lib/sitter/sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import {
   formatParentFacingPriceLabel,
@@ -15,13 +18,24 @@ import {
 } from "@/lib/sitter/public-search-card";
 import { formatSitterLanguagesDisplay } from "@/lib/sitter/sitter-profile";
 
+function formatReviewDate(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  try {
+    return new Date(t).toLocaleDateString("he-IL");
+  } catch {
+    return "";
+  }
+}
+
 export default function ParentSitterProfileView() {
   const router = useRouter();
   const params = useParams();
   const sitterId = typeof params?.sitterId === "string" ? params.sitterId : "";
   const { isLoading, signedIn, effectiveRole } = useAuth();
 
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<SitterProfilePublic | null>(null);
+  const [reviews, setReviews] = useState<PublicSitterReview[]>([]);
   const [fetching, setFetching] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -40,53 +54,32 @@ export default function ParentSitterProfileView() {
   useEffect(() => {
     async function loadSitter() {
       if (!sitterId) return;
-      const supabase = getSupabaseBrowserClient();
-      if (!supabase) {
-        setErrorMsg("Supabase לא מוגדר.");
-        setFetching(false);
-        return;
-      }
 
       try {
-        const tableName = getSitterProfilesTable();
-        
-        let { data, error } = await supabase
-          .from(tableName)
-          .select("*")
-          .eq("id", sitterId)
-          .maybeSingle();
+        const res = await fetch(`/api/parent/sitter/${encodeURIComponent(sitterId)}/public`, {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store"
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          profile?: SitterProfilePublic | null;
+          reviews?: PublicSitterReview[];
+          error?: string;
+        };
 
-        if (!data) {
-          const res = await supabase
-            .from(tableName)
-            .select("*")
-            .eq("user_id", sitterId)
-            .maybeSingle();
-          data = res.data;
-          error = res.error;
-        }
-
-        if (error || !data) {
-          setErrorMsg("הפרופיל אינו נמצא.");
+        if (!res.ok || !json.profile) {
+          setErrorMsg(json.error || "הפרופיל אינו נמצא.");
           setProfile(null);
+          setReviews([]);
         } else {
-          const profileData = { ...data };
-          // שליפת התמונה בנפרד מטבלת ה-profiles הראשית (כדי להימנע משגיאות schema)
-          const targetUserId = profileData.user_id || profileData.id || sitterId;
-          const { data: mainProfile } = await supabase
-            .from("profiles")
-            .select("avatar_url")
-            .eq("id", targetUserId)
-            .maybeSingle();
-
-          if (mainProfile?.avatar_url) {
-            profileData.avatar_url = mainProfile.avatar_url;
-          }
-
-          setProfile(profileData);
+          setProfile(json.profile);
+          setReviews(Array.isArray(json.reviews) ? json.reviews : []);
+          setErrorMsg(null);
         }
-      } catch (err) {
+      } catch {
         setErrorMsg("שגיאה בטעינת הפרופיל.");
+        setProfile(null);
+        setReviews([]);
       } finally {
         setFetching(false);
       }
@@ -97,7 +90,8 @@ export default function ParentSitterProfileView() {
     }
   }, [sitterId, signedIn, effectiveRole]);
 
-  const displayName = formatSitterDisplayName(profile) || profile?.display_name || "בייביסיטר";
+  const displayName =
+    formatSitterDisplayName(profile ?? undefined) || profile?.display_name || "בייביסיטר";
   const workingCity = profile?.working_cities?.[0] || "חיפה";
   const rateLabel = formatParentFacingPriceLabel({
     pricing_model: profile?.pricing_model,
@@ -117,7 +111,7 @@ export default function ParentSitterProfileView() {
     formatPublicLanguagesLabel(profile?.languages) ||
     formatSitterLanguagesDisplay(profile?.languages) ||
     null;
-  
+
   const serialNumber = profile?.nanny_serial;
   const serialRaw = serialNumber ? String(serialNumber).trim() : "";
   const serialDisplay = serialRaw
@@ -127,6 +121,17 @@ export default function ParentSitterProfileView() {
         ? `AN-${serialRaw}`
         : serialRaw
     : null;
+
+  const avgRating =
+    profile?.avg_rating != null && Number.isFinite(Number(profile.avg_rating))
+      ? Number(profile.avg_rating)
+      : null;
+  const ratingCount =
+    profile?.rating_count != null && Number.isFinite(Number(profile.rating_count))
+      ? Math.max(0, Math.floor(Number(profile.rating_count)))
+      : 0;
+  const hasPublishedRating = avgRating != null && avgRating > 0 && ratingCount > 0;
+  const writtenReviews = reviews.filter((r) => String(r.comment ?? "").trim().length > 0);
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-4 pb-24 px-2" dir="rtl">
@@ -146,7 +151,6 @@ export default function ParentSitterProfileView() {
         <p className="text-right text-sm text-rose-700 px-1">{errorMsg}</p>
       ) : profile ? (
         <div className="rounded-3xl border border-navy-header/12 bg-white p-5 shadow-soft space-y-4">
-          {/* הוספת תמונת הפרופיל בראש כרטיסיית המידע */}
           <div className="flex items-center gap-4">
             <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
               {profile.avatar_url ? (
@@ -162,6 +166,23 @@ export default function ParentSitterProfileView() {
               {serialDisplay && (
                 <p className="text-xs font-semibold text-violet-600">מזהה: {serialDisplay}</p>
               )}
+              <div className="pt-1">
+                {hasPublishedRating ? (
+                  <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">
+                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
+                    <span>{avgRating!.toFixed(1)}</span>
+                    <span className="font-medium text-amber-700">
+                      ·{" "}
+                      {ratingCount === 1 ? "דירוג אחד" : `${ratingCount} דירוגים`}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-500">
+                    <Star className="h-3.5 w-3.5 text-slate-300" aria-hidden />
+                    <span>טרם דורג</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -182,9 +203,7 @@ export default function ParentSitterProfileView() {
             <p className="text-xs text-violet-700 font-medium">
               {profile.has_car ? "דרך הגעה: עצמאית" : "דרך הגעה: תחבורה ציבורית"}
             </p>
-            <p className="text-sm font-semibold text-navy-800 pt-1">
-              {rateLabel}
-            </p>
+            <p className="text-sm font-semibold text-navy-800 pt-1">{rateLabel}</p>
           </div>
 
           <div className="border-t border-slate-100 pt-3 text-right">
@@ -192,9 +211,42 @@ export default function ParentSitterProfileView() {
             <p className="mt-1 text-sm text-slate-700">{profile.bio || "אין פירוט זמין"}</p>
           </div>
 
+          <div className="border-t border-slate-100 pt-3 text-right space-y-2">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              חוות דעת
+            </h2>
+            {writtenReviews.length === 0 ? (
+              <p className="text-sm text-slate-500">עדיין אין חוות דעת כתובות.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {writtenReviews.map((review, idx) => (
+                  <li
+                    key={`${review.created_at}-${idx}`}
+                    className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right"
+                  >
+                    <div className="flex flex-row-reverse items-center justify-between gap-2">
+                      <span className="inline-flex flex-row-reverse items-center gap-1 text-xs font-bold text-amber-900">
+                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
+                        {Number(review.rating).toFixed(0)}
+                      </span>
+                      {review.created_at ? (
+                        <span className="text-[11px] tabular-nums text-slate-400">
+                          {formatReviewDate(review.created_at)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{review.comment}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <div className="border-t border-slate-100 pt-3 space-y-2">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider text-right">פעולות</h2>
-            
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
+              פעולות
+            </h2>
+
             <button
               type="button"
               onClick={() => setIsBookingModalOpen(true)}

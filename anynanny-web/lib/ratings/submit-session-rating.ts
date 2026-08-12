@@ -10,7 +10,7 @@ export type SubmitSessionRatingResult =
   | { ok: true }
   | { ok: false; error: string };
 
-/** Persist a 1–5 star rating for a completed session (parent → sitter or sitter → parent). */
+/** Persist a 1–5 star rating (+ optional comment) for a completed session. */
 export async function submitSessionRating(
   supabase: SupabaseClient,
   params: {
@@ -54,13 +54,28 @@ export async function submitSessionRating(
   const uid = user.id;
   const isParent = parentId === uid;
   const isSitter = sitterId === uid;
+  const status = String(sessionRow.status ?? "");
 
   if (!isParent && !isSitter) {
     return { ok: false, error: "אין הרשאה לדרג משמרת זו." };
   }
-  const ratableStatuses = new Set(["completed", "payment_pending", "paid"]);
-  if (!ratableStatuses.has(String(sessionRow.status))) {
-    return { ok: false, error: "ניתן לדרג רק משמרת שהסתיימה." };
+
+  if (params.role === "parent") {
+    if (!isParent) {
+      return { ok: false, error: "אין הרשאה לדרג משמרת זו." };
+    }
+    const parentRatable = new Set(["completed", "payment_pending", "paid", "sitter_completed"]);
+    if (!parentRatable.has(status)) {
+      return { ok: false, error: "ניתן לדרג רק משמרת שהסתיימה." };
+    }
+  } else {
+    if (!isSitter) {
+      return { ok: false, error: "אין הרשאה לדרג משמרת זו." };
+    }
+    // Sitter → Parent only after successful payment.
+    if (status !== "paid") {
+      return { ok: false, error: "ניתן לדרג את המשפחה רק לאחר שהתשלום הושלם." };
+    }
   }
 
   const toUserId = isParent ? sitterId : parentId;
@@ -68,19 +83,44 @@ export async function submitSessionRating(
     return { ok: false, error: "לא נמצא משתמש לדירוג." };
   }
 
-  const { error: insErr } = await supabase.from(RATINGS_TABLE).insert({
+  // Parent reviews stay unpublished until finalizeHypPaymentSuccess publishes them.
+  // Sitter reviews are published immediately (payment already succeeded).
+  // DB BEFORE INSERT trigger also enforces this — clients cannot self-publish as parent.
+  const row: Record<string, unknown> = {
     session_id: sid,
     from_user_id: uid,
     to_user_id: toUserId,
     rating: stars,
-    comment: commentTrimmed
-  });
+    comment: commentTrimmed,
+    published_at: isParent ? null : new Date().toISOString()
+  };
+
+  const { error: insErr } = await supabase.from(RATINGS_TABLE).insert(row);
 
   if (insErr) {
     // unique (session_id, from_user_id) — already rated; treat as success (idempotent).
     const code = String((insErr as { code?: string }).code ?? "");
     const msg = String(insErr.message ?? "");
     if (code === "23505" || /duplicate key|unique/i.test(msg)) {
+      return { ok: true };
+    }
+    // Older DBs without published_at: retry without the column.
+    if (/published_at|schema cache|column/i.test(msg)) {
+      const { error: retryErr } = await supabase.from(RATINGS_TABLE).insert({
+        session_id: sid,
+        from_user_id: uid,
+        to_user_id: toUserId,
+        rating: stars,
+        comment: commentTrimmed
+      });
+      if (retryErr) {
+        const retryCode = String((retryErr as { code?: string }).code ?? "");
+        const retryMsg = String(retryErr.message ?? "");
+        if (retryCode === "23505" || /duplicate key|unique/i.test(retryMsg)) {
+          return { ok: true };
+        }
+        return { ok: false, error: retryErr.message || "שמירת הדירוג נכשלה." };
+      }
       return { ok: true };
     }
     return { ok: false, error: insErr.message || "שמירת הדירוג נכשלה." };

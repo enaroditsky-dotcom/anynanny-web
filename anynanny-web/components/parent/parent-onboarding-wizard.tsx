@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
+import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
+import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 type SpecialEvent = {
@@ -50,6 +52,7 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
 
   // Special Pampering Events (Dynamic list with +)
   const [specialEvents, setSpecialEvents] = useState<SpecialEvent[]>([]);
+  const [verifyFormOpen, setVerifyFormOpen] = useState(false);
 
   const addChild = () => {
     setChildren([...children, { id: Math.random().toString(), name: "", birthDate: "" }]);
@@ -73,6 +76,19 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
 
   const removeSpecialEvent = (id: string) => {
     setSpecialEvents(specialEvents.filter(e => e.id !== id));
+  };
+
+  const goToVerificationStep = () => {
+    if (!firstName || !lastName) {
+      setError("יש למלא את שם ההורה.");
+      return;
+    }
+    if (selectedCity.length === 0 || !street || !houseNumber) {
+      setError("יש להזין כתובת מלאה ומובנית (עיר, רחוב ומספר בית).");
+      return;
+    }
+    setError(null);
+    setStep(4);
   };
 
   const handleFinish = async () => {
@@ -410,14 +426,43 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
             <button
               type="button"
               disabled={busy}
-              onClick={() => void handleFinish()}
-              className="flex-[1.4] rounded-2xl bg-[#B8860B] py-3.5 font-bold text-white transition hover:bg-yellow-700 disabled:opacity-60"
+              onClick={goToVerificationStep}
+              className="flex-[1.4] rounded-2xl bg-[#001F3F] py-3.5 font-bold text-white transition hover:bg-blue-900 disabled:opacity-60"
             >
-              {busy ? "שומר..." : "סיום ושמירה"}
+              הבא
             </button>
           </div>
         </div>
       )}
+
+      {step === 4 && (
+        <div className="space-y-4">
+          <IdentityOnboardingCard
+            busy={busy}
+            onVerifyNow={() => setVerifyFormOpen(true)}
+            onSkipLater={() => void handleFinish()}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setStep(3)}
+            className="w-full rounded-2xl border-2 border-[#001F3F]/20 py-3 font-bold text-[#001F3F] transition hover:bg-white/60 disabled:opacity-60"
+          >
+            חזרה
+          </button>
+        </div>
+      )}
+
+      <IdentityVerificationForm
+        open={verifyFormOpen}
+        role="parent"
+        nextPath="/parent/profile"
+        onClose={() => setVerifyFormOpen(false)}
+        onSaved={async () => {
+          setVerifyFormOpen(false);
+          await handleFinish();
+        }}
+      />
     </div>
   );
 }

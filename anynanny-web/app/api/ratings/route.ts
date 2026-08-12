@@ -84,8 +84,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (String(sessionRow.status) !== "completed") {
+    if (String(sessionRow.status) !== "completed" && String(sessionRow.status) !== "payment_pending" && String(sessionRow.status) !== "paid" && String(sessionRow.status) !== "sitter_completed") {
       return NextResponse.json({ error: "Session must be completed before rating" }, { status: 400 });
+    }
+
+    // Sitter may only rate after payment success.
+    if (isSitter && String(sessionRow.status) !== "paid") {
+      return NextResponse.json({ error: "Sitter may rate only after payment" }, { status: 400 });
     }
 
     let toUserId: string | null = null;
@@ -107,13 +112,16 @@ export async function POST(request: Request) {
 
     const ratingStars = rating;
 
-    const { error: insErr } = await supabase.from(RATINGS_TABLE).insert({
+    const insertRow: Record<string, unknown> = {
       session_id: sessionId,
       from_user_id: uid,
       to_user_id: toUserId,
       rating: ratingStars,
-      comment
-    });
+      comment,
+      published_at: isParent ? null : new Date().toISOString()
+    };
+
+    const { error: insErr } = await supabase.from(RATINGS_TABLE).insert(insertRow);
 
     if (insErr) {
       const msg = insErr.message ?? "Insert failed";

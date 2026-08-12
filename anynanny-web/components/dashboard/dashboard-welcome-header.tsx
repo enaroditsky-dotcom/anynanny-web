@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { CurrentUserRatingBadge } from "@/components/dashboard/current-user-rating-badge";
+import { IdentityVerifiedBadgeLive } from "@/components/identity/verified-user-badge";
+import { useAuth } from "@/components/auth-provider";
 import { buildDashboardGreetingLine } from "@/lib/user/use-dashboard-greeting-name";
 
 type DashboardWelcomeHeaderProps = {
@@ -22,6 +24,7 @@ export function DashboardWelcomeHeader({
   children
 }: DashboardWelcomeHeaderProps) {
   const greeting = buildDashboardGreetingLine(fullName, nameLoading);
+  const { user } = useAuth();
 
   return (
     <header className="text-right px-4" dir="rtl">
@@ -33,7 +36,7 @@ export function DashboardWelcomeHeader({
       
       {/* 👑 קונטיינר אנכי משותף (מותאם לנני בלבד או לפי הצורך) */}
       <div className="mt-2 flex flex-col items-start gap-1.5">
-        {/* ⭐️ תג הדירוג */}
+        <IdentityVerifiedBadgeLive userId={user?.id} />
         <CurrentUserRatingBadge showNannyId={showNannyId} />
       </div>
 
