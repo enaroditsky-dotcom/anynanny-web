@@ -105,9 +105,30 @@ export function SitterDashboardHeader({
       const { data: rows, error: ratingsErr } = await supabase
         .from(RATINGS_TABLE)
         .select("rating")
-        .eq("to_user_id", sitterId);
+        .eq("to_user_id", sitterId)
+        .not("published_at", "is", null);
       if (cancelled) return;
       if (ratingsErr) {
+        if (/published_at|schema cache|column/i.test(ratingsErr.message ?? "")) {
+          const legacy = await supabase
+            .from(RATINGS_TABLE)
+            .select("rating")
+            .eq("to_user_id", sitterId);
+          if (cancelled) return;
+          if (legacy.error) {
+            setLoadState("error");
+            return;
+          }
+          const ratings = (legacy.data ?? [])
+            .map((r) => Number((r as { rating?: unknown }).rating))
+            .filter((n) => Number.isFinite(n));
+          const rating_count = ratings.length;
+          const avg_rating =
+            rating_count > 0 ? ratings.reduce((a, b) => a + b, 0) / rating_count : null;
+          setStats({ avg_rating, rating_count });
+          setLoadState("ready");
+          return;
+        }
         setLoadState("error");
         return;
       }

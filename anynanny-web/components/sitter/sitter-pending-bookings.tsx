@@ -84,6 +84,11 @@ type ParentDetails = {
 
   rating_average?: number | null;
   rating_count?: number | null;
+  reviews?: Array<{
+    rating: number;
+    comment: string;
+    created_at: string;
+  }> | null;
 
   children_count?: number | null;
   children_ages?: string | null;
@@ -970,6 +975,39 @@ export function SitterPendingBookings({
                         </div>
                       )}
                     </div>
+
+                    {Array.isArray(parentInfo.reviews) &&
+                    parentInfo.reviews.length > 0 ? (
+                      <div className="space-y-1.5 border-t border-slate-100 pt-2 text-right">
+                        <p className="text-[11px] font-semibold text-slate-500">
+                          חוות דעת אחרונות
+                        </p>
+                        {parentInfo.reviews.slice(0, 2).map((review, idx) => (
+                          <div
+                            key={`${review.created_at}-${idx}`}
+                            className="rounded-lg bg-slate-50 px-2 py-1.5"
+                          >
+                            <div className="flex flex-row-reverse items-center justify-between gap-2">
+                              <span className="inline-flex flex-row-reverse items-center gap-1 text-[11px] font-bold text-amber-800">
+                                <Star
+                                  className="h-3 w-3 fill-amber-400 text-amber-400"
+                                  aria-hidden
+                                />
+                                {Number(review.rating).toFixed(0)}
+                              </span>
+                              {review.created_at ? (
+                                <span className="text-[10px] tabular-nums text-slate-400">
+                                  {new Date(review.created_at).toLocaleDateString("he-IL")}
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-0.5 text-[11px] leading-snug text-slate-700">
+                              {review.comment}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
 
                     {parentInfo.address_visible &&
                     parentInfo.address ? (

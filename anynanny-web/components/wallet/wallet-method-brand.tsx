@@ -3,13 +3,24 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
 
-export type WalletMethodKind = "credit_card" | "bit" | "paybox" | "card";
+export type WalletMethodKind =
+  | "credit_card"
+  | "bit"
+  | "paybox"
+  | "apple_pay"
+  | "google_pay"
+  | "card";
 
-export const WALLET_METHOD_ACCENT: Record<"credit_card" | "bit" | "paybox" | "card", string> = {
+export const WALLET_METHOD_ACCENT: Record<
+  "credit_card" | "bit" | "paybox" | "apple_pay" | "google_pay" | "card",
+  string
+> = {
   credit_card: "border-[#0B3C5D]/20 bg-transparent",
   card: "border-[#0B3C5D]/20 bg-transparent",
   bit: "border-[#0A7FA8]/25 bg-transparent",
-  paybox: "border-[#1E8FD6]/25 bg-transparent"
+  paybox: "border-[#1E8FD6]/25 bg-transparent",
+  apple_pay: "border-slate-900/20 bg-transparent",
+  google_pay: "border-[#4A90E2]/20 bg-transparent"
 };
 
 export const EMPTY_METHOD_HINT = "לחצו על עדכון להגדרה מאובטחת";
@@ -55,6 +66,12 @@ export function WalletMethodLogo({
   }
   if (kind === "paybox") {
     return <WalletBrandIcon src="/wallet/paybox-logo.png" alt="PayBox" size={size} fit="cover" />;
+  }
+  if (kind === "apple_pay") {
+    return <WalletBrandIcon src="/wallet/apple-pay-logo.png" alt="Apple Pay" size={size} fit="contain" />;
+  }
+  if (kind === "google_pay") {
+    return <WalletBrandIcon src="/wallet/google-pay-logo.png" alt="Google Pay" size={size} fit="contain" />;
   }
   return <AnyNannyCardMark size={size} />;
 }
@@ -188,6 +205,108 @@ export function PayboxWalletCard({ status, ready, compact, className = "" }: Vis
   );
 }
 
+function ApplePayWalletCard({
+  status,
+  ready,
+  compact,
+  className = ""
+}: VisualCardProps) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(11,60,93,0.55)] ring-1 ring-white/20 ${
+        compact ? "h-[4.75rem]" : "h-[5.5rem]"
+      } ${className}`}
+      style={{
+        background:
+          "linear-gradient(135deg, #0B3C5D 0%, #111827 55%, #0A84FF 120%)"
+      }}
+    >
+      <div
+        className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-white/10 blur-2xl"
+        aria-hidden
+      />
+      <div className="relative flex h-full items-center gap-3 px-3.5 py-2.5">
+        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/95 shadow-md ring-2 ring-white/25">
+          <Image
+            src="/wallet/apple-pay-logo.png"
+            alt="Apple Pay"
+            fill
+            className="object-contain p-2"
+            sizes="48px"
+          />
+        </div>
+        <div className="min-w-0 flex-1 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+            Apple Pay
+          </p>
+          <p className="text-sm font-extrabold tracking-tight">Apple Pay</p>
+          {status ? (
+            <p className="mt-0.5 truncate text-[10px] font-medium text-white/85" dir="ltr">
+              {status}
+            </p>
+          ) : null}
+        </div>
+        {ready ? (
+          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-bold backdrop-blur-sm">
+            שמור
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function GooglePayWalletCard({
+  status,
+  ready,
+  compact,
+  className = ""
+}: VisualCardProps) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(74,144,226,0.35)] ring-1 ring-white/20 ${
+        compact ? "h-[4.75rem]" : "h-[5.5rem]"
+      } ${className}`}
+      style={{
+        background:
+          "linear-gradient(135deg, #2D6CDF 0%, #4A90E2 45%, #0A84FF 100%)"
+      }}
+    >
+      <div
+        className="pointer-events-none absolute -left-10 -top-10 h-28 w-28 rounded-full bg-white/10 blur-2xl"
+        aria-hidden
+      />
+      <div className="relative flex h-full items-center gap-3 px-3.5 py-2.5">
+        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/95 shadow-md ring-2 ring-white/25">
+          <Image
+            src="/wallet/google-pay-logo.png"
+            alt="Google Pay"
+            fill
+            className="object-contain p-2"
+            sizes="48px"
+          />
+        </div>
+        <div className="min-w-0 flex-1 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+            Google Pay
+          </p>
+          <p className="text-sm font-extrabold tracking-tight">Google Pay</p>
+          {status ? (
+            <p className="mt-0.5 truncate text-[10px] font-medium text-white/85" dir="ltr">
+              {status}
+            </p>
+          ) : null}
+        </div>
+        {ready ? (
+          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-bold backdrop-blur-sm">
+            שמור
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /** Custom AnyNanny-branded credit card face. */
 export function AnyNannyCreditCard({
   status,
@@ -277,6 +396,26 @@ export function WalletMethodVisualCard({
   if (kind === "paybox") {
     return (
       <PayboxWalletCard status={status} ready={ready} compact={compact} className={className} />
+    );
+  }
+  if (kind === "apple_pay") {
+    return (
+      <ApplePayWalletCard
+        status={status}
+        ready={ready}
+        compact={compact}
+        className={className}
+      />
+    );
+  }
+  if (kind === "google_pay") {
+    return (
+      <GooglePayWalletCard
+        status={status}
+        ready={ready}
+        compact={compact}
+        className={className}
+      />
     );
   }
   return (

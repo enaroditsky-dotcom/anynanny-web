@@ -736,7 +736,7 @@ export default function SitterDashboardPage() {
     setDashboardStatsRefreshKey((k) => k + 1);
   }, [pathname, sitterId, checkingAuthEnforcement, refreshSitterProfileCardStatus]);
 
-  const handleSitterMandatoryRatingComplete = useCallback(async (rating: number) => {
+  const handleSitterMandatoryRatingComplete = useCallback(async (rating: number, comment: string | null) => {
     if (!completedSummaryRow || !sitterId) return;
     const sid = String(completedSummaryRow.id);
     const supabase = getSupabaseBrowserClient();
@@ -744,7 +744,12 @@ export default function SitterDashboardPage() {
     const sitterIdTemp = sitterId;
     setSitterClosureBusy(true);
     setSitterClosureError(null);
-    const result = await submitSessionRating(supabase, { sessionId: sid, role: SITTER_ROLE, rating });
+    const result = await submitSessionRating(supabase, {
+      sessionId: sid,
+      role: SITTER_ROLE,
+      rating,
+      comment
+    });
     if (!result.ok) { setSitterClosureError(result.error); setSitterClosureBusy(false); return; }
     markSitterSessionRatedLocally(sid);
     dismissCompletedSession(sid, "sitter");

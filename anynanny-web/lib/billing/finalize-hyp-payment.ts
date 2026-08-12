@@ -180,6 +180,36 @@ export async function finalizeHypPaymentSuccess(
     hypApprovalId: input.hypApprovalId ?? null
   });
 
+  // BEST-EFFORT: publish Parent→Sitter rating AFTER paid-state is committed.
+  // Must never fail the payment / wallet path. Idempotent under HYP retries.
+  if (paidSessionIds.size > 0) {
+    try {
+      const sessionIds = [...paidSessionIds];
+      const { error: publishRpcErr } = await supabase.rpc(
+        "publish_parent_ratings_for_paid_sessions",
+        { p_session_ids: sessionIds }
+      );
+      if (publishRpcErr) {
+        // Fallback: direct update when RPC is not yet migrated.
+        const { error: publishErr } = await supabase
+          .from("ratings")
+          .update({ published_at: new Date().toISOString() })
+          .in("session_id", sessionIds)
+          .eq("from_user_id", parentId)
+          .is("published_at", null);
+        if (publishErr) {
+          console.warn(
+            "[finalizeHypPaymentSuccess] parent rating publish skipped:",
+            publishRpcErr.message,
+            publishErr.message
+          );
+        }
+      }
+    } catch (err) {
+      console.warn("[finalizeHypPaymentSuccess] parent rating publish skipped:", err);
+    }
+  }
+
   // Wallet credit is primarily handled by DB triggers on sessions/bookings.
   // Best-effort explicit credit when the RPC exists (service role / elevated clients).
   try {

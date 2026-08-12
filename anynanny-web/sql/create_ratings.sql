@@ -90,7 +90,7 @@ create policy "ratings_insert_session_participant"
       select 1
       from public.sessions s
       where s.id = session_id
-        and s.status::text = 'completed'
+        and s.status::text in ('completed', 'payment_pending', 'paid', 'sitter_completed')
         and (s.parent_id = auth.uid() or s.sitter_id = auth.uid())
         and (
           (

@@ -46,6 +46,11 @@ type ParentPreview = {
 
   rating_average?: number | null;
   rating_count?: number | null;
+  reviews?: Array<{
+    rating: number;
+    comment: string;
+    created_at: string;
+  }> | null;
 
   children_count?: number | null;
   children_ages?: string | null;
@@ -550,6 +555,38 @@ export function SitterShiftApprovalCard({
                       )}
                     </div>
                   </div>
+
+                  {Array.isArray(parentInfo.reviews) &&
+                  parentInfo.reviews.length > 0 ? (
+                    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-right">
+                      <p className="text-xs font-semibold text-slate-500">
+                        חוות דעת מבייביסיטרים
+                      </p>
+                      <ul className="space-y-2.5">
+                        {parentInfo.reviews.slice(0, 3).map((review, idx) => (
+                          <li
+                            key={`${review.created_at}-${idx}`}
+                            className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2"
+                          >
+                            <div className="flex flex-row-reverse items-center justify-between gap-2">
+                              <span className="inline-flex flex-row-reverse items-center gap-1 text-xs font-bold text-amber-800">
+                                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
+                                {Number(review.rating).toFixed(0)}
+                              </span>
+                              {review.created_at ? (
+                                <span className="text-[10px] tabular-nums text-slate-400">
+                                  {new Date(review.created_at).toLocaleDateString("he-IL")}
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-700">
+                              {review.comment}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                     <div className="flex items-start gap-3">

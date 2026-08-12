@@ -3,6 +3,10 @@ import {
   isHypSuccessCCode,
   parseHypReturnParams
 } from "@/lib/billing/hyp/parse-return-params";
+import {
+  applyHypIdentityVerificationResult,
+  parseHypIdentityVerificationUserId
+} from "@/lib/identity/hyp-identity-flow";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import {
   creditParentWalletDeposit,
@@ -47,6 +51,43 @@ export async function handleHypPaymentWebhook(request: Request): Promise<Respons
   const infoRaw = params.get("Info") ?? params.get("info") ?? parsed.raw.Info ?? parsed.raw.info ?? "";
   const moreDataRaw =
     params.get("MoreData") ?? params.get("moredata") ?? parsed.raw.MoreData ?? parsed.raw.moredata ?? "";
+  const identityUserId =
+    parseHypIdentityVerificationUserId(infoRaw) || parseHypIdentityVerificationUserId(moreDataRaw);
+
+  if (identityUserId) {
+    let supabase;
+    try {
+      supabase = getSupabaseServiceRoleClient();
+    } catch (error) {
+      console.error("[Hyp Webhook] Service role client unavailable:", error);
+      return NextResponse.json(
+        { error: "Server misconfigured (SUPABASE_SERVICE_ROLE_KEY)." },
+        { status: 500 }
+      );
+    }
+
+    const applied = await applyHypIdentityVerificationResult(supabase, {
+      userId: identityUserId,
+      parsed
+    });
+    if (applied.error) {
+      console.error("[Hyp Webhook] Identity verification update failed:", applied.error, {
+        userId: identityUserId,
+        idStatusOutcome: applied.idStatusOutcome,
+        lookupKind: applied.lookupKind
+      });
+      return NextResponse.json({ error: applied.error }, { status: 500 });
+    }
+
+    console.info("[Hyp Webhook] Identity verification processed", {
+      userId: identityUserId,
+      outcome: applied.idStatusOutcome,
+      lookupKind: applied.lookupKind,
+      status: applied.record.status
+    });
+    return new NextResponse("OK", { status: 200, headers: { "Content-Type": "text/plain" } });
+  }
+
   const israeliId = params.get("UserId") ?? params.get("userid") ?? parsed.raw.UserId ?? null;
   const brandHint =
     params.get("Brand") ?? params.get("CardName") ?? params.get("cardname") ?? parsed.raw.Brand ?? null;

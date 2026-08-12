@@ -15,6 +15,11 @@ export type HypReturnParams = {
   approvalId: string | null;
   amount: string | null;
   order: string | null;
+  /**
+   * Raw HYP/SHVA Israeli-ID field when present on a redirect.
+   * Diagnostic only — identity verification must not treat this as source of truth.
+   */
+  idStatus: string | null;
   raw: Record<string, string>;
 };
 
@@ -130,6 +135,7 @@ export function parseHypReturnParams(
     approvalId: pick(params, "Id", "id", "TransactionId", "ACode"),
     amount: pick(params, "Amount", "amount", "Sum"),
     order,
+    idStatus: pick(params, "idStatus", "IdStatus", "IDStatus", "idstatus"),
     raw
   };
 }

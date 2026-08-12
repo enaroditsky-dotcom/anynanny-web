@@ -1,11 +1,10 @@
-import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-method";
-
 const STORAGE_PREFIX = "anynanny.parentPreferredCheckoutMethod";
 
-export type ParentPreferredCheckoutMethod = Extract<
-  CheckoutPaymentMethod,
-  "credit_card" | "bit" | "paybox"
->;
+export type ParentPreferredCheckoutMethod =
+  | "credit_card"
+  | "bit"
+  | "apple_pay"
+  | "google_pay";
 
 function storageKey(parentId: string): string {
   return `${STORAGE_PREFIX}.${parentId.trim()}`;
@@ -17,7 +16,13 @@ export function readParentPreferredCheckoutMethod(
   if (typeof window === "undefined" || !parentId?.trim()) return null;
   try {
     const raw = window.localStorage.getItem(storageKey(parentId));
-    if (raw === "credit_card" || raw === "bit" || raw === "paybox") return raw;
+    if (
+      raw === "credit_card" ||
+      raw === "bit" ||
+      raw === "apple_pay" ||
+      raw === "google_pay"
+    )
+      return raw;
   } catch {
     /* ignore quota / private mode */
   }

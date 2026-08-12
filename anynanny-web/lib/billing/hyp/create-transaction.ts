@@ -75,6 +75,35 @@ export type HypCreateTransactionInput = {
    * Normal checkout flows should never set this to true.
    */
   omitReturnUrls?: boolean;
+
+  /**
+   * Identity-verification only. Leave unset on checkout/deposit/payout.
+   *
+   * HYP Pay APISign: `J5=True` is J5 authorization; `J5=J2` is card
+   * verification without charge.
+   */
+  j5?: "J2" | "True" | boolean | null;
+
+  /**
+   * Identity-verification only. Leave unset on checkout.
+   *
+   * HYP Pay: `MoreData=True` adds extra redirect fields such as `UserId`.
+   * Checkout already uses `MoreData` for `Session_<uuid>` and must not set this.
+   */
+  includeMoreData?: boolean;
+
+  /**
+   * Identity-verification only. Overrides compact Order derived from bookingId.
+   * Used as the unique per-attempt merchant reference (max 19 chars for inquiry `user`).
+   * Checkout must leave this unset.
+   */
+  orderOverride?: string | null;
+
+  /**
+   * Identity-verification only. Echoed as Fild2 so the return can correlate the attempt.
+   * Checkout must leave this unset.
+   */
+  fild2?: string | null;
 };
 
 export type HypCreateTransactionResult = {
@@ -806,6 +835,33 @@ export function buildHypApiSignEntries(
       "MoreData",
       `Session_${shiftSessionId}`
     ]);
+  } else if (
+    input.includeMoreData
+  ) {
+    entries.push([
+      "MoreData",
+      "True"
+    ]);
+  }
+
+  if (
+    input.j5 ===
+      "J2"
+  ) {
+    entries.push([
+      "J5",
+      "J2"
+    ]);
+  } else if (
+    input.j5 ===
+      true ||
+    input.j5 ===
+      "True"
+  ) {
+    entries.push([
+      "J5",
+      "True"
+    ]);
   }
 
   if (
@@ -819,6 +875,15 @@ export function buildHypApiSignEntries(
           0,
           100
         )
+    ]);
+  }
+
+  if (
+    input.fild2?.trim()
+  ) {
+    entries.push([
+      "Fild2",
+      input.fild2.trim().slice(0, 19)
     ]);
   }
 
@@ -965,6 +1030,7 @@ export async function createHypTransaction(
     getHypCredentials();
 
   const order =
+    input.orderOverride?.trim() ||
     hypOrderFromBookingId(
       input.bookingId
     );
@@ -1200,10 +1266,15 @@ export async function createHypTransaction(
             usedReturnUrls,
 
           body:
-            signedQuery.slice(
-              0,
-              400
-            )
+            signedQuery
+              .slice(
+                0,
+                400
+              )
+              .replace(
+                /UserId=[^&]*/gi,
+                "UserId=REDACTED"
+              )
         }
       );
 

@@ -37,10 +37,21 @@ async function loadRatingFromTable(
   supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
   userId: string
 ): Promise<CurrentUserRating> {
-  const { data: rows, error } = await supabase
+  let { data: rows, error } = await supabase
     .from(RATINGS_TABLE)
     .select("rating")
-    .eq("to_user_id", userId);
+    .eq("to_user_id", userId)
+    .not("published_at", "is", null);
+
+  if (error && /published_at|schema cache|column/i.test(error.message ?? "")) {
+    const fallback = await supabase
+      .from(RATINGS_TABLE)
+      .select("rating")
+      .eq("to_user_id", userId);
+    rows = fallback.data;
+    error = fallback.error;
+  }
+
   if (error) return EMPTY_CURRENT_USER_RATING;
 
   const ratings = (rows ?? [])

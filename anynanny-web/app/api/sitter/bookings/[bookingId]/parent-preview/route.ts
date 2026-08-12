@@ -5,7 +5,9 @@ import { NextResponse } from "next/server";
 
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import {
+  fetchUserPublicReviews,
   fetchUserRatingSummary,
+  type PublicUserReview,
   type UserRatingSummary
 } from "@/lib/ratings/fetch-user-rating-summary";
 import {
@@ -291,12 +293,19 @@ export async function GET(
         average: 0,
         count: 0
       };
+    let parentReviews: PublicUserReview[] = [];
 
     try {
       parentRatingSummary =
         await fetchUserRatingSummary(
           supabase,
           parentId
+        );
+      parentReviews =
+        await fetchUserPublicReviews(
+          supabase,
+          parentId,
+          5
         );
     } catch (error) {
       console.warn(
@@ -429,6 +438,12 @@ export async function GET(
             parentRatingSummary.count ??
               0
           ),
+
+        reviews: parentReviews.map((review) => ({
+          rating: review.rating,
+          comment: review.comment,
+          created_at: review.created_at
+        })),
 
         children_count:
           details.children_count !=

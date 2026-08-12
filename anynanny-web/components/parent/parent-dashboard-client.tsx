@@ -122,6 +122,12 @@ const POLL_MS = 5000;
 
 type SettlementStep = "payment" | "rating";
 
+type ParentCheckoutPaymentMethodUi =
+  | "credit_card"
+  | "bit"
+  | "apple_pay"
+  | "google_pay";
+
 const DISMISSED_SCHEDULED_STATUS_KEY = "anynanny_dismissed_scheduled_status_v1";
 
 function readDismissedScheduledBookingIds(): Set<string> {
@@ -411,7 +417,9 @@ export function ParentDashboardClient({
   const [confirmPending, startConfirmTransition] = useTransition();
   const [confirmEndPending, startConfirmEndTransition] = useTransition();
   const [settlementStep, setSettlementStep] = useState<SettlementStep | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod>("credit_card");
+  const [paymentMethod, setPaymentMethod] = useState<ParentCheckoutPaymentMethodUi>(
+    "credit_card"
+  );
   const [savedPaymentMethods, setSavedPaymentMethods] = useState<ParentPaymentMethod[]>([]);
   const [savedPaymentMethodsLoading, setSavedPaymentMethodsLoading] = useState(false);
   const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string | null>(null);
@@ -1292,11 +1300,21 @@ export function ParentDashboardClient({
     clearPaymentError();
     setShiftError(null);
     try {
+      if (paymentMethod === "apple_pay" || paymentMethod === "google_pay") {
+        setShiftError(
+          "Apple Pay / Google Pay מוצגים ל-UI בלבד בשלב 1. הטמעת החיוב בפועל תתבצע ב-Phase 2."
+        );
+        return;
+      }
+
+      const backendPaymentMethod: CheckoutPaymentMethod =
+        paymentMethod === "bit" ? "bit" : "credit_card";
+
       const result = await executePayment({
         bookingId: String(activeBooking.id),
         sessionId: String(activeSession.id),
         sitterBaseNis,
-        paymentMethod,
+        paymentMethod: backendPaymentMethod,
         paymentMethodId: selectedSavedMethodId,
         elapsedSeconds: settlementElapsedSeconds
       });
@@ -1338,7 +1356,7 @@ export function ParentDashboardClient({
   ]);
 
   const handleSubmitParentRating = useCallback(
-    async (rating: number) => {
+    async (rating: number, comment: string | null) => {
       if (!activeSession?.id) return;
       setRatingBusy(true);
       setRatingError(null);
@@ -1351,7 +1369,8 @@ export function ParentDashboardClient({
       const result = await submitSessionRating(supabase, {
         sessionId: String(activeSession.id),
         role: "parent",
-        rating
+        rating,
+        comment
       });
       setRatingBusy(false);
       if (!result.ok) {
@@ -1388,11 +1407,11 @@ export function ParentDashboardClient({
         setSavedPaymentMethods(methods);
         const defaultMethod = methods.find((m) => m.is_default) ?? methods[0] ?? null;
         /*
-         * Bit / PayBox are hosted HYP rails — never auto-select a saved card
-         * alongside them, or checkout will charge the card (or open card UI)
-         * instead of the selected wallet rail.
+         * Hosted rails (Bit / Apple Pay / Google Pay) must not auto-select a saved
+         * card alongside them, or checkout will charge / open the card UI instead
+         * of the chosen wallet rail.
          */
-        if (preferred === "bit" || preferred === "paybox") {
+        if (preferred === "bit" || preferred === "apple_pay" || preferred === "google_pay") {
           setSelectedSavedMethodId(null);
         } else {
           setSelectedSavedMethodId(defaultMethod?.id ?? null);

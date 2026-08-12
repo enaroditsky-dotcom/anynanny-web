@@ -31,6 +31,8 @@ import {
 } from "@/lib/sitter/sitter-profile";
 import { updateSitterWorkingCities } from "@/lib/sitter/sitter-working-cities";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
+import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 type Props = {
@@ -61,6 +63,7 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
   const [workingCities, setWorkingCities] = useState<IsraelCity[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verifyFormOpen, setVerifyFormOpen] = useState(false);
 
   useEffect(() => {
     setIsExpert(readIsExpertTrack());
@@ -464,14 +467,46 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
             <button
               type="button"
               disabled={busy || workingCities.length === 0}
-              onClick={() => void handleFinish()}
-              className="flex-[1.4] rounded-2xl bg-[#B8860B] py-3.5 font-bold text-white transition hover:bg-yellow-700 disabled:opacity-60"
+              onClick={() => {
+                setError(null);
+                setStep(4);
+              }}
+              className="flex-[1.4] rounded-2xl bg-[#001F3F] py-3.5 font-bold text-white transition hover:bg-blue-900 disabled:opacity-60"
             >
-              {busy ? "שומר..." : "סיום ושמירה"}
+              הבא
             </button>
           </div>
         </div>
       )}
+
+      {step === 4 && (
+        <div className="space-y-4">
+          <IdentityOnboardingCard
+            busy={busy}
+            onVerifyNow={() => setVerifyFormOpen(true)}
+            onSkipLater={() => void handleFinish()}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setStep(3)}
+            className="w-full rounded-2xl border-2 border-[#001F3F]/20 py-3 font-bold text-[#001F3F] transition hover:bg-white/60 disabled:opacity-60"
+          >
+            חזרה
+          </button>
+        </div>
+      )}
+
+      <IdentityVerificationForm
+        open={verifyFormOpen}
+        role="sitter"
+        nextPath="/sitter/profile"
+        onClose={() => setVerifyFormOpen(false)}
+        onSaved={async () => {
+          setVerifyFormOpen(false);
+          await handleFinish();
+        }}
+      />
     </div>
   );
 }

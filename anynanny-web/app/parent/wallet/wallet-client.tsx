@@ -24,14 +24,17 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchParentWalletView } from "@/lib/wallet/parent-wallet";
 import type { BillingTransaction } from "@/lib/wallet/billing-transactions";
 import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
-import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-method";
 import {
   readParentPreferredCheckoutMethod,
   writeParentPreferredCheckoutMethod,
   type ParentPreferredCheckoutMethod
 } from "@/lib/wallet/parent-preferred-checkout-method";
 
-type PaymentOptionId = Extract<CheckoutPaymentMethod, "credit_card" | "bit" | "paybox">;
+type PaymentOptionId =
+  | "credit_card"
+  | "bit"
+  | "apple_pay"
+  | "google_pay";
 
 const PAYMENT_OPTIONS: Array<{
   id: PaymentOptionId;
@@ -39,15 +42,19 @@ const PAYMENT_OPTIONS: Array<{
 }> = [
   { id: "credit_card", label: "כרטיס אשראי" },
   { id: "bit", label: "Bit" },
-  { id: "paybox", label: "PayBox" }
+  { id: "apple_pay", label: "Apple Pay" },
+  { id: "google_pay", label: "Google Pay" }
 ];
 
 function walletRailExplanation(id: PaymentOptionId): string {
   if (id === "bit") {
     return "Bit ישמש כאמצעי המועדף בתשלום משמרת. לא נפתח שער תשלום עכשיו — החיוב ב־HYP יתבצע רק כשתאשרו תשלום בפועל בדשבורד.";
   }
-  if (id === "paybox") {
-    return "PayBox ישמש כאמצעי המועדף בתשלום משמרת. לא נפתח שער תשלום עכשיו — החיוב ב־HYP יתבצע רק כשתאשרו תשלום בפועל בדשבורד.";
+  if (id === "apple_pay") {
+    return "Apple Pay ישמש כאמצעי המועדף בתשלום משמרת. תשלום מאובטח ב־HYP יתבצע רק בגרסה הבאה.";
+  }
+  if (id === "google_pay") {
+    return "Google Pay ישמש כאמצעי המועדף בתשלום משמרת. תשלום מאובטח ב־HYP יתבצע רק בגרסה הבאה.";
   }
   return "שמירת כרטיס מאפשרת חיוב מהיר במשמרות הבאות דרך HYP.";
 }
@@ -240,9 +247,11 @@ export default function ParentWalletClient() {
     setToast(
       method === "bit"
         ? "Bit הוגדר כאמצעי המועדף לתשלום משמרת"
-        : method === "paybox"
-          ? "PayBox הוגדר כאמצעי המועדף לתשלום משמרת"
-          : "כרטיס אשראי הוגדר כאמצעי המועדף"
+        : method === "apple_pay"
+          ? "Apple Pay הוגדר כאמצעי המועדף לתשלום משמרת"
+          : method === "google_pay"
+            ? "Google Pay הוגדר כאמצעי המועדף לתשלום משמרת"
+            : "כרטיס אשראי הוגדר כאמצעי המועדף"
     );
   };
 
@@ -300,7 +309,7 @@ export default function ParentWalletClient() {
     }
     if (preferredMethod === id) return "מועדף לתשלום משמרת";
     if (id === "bit") return "בחרו להגדיר כמועדף — ללא חיוב עכשיו";
-    if (id === "paybox") return "בחרו להגדיר כמועדף — ללא חיוב עכשיו";
+    if (id === "apple_pay" || id === "google_pay") return "בחרו להגדיר כמועדף — ללא חיוב עכשיו";
     return EMPTY_METHOD_HINT;
   };
 
@@ -572,7 +581,7 @@ export default function ParentWalletClient() {
                   })}
                 </div>
                 <p className="border-t border-slate-100 px-4 py-3 text-center text-[11px] text-slate-500">
-                  Bit ו־PayBox נבחרים כאן כמועדפים בלבד. החיוב ב־HYP מתבצע רק בתשלום משמרת.
+                  Bit, Apple Pay ו־Google Pay נבחרים כאן כמועדפים בלבד. החיוב ב־HYP מתבצע רק בתשלום משמרת.
                 </p>
               </>
             )}
