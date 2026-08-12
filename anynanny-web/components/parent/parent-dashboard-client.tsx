@@ -19,8 +19,11 @@ import {
 } from "@/lib/bookings/booking-shift-ui";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import {
+  acknowledgeRejectedBookingNotification,
+  isRejectedWithNoteBooking,
   persistDismissedRejectedBookingId,
-  readDismissedRejectedBookingIds
+  readDismissedRejectedBookingIds,
+  shouldShowRejectedNotification
 } from "@/lib/bookings/dismissed-rejected-bookings";
 import {
   ANYNANNY_NEW_BOOKING_EVENT,
@@ -81,6 +84,10 @@ import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-prefer
 import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, User, X } from "lucide-react";
 
 const BOOKING_LIVE_SELECT =
+  "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, hourly_rate_nis, parent_notified_at, created_at, updated_at";
+
+/** Fallback when `parent_notified_at` is not yet migrated. */
+const BOOKING_LIVE_SELECT_LEGACY =
   "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, hourly_rate_nis, created_at, updated_at";
 
 const LIVE_BOOKING_FETCH_STATUSES = [
@@ -153,10 +160,6 @@ function isUnpaidCompletedBooking(b: BookingRow): boolean {
   return normalizeStatus(b.status) === "completed" && paymentStatus !== "paid" && !paidAt;
 }
 
-function isRejectedWithNoteBooking(b: BookingRow): boolean {
-  return normalizeStatus(b.status) === "rejected" && Boolean(b.rejection_note);
-}
-
 function pickParentDashboardBooking(
   rows: BookingRow[],
   opts?: {
@@ -171,6 +174,9 @@ function pickParentDashboardBooking(
     ? String(opts.preferBookingId)
     : null;
   const dismissedRejectedIds = opts?.dismissedRejectedIds ?? new Set<string>();
+
+  const pendingRejectedNotification = (b: BookingRow) =>
+    shouldShowRejectedNotification(b, dismissedRejectedIds);
 
   // בזמן Settlement אסור לעבור להזמנה אחרת.
   if (opts?.settlementLocked) {
@@ -215,10 +221,7 @@ function pickParentDashboardBooking(
       (
         isBookingDueForParentActiveShiftUi(preferred) ||
         isUnpaidCompletedBooking(preferred) ||
-        (
-          isRejectedWithNoteBooking(preferred) &&
-          !dismissedRejectedIds.has(String(preferred.id))
-        )
+        pendingRejectedNotification(preferred)
       )
     ) {
       return preferred;
@@ -233,11 +236,7 @@ function pickParentDashboardBooking(
     return unpaidCompleted;
   }
 
-  const rejectedHit = rows.find(
-    (b) =>
-      isRejectedWithNoteBooking(b) &&
-      !dismissedRejectedIds.has(String(b.id))
-  );
+  const rejectedHit = rows.find(pendingRejectedNotification);
 
   if (rejectedHit) {
     return rejectedHit;
@@ -259,7 +258,11 @@ function pickParentDashboardBooking(
     return futurePending;
   }
 
-  return dueLive[0] ?? rows[0] ?? null;
+  const fallbackRow = rows.find(
+    (b) => !isRejectedWithNoteBooking(b) || pendingRejectedNotification(b)
+  );
+
+  return dueLive[0] ?? fallbackRow ?? null;
 }
 
 function sessionMatchesBookingSitter(
@@ -568,7 +571,18 @@ export function ParentDashboardClient({
             .order("updated_at", { ascending: false })
             .limit(8);
           if (bookingCore.error) {
-            bookingQueryFailed = true;
+            const legacy = await supabase
+              .from(BOOKINGS_TABLE)
+              .select(BOOKING_LIVE_SELECT_LEGACY)
+              .eq("parent_id", uid)
+              .in("status", [...LIVE_BOOKING_FETCH_STATUSES, "completed"])
+              .order("updated_at", { ascending: false })
+              .limit(8);
+            if (legacy.error) {
+              bookingQueryFailed = true;
+            } else {
+              bookingRows = (legacy.data as BookingRow[] | null) ?? [];
+            }
           } else {
             bookingRows = (bookingCore.data as BookingRow[] | null) ?? [];
           }
@@ -669,9 +683,12 @@ export function ParentDashboardClient({
           }
         }
 
-        const isRejectedWithNote = bookingStatus === "rejected" && Boolean(booking?.rejection_note);
+        const showRejectedNotification = shouldShowRejectedNotification(
+          booking,
+          dismissedRejectedIds
+        );
 
-        if (!hasLiveBooking && !hasUnpaidCompleted && !isRejectedWithNote) {
+        if (!hasLiveBooking && !hasUnpaidCompleted && !showRejectedNotification) {
           if (settlementIsLocked()) {
             const settlementSession = await fetchLatestParentSessionRow(supabase, uid, {
               statuses: [...SESSION_SETTLEMENT_STATUSES],
@@ -702,7 +719,7 @@ export function ParentDashboardClient({
             continue;
           }
 
-          if (isRejectedWithNote && booking) {
+          if (showRejectedNotification && booking) {
             setActiveBooking(booking);
             activeBookingRef.current = booking;
             if (!settlementIsLocked()) {
@@ -724,7 +741,7 @@ export function ParentDashboardClient({
           activeBookingRef.current = booking;
         }
 
-        if (isRejectedWithNote) {
+        if (showRejectedNotification) {
           if (!settlementIsLocked()) {
             clearToIdleDashboard();
           }
@@ -1520,8 +1537,9 @@ export function ParentDashboardClient({
       isFutureScheduledBooking(activeBooking) &&
       !isScheduledConfirmed
   );
-  const isRejectedBooking = Boolean(
-    activeBooking && normalizeStatus(activeBooking.status) === "rejected"
+  const isRejectedBooking = shouldShowRejectedNotification(
+    activeBooking,
+    dismissedRejectedBookingIds
   );
   const showLiveTimer =
     dueForActiveShiftUi &&
@@ -1633,14 +1651,27 @@ export function ParentDashboardClient({
       });
     }
     if (rejectedBookingId && isRejectedBooking) {
-      // Persist only THIS booking id — new rejections remain visible.
-      persistDismissedRejectedBookingId(parentId, rejectedBookingId);
+      const uid = String(parentId ?? activeBooking?.parent_id ?? "").trim();
+      if (!uid) return;
+
+      const acknowledgedAt = new Date().toISOString();
+      persistDismissedRejectedBookingId(uid, rejectedBookingId);
       setDismissedRejectedBookingIds((prev) => {
         const next = new Set(prev);
         next.add(rejectedBookingId);
         dismissedRejectedBookingIdsRef.current = next;
         return next;
       });
+      setActiveBooking((prev) =>
+        prev?.id === rejectedBookingId
+          ? { ...prev, parent_notified_at: acknowledgedAt }
+          : prev
+      );
+
+      const supabase = getSupabaseBrowserClient();
+      if (supabase) {
+        void acknowledgeRejectedBookingNotification(supabase, uid, rejectedBookingId);
+      }
     }
     if (statusCardKey) setDismissedStatusKey(statusCardKey);
     setStatusCardCollapsed(false);
