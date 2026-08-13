@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { User, Baby } from 'lucide-react';
+import { AgeGateStep } from '@/components/auth/age-gate-step';
+import { ACCOUNT_TYPE_ENTRY_HREF } from '@/lib/auth/age-eligibility';
 import { upsertProfileOnSignup } from '@/lib/auth/supabase-profile';
 import { saveSignupNamesToDevice } from '@/lib/auth/signup-names';
 import { isProfileRole } from '@/lib/supabase/profiles';
@@ -14,6 +16,7 @@ export default function SignUpPage() {
   const supabase = getSupabaseBrowserClient();
 
   const [role, setRole] = useState<'parent' | 'sitter' | null>(null);
+  const [ageGatePassed, setAgeGatePassed] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -47,6 +50,10 @@ export default function SignUpPage() {
 
     if (!role) {
       setErrorMsg('אנא בחר/י תפקיד (הורה או בייביסיטר) כדי להמשיך.');
+      return;
+    }
+    if (!ageGatePassed) {
+      setErrorMsg('יש לענות על שאלת הגיל כדי להמשיך.');
       return;
     }
     if (!firstName.trim() || !lastName.trim()) {
@@ -123,10 +130,12 @@ export default function SignUpPage() {
           </h1>
         </div>
 
-        <div className="text-center space-y-1 mb-8">
-          <h2 className="text-2xl font-bold text-stone-900">יצירת חשבון</h2>
-          <p className="text-sm text-stone-500">הצטרפו לקהילת AnyNanny</p>
-        </div>
+        {!(role && !ageGatePassed) ? (
+          <div className="text-center space-y-1 mb-8">
+            <h2 className="text-2xl font-bold text-stone-900">יצירת חשבון</h2>
+            <p className="text-sm text-stone-500">הצטרפו לקהילת AnyNanny</p>
+          </div>
+        ) : null}
 
         {errorMsg && (
           <div className="p-3 mb-6 bg-red-50 text-red-700 text-xs rounded-lg text-center font-medium">
@@ -134,50 +143,54 @@ export default function SignUpPage() {
           </div>
         )}
 
-        <form onSubmit={handleSignUp} className="space-y-4">
+        {!role ? (
           <div>
             <p className="mb-2 text-right text-sm font-semibold text-stone-700">
               תפקיד <span className="text-red-500">*</span>
             </p>
             <div className="grid grid-cols-2 gap-3">
-              <label
-                className={`flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all ${
-                  role === "sitter" ? "bg-emerald-50" : "border-stone-100"
-                }`}
-                style={{ borderColor: role === "sitter" ? brandColor : "#f5f5f4" }}
+              <button
+                type="button"
+                onClick={() => {
+                  setRole("sitter");
+                  setAgeGatePassed(false);
+                  setErrorMsg(null);
+                }}
+                className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-stone-100 p-4 transition-all"
               >
-                <input
-                  type="radio"
-                  name="role"
-                  value="sitter"
-                  checked={role === "sitter"}
-                  onChange={() => setRole("sitter")}
-                  className="sr-only"
-                  required
-                />
-                <Baby size={32} style={{ color: role === "sitter" ? brandColor : "#78716c" }} />
-                <span className="text-sm font-bold" style={{ color: role === "sitter" ? brandColor : "#78716c" }}>בייביסיטר</span>
-              </label>
-              <label
-                className={`flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all ${
-                  role === "parent" ? "bg-emerald-50" : "border-stone-100"
-                }`}
-                style={{ borderColor: role === "parent" ? brandColor : "#f5f5f4" }}
+                <Baby size={32} style={{ color: "#78716c" }} />
+                <span className="text-sm font-bold" style={{ color: "#78716c" }}>בייביסיטר</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRole("parent");
+                  setAgeGatePassed(false);
+                  setErrorMsg(null);
+                }}
+                className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-stone-100 p-4 transition-all"
               >
-                <input
-                  type="radio"
-                  name="role"
-                  value="parent"
-                  checked={role === "parent"}
-                  onChange={() => setRole("parent")}
-                  className="sr-only"
-                  required
-                />
-                <User size={32} style={{ color: role === "parent" ? brandColor : "#78716c" }} />
-                <span className="text-sm font-bold" style={{ color: role === "parent" ? brandColor : "#78716c" }}>הורה</span>
-              </label>
+                <User size={32} style={{ color: "#78716c" }} />
+                <span className="text-sm font-bold" style={{ color: "#78716c" }}>הורה</span>
+              </button>
             </div>
           </div>
+        ) : !ageGatePassed ? (
+          <AgeGateStep
+            role={role}
+            variant="plain"
+            onEligible={() => setAgeGatePassed(true)}
+            onDeclineExit={() => router.replace(ACCOUNT_TYPE_ENTRY_HREF)}
+            onBack={() => {
+              setRole(null);
+              setAgeGatePassed(false);
+            }}
+          />
+        ) : (
+        <form onSubmit={handleSignUp} className="space-y-4">
+          <p className="rounded-xl bg-stone-50 px-3 py-2 text-center text-sm font-semibold text-stone-700">
+            הרשמה כ{role === "parent" ? "הורה" : "נני"}
+          </p>
 
           <div className="grid grid-cols-2 gap-3">
             <input
@@ -231,6 +244,7 @@ export default function SignUpPage() {
             {loading ? 'מייצר חשבון...' : 'יצירת חשבון'}
           </button>
         </form>
+        )}
       </div>
     </div>
   );

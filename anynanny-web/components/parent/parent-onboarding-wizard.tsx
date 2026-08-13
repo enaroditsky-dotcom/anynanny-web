@@ -6,6 +6,7 @@ import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-se
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
 import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
+import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 type SpecialEvent = {
@@ -87,6 +88,12 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
       setError("יש להזין כתובת מלאה ומובנית (עיר, רחוב ומספר בית).");
       return;
     }
+    const dobError = getAccountDobEligibilityError("parent", birthDate);
+    if (dobError) {
+      setError(dobError);
+      setStep(1);
+      return;
+    }
     setError(null);
     setStep(4);
   };
@@ -99,6 +106,12 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
     }
     if (selectedCity.length === 0 || !street || !houseNumber) {
       setError("יש להזין כתובת מלאה ומובנית (עיר, רחוב ומספר בית).");
+      return;
+    }
+    const dobError = getAccountDobEligibilityError("parent", birthDate);
+    if (dobError) {
+      setError(dobError);
+      setStep(1);
       return;
     }
 
@@ -190,7 +203,7 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">תאריך לידה</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">תאריך לידה *</label>
             <input
               type="date"
               value={birthDate}
@@ -237,7 +250,15 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
 
           <button
             type="button"
-            onClick={() => setStep(2)}
+            onClick={() => {
+              const dobError = getAccountDobEligibilityError("parent", birthDate);
+              if (dobError) {
+                setError(dobError);
+                return;
+              }
+              setError(null);
+              setStep(2);
+            }}
             className="w-full rounded-2xl bg-[#001F3F] py-3.5 font-bold text-white transition hover:bg-blue-900 mt-4"
           >
             הבא

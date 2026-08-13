@@ -18,6 +18,7 @@ import {
   formatDisplayDate,
   personalInputClassName
 } from "@/components/personal-area/personal-area-ui";
+import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import {
   buildParentProfileUpdatePayload,
@@ -334,6 +335,14 @@ export function ParentPersonalArea() {
       next = { ...next, special_events: draftEvents.map((event) => ({ ...event })) };
     } else if (editKey === "avatar") {
       next = { ...next, avatar_url: draftAvatarUrl.trim() };
+    }
+
+    if (editKey === "birth_date") {
+      const dobError = getAccountDobEligibilityError("parent", next.birth_date);
+      if (dobError) {
+        setModalError(dobError);
+        return;
+      }
     }
 
     if (editKey === "avatar") {

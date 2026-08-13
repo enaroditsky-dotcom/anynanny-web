@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { AgeGateStep } from "@/components/auth/age-gate-step";
 import { PageBackButton, PageBackRow, HOME_BACK_BUTTON_CLASS } from "@/components/navigation/page-back-link";
 import { ExpertRegistrationFields } from "@/components/sitter/expert-registration-fields";
 import { upsertProfileOnSignup } from "@/lib/auth/supabase-profile";
@@ -20,6 +21,7 @@ import {
   SITTER_PROFILES_USER_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import type { ProfileRole } from "@/lib/supabase/profiles";
+import { ACCOUNT_TYPE_ENTRY_HREF } from "@/lib/auth/age-eligibility";
 
 const SUPABASE_URL = "https://dqycvddpdhxawdgdatfe.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -99,12 +101,21 @@ function RegisterInner() {
   const [expertDraft, setExpertDraft] = useState<ExpertProfileDraft>(() => emptyExpertProfileDraft());
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [ageGatePassed, setAgeGatePassed] = useState(false);
+
+  useEffect(() => {
+    setAgeGatePassed(false);
+  }, [role]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!role) {
       setErrorMsg("לא נבחר תפקיד. חזרו לדף הבית ובחרו הורה, בייביסיטר או יועצת/דולה.");
+      return;
+    }
+    if (!ageGatePassed) {
+      setErrorMsg("יש לענות על שאלת הגיל כדי להמשיך.");
       return;
     }
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
@@ -225,10 +236,25 @@ function RegisterInner() {
     );
   }
 
+  if (!ageGatePassed) {
+    return (
+      <main className="mx-auto max-w-md p-6 sm:p-8" dir="rtl">
+        <PageBackRow className="mb-4">
+          <PageBackButton onClick={() => router.replace(ACCOUNT_TYPE_ENTRY_HREF)} />
+        </PageBackRow>
+        <AgeGateStep
+          role={role}
+          onEligible={() => setAgeGatePassed(true)}
+          onDeclineExit={() => router.replace(ACCOUNT_TYPE_ENTRY_HREF)}
+        />
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto max-w-md p-6 sm:p-8" dir="rtl">
       <PageBackRow className="mb-4">
-        <PageBackButton onClick={() => router.push("/")} />
+        <PageBackButton onClick={() => router.replace(ACCOUNT_TYPE_ENTRY_HREF)} />
       </PageBackRow>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
