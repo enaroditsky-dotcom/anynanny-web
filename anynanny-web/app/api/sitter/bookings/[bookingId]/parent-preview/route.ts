@@ -10,6 +10,7 @@ import {
   type PublicUserReview,
   type UserRatingSummary
 } from "@/lib/ratings/fetch-user-rating-summary";
+import { parseIdentityVerificationStatus } from "@/lib/identity/identity-verification";
 import {
   isProfileRole,
   PROFILES_TABLE
@@ -324,7 +325,7 @@ export async function GET(
     } = await supabase
       .from(PROFILES_TABLE)
       .select(
-        "first_name, last_name, avatar_url"
+        "first_name, last_name, avatar_url, identity_verification_status"
       )
       .eq("id", parentId)
       .maybeSingle();
@@ -460,8 +461,9 @@ export async function GET(
           ).trim() || null,
 
         identity_verified:
-          details.is_verified ===
-          true,
+          parseIdentityVerificationStatus(
+            publicParentProfile?.identity_verification_status
+          ) === "verified",
 
         address:
           bookingApproved

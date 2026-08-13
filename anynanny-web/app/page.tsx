@@ -3,7 +3,9 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { getSitterOnboardingGateRedirect } from "@/lib/auth/post-auth-destination";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type LandingPath = "parent" | "sitter";
 
@@ -73,7 +75,22 @@ function HomeInner() {
       }
 
       if (activeRole === "sitter") {
-        router.replace("/sitter/dashboard");
+        void (async () => {
+          const supabase = getSupabaseBrowserClient();
+          if (!supabase) {
+            router.replace("/sitter/dashboard");
+            return;
+          }
+          const {
+            data: { user }
+          } = await supabase.auth.getUser();
+          if (!user) {
+            router.replace("/sitter/dashboard");
+            return;
+          }
+          const dest = await getSitterOnboardingGateRedirect(supabase, user.id, "/sitter/dashboard");
+          router.replace(dest ?? "/sitter/dashboard");
+        })();
       }
     } catch {
       /* ignore */

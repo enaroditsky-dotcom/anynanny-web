@@ -52,7 +52,8 @@ function RoleSelectionInner() {
       }
 
       if (isNannyOnboardingBypassEmail(user.email) || isSitterTestBypassEmail(user.email)) {
-        window.location.assign("/sitter/dashboard");
+        const dest = await resolvePostAuthPath(supabase, user.id, nextParam, { userEmail: user.email });
+        if (!cancelled) window.location.assign(dest);
         return;
       }
 
@@ -132,12 +133,8 @@ function RoleSelectionInner() {
         await supabase.auth.refreshSession();
         setUserRoleChoice(role);
 
-        if (role === "parent") {
-          const dest = await resolvePostAuthPath(supabase, user.id, nextParam, { userEmail: user.email });
-          window.location.assign(dest);
-        } else {
-          window.location.assign("/sitter/dashboard");
-        }
+        const dest = await resolvePostAuthPath(supabase, user.id, nextParam, { userEmail: user.email });
+        window.location.assign(dest);
       } finally {
         setBusy(null);
       }

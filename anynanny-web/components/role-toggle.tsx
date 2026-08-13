@@ -3,11 +3,13 @@
 import { usePathname, useRouter } from "next/navigation";
 import { startTransition, useCallback } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { getSitterOnboardingGateRedirect } from "@/lib/auth/post-auth-destination";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "active_role";
 
 export function RoleToggle() {
-  const { signedIn, currentRole } = useAuth();
+  const { signedIn, currentRole, user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isParent = currentRole === "parent";
@@ -31,10 +33,20 @@ export function RoleToggle() {
     } catch {
       /* ignore */
     }
-    startTransition(() => {
-      router.replace("/sitter/dashboard");
-    });
-  }, [router, pathname]);
+    void (async () => {
+      const supabase = getSupabaseBrowserClient();
+      if (supabase && user?.id) {
+        const dest = await getSitterOnboardingGateRedirect(supabase, user.id, "/sitter/dashboard");
+        startTransition(() => {
+          router.replace(dest ?? "/sitter/dashboard");
+        });
+        return;
+      }
+      startTransition(() => {
+        router.replace("/sitter/dashboard");
+      });
+    })();
+  }, [router, pathname, user]);
 
   const show =
     signedIn &&

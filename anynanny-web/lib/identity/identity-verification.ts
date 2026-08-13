@@ -30,6 +30,8 @@ export const IDENTITY_VERIFICATION_METHOD_CARD_ID_MATCH = "card_id_match";
 const PROFILE_SELECT =
   "identity_verification_status, identity_verified_at, identity_verification_method, identity_id_number";
 
+const IDENTITY_VERIFICATION_ATTEMPTS_TABLE = "identity_verification_attempts";
+
 export function parseIdentityVerificationStatus(raw: unknown): IdentityVerificationStatus {
   const value = String(raw ?? "").trim();
   if (value === "pending" || value === "verified" || value === "failed") return value;
@@ -54,9 +56,20 @@ export function validateIdentityIdNumber(raw: string): string | null {
 
 export function identityStatusLabel(status: IdentityVerificationStatus): string {
   if (status === "pending") return "האימות בבדיקה";
-  if (status === "verified") return "✓ משתמש מאומת";
+  if (status === "verified") return "זהות מאומתת";
   if (status === "failed") return "נדרש עדכון פרטים";
-  return "טרם הושלם";
+  return "זהות טרם אומתה";
+}
+
+/** Compact own-account dashboard copy. Failed is shown as unverified so the user can retry. */
+export function identityDashboardStatusLabel(status: IdentityVerificationStatus): string {
+  if (status === "pending") return "האימות בבדיקה";
+  if (status === "verified") return "זהות מאומתת";
+  return "זהות טרם אומתה";
+}
+
+export function isIdentityDashboardActionable(status: IdentityVerificationStatus): boolean {
+  return status === "unverified" || status === "failed";
 }
 
 export function identityStatusCta(status: IdentityVerificationStatus): string | null {
@@ -96,6 +109,42 @@ function mapProfileRow(
     method: String(row.identity_verification_method ?? "").trim() || null,
     idNumber: normalizeIsraeliId(canonicalIdNumber)
   };
+}
+
+/**
+ * Opening HYP used to write `pending` before the user finished. Abandoned attempts
+ * must not stay pending. Keep `pending` only when a HYP result was actually applied
+ * (`identity_verification_attempts.completed_at` is set).
+ */
+async function healStalePendingIdentityStatus(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<IdentityVerificationStatus> {
+  const latest = await supabase
+    .from(IDENTITY_VERIFICATION_ATTEMPTS_TABLE)
+    .select("completed_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!latest.error) {
+    const completedAt = String(
+      (latest.data as { completed_at?: unknown } | null)?.completed_at ?? ""
+    ).trim();
+    if (completedAt) return "pending";
+  }
+
+  await supabase
+    .from(PROFILES_TABLE)
+    .update({
+      identity_verification_status: "unverified",
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", userId)
+    .eq("identity_verification_status", "pending");
+
+  return "unverified";
 }
 
 /**
@@ -141,8 +190,13 @@ export async function fetchIdentityVerification(
     }
   }
 
+  const record = mapProfileRow(row, canonicalId);
+  if (record.status === "pending") {
+    record.status = await healStalePendingIdentityStatus(supabase, userId);
+  }
+
   return {
-    record: mapProfileRow(row, canonicalId),
+    record,
     error: null,
     missingSchema: false
   };

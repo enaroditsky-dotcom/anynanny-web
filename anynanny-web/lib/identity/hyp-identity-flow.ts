@@ -272,18 +272,6 @@ export async function startHypIdentityVerification(
     };
   }
 
-  const pending = await supabase
-    .from(PROFILES_TABLE)
-    .update({
-      identity_verification_status: "pending",
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", input.userId);
-
-  if (pending.error) {
-    return { error: pending.error.message, status: 400 };
-  }
-
   logIdentity("HYP verification initiated", {
     userId: input.userId,
     role: input.role,

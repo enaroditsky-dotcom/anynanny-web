@@ -11,6 +11,7 @@ import {
   markRpcMissing
 } from "@/lib/supabase/rpc-availability";
 import { Star, User } from "lucide-react";
+import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 type SitterDashboardStats = {
   avg_rating: number | null;
@@ -195,6 +196,11 @@ export function SitterDashboardHeader({
             </div>
           )}
         </div>
+        <IdentityStatusIndicator
+          userId={sitterId}
+          role="sitter"
+          nextPath="/sitter/dashboard"
+        />
       </div>
       {children}
     </header>
