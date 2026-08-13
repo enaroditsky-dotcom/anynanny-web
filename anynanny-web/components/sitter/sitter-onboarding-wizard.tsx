@@ -33,6 +33,7 @@ import { updateSitterWorkingCities } from "@/lib/sitter/sitter-working-cities";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
 import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
+import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 type Props = {
@@ -187,6 +188,13 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
       return;
     }
 
+    const dobError = getAccountDobEligibilityError("sitter", birthDate);
+    if (dobError) {
+      setError(dobError);
+      setStep(1);
+      return;
+    }
+
     if (isExpert) {
       const expertError = validateExpertProfileDraft(expertDraft);
       if (expertError) {
@@ -305,6 +313,11 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
       setError("השם מההרשמה לא נמצא. התחברו מחדש או פנו לתמיכה.");
       return;
     }
+    const dobError = getAccountDobEligibilityError("sitter", birthDate);
+    if (dobError) {
+      setError(dobError);
+      return;
+    }
     setError(null);
     setStep(2);
   };
@@ -345,7 +358,7 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
             </p>
           )}
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">תאריך לידה</label>
+            <label className="mb-1 block text-xs font-medium text-slate-700">תאריך לידה *</label>
             <input
               type="date"
               value={birthDate}

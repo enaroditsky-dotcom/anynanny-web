@@ -18,6 +18,7 @@ import {
   yesNoLabel
 } from "@/components/personal-area/personal-area-ui";
 import { SitterBankDetailsSection } from "@/components/sitter/SitterBankDetailsSection";
+import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
@@ -361,6 +362,14 @@ export function SitterPersonalArea({ userId }: Props) {
     if (editKey === "working_cities" && draft.working_cities.length === 0) {
       setModalError("יש לבחור לפחות עיר אחת.");
       return;
+    }
+
+    if (editKey === "birth_date") {
+      const dobError = getAccountDobEligibilityError("sitter", draft.birth_date);
+      if (dobError) {
+        setModalError(dobError);
+        return;
+      }
     }
 
     setSaving(true);
