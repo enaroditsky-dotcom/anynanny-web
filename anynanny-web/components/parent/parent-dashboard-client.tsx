@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { ParentOnboardingWizard } from "@/components/parent/parent-onboarding-wizard";
+import {
+  DeclineNoticeUnit,
+  type DeclineNoticeState
+} from "@/components/parent/broadcast-decline-notice";
 import { ParentSessionTimerCircle } from "@/components/session/parent-double-shake-idle-circle";
 import { ParentSessionRatingPanel } from "@/components/session/parent-session-rating-panel";
 import { DoubleShakeCircleButton } from "@/components/session/double-shake-circle-button";
@@ -50,6 +54,7 @@ import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
 import { readParentPreferredCheckoutMethod } from "@/lib/wallet/parent-preferred-checkout-method";
 import type { ParentBusySlot, ParentPreferences } from "@/lib/parent/types";
 import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
+import { fetchRejectedSitterSnapshot } from "@/lib/sitter/fetch-rejected-sitter-snapshot";
 import {
   clearParentSessionRatedLocally,
   markParentSessionRatedLocally,
@@ -427,6 +432,9 @@ export function ParentDashboardClient({
   const [ratingBusy, setRatingBusy] = useState(false);
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [sitterAcceptedToast, setSitterAcceptedToast] = useState<string | null>(null);
+  const [rejectedDeclineNotice, setRejectedDeclineNotice] =
+    useState<DeclineNoticeState | null>(null);
+  const capturedRejectedBookingIdRef = useRef<string>("");
   const lastSitterAcceptedToastKeyRef = useRef<string | null>(null);
   const bookingStatusWatchRef = useRef<{ id: string; status: string } | null>(null);
   const refreshInFlightRef = useRef(false);
@@ -1638,6 +1646,46 @@ export function ParentDashboardClient({
   const scheduledBookingId = activeBooking?.id ? String(activeBooking.id) : null;
   const rejectedBookingId = isRejectedBooking && activeBooking?.id ? String(activeBooking.id) : null;
 
+  useEffect(() => {
+    if (!isRejectedBooking || !rejectedBookingId) return;
+    const sitterId = String(activeBooking?.sitter_id ?? "").trim();
+    if (!sitterId) return;
+    if (capturedRejectedBookingIdRef.current === rejectedBookingId) return;
+
+    capturedRejectedBookingIdRef.current = rejectedBookingId;
+    const placeholder = {
+      id: sitterId,
+      name: "בייביסיטר",
+      avatarUrl: null,
+      rating: null
+    };
+    // Preserve the original dashboard copy: heading + bookings.rejection_note.
+    const originalHeading = "הבקשה נדחתה על ידי הבייביסיטר";
+    const originalPoliteNote = String(activeBooking?.rejection_note ?? "").trim();
+    setRejectedDeclineNotice({
+      message: originalHeading,
+      secondary: originalPoliteNote,
+      sitter: placeholder
+    });
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    let cancelled = false;
+    void (async () => {
+      const snapshot = await fetchRejectedSitterSnapshot(supabase, sitterId);
+      if (cancelled) return;
+      if (capturedRejectedBookingIdRef.current !== rejectedBookingId) return;
+      setRejectedDeclineNotice((prev) =>
+        prev ? { ...prev, sitter: snapshot } : prev
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isRejectedBooking, rejectedBookingId, activeBooking?.sitter_id]);
+
   const scheduledBannerDismissed = Boolean(
     hasHydrated &&
       scheduledBookingId &&
@@ -1655,7 +1703,8 @@ export function ParentDashboardClient({
     showShiftCard &&
     !scheduledBannerDismissed &&
     !rejectedBannerDismissed &&
-    (!statusCardKey || dismissedStatusKey !== statusCardKey);
+    (!statusCardKey || dismissedStatusKey !== statusCardKey) &&
+    !rejectedDeclineNotice;
 
   // Expanded Active Shift panel: free vertical space by hiding shortcuts / external actions.
   const isActiveShiftExpanded = statusCardVisible && !statusCardCollapsed;
@@ -1697,6 +1746,12 @@ export function ParentDashboardClient({
     setStatusCardCollapsed(false);
   };
 
+  const closeRejectedDeclineNotice = () => {
+    dismissStatusBanner();
+    setRejectedDeclineNotice(null);
+    capturedRejectedBookingIdRef.current = "";
+  };
+
   const statusCollapsedSummary = isRejectedBooking
     ? "הבקשה נדחתה — לחצו להרחבה"
     : inSettlement
@@ -1729,6 +1784,12 @@ export function ParentDashboardClient({
 
   return (
     <main className="relative mx-auto max-w-md space-y-4 p-4 pb-[calc(8rem+var(--anynanny-now-dock,0px))] overflow-y-auto min-h-screen" dir="rtl">
+      {rejectedDeclineNotice ? (
+        <DeclineNoticeUnit
+          notice={rejectedDeclineNotice}
+          onClose={closeRejectedDeclineNotice}
+        />
+      ) : null}
       {onboardingPending ? (
         <div className="absolute inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
           <div className="w-full max-w-sm my-auto">
