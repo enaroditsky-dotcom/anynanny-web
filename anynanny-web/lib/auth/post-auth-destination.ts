@@ -1,7 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
+import {
+  hasSitterCompletedOnboarding,
+  SITTER_PROFILES_TABLE,
+  SITTER_PROFILES_USER_COLUMN
+} from "@/lib/sitter/sitter-profile";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
+
+export const SITTER_ONBOARDING_PATH = "/sitter/onboarding";
+export const SITTER_DASHBOARD_PATH = "/sitter/dashboard";
 
 export type ProfileAuthRow = {
   role: string | null;
@@ -41,6 +48,79 @@ export function sanitizeNextParam(nextParam: string | null): string | null {
   if (!nextParam || nextParam.includes("..") || nextParam.startsWith("//")) return null;
   if (!nextParam.startsWith("/")) return null;
   return nextParam;
+}
+
+export function isSitterOnboardingPath(pathname: string): boolean {
+  const path = pathname.split("?")[0] || pathname;
+  return path === SITTER_ONBOARDING_PATH || path.startsWith(`${SITTER_ONBOARDING_PATH}/`);
+}
+
+async function loadSitterOnboardingCompletedAt(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<string | null> {
+  const fk = SITTER_PROFILES_USER_COLUMN;
+  const full = await supabase
+    .from(SITTER_PROFILES_TABLE)
+    .select("onboarding_completed_at")
+    .eq(fk, userId)
+    .maybeSingle();
+
+  if (full.error) {
+    return null;
+  }
+
+  const at = (full.data as { onboarding_completed_at?: string | null } | null)?.onboarding_completed_at;
+  return typeof at === "string" && at.trim() ? at : null;
+}
+
+/**
+ * Ensure a sitter_profiles row exists, then route by onboarding_completed_at only.
+ * Row existence is never treated as completion.
+ */
+async function resolveSitterPostAuthPath(supabase: SupabaseClient, userId: string): Promise<string> {
+  const fk = SITTER_PROFILES_USER_COLUMN;
+  const sitterRes = await supabase.from(SITTER_PROFILES_TABLE).select(fk).eq(fk, userId).maybeSingle();
+  const hasSitterProfile =
+    !sitterRes.error &&
+    sitterRes.data != null &&
+    typeof sitterRes.data === "object" &&
+    fk in sitterRes.data;
+
+  if (!hasSitterProfile) {
+    await supabase.from(SITTER_PROFILES_TABLE).insert({ [fk]: userId } as never);
+    return SITTER_ONBOARDING_PATH;
+  }
+
+  const completedAt = await loadSitterOnboardingCompletedAt(supabase, userId);
+  if (!hasSitterCompletedOnboarding({ onboarding_completed_at: completedAt })) {
+    return SITTER_ONBOARDING_PATH;
+  }
+
+  return SITTER_DASHBOARD_PATH;
+}
+
+/**
+ * Read-only sitter route guard. Does not create rows.
+ * Incomplete (`onboarding_completed_at` null) → `/sitter/onboarding`.
+ * Complete users on the questionnaire → `/sitter/dashboard`.
+ */
+export async function getSitterOnboardingGateRedirect(
+  supabase: SupabaseClient,
+  userId: string,
+  currentPath: string
+): Promise<string | null> {
+  const path = currentPath.split("?")[0] || currentPath;
+  const completedAt = await loadSitterOnboardingCompletedAt(supabase, userId);
+  const complete = hasSitterCompletedOnboarding({ onboarding_completed_at: completedAt });
+
+  if (!complete) {
+    if (isSitterOnboardingPath(path)) return null;
+    return SITTER_ONBOARDING_PATH;
+  }
+
+  if (isSitterOnboardingPath(path)) return SITTER_DASHBOARD_PATH;
+  return null;
 }
 
 function allowedNextPath(role: ProfileRole, nextParam: string | null): string | null {
@@ -141,22 +221,10 @@ export async function resolvePostAuthPath(
       ? options.userEmail
       : (await supabase.auth.getUser()).data.user?.email;
     
-    /** Must stay first: `+nanny` routes like other sitters — dashboard. */
-    if (isNannyOnboardingBypassEmail(email)) {
-      return "/sitter/dashboard";
+    /** Must stay first: `+nanny` / `+sitter` skip role-selection, not the onboarding questionnaire. */
+    if (isNannyOnboardingBypassEmail(email) || isSitterTestBypassEmail(email)) {
+      return resolveSitterPostAuthPath(supabase, userId);
     }
-    if (isSitterTestBypassEmail(email)) {
-      return "/sitter/dashboard";
-    }
-
-    // 1. בדיקת קיום פרופיל נני בבסיס הנתונים עבור היוזר הנוכחי
-    const fk = SITTER_PROFILES_USER_COLUMN;
-    const sitterRes = await supabase.from(SITTER_PROFILES_TABLE).select(fk).eq(fk, userId).maybeSingle();
-    const hasSitterProfile =
-      !sitterRes.error &&
-      sitterRes.data != null &&
-      typeof sitterRes.data === "object" &&
-      fk in sitterRes.data;
 
     const profile = await loadProfileAuthRow(supabase, userId);
     if (!profile) {
@@ -189,11 +257,7 @@ export async function resolvePostAuthPath(
 
     // 3. ניתוב עצמאי, מבודד והרמטי לפי הבחירה של המשתמש ברגע ההתחברות!
     if (targetRole === "sitter") {
-      // מקרה מולטי-רול: אם המשתמש בחר להיכנס כנני אך חסרה שורה בטבלה, ניצור אותה מיד
-      if (!hasSitterProfile) {
-        await supabase.from(SITTER_PROFILES_TABLE).insert({ [fk]: userId } as never);
-      }
-      return "/sitter/dashboard";
+      return resolveSitterPostAuthPath(supabase, userId);
     }
 
     if (targetRole === "parent") {

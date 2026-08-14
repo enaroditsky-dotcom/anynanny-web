@@ -82,6 +82,7 @@ import {
 import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
 import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
 import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, User, X } from "lucide-react";
+import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 const BOOKING_LIVE_SELECT =
   "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, hourly_rate_nis, parent_notified_at, created_at, updated_at";
@@ -1779,6 +1780,12 @@ export function ParentDashboardClient({
                 </span>
               </div>
             </div>
+
+            <IdentityStatusIndicator
+              userId={parentId}
+              role="parent"
+              nextPath="/parent/dashboard"
+            />
 
             {sitterAcceptedToast ? (
               <div

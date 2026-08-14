@@ -5,7 +5,12 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { AgeGateStep } from "@/components/auth/age-gate-step";
-import { PageBackButton, PageBackRow, HOME_BACK_BUTTON_CLASS } from "@/components/navigation/page-back-link";
+import { ACCOUNT_TYPE_ENTRY_HREF } from "@/lib/auth/age-eligibility";
+import {
+  PageBackButton,
+  PageBackRow,
+  HOME_BACK_BUTTON_CLASS
+} from "@/components/navigation/page-back-link";
 import { ExpertRegistrationFields } from "@/components/sitter/expert-registration-fields";
 import { upsertProfileOnSignup } from "@/lib/auth/supabase-profile";
 import {
@@ -21,7 +26,6 @@ import {
   SITTER_PROFILES_USER_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import type { ProfileRole } from "@/lib/supabase/profiles";
-import { ACCOUNT_TYPE_ENTRY_HREF } from "@/lib/auth/age-eligibility";
 
 const SUPABASE_URL = "https://dqycvddpdhxawdgdatfe.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -40,6 +44,7 @@ async function persistExpertSitterProfile(
   names: { first_name: string; last_name: string }
 ): Promise<void> {
   const expertPatch = expertDraftToProfilePatch(draft);
+
   const ensure = await ensureSitterProfileRowForUser(supabase, userId, {
     first_name: names.first_name,
     last_name: names.last_name,
@@ -47,6 +52,7 @@ async function persistExpertSitterProfile(
       ? (expertPatch.service_types as string[])
       : undefined
   });
+
   if (ensure.error) {
     console.warn("[register] ensure sitter profile:", ensure.error);
     return;
@@ -80,8 +86,10 @@ function RegisterInner() {
 
   const track = useMemo(() => {
     const value = (searchParams.get("track") || "").trim().toLowerCase();
+
     if (value === "expert") return "expert" as const;
     if (value === "babysitter") return "babysitter" as const;
+
     return null;
   }, [searchParams]);
 
@@ -91,6 +99,7 @@ function RegisterInner() {
     if (role === "parent") return "הורה";
     if (isExpert) return "יועצת / דולה";
     if (role === "sitter") return "בייביסיטר";
+
     return null;
   }, [role, isExpert]);
 
@@ -98,7 +107,9 @@ function RegisterInner() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [expertDraft, setExpertDraft] = useState<ExpertProfileDraft>(() => emptyExpertProfileDraft());
+  const [expertDraft, setExpertDraft] = useState<ExpertProfileDraft>(
+    () => emptyExpertProfileDraft()
+  );
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [ageGatePassed, setAgeGatePassed] = useState(false);
@@ -111,13 +122,17 @@ function RegisterInner() {
     e.preventDefault();
 
     if (!role) {
-      setErrorMsg("לא נבחר תפקיד. חזרו לדף הבית ובחרו הורה, בייביסיטר או יועצת/דולה.");
+      setErrorMsg(
+        "לא נבחר תפקיד. חזרו לדף הבית ובחרו הורה, בייביסיטר או יועצת/דולה."
+      );
       return;
     }
+
     if (!ageGatePassed) {
       setErrorMsg("יש לענות על שאלת הגיל כדי להמשיך.");
       return;
     }
+
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
       setErrorMsg("נא למלא את כל השדות.");
       return;
@@ -125,6 +140,7 @@ function RegisterInner() {
 
     if (isExpert) {
       const expertError = validateExpertProfileDraft(expertDraft);
+
       if (expertError) {
         setErrorMsg(expertError);
         return;
@@ -136,8 +152,14 @@ function RegisterInner() {
 
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
-    const expertPatch = isExpert ? expertDraftToProfilePatch(expertDraft) : null;
-    saveSignupNamesToDevice({ first_name: trimmedFirst, last_name: trimmedLast });
+    const expertPatch = isExpert
+      ? expertDraftToProfilePatch(expertDraft)
+      : null;
+
+    saveSignupNamesToDevice({
+      first_name: trimmedFirst,
+      last_name: trimmedLast
+    });
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -148,7 +170,11 @@ function RegisterInner() {
             role,
             first_name: trimmedFirst,
             last_name: trimmedLast,
-            service_track: isExpert ? "expert" : role === "sitter" ? "babysitter" : "parent",
+            service_track: isExpert
+              ? "expert"
+              : role === "sitter"
+                ? "babysitter"
+                : "parent",
             ...(expertPatch
               ? {
                   service_types: expertPatch.service_types,
@@ -173,6 +199,7 @@ function RegisterInner() {
           first_name: trimmedFirst,
           last_name: trimmedLast
         });
+
         if (profileResult.error) {
           console.warn("[register] profile upsert:", profileResult.error);
         }
@@ -183,20 +210,27 @@ function RegisterInner() {
               first_name: trimmedFirst,
               last_name: trimmedLast
             });
+
             try {
               localStorage.setItem("anynanny_service_track", "expert");
             } catch {
               /* ignore */
             }
           } else {
-            const ensure = await ensureSitterProfileRowForUser(supabase, data.user.id, {
-              first_name: trimmedFirst,
-              last_name: trimmedLast,
-              service_types: ["babysitter"]
-            });
+            const ensure = await ensureSitterProfileRowForUser(
+              supabase,
+              data.user.id,
+              {
+                first_name: trimmedFirst,
+                last_name: trimmedLast,
+                service_types: ["babysitter"]
+              }
+            );
+
             if (ensure.error) {
               console.warn("[register] ensure sitter profile:", ensure.error);
             }
+
             try {
               localStorage.setItem("anynanny_service_track", "babysitter");
             } catch {
@@ -207,9 +241,18 @@ function RegisterInner() {
       }
 
       alert("ההרשמה הצליחה! נא לאשר את האימייל שנשלח אליך.");
-      router.push(isExpert ? "/login?role=sitter&track=expert" : "/");
+
+      router.push(
+        isExpert
+          ? "/login?role=sitter&track=expert"
+          : "/"
+      );
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "לא ניתן להשלים את ההרשמה";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "לא ניתן להשלים את ההרשמה";
+
       console.error("שגיאת הרשמה:", err);
       setErrorMsg(message);
     } finally {
@@ -221,10 +264,14 @@ function RegisterInner() {
     return (
       <main className="mx-auto max-w-md p-8" dir="rtl">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-right shadow-sm">
-          <h1 className="text-xl font-bold text-navy-header">לא נבחר תפקיד</h1>
+          <h1 className="text-xl font-bold text-navy-header">
+            לא נבחר תפקיד
+          </h1>
+
           <p className="mt-2 text-sm text-slate-600">
             יש לבחור הורה, בייביסיטר או יועצת/דולה בדף הבית לפני ההרשמה.
           </p>
+
           <Link
             href="/"
             className={HOME_BACK_BUTTON_CLASS}
@@ -259,7 +306,10 @@ function RegisterInner() {
 
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
         <header className="mb-6 text-right">
-          <h1 className="text-2xl font-bold text-navy-header">יצירת חשבון</h1>
+          <h1 className="text-2xl font-bold text-navy-header">
+            יצירת חשבון
+          </h1>
+
           <p className="mt-1 text-sm text-slate-600">
             הרשמה כ{roleHeadline ?? ROLE_LABELS[role]}
             {isExpert ? " · הנקה / שינה / דולה" : null}
@@ -272,7 +322,10 @@ function RegisterInner() {
           </p>
         ) : null}
 
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form
+          onSubmit={handleRegister}
+          className="space-y-4"
+        >
           <div className="grid grid-cols-2 gap-3">
             <input
               type="text"
@@ -283,6 +336,7 @@ function RegisterInner() {
               onChange={(e) => setFirstName(e.target.value)}
               autoComplete="given-name"
             />
+
             <input
               type="text"
               required
@@ -303,6 +357,7 @@ function RegisterInner() {
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
           />
+
           <input
             type="password"
             required
@@ -315,8 +370,14 @@ function RegisterInner() {
 
           {isExpert ? (
             <div className="rounded-2xl border border-dashed border-emerald-200 bg-gradient-to-b from-emerald-50/60 to-rose-50/40 p-4">
-              <p className="mb-3 text-sm font-bold text-navy-header">פרטי השירות המקצועי</p>
-              <ExpertRegistrationFields value={expertDraft} onChange={setExpertDraft} />
+              <p className="mb-3 text-sm font-bold text-navy-header">
+                פרטי השירות המקצועי
+              </p>
+
+              <ExpertRegistrationFields
+                value={expertDraft}
+                onChange={setExpertDraft}
+              />
             </div>
           ) : null}
 

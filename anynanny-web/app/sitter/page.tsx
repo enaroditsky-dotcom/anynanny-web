@@ -1,6 +1,22 @@
 import { redirect } from "next/navigation";
+import { getSitterOnboardingGateRedirect, SITTER_DASHBOARD_PATH } from "@/lib/auth/post-auth-destination";
+import { createServerClient } from "@/lib/supabase/server";
 
-/** Sitter home — dashboard with rating + nanny ID header lives here. */
-export default function SitterPage() {
-  redirect("/sitter/dashboard");
+/** Sitter home — incomplete sitters go to onboarding; others to the dashboard. */
+export default async function SitterPage() {
+  const supabase = await createServerClient();
+  if (!supabase) {
+    redirect(SITTER_DASHBOARD_PATH);
+  }
+
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect(SITTER_DASHBOARD_PATH);
+  }
+
+  const dest = await getSitterOnboardingGateRedirect(supabase, user.id, SITTER_DASHBOARD_PATH);
+  redirect(dest ?? SITTER_DASHBOARD_PATH);
 }

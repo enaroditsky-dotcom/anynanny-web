@@ -19,7 +19,8 @@ const CHROMELESS_PREFIXES = [
   "/auth/sign-up",
   "/login",
   "/register",
-  "/terms"
+  "/terms",
+  "/sitter/onboarding"
 ];
 
 /**
