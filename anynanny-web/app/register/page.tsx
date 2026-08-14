@@ -287,19 +287,12 @@ function RegisterInner() {
     return (
       <main className="mx-auto max-w-md p-6 sm:p-8" dir="rtl">
         <PageBackRow className="mb-4">
-          <PageBackButton
-            onClick={() =>
-              router.replace(ACCOUNT_TYPE_ENTRY_HREF)
-            }
-          />
+          <PageBackButton onClick={() => router.replace(ACCOUNT_TYPE_ENTRY_HREF)} />
         </PageBackRow>
-
         <AgeGateStep
           role={role}
           onEligible={() => setAgeGatePassed(true)}
-          onDeclineExit={() =>
-            router.replace(ACCOUNT_TYPE_ENTRY_HREF)
-          }
+          onDeclineExit={() => router.replace(ACCOUNT_TYPE_ENTRY_HREF)}
         />
       </main>
     );
@@ -308,11 +301,7 @@ function RegisterInner() {
   return (
     <main className="mx-auto max-w-md p-6 sm:p-8" dir="rtl">
       <PageBackRow className="mb-4">
-        <PageBackButton
-          onClick={() =>
-            router.replace(ACCOUNT_TYPE_ENTRY_HREF)
-          }
-        />
+        <PageBackButton onClick={() => router.replace(ACCOUNT_TYPE_ENTRY_HREF)} />
       </PageBackRow>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
