@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBooking } from "@/lib/bookings/create-booking";
 import { BroadcastPanelControls } from "@/components/parent/broadcast-panel-controls";
+import {
+  BroadcastDeclineNoticeUnit,
+  type BroadcastDeclineNoticeState,
+  type BroadcastDeclineSitterSnapshot
+} from "@/components/parent/broadcast-decline-notice";
 import { parentSitterProfilePathFromBroadcast } from "@/components/sitter/public-sitter-search-card";
 import { rememberActiveBroadcast } from "@/lib/broadcast/broadcast-active-snapshot";
 import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
@@ -13,6 +18,7 @@ import {
   broadcastRadarHref,
   fetchActiveBroadcastForParent,
   fetchBroadcastRequestStatuses,
+  filterAvailableBroadcastSitterIds,
   findApprovedBroadcastLinkedBooking,
   formatBroadcastElapsed
 } from "@/lib/broadcast/parent-active-broadcast";
@@ -24,7 +30,6 @@ import {
 } from "@/lib/supabase/subscribe-postgres-changes";
 import {
   Zap,
-  ShieldCheck,
   Star,
   Clock,
   AlertCircle,
@@ -40,7 +45,18 @@ interface RespondingSitter {
   rating: number | null;
   experience: number;
   hourlyRate: number | null;
+  avatarUrl: string | null;
 }
+
+type ResponderIdentity = {
+  name: string;
+  avatarUrl: string | null;
+  rating: number | null;
+};
+
+const BROADCAST_DECLINE_TITLE = "דחתה את הבקשה";
+const BROADCAST_DECLINE_SECONDARY =
+  "הבייביסיטר הוסרה מרשימת הזמינות לשידור הזה.";
 
 function normalizePositiveNumber(value: unknown): number | null {
   const numberValue = Number(value);
@@ -58,6 +74,36 @@ function localDateKey(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function BroadcastSitterAvatar({
+  name,
+  avatarUrl,
+  sizeClass = "h-11 w-11",
+  textClass = "text-sm"
+}: {
+  name: string;
+  avatarUrl: string | null;
+  sizeClass?: string;
+  textClass?: string;
+}) {
+  const initial = name.trim().charAt(0) || "נ";
+
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-purple-100 bg-purple-50 font-black text-purple-700 ${sizeClass} ${textClass}`}
+    >
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        initial
+      )}
+    </div>
+  );
 }
 
 function BroadcastRadarContent() {
@@ -84,14 +130,129 @@ function BroadcastRadarContent() {
     null
   );
   const [requestedSitterIds, setRequestedSitterIds] = useState<string[]>([]);
+  const [declinedSitterIds, setDeclinedSitterIds] = useState<string[]>([]);
+  const [declineNotice, setDeclineNotice] =
+    useState<BroadcastDeclineNoticeState | null>(null);
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [parentId, setParentId] = useState<string | null>(null);
   const handledRejectionBookingIdsRef = useRef<Set<string>>(new Set());
   const rejectionMinimizeLockRef = useRef(false);
+  const declinedSitterIdsRef = useRef<string[]>([]);
+  const requestedSitterIdsRef = useRef<string[]>([]);
+  const respondersRef = useRef<RespondingSitter[]>([]);
+  const responderIdentityRef = useRef<Map<string, ResponderIdentity>>(new Map());
+  const notifiedDeclineKeysRef = useRef<Set<string>>(new Set());
+  const prevAlertIdParamRef = useRef<string | null>(alertIdParam);
+  requestedSitterIdsRef.current = requestedSitterIds;
+  respondersRef.current = responders;
+
+  const captureResponderIdentity = (
+    sitterId: string
+  ): BroadcastDeclineSitterSnapshot => {
+    const stored = responderIdentityRef.current.get(sitterId);
+    const fromList = respondersRef.current.find((sitter) => sitter.id === sitterId);
+    const name =
+      stored?.name?.trim() || fromList?.name?.trim() || "בייביסיטר";
+    return {
+      id: sitterId,
+      name,
+      avatarUrl: stored?.avatarUrl ?? fromList?.avatarUrl ?? null,
+      rating: stored?.rating ?? fromList?.rating ?? null
+    };
+  };
+
+  const visibleResponderIds = filterAvailableBroadcastSitterIds(
+    responders.map((sitter) => sitter.id),
+    declinedSitterIds
+  );
+  const visibleResponderList = responders.filter((sitter) =>
+    visibleResponderIds.includes(sitter.id)
+  );
+
+  const replaceDeclinedSitterIds = (ids: string[]) => {
+    const unique = [
+      ...new Set([
+        ...declinedSitterIdsRef.current,
+        ...ids.map((id) => id.trim()).filter(Boolean)
+      ])
+    ];
+    declinedSitterIdsRef.current = unique;
+    setDeclinedSitterIds(unique);
+    if (unique.length === 0) return;
+    const declined = new Set(unique);
+    setResponders((previous) =>
+      previous.filter((sitter) => !declined.has(sitter.id))
+    );
+  };
+
+  const showDeclineNotice = (
+    sitterId: string,
+    bookingId?: string,
+    snapshot?: BroadcastDeclineSitterSnapshot
+  ) => {
+    const id = sitterId.trim();
+    if (!id) return;
+
+    const sitterKey = `sitter:${id}`;
+    if (notifiedDeclineKeysRef.current.has(sitterKey)) return;
+    if (bookingId && notifiedDeclineKeysRef.current.has(bookingId)) return;
+
+    notifiedDeclineKeysRef.current.add(sitterKey);
+    if (bookingId) {
+      notifiedDeclineKeysRef.current.add(bookingId);
+    }
+
+    const source = snapshot ?? captureResponderIdentity(id);
+    const sitter: BroadcastDeclineSitterSnapshot = {
+      id: source.id,
+      name: source.name,
+      avatarUrl: source.avatarUrl,
+      rating: source.rating
+    };
+    setDeclineNotice({
+      message: `${sitter.name} ${BROADCAST_DECLINE_TITLE}`,
+      secondary: BROADCAST_DECLINE_SECONDARY,
+      sitter
+    });
+  };
+
+  const addDeclinedSitterId = (sitterId: string, notify: boolean) => {
+    const id = sitterId.trim();
+    if (!id) return;
+    const snapshot = captureResponderIdentity(id);
+    const alreadyTracked = declinedSitterIdsRef.current.includes(id);
+    if (!alreadyTracked) {
+      const next = [...declinedSitterIdsRef.current, id];
+      declinedSitterIdsRef.current = next;
+      setDeclinedSitterIds(next);
+    }
+    setResponders((previous) =>
+      previous.filter((sitter) => sitter.id !== id)
+    );
+    if (notify && !alreadyTracked) {
+      showDeclineNotice(id, undefined, snapshot);
+    }
+  };
 
   useEffect(() => {
     setAlertId(alertIdParam);
+    const previousAlertId = prevAlertIdParamRef.current;
+    prevAlertIdParamRef.current = alertIdParam;
+    if (previousAlertId === alertIdParam) {
+      return;
+    }
+
+    declinedSitterIdsRef.current = [];
+    setDeclinedSitterIds([]);
+    setResponders([]);
+    handledRejectionBookingIdsRef.current = new Set();
+    rejectionMinimizeLockRef.current = false;
+    responderIdentityRef.current = new Map();
+    notifiedDeclineKeysRef.current = new Set();
+    if (previousAlertId) {
+      setDeclineNotice(null);
+    }
   }, [alertIdParam]);
 
   useEffect(() => {
@@ -214,7 +375,7 @@ function BroadcastRadarContent() {
           }
         }
 
-        const { pendingIds } = await fetchBroadcastRequestStatuses(
+        const { pendingIds, rejectedIds } = await fetchBroadcastRequestStatuses(
           supabase,
           user.id,
           alertId,
@@ -222,6 +383,7 @@ function BroadcastRadarContent() {
         );
         if (!disposed) {
           setRequestedSitterIds(pendingIds);
+          replaceDeclinedSitterIds(rejectedIds);
         }
       }
     };
@@ -274,6 +436,10 @@ function BroadcastRadarContent() {
       return;
     }
 
+    if (declinedSitterIdsRef.current.includes(sitterId)) {
+      return;
+    }
+
     try {
       const [
         { data: nameRow, error: nameError },
@@ -282,7 +448,7 @@ function BroadcastRadarContent() {
       ] = await Promise.all([
         supabase
           .from("profiles")
-          .select("first_name, last_name")
+          .select("first_name, last_name, avatar_url")
           .eq("id", sitterId)
           .maybeSingle(),
 
@@ -310,6 +476,12 @@ function BroadcastRadarContent() {
         `${nameRow?.first_name ?? ""} ${nameRow?.last_name ?? ""}`.trim() ||
         "נני זמינה";
 
+      const avatarRaw =
+        nameRow && typeof (nameRow as { avatar_url?: unknown }).avatar_url === "string"
+          ? String((nameRow as { avatar_url: string }).avatar_url).trim()
+          : "";
+      const avatarUrl = avatarRaw.length > 0 ? avatarRaw : null;
+
       const hourlyRate = normalizePositiveNumber(
         sitterProfile?.hourly_rate_nis
       );
@@ -326,7 +498,20 @@ function BroadcastRadarContent() {
           ? ratingSummary.average
           : null;
 
+      responderIdentityRef.current.set(sitterId, {
+        name: displayName,
+        avatarUrl,
+        rating
+      });
+
+      if (declinedSitterIdsRef.current.includes(sitterId)) {
+        return;
+      }
+
       setResponders((previous) => {
+        if (declinedSitterIdsRef.current.includes(sitterId)) {
+          return previous.filter((sitter) => sitter.id !== sitterId);
+        }
         if (previous.some((responder) => responder.id === sitterId)) {
           return previous;
         }
@@ -338,7 +523,8 @@ function BroadcastRadarContent() {
             name: displayName,
             rating,
             experience,
-            hourlyRate
+            hourlyRate,
+            avatarUrl
           }
         ];
       });
@@ -358,7 +544,7 @@ function BroadcastRadarContent() {
     if (!alertId || alertId === "null" || !parentId || !startedAt || !supabase) {
       return;
     }
-    if (isExpired || isPaused || isFilled) {
+    if (isExpired || isFilled) {
       return;
     }
 
@@ -402,30 +588,53 @@ function BroadcastRadarContent() {
     };
 
     const syncRequestStatuses = async (mode: "seed" | "watch" = "watch") => {
-      const { pendingIds, rejectedBookingIds } = await fetchBroadcastRequestStatuses(
+      const { pendingIds, rejectedIds, rejectedBookingIds } = await fetchBroadcastRequestStatuses(
         supabase,
         parentId,
         alertId,
         startedAt
       );
       if (disposed) return;
+      const declinedSnapshots = new Map(
+        rejectedIds.map((id) => [id, captureResponderIdentity(id)] as const)
+      );
       setRequestedSitterIds(pendingIds);
+      replaceDeclinedSitterIds(rejectedIds);
 
       if (mode === "seed") {
         for (const bookingId of rejectedBookingIds) {
           handledRejectionBookingIdsRef.current.add(bookingId);
+        }
+        for (const sitterId of rejectedIds) {
+          notifiedDeclineKeysRef.current.add(`sitter:${sitterId}`);
         }
         return;
       }
 
       for (const bookingId of rejectedBookingIds) {
         if (handledRejectionBookingIdsRef.current.has(bookingId)) continue;
-        warmAndMinimizeForRejection(bookingId);
+        const noticeSitterId = rejectedIds.find(
+          (id) => !notifiedDeclineKeysRef.current.has(`sitter:${id}`)
+        );
+        if (noticeSitterId) {
+          showDeclineNotice(
+            noticeSitterId,
+            bookingId,
+            declinedSnapshots.get(noticeSitterId)
+          );
+        }
+        if (!isPaused) {
+          warmAndMinimizeForRejection(bookingId);
+        } else {
+          handledRejectionBookingIdsRef.current.add(bookingId);
+        }
         break;
       }
     };
 
-    void checkConfirmation();
+    if (!isPaused) {
+      void checkConfirmation();
+    }
     void syncRequestStatuses("seed");
 
     const bookingChannel = subscribePostgresChanges(
@@ -445,11 +654,17 @@ function BroadcastRadarContent() {
             const bookingId = String(next.id ?? "").trim();
             const sitterId = String(next.sitter_id ?? "").trim();
             if (sitterId) {
+              const requestedOnThisAlert =
+                requestedSitterIdsRef.current.includes(sitterId);
               setRequestedSitterIds((previous) =>
                 previous.filter((id) => id !== sitterId)
               );
+              if (requestedOnThisAlert) {
+                addDeclinedSitterId(sitterId, true);
+              }
             }
-            if (bookingId) {
+            void syncRequestStatuses("watch");
+            if (bookingId && !isPaused) {
               warmAndMinimizeForRejection(bookingId);
             }
             return;
@@ -468,14 +683,18 @@ function BroadcastRadarContent() {
             next.status === "sitter_ended" ||
             next.status === "completed"
           ) {
-            void checkConfirmation();
+            if (!isPaused) {
+              void checkConfirmation();
+            }
           }
         }
       }
     );
 
     const poll = window.setInterval(() => {
-      void checkConfirmation();
+      if (!isPaused) {
+        void checkConfirmation();
+      }
       void syncRequestStatuses("watch");
     }, 2500);
 
@@ -539,14 +758,26 @@ function BroadcastRadarContent() {
         return;
       }
 
+      const declined = new Set(declinedSitterIdsRef.current);
+
+      setResponders((previous) =>
+        previous.filter((sitter) => !declined.has(sitter.id))
+      );
+
       for (const response of existingResponses) {
         if (disposed) {
           return;
         }
 
-        if (response.sitter_id) {
-          await addSitterToResponders(String(response.sitter_id));
+        const sitterId = response.sitter_id
+          ? String(response.sitter_id).trim()
+          : "";
+
+        if (!sitterId || declined.has(sitterId)) {
+          continue;
         }
+
+        await addSitterToResponders(sitterId);
       }
     };
 
@@ -567,10 +798,15 @@ function BroadcastRadarContent() {
           const next = payload.new as {
             sitter_id?: string;
           };
+          const sitterId = next?.sitter_id
+            ? String(next.sitter_id).trim()
+            : "";
 
-          if (next?.sitter_id) {
-            await addSitterToResponders(String(next.sitter_id));
+          if (!sitterId || declinedSitterIdsRef.current.includes(sitterId)) {
+            return;
           }
+
+          await addSitterToResponders(sitterId);
         }
       }
     );
@@ -802,7 +1038,7 @@ function BroadcastRadarContent() {
       dir="rtl"
       className="mx-auto max-w-md space-y-6 px-2 pt-4"
     >
-      {isExpired && responders.length === 0 ? (
+      {isExpired && visibleResponderList.length === 0 ? (
         <div className="animate-fadeIn space-y-4 rounded-3xl border border-slate-100 bg-white p-6 text-center shadow-soft">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600 shadow-inner">
             <AlertCircle className="h-6 w-6" />
@@ -903,10 +1139,10 @@ function BroadcastRadarContent() {
 
           <div className="space-y-3">
             <h2 className="mr-1 text-xs font-bold uppercase tracking-wider text-slate-400">
-              מטפלות פנויות שהגיבו ({responders.length})
+              מטפלות פנויות שהגיבו ({visibleResponderList.length})
             </h2>
 
-            {responders.length === 0 ? (
+            {visibleResponderList.length === 0 ? (
               <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center">
                 <Clock
                   className="mx-auto h-8 w-8 animate-spin text-slate-300"
@@ -926,7 +1162,7 @@ function BroadcastRadarContent() {
               </div>
             ) : (
               <div className="space-y-2.5">
-                {responders.map((sitter) => {
+                {visibleResponderList.map((sitter) => {
                   const selecting =
                     selectingSitterId === sitter.id;
                   const requested = requestedSitterIds.includes(sitter.id);
@@ -937,9 +1173,10 @@ function BroadcastRadarContent() {
                       className="animate-fadeIn flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 shadow-soft"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-purple-100 bg-purple-50 text-sm font-black text-purple-700">
-                          {sitter.name[0] ?? "נ"}
-                        </div>
+                        <BroadcastSitterAvatar
+                          name={sitter.name}
+                          avatarUrl={sitter.avatarUrl}
+                        />
 
                         <div className="space-y-0.5 text-right">
                           <h3 className="flex items-center gap-1 text-sm font-bold text-slate-800">
@@ -1010,23 +1247,15 @@ function BroadcastRadarContent() {
               </div>
             )}
           </div>
-
-          <div className="flex items-start gap-2.5 rounded-xl border border-slate-100 bg-slate-50 p-3 text-right">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-
-            <div className="space-y-0.5">
-              <h4 className="text-[11px] font-bold text-slate-700">
-                הגנה מלאה על המשמרת
-              </h4>
-
-              <p className="text-[10px] leading-normal text-slate-500">
-                כל הנניז הרשומות בפלטפורמה עברו אימות פרופיל קשיח
-                ובדיקת רקע.
-              </p>
-            </div>
-          </div>
         </>
       )}
+
+      {declineNotice ? (
+        <BroadcastDeclineNoticeUnit
+          notice={declineNotice}
+          onClose={() => setDeclineNotice(null)}
+        />
+      ) : null}
     </div>
   );
 }

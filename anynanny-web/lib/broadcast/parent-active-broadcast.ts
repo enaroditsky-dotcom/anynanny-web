@@ -178,9 +178,34 @@ export async function fetchPendingRequestedSitterIds(
 }
 
 /**
+ * Radar available-list rule for a single alert:
+ * the sitter positively responded to that alert AND has not declined
+ * the parent's request for that same alert.
+ *
+ * Does not touch general availability, other alerts, or Search.
+ */
+export function filterAvailableBroadcastSitterIds(
+  responderIds: readonly string[],
+  declinedSitterIds: Iterable<string>
+): string[] {
+  const declined = new Set(
+    [...declinedSitterIds].map((id) => String(id).trim()).filter(Boolean)
+  );
+
+  return [
+    ...new Set(
+      responderIds
+        .map((id) => String(id).trim())
+        .filter((id) => id.length > 0 && !declined.has(id))
+    )
+  ];
+}
+
+/**
  * Latest request outcome per responding sitter for this broadcast window.
- * Pending is used for "בקשה נשלחה". Rejected booking ids drive
- * auto-minimize to the dashboard rejection card (UI-only).
+ * Pending is used for "בקשה נשלחה". Rejected ids hide the sitter from this
+ * alert's available list only. Rejected booking ids drive auto-minimize
+ * to the dashboard rejection card (UI-only).
  */
 export async function fetchBroadcastRequestStatuses(
   supabase: SupabaseClient,
@@ -191,10 +216,16 @@ export async function fetchBroadcastRequestStatuses(
   pendingIds: string[];
   rejectedIds: string[];
   rejectedBookingIds: string[];
+  availableIds: string[];
 }> {
   const responderIds = await fetchBroadcastResponderIds(supabase, alertId);
   if (responderIds.length === 0) {
-    return { pendingIds: [], rejectedIds: [], rejectedBookingIds: [] };
+    return {
+      pendingIds: [],
+      rejectedIds: [],
+      rejectedBookingIds: [],
+      availableIds: []
+    };
   }
 
   const { data, error } = await supabase
@@ -208,7 +239,12 @@ export async function fetchBroadcastRequestStatuses(
 
   if (error) {
     console.warn("[broadcast] request statuses:", error.message);
-    return { pendingIds: [], rejectedIds: [], rejectedBookingIds: [] };
+    return {
+      pendingIds: [],
+      rejectedIds: [],
+      rejectedBookingIds: [],
+      availableIds: responderIds
+    };
   }
 
   const pendingIds: string[] = [];
@@ -232,7 +268,12 @@ export async function fetchBroadcastRequestStatuses(
     else if (status === "rejected") rejectedIds.push(sitterId);
   }
 
-  return { pendingIds, rejectedIds, rejectedBookingIds };
+  return {
+    pendingIds,
+    rejectedIds,
+    rejectedBookingIds,
+    availableIds: filterAvailableBroadcastSitterIds(responderIds, rejectedIds)
+  };
 }
 
 /**
