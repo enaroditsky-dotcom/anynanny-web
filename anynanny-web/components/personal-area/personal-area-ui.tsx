@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 
 export function PersonalAreaSection({
@@ -180,6 +181,12 @@ export function PersonalEditModal({
   error?: string | null;
   children: ReactNode;
 }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -189,11 +196,48 @@ export function PersonalEditModal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose, saving]);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (!open) return;
 
-  return (
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    body.style.overscrollBehavior = "none";
+
+    const restoreScrollers: Array<() => void> = [];
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *"))) {
+      if (el.closest("[data-personal-edit-modal]")) continue;
+      const overflowY = window.getComputedStyle(el).overflowY;
+      if (overflowY !== "auto" && overflowY !== "scroll") continue;
+      const previous = el.style.overflowY;
+      el.style.overflowY = "hidden";
+      restoreScrollers.push(() => {
+        el.style.overflowY = previous;
+      });
+    }
+
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+      restoreScrollers.forEach((restore) => restore());
+    };
+  }, [open]);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      data-personal-edit-modal
+      className="fixed inset-0 z-[120] flex items-start justify-center overflow-hidden bg-black/40 px-4 pb-4 pt-[max(1.25rem,env(safe-area-inset-top))] sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="personal-edit-modal-title"
@@ -203,7 +247,7 @@ export function PersonalEditModal({
       }}
     >
       <div
-        className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 rounded-2xl border border-[#001F3F]/12 bg-white p-5 shadow-xl shadow-[#001F3F]/15 duration-200"
+        className="mt-2 flex w-full max-w-md max-h-[min(85dvh,calc(100dvh-2.5rem))] flex-col overflow-y-auto overscroll-contain rounded-2xl border border-[#001F3F]/12 bg-white p-5 shadow-xl shadow-[#001F3F]/15 animate-in fade-in zoom-in-95 duration-200 sm:mt-0"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="personal-edit-modal-title" className="text-right text-base font-bold text-[#001F3F]">
@@ -235,7 +279,8 @@ export function PersonalEditModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
