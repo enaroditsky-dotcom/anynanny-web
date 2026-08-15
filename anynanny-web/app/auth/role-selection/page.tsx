@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth/post-auth-destination";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { ensureProfile } from "@/lib/auth/supabase-profile";
+import { loadProductProfileOwnership, secondRoleHref } from "@/lib/auth/product-profiles";
 import { resolveNamePartsFromAuthUser } from "@/lib/user/greeting-display-name";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
@@ -89,6 +90,20 @@ function RoleSelectionInner() {
         } = await supabase.auth.getUser();
         if (!user) {
           router.replace(AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT);
+          return;
+        }
+
+        const ownership = await loadProductProfileOwnership(supabase, user.id);
+        if (ownership?.hasParent || ownership?.hasSitter) {
+          if ((role === "parent" && ownership.hasParent) || (role === "sitter" && ownership.hasSitter)) {
+            const dest = await resolvePostAuthPath(supabase, user.id, nextParam, {
+              userEmail: user.email,
+              requestedRole: role
+            });
+            window.location.assign(dest);
+            return;
+          }
+          window.location.assign(secondRoleHref(role));
           return;
         }
 

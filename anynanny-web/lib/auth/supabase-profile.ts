@@ -67,11 +67,24 @@ export async function ensureProfile(
   const first_name = input.first_name !== undefined ? input.first_name?.trim() || null : undefined;
   const last_name = input.last_name !== undefined ? input.last_name?.trim() || null : undefined;
 
-  const { data: existing } = await supabase.from(PROFILES_TABLE).select("id").eq("id", input.id).maybeSingle();
+  const { data: existing } = await supabase
+    .from(PROFILES_TABLE)
+    .select("id, role")
+    .eq("id", input.id)
+    .maybeSingle();
   if (existing) {
-    const patch: Record<string, unknown> = { role: input.role };
+    const patch: Record<string, unknown> = {};
+    const existingRole =
+      existing && typeof existing === "object" && typeof (existing as { role?: unknown }).role === "string"
+        ? (existing as { role: string }).role
+        : null;
+    // Keep the first registered product role. Dual-profile users must not lose ownership by overwrite.
+    if (!isProfileRole(existingRole)) {
+      patch.role = input.role;
+    }
     if (first_name !== undefined) patch.first_name = first_name;
     if (last_name !== undefined) patch.last_name = last_name;
+    if (Object.keys(patch).length === 0) return { error: null };
     const { error } = await supabase.from(PROFILES_TABLE).update(patch).eq("id", input.id);
     if (error) return { error: error.message };
     return { error: null };

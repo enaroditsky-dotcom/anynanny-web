@@ -10,6 +10,7 @@ import {
   TermsAcceptanceCheckbox
 } from '@/components/auth/terms-acceptance-checkbox';
 import { ACCOUNT_TYPE_ENTRY_HREF } from '@/lib/auth/age-eligibility';
+import { resolvePostAuthPath } from '@/lib/auth/post-auth-destination';
 import { upsertProfileOnSignup } from '@/lib/auth/supabase-profile';
 import { saveSignupNamesToDevice } from '@/lib/auth/signup-names';
 import { createLegalAcceptanceRecord } from '@/lib/legal/acceptance';
@@ -39,9 +40,10 @@ export default function SignUpPage() {
       if (!supabase) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const userRole = session.user.user_metadata?.role;
-        if (userRole === 'parent') router.push('/parent/onboarding');
-        else if (userRole === 'sitter') router.push('/sitter/onboarding');
+        const dest = await resolvePostAuthPath(supabase, session.user.id, null, {
+          userEmail: session.user.email,
+        });
+        router.replace(dest);
       }
     };
     checkUser();

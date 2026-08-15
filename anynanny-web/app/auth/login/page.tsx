@@ -78,7 +78,13 @@ function LoginInner() {
       const user = session?.user;
       if (cancelled || !user) return;
       setBypassLogin(true);
-      await navigateAfterAuth(supabase, user.id, nextPath, user.email ?? null);
+      await navigateAfterAuth(
+        supabase,
+        user.id,
+        nextPath,
+        user.email ?? null,
+        roleFromQuery === "parent" || roleFromQuery === "sitter" ? roleFromQuery : null
+      );
     };
 
     void redirectIfSignedIn();
@@ -87,7 +93,13 @@ function LoginInner() {
       if (cancelled) return;
       if (event === "SIGNED_IN" && session?.user) {
         setBypassLogin(true);
-        void navigateAfterAuth(supabase, session.user.id, nextPath, session.user.email ?? null);
+        void navigateAfterAuth(
+          supabase,
+          session.user.id,
+          nextPath,
+          session.user.email ?? null,
+          roleFromQuery === "parent" || roleFromQuery === "sitter" ? roleFromQuery : null
+        );
       }
     });
 
@@ -95,7 +107,7 @@ function LoginInner() {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [nextPath, supabase]);
+  }, [nextPath, supabase, roleFromQuery]);
 
   if (bypassLogin) {
     return (
@@ -124,7 +136,13 @@ function LoginInner() {
       
       setReturningUserFlag();
       saveLastUsedEmail(emailTrim);
-      await navigateAfterAuth(supabase, data.user.id, nextPath, data.user.email);
+      await navigateAfterAuth(
+        supabase,
+        data.user.id,
+        nextPath,
+        data.user.email,
+        roleFromQuery === "parent" || roleFromQuery === "sitter" ? roleFromQuery : null
+      );
     } catch (err: any) {
       setMessage("שגיאה בהתחברות. נסו שוב.");
     } finally {

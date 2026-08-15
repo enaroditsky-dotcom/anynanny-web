@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolvePostAuthPath } from "@/lib/auth/post-auth-destination";
+import type { ProfileRole } from "@/lib/supabase/profiles";
 
 let lastRedirectTarget: string | null = null;
 let lastRedirectAt = 0;
@@ -29,14 +30,13 @@ export async function navigateAfterAuth(
   supabase: SupabaseClient,
   userId: string,
   nextPath: string | null,
-  userEmail?: string | null
+  userEmail?: string | null,
+  requestedRole?: ProfileRole | null
 ): Promise<void> {
-  const target = await resolvePostAuthPath(
-    supabase,
-    userId,
-    nextPath,
-    userEmail !== undefined ? { userEmail } : undefined
-  );
+  const target = await resolvePostAuthPath(supabase, userId, nextPath, {
+    ...(userEmail !== undefined ? { userEmail } : {}),
+    ...(requestedRole ? { requestedRole } : {})
+  });
   if (!shouldAssignWindow(target)) return;
   window.location.assign(target);
 }

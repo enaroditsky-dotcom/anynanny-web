@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  loadProductProfileOwnership,
+  PARENT_DASHBOARD_PATH,
+  PARENT_ONBOARDING_PATH,
+  roleMismatchHref,
+  SECOND_ROLE_PATH
+} from "@/lib/auth/product-profiles";
+import {
   hasSitterCompletedOnboarding,
   SITTER_PROFILES_TABLE,
   SITTER_PROFILES_USER_COLUMN
@@ -75,23 +82,10 @@ async function loadSitterOnboardingCompletedAt(
 }
 
 /**
- * Ensure a sitter_profiles row exists, then route by onboarding_completed_at only.
- * Row existence is never treated as completion.
+ * Route an owned sitter product profile by onboarding_completed_at only.
+ * Does not create sitter_profiles rows.
  */
-async function resolveSitterPostAuthPath(supabase: SupabaseClient, userId: string): Promise<string> {
-  const fk = SITTER_PROFILES_USER_COLUMN;
-  const sitterRes = await supabase.from(SITTER_PROFILES_TABLE).select(fk).eq(fk, userId).maybeSingle();
-  const hasSitterProfile =
-    !sitterRes.error &&
-    sitterRes.data != null &&
-    typeof sitterRes.data === "object" &&
-    fk in sitterRes.data;
-
-  if (!hasSitterProfile) {
-    await supabase.from(SITTER_PROFILES_TABLE).insert({ [fk]: userId } as never);
-    return SITTER_ONBOARDING_PATH;
-  }
-
+async function resolveOwnedSitterPostAuthPath(supabase: SupabaseClient, userId: string): Promise<string> {
   const completedAt = await loadSitterOnboardingCompletedAt(supabase, userId);
   if (!hasSitterCompletedOnboarding({ onboarding_completed_at: completedAt })) {
     return SITTER_ONBOARDING_PATH;
@@ -104,6 +98,7 @@ async function resolveSitterPostAuthPath(supabase: SupabaseClient, userId: strin
  * Read-only sitter route guard. Does not create rows.
  * Incomplete (`onboarding_completed_at` null) → `/sitter/onboarding`.
  * Complete users on the questionnaire → `/sitter/dashboard`.
+ * Callers must confirm sitter product ownership before invoking this.
  */
 export async function getSitterOnboardingGateRedirect(
   supabase: SupabaseClient,
@@ -120,6 +115,33 @@ export async function getSitterOnboardingGateRedirect(
   }
 
   if (isSitterOnboardingPath(path)) return SITTER_DASHBOARD_PATH;
+  return null;
+}
+
+export function isParentOnboardingRoute(pathname: string): boolean {
+  const path = pathname.split("?")[0] || pathname;
+  return path === PARENT_ONBOARDING_PATH || path.startsWith(`${PARENT_ONBOARDING_PATH}/`);
+}
+
+/**
+ * Read-only parent route guard. Does not create profiles.
+ * Callers must confirm parent product ownership before invoking this.
+ */
+export async function getParentOnboardingGateRedirect(
+  supabase: SupabaseClient,
+  userId: string,
+  currentPath: string
+): Promise<string | null> {
+  const path = currentPath.split("?")[0] || currentPath;
+  const ownership = await loadProductProfileOwnership(supabase, userId);
+  const complete = Boolean(ownership?.parentOnboardingComplete);
+
+  if (!complete) {
+    if (isParentOnboardingRoute(path)) return null;
+    return PARENT_ONBOARDING_PATH;
+  }
+
+  if (isParentOnboardingRoute(path)) return PARENT_DASHBOARD_PATH;
   return null;
 }
 
@@ -199,11 +221,58 @@ export type ResolvePostAuthOptions = {
    * Use from middleware after `getUser()` so `+nanny` / `+sitter` bypass returns immediately with no DB `.from()` calls.
    */
   userEmail?: string | null;
+  /** Portal the user explicitly chose (home login / `?role=`). Not inferred as ownership. */
+  requestedRole?: ProfileRole | null;
 };
 
 /**
+ * Explicit portal only: `requestedRole`, `?role=`, or a portal `next` path.
+ * Never infers from profiles.role, active_role, age, or DOB.
+ */
+function resolveExplicitRequestedPortal(
+  nextParam: string | null,
+  options?: ResolvePostAuthOptions
+): ProfileRole | null {
+  if (isProfileRole(options?.requestedRole)) {
+    return options.requestedRole;
+  }
+
+  if (typeof window !== "undefined") {
+    const explicitRole = new URLSearchParams(window.location.search).get("role");
+    if (explicitRole === "parent" || explicitRole === "sitter") {
+      return explicitRole;
+    }
+  }
+
+  const cleanNext = sanitizeNextParam(nextParam);
+  if (cleanNext) {
+    if (cleanNext.startsWith("/sitter") || cleanNext === "/session" || cleanNext.startsWith("/session/")) {
+      return "sitter";
+    }
+    if (cleanNext.startsWith("/parent") || cleanNext.startsWith("/checkout")) {
+      return "parent";
+    }
+  }
+
+  return null;
+}
+
+function destinationForMissingPortal(
+  requestedPortal: ProfileRole,
+  nextParam: string | null
+): string {
+  const secondRoleNext = sanitizeNextParam(nextParam);
+  if (secondRoleNext && (secondRoleNext === SECOND_ROLE_PATH || secondRoleNext.startsWith(`${SECOND_ROLE_PATH}?`))) {
+    return secondRoleNext;
+  }
+  return roleMismatchHref(requestedPortal);
+}
+
+/**
  * Where to send the user after login, register, or email confirmation.
- * Multi-role bypass: explicit route choices are respected regardless of the core profile column status.
+ *
+ * Explicit portal choice is preserved. Missing ownership for THAT portal
+ * goes to role-mismatch — never to the other product portal.
  */
 export async function resolvePostAuthPath(
   supabase: SupabaseClient,
@@ -220,10 +289,18 @@ export async function resolvePostAuthPath(
     const email = bypassFromCaller
       ? options.userEmail
       : (await supabase.auth.getUser()).data.user?.email;
-    
-    /** Must stay first: `+nanny` / `+sitter` skip role-selection, not the onboarding questionnaire. */
-    if (isNannyOnboardingBypassEmail(email) || isSitterTestBypassEmail(email)) {
-      return resolveSitterPostAuthPath(supabase, userId);
+
+    const requestedPortal = resolveExplicitRequestedPortal(nextParam, options);
+
+    /**
+     * Test-email sitter shortcut must NOT run when the user explicitly chose Parent.
+     * `+sitter` / `+nanny` previously replaced Parent login with the sitter portal.
+     */
+    if (
+      !requestedPortal &&
+      (isNannyOnboardingBypassEmail(email) || isSitterTestBypassEmail(email))
+    ) {
+      return resolveOwnedSitterPostAuthPath(supabase, userId);
     }
 
     const profile = await loadProfileAuthRow(supabase, userId);
@@ -231,41 +308,36 @@ export async function resolvePostAuthPath(
       return "/auth/role-selection";
     }
 
-    // 2. זיהוי ה-Role המבוקש על סמך הבחירה בצומת הראשונית של מסך הפתיחה והאימות
-    let targetRole = isProfileRole(profile.role) ? profile.role : null;
-    
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      const explicitRole = urlParams.get("role");
-      if (explicitRole === "parent" || explicitRole === "sitter") {
-        targetRole = explicitRole;
+    const ownership = await loadProductProfileOwnership(supabase, userId);
+
+    if (requestedPortal === "parent") {
+      if (!ownership?.hasParent) {
+        return destinationForMissingPortal("parent", nextParam);
       }
-    } else if (nextParam) {
-      const cleanNext = sanitizeNextParam(nextParam);
-      if (cleanNext) {
-        if (cleanNext.startsWith("/sitter") || cleanNext === "/session" || cleanNext.startsWith("/session/")) {
-          targetRole = "sitter";
-        } else if (cleanNext.startsWith("/parent") || cleanNext.startsWith("/checkout")) {
-          targetRole = "parent";
-        }
-      }
-    }
-
-    if (!targetRole) {
-      return "/auth/role-selection";
-    }
-
-    // 3. ניתוב עצמאי, מבודד והרמטי לפי הבחירה של המשתמש ברגע ההתחברות!
-    if (targetRole === "sitter") {
-      return resolveSitterPostAuthPath(supabase, userId);
-    }
-
-    if (targetRole === "parent") {
-      if (!profile.parent_onboarding_completed_at) {
-        return "/parent/onboarding";
+      if (!ownership.parentOnboardingComplete) {
+        return PARENT_ONBOARDING_PATH;
       }
       const nextOk = allowedNextPath("parent", nextParam);
-      return nextOk ?? "/parent/dashboard";
+      return nextOk ?? PARENT_DASHBOARD_PATH;
+    }
+
+    if (requestedPortal === "sitter") {
+      if (!ownership?.hasSitter) {
+        return destinationForMissingPortal("sitter", nextParam);
+      }
+      return resolveOwnedSitterPostAuthPath(supabase, userId);
+    }
+
+    // Unscoped post-auth (no login portal): skip role-selection only if a first role already exists.
+    const storedRole = isProfileRole(profile.role) ? profile.role : null;
+    if (storedRole === "sitter" && ownership?.hasSitter) {
+      return resolveOwnedSitterPostAuthPath(supabase, userId);
+    }
+    if (storedRole === "parent" && ownership?.hasParent) {
+      if (!ownership.parentOnboardingComplete) {
+        return PARENT_ONBOARDING_PATH;
+      }
+      return PARENT_DASHBOARD_PATH;
     }
 
     return "/auth/role-selection";

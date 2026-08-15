@@ -85,7 +85,9 @@ export default function SitterOnboardingForm() {
       if (hasCompleteSignupNames(resolved)) {
         setNamesReady(true);
         saveSignupNamesToDevice(resolved);
-        await ensureSitterProfileRowForUser(supabase, user.id, resolved);
+        if (sitterRow) {
+          await ensureSitterProfileRowForUser(supabase, user.id, resolved);
+        }
       }
     })();
   }, []);

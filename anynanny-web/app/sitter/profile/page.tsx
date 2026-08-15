@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { LogoutButton } from "@/components/account/logout-button";
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
 import { SitterPersonalArea } from "@/components/sitter/sitter-personal-area";
+import { loadProductProfileOwnership } from "@/lib/auth/product-profiles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 export default function SitterProfilePage() {
   const router = useRouter();
@@ -34,17 +34,12 @@ export default function SitterProfilePage() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from(PROFILES_TABLE)
-        .select("role")
-        .eq("id", user.id)
-        .eq("role", "sitter")
-        .maybeSingle();
+      const ownership = await loadProductProfileOwnership(supabase, user.id);
 
       if (cancelled) return;
 
-      if (!profile) {
-        router.replace("/auth/role-selection");
+      if (!ownership?.hasSitter) {
+        router.replace("/auth/role-mismatch?requested=sitter");
         return;
       }
 

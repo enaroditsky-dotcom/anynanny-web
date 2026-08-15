@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { startTransition, useCallback } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { getSitterOnboardingGateRedirect } from "@/lib/auth/post-auth-destination";
+import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "active_role";
@@ -21,10 +22,22 @@ export function RoleToggle() {
     } catch {
       /* ignore */
     }
-    startTransition(() => {
-      router.replace("/parent/dashboard");
-    });
-  }, [router, pathname]);
+    void (async () => {
+      const supabase = getSupabaseBrowserClient();
+      if (supabase && user?.id) {
+        const ownership = await loadProductProfileOwnership(supabase, user.id);
+        if (!ownership?.hasParent) {
+          startTransition(() => {
+            router.replace(roleMismatchHref("parent"));
+          });
+          return;
+        }
+      }
+      startTransition(() => {
+        router.replace("/parent/dashboard");
+      });
+    })();
+  }, [router, pathname, user]);
 
   const goSitter = useCallback(() => {
     if (pathname.startsWith("/sitter") || pathname.startsWith("/session")) return;
@@ -36,6 +49,13 @@ export function RoleToggle() {
     void (async () => {
       const supabase = getSupabaseBrowserClient();
       if (supabase && user?.id) {
+        const ownership = await loadProductProfileOwnership(supabase, user.id);
+        if (!ownership?.hasSitter) {
+          startTransition(() => {
+            router.replace(roleMismatchHref("sitter"));
+          });
+          return;
+        }
         const dest = await getSitterOnboardingGateRedirect(supabase, user.id, "/sitter/dashboard");
         startTransition(() => {
           router.replace(dest ?? "/sitter/dashboard");
