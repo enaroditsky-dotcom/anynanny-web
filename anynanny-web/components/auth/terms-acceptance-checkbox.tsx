@@ -1,84 +1,86 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { MouseEvent, ReactNode } from "react";
+import type { MouseEvent } from "react";
 
-export const PARENT_TERMS_LABEL =
-  "אני מצהיר/ה שקראתי והסכמתי לכל תנאי השימוש של AnyNanny.";
-
-export const SITTER_TERMS_LABEL =
-  "אני מצהיר/ה שקראתי והסכמתי לתנאי השימוש, וידוע לי ש-AnyNanny מציגה להורים את תעריף המשמרת בתוספת דמי תפעול וסנכרון של 10%.";
-
-const TERMS_PHRASE = "תנאי השימוש";
+export const LEGAL_ACCEPTANCE_REQUIRED_MESSAGE =
+  "יש לאשר את תנאי השימוש ואת מדיניות הפרטיות כדי להשלים את ההרשמה.";
 
 const checkboxClass =
   "mt-0.5 h-4 w-4 shrink-0 rounded border border-navy-header/25 accent-emerald-600";
 
-const termsLinkClass =
+const legalLinkClass =
   "font-semibold text-navy-header underline decoration-navy-header/30 underline-offset-2 transition hover:decoration-navy-header/60";
 
 function stopLabelToggle(event: MouseEvent<HTMLAnchorElement>) {
   event.stopPropagation();
 }
 
-function renderLabelWithTermsLink(label: string, from: string): ReactNode {
-  const idx = label.indexOf(TERMS_PHRASE);
-  if (idx === -1) return label;
-
-  const href = `/terms?from=${encodeURIComponent(from)}`;
-
-  return (
-    <>
-      {label.slice(0, idx)}
-      <Link
-        href={href}
-        className={termsLinkClass}
-        onClick={stopLabelToggle}
-        onMouseDown={stopLabelToggle}
-      >
-        {TERMS_PHRASE}
-      </Link>
-      {label.slice(idx + TERMS_PHRASE.length)}
-    </>
-  );
-}
-
 type TermsAcceptanceCheckboxProps = {
   id: string;
-  label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
+  error?: string | null;
 };
 
 export function TermsAcceptanceCheckbox({
   id,
-  label,
   checked,
   onChange,
-  disabled = false
+  disabled = false,
+  error = null
 }: TermsAcceptanceCheckboxProps) {
-  const pathname = usePathname();
-  const from = pathname && pathname.startsWith("/") ? pathname : "/";
-
   return (
-    <label
-      htmlFor={id}
-      className="flex cursor-pointer items-start gap-3 rounded-xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right shadow-sm"
-    >
-      <input
-        id={id}
-        type="checkbox"
-        required
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-        className={checkboxClass}
-      />
-      <span className="min-w-0 flex-1 text-xs leading-relaxed text-navy-900">
-        {renderLabelWithTermsLink(label, from)}
-      </span>
-    </label>
+    <div className="space-y-2">
+      <label
+        htmlFor={id}
+        className={`flex cursor-pointer items-start gap-3 rounded-xl border bg-[#FDFBF6]/80 p-3 text-right shadow-sm ${
+          error
+            ? "border-rose-300"
+            : "border-navy-header/10"
+        }`}
+      >
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={checkboxClass}
+        />
+        <span className="min-w-0 flex-1 text-xs leading-relaxed text-navy-900">
+          קראתי ואני מאשר/ת את{" "}
+          <Link
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={legalLinkClass}
+            onClick={stopLabelToggle}
+            onMouseDown={stopLabelToggle}
+          >
+            תנאי השימוש
+          </Link>{" "}
+          ואת{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={legalLinkClass}
+            onClick={stopLabelToggle}
+            onMouseDown={stopLabelToggle}
+          >
+            מדיניות הפרטיות
+          </Link>
+        </span>
+      </label>
+      {error ? (
+        <p id={`${id}-error`} className="px-1 text-xs font-medium text-rose-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

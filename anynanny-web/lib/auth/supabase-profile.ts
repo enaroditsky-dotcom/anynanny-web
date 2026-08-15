@@ -1,6 +1,16 @@
+import type { LegalAcceptanceRecord } from "@/lib/legal/acceptance";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
+
+function isMissingLegalAcceptanceColumn(message: string | null | undefined): boolean {
+  return (
+    isPostgrestMissingColumnError(message, "terms_accepted_at") ||
+    isPostgrestMissingColumnError(message, "terms_version") ||
+    isPostgrestMissingColumnError(message, "privacy_accepted_at") ||
+    isPostgrestMissingColumnError(message, "privacy_version")
+  );
+}
 
 export type ProfileNameInput = {
   first_name?: string | null;
@@ -14,13 +24,14 @@ export async function upsertProfileOnSignup(
     role: ProfileRole;
     first_name: string;
     last_name: string;
+    legalAcceptance?: LegalAcceptanceRecord;
   }
 ): Promise<{ error: string | null }> {
   const first_name = input.first_name.trim();
   const last_name = input.last_name.trim();
 
   // שים לב: איננו שולחים שדות serial לכאן, כדי שהמסד והטריגר ייצרו את ה-AN-1001 / P-1001 באופן אוטומטי
-  const row: Record<string, unknown> = {
+  const baseRow: Record<string, unknown> = {
     id: input.id,
     role: input.role,
     first_name,
@@ -28,8 +39,15 @@ export async function upsertProfileOnSignup(
     balance: 0,
     role_selected: true
   };
+  const row: Record<string, unknown> = input.legalAcceptance
+    ? { ...baseRow, ...input.legalAcceptance }
+    : baseRow;
 
   let { error } = await supabase.from(PROFILES_TABLE).upsert(row, { onConflict: "id" });
+
+  if (error && input.legalAcceptance && isMissingLegalAcceptanceColumn(error.message)) {
+    ({ error } = await supabase.from(PROFILES_TABLE).upsert(baseRow, { onConflict: "id" }));
+  }
 
   if (error && isPostgrestMissingColumnError(error.message, "first_name")) {
     ({ error } = await supabase.from(PROFILES_TABLE).upsert(

@@ -3,7 +3,7 @@ import { TermsPageView } from "@/components/legal/terms-page-view";
 
 export const metadata: Metadata = {
   title: "תנאי שימוש | AnyNanny",
-  description: "תנאי השימוש של פלטפורמת AnyNanny — מקשרת בין הורים לבייביסיטרים."
+  description: "תנאי השימוש של פלטפורמת AnyNanny — מקשרת בין הורים לבייביסיטרים. עדכון אחרון: אוגוסט 2026."
 };
 
 export default function TermsPage() {
