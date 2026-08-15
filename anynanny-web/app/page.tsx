@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { getSitterOnboardingGateRedirect } from "@/lib/auth/post-auth-destination";
+import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -69,23 +70,31 @@ function HomeInner() {
     try {
       const activeRole = localStorage.getItem("active_role");
 
-      if (activeRole === "parent") {
-        router.replace("/parent/dashboard");
-        return;
-      }
-
-      if (activeRole === "sitter") {
+      if (activeRole === "parent" || activeRole === "sitter") {
         void (async () => {
           const supabase = getSupabaseBrowserClient();
           if (!supabase) {
-            router.replace("/sitter/dashboard");
+            router.replace(activeRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
             return;
           }
           const {
             data: { user }
           } = await supabase.auth.getUser();
           if (!user) {
-            router.replace("/sitter/dashboard");
+            router.replace(activeRole === "parent" ? "/login?role=parent" : "/login?role=sitter");
+            return;
+          }
+          const ownership = await loadProductProfileOwnership(supabase, user.id);
+          if (activeRole === "parent") {
+            if (!ownership?.hasParent) {
+              router.replace(roleMismatchHref("parent"));
+              return;
+            }
+            router.replace(ownership.parentOnboardingComplete ? "/parent/dashboard" : "/parent/onboarding");
+            return;
+          }
+          if (!ownership?.hasSitter) {
+            router.replace(roleMismatchHref("sitter"));
             return;
           }
           const dest = await getSitterOnboardingGateRedirect(supabase, user.id, "/sitter/dashboard");

@@ -7,6 +7,7 @@ import type { IsraelCity } from "@/lib/geo/israel-cities";
 import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
 import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
 import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
+import { clearSecondRoleInProgress } from "@/lib/auth/product-profiles";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 type SpecialEvent = {
@@ -158,6 +159,7 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
       }
 
       await onSaved?.();
+      clearSecondRoleInProgress(auth.userId, "parent");
       router.replace("/parent/dashboard");
       router.refresh();
     } catch (err) {

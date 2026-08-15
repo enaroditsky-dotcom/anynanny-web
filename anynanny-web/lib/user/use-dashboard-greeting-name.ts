@@ -7,7 +7,7 @@ import {
   SITTER_PROFILES_USER_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { selectProfileForRole } from "@/lib/supabase/profiles";
+import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { pickGreetingDisplayName } from "@/lib/user/greeting-display-name";
 
 export type DashboardRole = "parent" | "sitter";
@@ -27,7 +27,7 @@ export function buildDashboardGreetingTitle(firstName: string | null, nameLoadin
 }
 
 /**
- * Resolves greeting first name from Supabase `profiles.first_name` (role-scoped).
+ * Resolves greeting first name from account-level `profiles.first_name`.
  * Falls back to sitter_profiles / auth metadata when needed.
  */
 export function useDashboardGreetingName(
@@ -68,7 +68,7 @@ export function useDashboardGreetingName(
               .eq(fk, userId)
               .maybeSingle()
           : Promise.resolve({ data: null, error: null }),
-        selectProfileForRole(supabase, userId, role, "first_name, last_name").maybeSingle()
+        supabase.from(PROFILES_TABLE).select("first_name, last_name").eq("id", userId).maybeSingle()
       ]);
 
       if (cancelled) return;

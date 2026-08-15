@@ -34,6 +34,7 @@ import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
 import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
 import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
+import { clearSecondRoleInProgress } from "@/lib/auth/product-profiles";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 type Props = {
@@ -118,10 +119,12 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
       if (resolved.last_name) setLastName(resolved.last_name);
       if (hasCompleteSignupNames(resolved)) {
         saveSignupNamesToDevice(resolved);
-        await ensureSitterProfileRowForUser(auth.supabase, auth.userId, {
-          first_name: resolved.first_name,
-          last_name: resolved.last_name
-        });
+        if (sitterRow) {
+          await ensureSitterProfileRowForUser(auth.supabase, auth.userId, {
+            first_name: resolved.first_name,
+            last_name: resolved.last_name
+          });
+        }
       }
       setNamesLoading(false);
 
@@ -287,6 +290,7 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
       }
 
       await onSaved?.();
+      clearSecondRoleInProgress(auth.userId, "sitter");
       router.replace("/sitter/dashboard");
       router.refresh();
     } catch (err) {
