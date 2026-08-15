@@ -10,8 +10,8 @@ import {
   type ParentSearchMinExperience,
   type ParentSearchMinRating
 } from "@/lib/sitter/parent-search-filters";
-import { ISRAEL_CITIES, type IsraelCity } from "@/lib/geo/israel-cities";
-import { MapPin, Search, Calendar, Award, Star } from "lucide-react";
+import { CityAutocomplete } from "@/components/geo/city-autocomplete";
+import { Search, Calendar, Award, Star } from "lucide-react";
 
 const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] = [
   { value: 0, label: "ללא הגבלה" },
@@ -124,21 +124,13 @@ export function ParentSearchFiltersBar({
           </div>
         </div>
 
-        <div className="flex flex-col">
+        <div className="relative z-10 flex min-w-0 flex-col overflow-visible">
           <label className={FIELD_LABEL}>עיר פעילות</label>
-          <div className="relative flex items-center">
-            <MapPin className="absolute right-3 h-4 w-4 text-slate-400" />
-            <select
-              className={`${FIELD_CONTROL} pr-9`}
-              value={filters.selectedCity}
-              onChange={(e) => patch({ selectedCity: (e.target.value || "") as IsraelCity | "" })}
-            >
-              <option value="">בחר עיר…</option>
-              {ISRAEL_CITIES.map((city) => (
-                <option key={city} value={city}>{city}</option>
-              ))}
-            </select>
-          </div>
+          <CityAutocomplete
+            value={filters.selectedCity}
+            onChange={(selectedCity) => patch({ selectedCity })}
+            inputClassName={`${FIELD_CONTROL} pr-9 pl-10`}
+          />
         </div>
       </div>
 
