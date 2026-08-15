@@ -5,6 +5,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { AgeGateStep } from "@/components/auth/age-gate-step";
+import {
+  LEGAL_ACCEPTANCE_REQUIRED_MESSAGE,
+  TermsAcceptanceCheckbox
+} from "@/components/auth/terms-acceptance-checkbox";
 import { ACCOUNT_TYPE_ENTRY_HREF } from "@/lib/auth/age-eligibility";
 import {
   PageBackButton,
@@ -13,6 +17,7 @@ import {
 } from "@/components/navigation/page-back-link";
 import { ExpertRegistrationFields } from "@/components/sitter/expert-registration-fields";
 import { upsertProfileOnSignup } from "@/lib/auth/supabase-profile";
+import { createLegalAcceptanceRecord } from "@/lib/legal/acceptance";
 import {
   emptyExpertProfileDraft,
   expertDraftToProfilePatch,
@@ -113,9 +118,13 @@ function RegisterInner() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [ageGatePassed, setAgeGatePassed] = useState(false);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [legalError, setLegalError] = useState<string | null>(null);
 
   useEffect(() => {
     setAgeGatePassed(false);
+    setAcceptedLegal(false);
+    setLegalError(null);
   }, [role]);
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -147,11 +156,18 @@ function RegisterInner() {
       }
     }
 
+    if (!acceptedLegal) {
+      setLegalError(LEGAL_ACCEPTANCE_REQUIRED_MESSAGE);
+      return;
+    }
+
     setLoading(true);
     setErrorMsg(null);
+    setLegalError(null);
 
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
+    const legalAcceptance = createLegalAcceptanceRecord();
     const expertPatch = isExpert
       ? expertDraftToProfilePatch(expertDraft)
       : null;
@@ -197,7 +213,8 @@ function RegisterInner() {
           id: data.user.id,
           role,
           first_name: trimmedFirst,
-          last_name: trimmedLast
+          last_name: trimmedLast,
+          legalAcceptance
         });
 
         if (profileResult.error) {
@@ -380,6 +397,17 @@ function RegisterInner() {
               />
             </div>
           ) : null}
+
+          <TermsAcceptanceCheckbox
+            id="register-legal-acceptance"
+            checked={acceptedLegal}
+            disabled={loading}
+            error={legalError}
+            onChange={(checked) => {
+              setAcceptedLegal(checked);
+              if (checked) setLegalError(null);
+            }}
+          />
 
           <button
             type="submit"

@@ -27,6 +27,11 @@ export type ProfileRow = {
   identity_verified_at?: string | null;
   identity_verification_method?: string | null;
   identity_id_number?: string | null;
+  /** Set only after explicit registration checkbox acceptance. NULL is not acceptance. */
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
+  privacy_accepted_at?: string | null;
+  privacy_version?: string | null;
 };
 
 export function isProfileRole(v: string | null | undefined): v is ProfileRole {

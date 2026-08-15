@@ -5,9 +5,14 @@ import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { User, Baby } from 'lucide-react';
 import { AgeGateStep } from '@/components/auth/age-gate-step';
+import {
+  LEGAL_ACCEPTANCE_REQUIRED_MESSAGE,
+  TermsAcceptanceCheckbox
+} from '@/components/auth/terms-acceptance-checkbox';
 import { ACCOUNT_TYPE_ENTRY_HREF } from '@/lib/auth/age-eligibility';
 import { upsertProfileOnSignup } from '@/lib/auth/supabase-profile';
 import { saveSignupNamesToDevice } from '@/lib/auth/signup-names';
+import { createLegalAcceptanceRecord } from '@/lib/legal/acceptance';
 import { isProfileRole } from '@/lib/supabase/profiles';
 import { ensureSitterProfileRowForUser } from '@/lib/sitter/sitter-profile';
 
@@ -23,6 +28,8 @@ export default function SignUpPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [legalError, setLegalError] = useState<string | null>(null);
 
   const brandColor = '#008080';
   const darkColor = '#0B243B';
@@ -60,12 +67,18 @@ export default function SignUpPage() {
       setErrorMsg('אנא מלא/י שם פרטי ושם משפחה.');
       return;
     }
+    if (!acceptedLegal) {
+      setLegalError(LEGAL_ACCEPTANCE_REQUIRED_MESSAGE);
+      return;
+    }
 
     setLoading(true);
     setErrorMsg(null);
+    setLegalError(null);
 
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
+    const legalAcceptance = createLegalAcceptanceRecord();
     saveSignupNamesToDevice({ first_name: trimmedFirst, last_name: trimmedLast });
 
     try {
@@ -90,6 +103,7 @@ export default function SignUpPage() {
           role,
           first_name: trimmedFirst,
           last_name: trimmedLast,
+          legalAcceptance,
         });
         if (profileResult.error) {
           console.warn('[sign-up] profile upsert:', profileResult.error);
@@ -154,6 +168,8 @@ export default function SignUpPage() {
                 onClick={() => {
                   setRole("sitter");
                   setAgeGatePassed(false);
+                  setAcceptedLegal(false);
+                  setLegalError(null);
                   setErrorMsg(null);
                 }}
                 className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-stone-100 p-4 transition-all"
@@ -166,6 +182,8 @@ export default function SignUpPage() {
                 onClick={() => {
                   setRole("parent");
                   setAgeGatePassed(false);
+                  setAcceptedLegal(false);
+                  setLegalError(null);
                   setErrorMsg(null);
                 }}
                 className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-stone-100 p-4 transition-all"
@@ -234,6 +252,16 @@ export default function SignUpPage() {
             style={{ outlineColor: brandColor }}
             placeholder="סיסמה"
             autoComplete="new-password"
+          />
+          <TermsAcceptanceCheckbox
+            id="sign-up-legal-acceptance"
+            checked={acceptedLegal}
+            disabled={loading}
+            error={legalError}
+            onChange={(checked) => {
+              setAcceptedLegal(checked);
+              if (checked) setLegalError(null);
+            }}
           />
           <button
             type="submit"
