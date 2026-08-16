@@ -18,10 +18,12 @@ import {
   transportBadgeLabel
 } from "@/lib/sitter/public-search-card";
 
-export function parentSitterProfilePath(sitterId: string): string {
+export function parentSitterProfilePath(sitterId: string, query?: string): string {
   const id = sitterId.trim();
   if (!id || id === "undefined" || id === "null") return "/parent/search";
-  return `/parent/sitter/${encodeURIComponent(id)}`;
+  const base = `/parent/sitter/${encodeURIComponent(id)}`;
+  const trimmedQuery = (query ?? "").replace(/^\?/, "").trim();
+  return trimmedQuery ? `${base}?${trimmedQuery}` : base;
 }
 
 /** Full public profile href when opened from an active Broadcast Radar session. */
@@ -51,14 +53,20 @@ function resolveCardServiceKinds(sitter: PublicSitterSearchCard): ExpertServiceK
   return kinds.length > 0 ? kinds : ["babysitter"];
 }
 
-export function PublicSitterSearchCardLink({ sitter }: { sitter: PublicSitterSearchCard }) {
+export function PublicSitterSearchCardLink({
+  sitter,
+  query
+}: {
+  sitter: PublicSitterSearchCard;
+  query?: string;
+}) {
   const title = resolveSitterCardTitle(sitter);
   const rateLabel = formatParentFacingPriceLabel({
     pricing_model: sitter.pricing_model,
     hourly_rate_nis: sitter.hourly_rate_nis,
     package_price_nis: sitter.package_price_nis
   });
-  const profileHref = parentSitterProfilePath(sitter.id);
+  const profileHref = parentSitterProfilePath(sitter.id, query);
   const serviceAreas = formatSearchCardWorkingCities(sitter.working_cities);
   const serviceKinds = resolveCardServiceKinds(sitter);
   const isExpertCard = serviceKinds.some((kind) => isExpertOnlyServiceKind(kind));

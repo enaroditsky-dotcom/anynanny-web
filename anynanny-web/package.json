@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "test:sitter-ownership": "node scripts/test-sitter-discovery-ownership.mjs",
-    "test:parent-pending-sitter-approval": "npx --yes tsx scripts/test-parent-pending-sitter-approval-view.ts"
+    "test:parent-pending-sitter-approval": "npx --yes tsx scripts/test-parent-pending-sitter-approval-view.ts",
+    "test:parent-approved-schedule-notification": "npx --yes tsx scripts/test-parent-approved-schedule-notification.ts",
+    "test:requested-shift-context": "npx --yes tsx scripts/test-requested-shift-context.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",

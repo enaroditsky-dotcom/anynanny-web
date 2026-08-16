@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
+import type { RequestedShiftWindow } from "@/lib/bookings/requested-shift";
 import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
 import { fetchPendingBookingForParentSitter } from "@/lib/bookings/todays-linked-booking";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
@@ -15,6 +16,7 @@ import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 export type SitterProfileActionsProps = {
   sitterId: string;
   sitterName: string;
+  requestedShift?: RequestedShiftWindow | null;
   onBookingSuccess?: (bookingId: string) => void;
 };
 
@@ -43,7 +45,12 @@ function applyBookingStatusFromPayload(
 /**
  * Primary CTAs on the public sitter profile: message (booking chat) and book shift (bookings pending).
  */
-export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }: SitterProfileActionsProps) {
+export function SitterProfileActions({
+  sitterId,
+  sitterName,
+  requestedShift = null,
+  onBookingSuccess
+}: SitterProfileActionsProps) {
   const router = useRouter();
   const [messageBusy, setMessageBusy] = useState(false);
   const [bookModalOpen, setBookModalOpen] = useState(false);
@@ -265,7 +272,9 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
           <span className="min-w-0 flex-1">
             <span className="block text-base font-bold text-white">תיאום משמרת</span>
             <span className="mt-0.5 block text-xs leading-snug text-white/85">
-              בחרו תאריך ושעות — הבקשה תישלח לאישור
+              {requestedShift
+                ? "אשרו את המשמרת שחיפשתם — הבקשה תישלח לאישור"
+                : "בחרו תאריך ושעות — הבקשה תישלח לאישור"}
             </span>
           </span>
         </button>
@@ -275,6 +284,7 @@ export function SitterProfileActions({ sitterId, sitterName, onBookingSuccess }:
         open={bookModalOpen}
         sitterId={sitterId}
         sitterName={sitterName}
+        requestedShift={requestedShift}
         onClose={() => setBookModalOpen(false)}
         onSuccess={handleBookingSuccess}
       />

@@ -4,6 +4,8 @@ import {
   normalizeParentSearchFilters,
   normalizeSitterSerialForLookup,
   toListPublicSittersSearchRpcArgs,
+  buildSearchEndTimeIso,
+  buildSearchStartTimeIso,
   type ParentSearchFilters
 } from "@/lib/sitter/parent-search-filters";
 import { parsePublicSearchCards, normalizePublicSearchCard, isDisplayableSearchRating } from "@/lib/sitter/public-search-card";
@@ -459,28 +461,33 @@ async function fetchPublicSitterBySerialDirect(
   );
 }
 
+function hasRequestedTimeWindow(filters: ParentSearchFilters): boolean {
+  return Boolean(buildSearchStartTimeIso(filters) && buildSearchEndTimeIso(filters));
+}
+
 export async function fetchPublicSitterSearchBySerial(
   supabase: SupabaseClient,
-  serialInput: string
+  serialInput: string,
+  contextFilters?: Partial<ParentSearchFilters>
 ): Promise<ParentSitterSearchResult> {
   const serial = normalizeSitterSerialForLookup(serialInput);
   if (!serial) return { cards: [], error: null };
-  const rpcResult = await runListPublicSittersSearchRpc(
-    supabase,
-    normalizeParentSearchFilters({ searchSitterSerial: serial })
-  );
-  if (!rpcResult.error && rpcResult.cards.length > 0) {
-    const rated = await ensureSearchCardRatings(
-      supabase,
-      rpcResult.cards,
-      normalizeParentSearchFilters({ searchSitterSerial: serial }),
-      { skipListRpcEnrich: true }
-    );
+  const filters = normalizeParentSearchFilters({
+    ...contextFilters,
+    searchSitterSerial: serial
+  });
+  const rpcResult = await runListPublicSittersSearchRpc(supabase, filters);
+  if (!rpcResult.error) {
+    const rated = await ensureSearchCardRatings(supabase, rpcResult.cards, filters, {
+      skipListRpcEnrich: true
+    });
     return finalizeSerialSearchResults(rated, serial);
   }
+  if (hasRequestedTimeWindow(filters)) {
+    return { cards: [], error: rpcResult.error };
+  }
   return fetchPublicSitterBySerialDirect(supabase, serial, {
-    skipListRpcEnrich:
-      rpcResult.error != null && isRpcRatingSchemaError(readSupabaseErrorMessage(rpcResult.error))
+    skipListRpcEnrich: isRpcRatingSchemaError(readSupabaseErrorMessage(rpcResult.error))
   });
 }
 
@@ -488,10 +495,11 @@ export async function runListPublicSittersSearchRpc(
   supabase: SupabaseClient,
   filters: ParentSearchFilters
 ): Promise<ParentSitterSearchResult> {
+  const hasTimeWindow = hasRequestedTimeWindow(filters);
   try {
     const { data: results, error } = await invokeListPublicSittersSearchRpc(supabase, filters);
     if (error) {
-      if (shouldFallbackListPublicSittersRpc(error)) {
+      if (!hasTimeWindow && shouldFallbackListPublicSittersRpc(error)) {
         return runBrowseParentSitterSearchDirect(supabase, filters, {
           skipListRpcEnrich: isRpcRatingSchemaError(readSupabaseErrorMessage(error))
         });
@@ -505,9 +513,12 @@ export async function runListPublicSittersSearchRpc(
       error: null
     };
   } catch (e) {
-    return runBrowseParentSitterSearchDirect(supabase, filters, {
-      skipListRpcEnrich: isRpcRatingSchemaError(readSupabaseErrorMessage(e))
-    });
+    if (!hasTimeWindow) {
+      return runBrowseParentSitterSearchDirect(supabase, filters, {
+        skipListRpcEnrich: isRpcRatingSchemaError(readSupabaseErrorMessage(e))
+      });
+    }
+    return { cards: [], error: readSupabaseErrorMessage(e) || "שגיאה בביצוע החיפוש" };
   }
 }
 
@@ -515,8 +526,8 @@ export async function runParentSitterSearch(
   supabase: SupabaseClient,
   filters: ParentSearchFilters
 ): Promise<ParentSitterSearchResult> {
-  if (isSerialTargetedSearch(filters)) {
-    return fetchPublicSitterSearchBySerial(supabase, filters.searchSitterSerial);
+  if (isSerialTargetedSearch(filters) && !hasRequestedTimeWindow(filters)) {
+    return fetchPublicSitterSearchBySerial(supabase, filters.searchSitterSerial, filters);
   }
   return runListPublicSittersSearchRpc(supabase, filters);
 }
