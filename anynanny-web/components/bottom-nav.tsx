@@ -6,14 +6,13 @@ import { Home, MessageCircle, UserRound, Settings, Zap } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useWalletNotification } from "@/features/wallet/hooks/useWalletNotification";
 import { useChatNotification } from "@/features/chat/hooks/useChatNotification";
-import { useSitterPendingBookingCount } from "@/lib/bookings/use-sitter-pending-booking-count";
 
 type NavItem = {
   href: string;
   label: string;
   match: (path: string) => boolean;
   Icon: typeof Home;
-  badgeKey?: "messages" | "wallet" | "pending";
+  badgeKey?: "messages" | "wallet";
 };
 
 const parentSideItems: NavItem[] = [
@@ -50,8 +49,7 @@ const sitterItems: NavItem[] = [
     href: "/sitter/dashboard",
     label: "בית",
     match: (p) => p === "/sitter/dashboard",
-    Icon: Home,
-    badgeKey: "pending"
+    Icon: Home
   },
   {
     href: "/sitter/messages",
@@ -79,7 +77,6 @@ function NavLink({
   pathname,
   hasUnreadMessages,
   hasWalletUpdate,
-  pendingBookingCount,
   clearWalletNotification,
   clearChatNotification
 }: {
@@ -87,7 +84,6 @@ function NavLink({
   pathname: string;
   hasUnreadMessages: boolean;
   hasWalletUpdate: boolean;
-  pendingBookingCount: number;
   clearWalletNotification: () => void;
   clearChatNotification: () => void;
 }) {
@@ -95,8 +91,7 @@ function NavLink({
   const active = match(pathname);
   const showMessageBadge = badgeKey === "messages" && hasUnreadMessages;
   const showWalletBadge = badgeKey === "wallet" && hasWalletUpdate;
-  const showPendingBadge = badgeKey === "pending" && pendingBookingCount > 0;
-  const showBadge = showMessageBadge || showWalletBadge || showPendingBadge;
+  const showBadge = showMessageBadge || showWalletBadge;
 
   return (
     <Link
@@ -109,9 +104,7 @@ function NavLink({
         active ? "text-emerald-700" : "text-navy-header/70 hover:bg-slate-50 hover:text-navy-header"
       }`}
       aria-label={
-        showPendingBadge
-          ? `${label} — ${pendingBookingCount} בקשות ממתינות`
-          : showMessageBadge
+        showMessageBadge
             ? `${label} — הודעות חדשות`
             : showWalletBadge
               ? `${label} — עדכון בארנק`
@@ -120,11 +113,7 @@ function NavLink({
     >
       <div className="relative">
         <Icon className={`h-[26px] w-[26px] shrink-0 ${active ? "stroke-[2.25]" : "stroke-[1.85]"}`} aria-hidden />
-        {showPendingBadge ? (
-          <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white">
-            {pendingBookingCount > 9 ? "9+" : pendingBookingCount}
-          </span>
-        ) : showBadge ? (
+        {showBadge ? (
           <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
         ) : null}
       </div>
@@ -173,10 +162,6 @@ export function BottomNav() {
 
   const { hasWalletUpdate, clearWalletNotification } = useWalletNotification(user?.id, role);
   const { hasUnreadMessages, clearChatNotification } = useChatNotification(user?.id);
-  const pendingBookingCount = useSitterPendingBookingCount(
-    role === "sitter" ? user?.id ?? null : null,
-    role === "sitter" && Boolean(user?.id)
-  );
 
   if (!signedIn) return null;
   if (!pathname.startsWith("/parent/") && !pathname.startsWith("/sitter/")) return null;
@@ -198,7 +183,6 @@ export function BottomNav() {
               pathname={pathname}
               hasUnreadMessages={hasUnreadMessages}
               hasWalletUpdate={hasWalletUpdate}
-              pendingBookingCount={pendingBookingCount}
               clearWalletNotification={clearWalletNotification}
               clearChatNotification={clearChatNotification}
             />
@@ -211,7 +195,6 @@ export function BottomNav() {
               pathname={pathname}
               hasUnreadMessages={hasUnreadMessages}
               hasWalletUpdate={hasWalletUpdate}
-              pendingBookingCount={pendingBookingCount}
               clearWalletNotification={clearWalletNotification}
               clearChatNotification={clearChatNotification}
             />
@@ -234,7 +217,6 @@ export function BottomNav() {
             pathname={pathname}
             hasUnreadMessages={hasUnreadMessages}
             hasWalletUpdate={hasWalletUpdate}
-            pendingBookingCount={pendingBookingCount}
             clearWalletNotification={clearWalletNotification}
             clearChatNotification={clearChatNotification}
           />

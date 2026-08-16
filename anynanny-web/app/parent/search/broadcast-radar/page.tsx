@@ -456,6 +456,8 @@ function BroadcastRadarContent() {
           .from("sitter_profiles")
           .select("hourly_rate_nis, years_experience")
           .eq("id", sitterId)
+          .eq("is_public", true)
+          .not("onboarding_completed_at", "is", null)
           .maybeSingle(),
 
         fetchUserRatingSummary(supabase, sitterId)
@@ -470,6 +472,10 @@ function BroadcastRadarContent() {
           "[broadcast radar] sitter profile:",
           sitterError.message
         );
+      }
+
+      if (sitterError || !sitterProfile) {
+        return;
       }
 
       const displayName =

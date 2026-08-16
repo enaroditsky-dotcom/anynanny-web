@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
-import type { PublicSitterReview, SitterProfilePublic } from "@/lib/sitter/sitter-profile";
-import {
-  fetchParentSitterProfile,
-  fetchSitterPublicReviews
-} from "@/lib/sitter/fetch-parent-sitter-profile";
+import { fetchParentSitterProfile } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
-import {
-  isPostgrestMissingFunctionError,
-  isSupabaseRpcUnavailableError
-} from "@/lib/supabase/postgrest-schema";
 
 /**
  * Parent-facing sitter profile — sanitized JSON only.
@@ -54,30 +46,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       });
     }
 
-    // Last resort: RPC-only path (may be absent in some envs).
-    const [{ data: profileJson, error: profErr }, reviews] = await Promise.all([
-      supabase.rpc("get_sitter_profile_public", { target_id: id }),
-      fetchSitterPublicReviews(supabase, id, 3)
-    ]);
-
-    if (profErr) {
-      if (
-        isPostgrestMissingFunctionError(profErr.message) ||
-        isSupabaseRpcUnavailableError(profErr)
-      ) {
-        return NextResponse.json({ profile: null, reviews: [] as PublicSitterReview[] });
-      }
-      return NextResponse.json({ error: profErr.message }, { status: 400 });
-    }
-
-    if (profileJson == null) {
-      return NextResponse.json({ profile: null, reviews: [] as PublicSitterReview[] });
-    }
-
-    return NextResponse.json({
-      profile: profileJson as SitterProfilePublic,
-      reviews
-    });
+    // The resilient loader already performs the guarded RPC fallback.
+    // Never bypass its completed-onboarding ownership check with a raw RPC call.
+    return NextResponse.json({ profile: null, reviews: [] });
   } catch (e) {
     console.error("[api/parent/sitter public GET]", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:sitter-ownership": "node scripts/test-sitter-discovery-ownership.mjs",
+    "test:parent-pending-sitter-approval": "npx --yes tsx scripts/test-parent-pending-sitter-approval-view.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",

@@ -1,25 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { BookingCalendarPanel } from "@/components/bookings/booking-calendar-panel";
 import {
-  isUpcomingOrActiveCalendarShift,
+  PARENT_CALENDAR_VIEW_OPTIONS,
   type CalendarShift
 } from "@/components/bookings/booking-calendar-views";
+import {
+  isVisibleParentCalendarShift,
+  PARENT_CALENDAR_LOAD_STATUSES
+} from "@/lib/bookings/calendar-shift-filters";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
+import { normalizeBookingStatus } from "@/lib/bookings/booking-status-normalize";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
-
-const BOOKED_STATUSES: BookingStatus[] = [
-  "pending",
-  "approved",
-  "sitter_started",
-  "parent_started",
-  "sitter_ended"
-];
 
 export default function ParentCalendarPage() {
   const router = useRouter();
@@ -38,7 +35,7 @@ export default function ParentCalendarPage() {
         .from(BOOKINGS_TABLE)
         .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status")
         .eq("parent_id", resolvedParentId)
-        .in("status", BOOKED_STATUSES)
+        .in("status", PARENT_CALENDAR_LOAD_STATUSES)
         .order("booking_date", { ascending: true })
         .order("start_time", { ascending: true });
 
@@ -79,6 +76,8 @@ export default function ParentCalendarPage() {
             end_time: string;
             status: BookingStatus;
           };
+          const status = normalizeBookingStatus(row.status);
+          if (!status) return null;
           return {
             id: row.id,
             partnerId: row.sitter_id,
@@ -86,11 +85,12 @@ export default function ParentCalendarPage() {
             bookingDate: row.booking_date,
             startTime: row.start_time,
             endTime: row.end_time,
-            status: row.status,
+            status,
             scheduleLabel: formatBookingSchedule(row)
           };
         })
-        .filter((shift) => isUpcomingOrActiveCalendarShift(shift));
+        .filter((shift): shift is CalendarShift => shift != null)
+        .filter((shift) => isVisibleParentCalendarShift(shift));
 
       setAllShifts(formatted);
     } catch (e) {
@@ -178,6 +178,7 @@ export default function ParentCalendarPage() {
         shifts={allShifts}
         loading={loadingBookings}
         viewModeSelectId="parent-calendar-view-mode"
+        viewOptions={PARENT_CALENDAR_VIEW_OPTIONS}
         profileHref={profileHref}
         profileLinkLabel="פרופיל שמרטפית"
         className="min-h-0 flex-1"
