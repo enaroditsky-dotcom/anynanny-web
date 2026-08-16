@@ -76,7 +76,7 @@ export function CityAutocomplete({
 
   return (
     <div ref={rootRef} className="relative min-w-0">
-      <MapPin className="pointer-events-none absolute right-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <MapPin className="pointer-events-none absolute right-3 top-1/2 z-10 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
       <input
         ref={inputRef}
         type="text"
@@ -121,10 +121,10 @@ export function CityAutocomplete({
         <ul
           id="parent-search-city-list"
           role="listbox"
-          className="absolute inset-x-0 top-full z-30 mt-1 max-h-52 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute inset-x-0 top-full z-30 mt-1 max-h-52 overflow-y-auto overscroll-contain rounded-xl border border-slate-300/80 bg-white py-1 shadow-[0_8px_20px_rgba(0,31,63,0.12)]"
         >
           {suggestions.length === 0 ? (
-            <li className="px-3 py-3 text-right text-xs font-medium text-slate-400">
+            <li className="px-3 py-3 text-right text-[12px] font-medium text-slate-400">
               לא נמצאה עיר ברשימה
             </li>
           ) : (
@@ -134,7 +134,7 @@ export function CityAutocomplete({
                 <li key={city} role="option" aria-selected={selected}>
                   <button
                     type="button"
-                    className={`flex min-h-11 w-full items-center px-3 py-2 text-right text-sm transition ${
+                    className={`flex min-h-11 w-full items-center px-3 py-2 text-right text-[15px] font-medium transition ${
                       selected
                         ? "bg-[#001F3F]/10 font-bold text-navy-header"
                         : "text-slate-800 hover:bg-slate-50"

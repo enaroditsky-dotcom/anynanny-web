@@ -275,7 +275,9 @@ export type ListPublicSittersSearchRpcParams = {
 };
 
 /** RPC args for `list_public_sitters_search`. */
-export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): ListPublicSittersSearchRpcParams {
+export function toListPublicSittersSearchRpcArgs(
+  filters: ParentSearchFilters
+): ListPublicSittersSearchRpcParams {
   const safe = normalizeParentSearchFilters(filters);
   const serialOnly = shouldUseDirectSerialLookup(safe.searchSitterSerial);
 

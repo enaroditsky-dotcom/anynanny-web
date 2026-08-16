@@ -238,9 +238,9 @@ async function invokeListPublicSittersSearchRpc(
   filters: ParentSearchFilters
 ): Promise<{ data: unknown; error: unknown }> {
   const args = toListPublicSittersSearchRpcArgs(filters);
-  const cleanArgs = { ...args };
-  delete (cleanArgs as { min_rating?: unknown }).min_rating;
-  delete (cleanArgs as { rating?: unknown }).rating;
+  const cleanArgs = { ...args } as Record<string, unknown>;
+  delete cleanArgs.min_rating;
+  delete cleanArgs.rating;
 
   const read = await safeSupabaseReadAsync(
     () => supabase.rpc("list_public_sitters_search", cleanArgs),
@@ -478,9 +478,12 @@ export async function fetchPublicSitterSearchBySerial(
   });
   const rpcResult = await runListPublicSittersSearchRpc(supabase, filters);
   if (!rpcResult.error) {
-    const rated = await ensureSearchCardRatings(supabase, rpcResult.cards, filters, {
-      skipListRpcEnrich: true
-    });
+    const rated = await ensureSearchCardRatings(
+      supabase,
+      rpcResult.cards,
+      filters,
+      { skipListRpcEnrich: true }
+    );
     return finalizeSerialSearchResults(rated, serial);
   }
   if (hasRequestedTimeWindow(filters)) {

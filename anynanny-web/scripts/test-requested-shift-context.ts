@@ -27,6 +27,7 @@ import {
 } from "../lib/sitter/parent-search-filters";
 import {
   PARENT_SEARCH_MISSING_CRITERIA_MESSAGE,
+  PARENT_SEARCH_MISSING_SHIFT_MESSAGE,
   validateParentSearchCriteria
 } from "../lib/sitter/parent-search-validation";
 
@@ -71,6 +72,10 @@ assert.equal(serialRpcArgs.p_search_nanny_id, "AN-1001");
 assert.equal(serialRpcArgs.p_start_time, window.startIso);
 assert.equal(serialRpcArgs.p_end_time, window.endIso);
 assert.equal(serialRpcArgs.p_search_city, null);
+
+assert.equal("p_parent_lat" in rpcArgs, false);
+assert.equal("p_parent_lng" in rpcArgs, false);
+assert.equal("p_max_distance_km" in rpcArgs, false);
 
 const blocking = { startMs: Date.parse("2026-08-19T12:00:00"), endMs: Date.parse("2026-08-19T15:00:00") };
 assert.equal(
@@ -185,7 +190,7 @@ const missingTimes = validateParentSearchCriteria(
 );
 assert.equal(missingTimes.ok, false);
 if (!missingTimes.ok) {
-  assert.equal(missingTimes.error, PARENT_SEARCH_MISSING_CRITERIA_MESSAGE);
+  assert.equal(missingTimes.error, PARENT_SEARCH_MISSING_SHIFT_MESSAGE);
   assert.ok(missingTimes.missing.includes("searchStartTime"));
   assert.ok(missingTimes.missing.includes("searchEndTime"));
 }
@@ -232,7 +237,7 @@ assert.equal(zeroDuration.ok, false);
 const resultsPage = read("app/parent/search/results/page.tsx");
 assert.match(resultsPage, /validateParentSearchCriteria/);
 assert.match(resultsPage, /if \(!criteria\.ok\)/);
-assert.match(resultsPage, /runParentSitterSearch\(supabase, normalized\)/);
+assert.match(resultsPage, /runParentSitterSearch\(supabase, normalized/);
 assert.doesNotMatch(resultsPage, /fetchPublicSitterSearchBySerial/);
 assert.match(resultsPage, /PublicSitterSearchCardLink key=\{s\.id\} sitter=\{s\} query=\{searchQuery\}/);
 
@@ -276,5 +281,40 @@ assert.match(migration, /b\.start_time < p_end_time/);
 assert.match(migration, /b\.end_time > p_start_time/);
 assert.match(migration, /public\.sitter_window_is_available\(sp\.id, f\.range_start, f\.range_end\)/);
 assert.doesNotMatch(migration, /f\.search_serial is not null\s+or f\.range_start is null/);
+
+const cleanupMigration = read("supabase/migrations/20260817010000_remove_proximity_radius_search.sql");
+assert.match(cleanupMigration, /public\.sitter_window_is_available\(sp\.id, f\.range_start, f\.range_end\)/);
+assert.match(cleanupMigration, /drop table if exists public\.sitter_service_geo/);
+assert.match(cleanupMigration, /drop table if exists public\.broadcast_alert_geo/);
+assert.match(cleanupMigration, /drop function if exists public\.sitter_is_within_radius/);
+assert.doesNotMatch(cleanupMigration, /sitter_is_within_radius\(sp\.id/);
+assert.doesNotMatch(cleanupMigration, /p_parent_lat/);
+assert.doesNotMatch(cleanupMigration, /'distance_km'/);
+
+const appliedProximityHistory = read("supabase/migrations/20260816230000_proximity_radius_search.sql");
+assert.match(appliedProximityHistory, /public\.sitter_window_is_available\(sp\.id, f\.range_start, f\.range_end\)/);
+
+const searchUi = read("components/parent/parent-search-filters.tsx");
+assert.doesNotMatch(searchUi, /ProximityRadiusControl/);
+assert.doesNotMatch(searchUi, /חפש בסביבה שלי/);
+assert.doesNotMatch(searchUi, /מרחק מקסימלי/);
+assert.doesNotMatch(searchUi, /טווח חיפוש/);
+assert.doesNotMatch(searchUi, /בדיקת מיקום/);
+
+const broadcastPage = read("app/parent/broadcast/page.tsx");
+assert.doesNotMatch(broadcastPage, /ProximityRadiusControl/);
+assert.doesNotMatch(broadcastPage, /NEARBY_BROADCAST_CITY/);
+assert.doesNotMatch(broadcastPage, /saveBroadcastAlertGeo/);
+assert.doesNotMatch(broadcastPage, /חפש בסביבה שלי/);
+assert.match(broadcastPage, /city: city/);
+
+const broadcastModal = read("components/sitter/SitterBroadcastAlertModal.tsx");
+assert.doesNotMatch(broadcastModal, /sitterMatchesBroadcastRadius/);
+assert.doesNotMatch(broadcastModal, /NEARBY_BROADCAST_CITY/);
+assert.match(broadcastModal, /stableCities\.length === 0/);
+
+const personalArea = read("components/sitter/sitter-personal-area.tsx");
+assert.doesNotMatch(personalArea, /hasServicePoint/);
+assert.doesNotMatch(personalArea, /נקודת שירות/);
 
 console.log("Requested shift search→booking context checks passed.");

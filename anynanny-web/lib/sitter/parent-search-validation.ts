@@ -11,6 +11,9 @@ import {
 export const PARENT_SEARCH_MISSING_CRITERIA_MESSAGE =
   "יש למלא עיר, תאריך ושעות כדי לחפש בייביסיטר פנויה.";
 
+export const PARENT_SEARCH_MISSING_SHIFT_MESSAGE =
+  "יש למלא תאריך ושעות כדי לחפש בייביסיטר פנויה.";
+
 export type ParentSearchMandatoryField =
   | "selectedCity"
   | "searchDate"
@@ -38,7 +41,7 @@ function hasClock(hour: string, minute: string): boolean {
  * Gate for parent search: city + complete requested shift window are required
  * before any availability/search backend call.
  *
- * Serial lookup remains optional and still bypasses city/availability matching
+ * Serial lookup remains optional and still bypasses city matching
  * for *who* is returned — but it cannot skip this booking-context gate.
  */
 export function validateParentSearchCriteria(
@@ -60,7 +63,9 @@ export function validateParentSearchCriteria(
   if (missing.length > 0) {
     return {
       ok: false,
-      error: PARENT_SEARCH_MISSING_CRITERIA_MESSAGE,
+      error: missing.includes("selectedCity")
+        ? PARENT_SEARCH_MISSING_CRITERIA_MESSAGE
+        : PARENT_SEARCH_MISSING_SHIFT_MESSAGE,
       missing
     };
   }
@@ -69,7 +74,7 @@ export function validateParentSearchCriteria(
   if (!shift) {
     return {
       ok: false,
-      error: PARENT_SEARCH_MISSING_CRITERIA_MESSAGE,
+      error: PARENT_SEARCH_MISSING_SHIFT_MESSAGE,
       missing: ["searchDate", "searchEndDate", "searchStartTime", "searchEndTime"]
     };
   }
