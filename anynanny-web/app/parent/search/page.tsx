@@ -62,7 +62,7 @@ function ParentSearchContent() {
 
   return (
     <MainLayout showBrandHeader={false}>
-      <div className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] pb-8" dir="rtl">
+      <div className="mx-auto w-full max-w-md overflow-x-hidden bg-[#FDFBF6] px-1 pb-8" dir="rtl">
         {showWait ? (
           <p className="text-center text-sm text-slate-600">טוען…</p>
         ) : redirectingToLogin ? (
@@ -72,9 +72,9 @@ function ParentSearchContent() {
         ) : null}
 
         {showContent ? (
-          <div className="space-y-5">
-            <header className="space-y-2 px-1 pt-1 text-center sm:pt-2">
-              <h1 className="text-xl font-black tracking-tight text-navy-header sm:text-2xl">
+          <div className="space-y-6">
+            <header className="space-y-2.5 px-1 pt-1 text-center sm:pt-2">
+              <h1 className="text-center text-[26px] font-extrabold leading-[1.2] tracking-tight text-[#001F3F] sm:text-[28px]">
                 חיפוש מהיר באפליקציה
               </h1>
               {parentPublicId ? (
@@ -84,7 +84,7 @@ function ParentSearchContent() {
               ) : null}
             </header>
 
-            <div className="rounded-2xl bg-white p-1">
+            <div className="rounded-[1.5rem] border border-[#001F3F]/10 bg-white/75 p-3.5 shadow-[0_2px_12px_rgba(0,31,63,0.06)]">
               <ParentSearchFiltersBar
                 filters={draftFilters}
                 invalidFields={invalidFields}
@@ -105,14 +105,14 @@ function ParentSearchContent() {
               </p>
             ) : null}
 
-            <div className="pb-4 pt-2">
+            <div className="pb-4 pt-1">
               <button
                 type="button"
                 disabled={navigating}
                 onClick={handleSearch}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#001F3F] py-3.5 text-sm font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
+                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#001F3F] py-4 text-[17px] font-extrabold text-white shadow-[0_4px_14px_rgba(0,31,63,0.22)] transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
               >
-                <Search className="h-4 w-4" aria-hidden />
+                <Search className="h-5 w-5" aria-hidden />
                 חפש בייביסיטר
               </button>
             </div>

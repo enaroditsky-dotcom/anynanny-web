@@ -85,7 +85,7 @@ export async function GET() {
 
     const mergedProfile = {
       ...(data || {}),
-      avatar_url: profile?.avatar_url ?? (data as any)?.avatar_url ?? null
+      avatar_url: profile?.avatar_url ?? (data as { avatar_url?: string | null }).avatar_url ?? null
     };
 
     return NextResponse.json({ profile: mergedProfile as SitterProfileRow | null });
@@ -304,15 +304,16 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await request.json()) as { working_cities?: unknown };
-    const working_cities = normalizeWorkingCities(body.working_cities);
-
-    if (working_cities.length === 0) {
-      return NextResponse.json({ error: "יש לבחור לפחות עיר אחת." }, { status: 400 });
-    }
+    const body = (await request.json()) as {
+      working_cities?: unknown;
+    };
 
     const fk = SITTER_PROFILES_USER_COLUMN;
     const table = getSitterProfilesTable() as typeof SITTER_PROFILES_TABLE;
+    const working_cities = normalizeWorkingCities(body.working_cities);
+    if (working_cities.length === 0) {
+      return NextResponse.json({ error: "יש לבחור לפחות עיר אחת." }, { status: 400 });
+    }
 
     const { data, error } = await supabase
       .from(table)

@@ -116,6 +116,7 @@ function BroadcastRadarContent() {
 
   const rawCity = searchParams.get("city") || "חיפה";
   const [city, setCity] = useState(decodeURIComponent(rawCity));
+  const cityLabel = city.trim() || "ישראל";
 
   const type = searchParams.get("type") || "sitter";
 
@@ -1056,7 +1057,7 @@ function BroadcastRadarContent() {
             </h1>
 
             <p className="px-4 text-xs font-medium leading-relaxed text-slate-500">
-              השידור המיידי לאזור {city} נעצר.
+              השידור המיידי לאזור {cityLabel} נעצר.
             </p>
           </div>
 
@@ -1088,8 +1089,8 @@ function BroadcastRadarContent() {
             <div className="space-y-1">
               <h1 className="text-xl font-black text-navy-header">
                 {isPaused
-                  ? `החיפוש הושהה ב-${city}`
-                  : `השידור המיידי הופעל ב-${city}`}
+                  ? `החיפוש הושהה ב-${cityLabel}`
+                  : `השידור המיידי הופעל ב-${cityLabel}`}
               </h1>
 
               <p className="text-xs font-medium text-slate-500">

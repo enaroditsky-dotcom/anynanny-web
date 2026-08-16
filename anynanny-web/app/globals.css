@@ -43,3 +43,66 @@ select,
 button {
   font-family: inherit;
 }
+
+/* Parent Search price/distance sliders — scoped, not a global range restyle */
+.anynanny-search-slider {
+  --search-slider-progress: 0%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  margin-block: 10px 4px;
+  border-radius: 999px;
+  touch-action: manipulation;
+  background: linear-gradient(
+    to right,
+    #001f3f var(--search-slider-progress),
+    #e6e1d6 var(--search-slider-progress)
+  );
+  outline: none;
+}
+
+.anynanny-search-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.anynanny-search-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -7px;
+  border-radius: 999px;
+  background: #001f3f;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 5px rgba(0, 31, 63, 0.28);
+  cursor: grab;
+}
+
+.anynanny-search-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #e6e1d6;
+}
+
+.anynanny-search-slider::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: #001f3f;
+}
+
+.anynanny-search-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #001f3f;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 5px rgba(0, 31, 63, 0.28);
+  cursor: grab;
+}
+
+.anynanny-search-slider:focus-visible {
+  box-shadow: 0 0 0 3px rgba(0, 31, 63, 0.18);
+}

@@ -15,6 +15,15 @@ import {
   type ParentSearchMandatoryField
 } from "@/lib/sitter/parent-search-validation";
 import { CityAutocomplete } from "@/components/geo/city-autocomplete";
+import {
+  SEARCH_LIMIT_CLEAR_BUTTON,
+  SEARCH_LIMIT_SLIDER_CLASS,
+  SEARCH_LIMIT_SLIDER_ENDS,
+  SEARCH_LIMIT_VALUE_BADGE,
+  SEARCH_LIMIT_VALUE_ROW,
+  SearchLimitToggleCard,
+  searchLimitSliderProgress
+} from "@/components/parent/search-limit-toggle-card";
 import { Search, Calendar, Award, Star } from "lucide-react";
 
 const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] = [
@@ -24,19 +33,22 @@ const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] 
   { value: 5, label: "5 שנים ומעלה" }
 ];
 
-const FIELD_LABEL = "block text-right text-xs font-bold text-slate-500 mb-1.5 mr-0.5";
+const FIELD_LABEL = "mb-1.5 mr-0.5 block text-right text-[14px] font-bold text-[#001F3F]";
+const SECTION_HEADING = "text-[16px] font-bold leading-snug text-[#001F3F]";
+const SECTION_SURFACE =
+  "rounded-[1.25rem] border border-[#001F3F]/10 bg-[#FBF8F1] p-4 shadow-[0_1px_6px_rgba(0,31,63,0.04)]";
 const FIELD_CONTROL =
-  "block min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 transition focus:border-[#001F3F] focus:outline-none focus:ring-1 focus:ring-[#001F3F] disabled:opacity-50 appearance-none";
+  "block min-h-[44px] w-full rounded-xl border border-slate-300/90 bg-white px-3 py-2.5 text-[15px] font-medium text-[#001F3F] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition placeholder:text-slate-400 focus:border-[#001F3F] focus:outline-none focus:ring-2 focus:ring-[#001F3F]/20 disabled:opacity-50 appearance-none";
 const FIELD_CONTROL_INVALID =
-  "block min-h-11 w-full rounded-xl border border-rose-400 bg-white px-3 py-2 text-sm text-slate-800 ring-1 ring-rose-200 transition focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-400 disabled:opacity-50 appearance-none";
+  "block min-h-[44px] w-full rounded-xl border border-rose-400 bg-white px-3 py-2.5 text-[15px] font-medium text-[#001F3F] ring-1 ring-rose-200 transition placeholder:text-slate-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:opacity-50 appearance-none";
 const DATE_CONTROL =
-  "block h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-[#001F3F]";
+  "block min-h-[44px] h-11 w-full rounded-xl border border-slate-300/90 bg-white px-3 text-[15px] font-medium text-[#001F3F] outline-none transition focus:border-[#001F3F] focus:ring-2 focus:ring-[#001F3F]/20";
 const DATE_CONTROL_INVALID =
-  "block h-10 w-full rounded-xl border border-rose-400 bg-white px-3 text-xs text-slate-800 outline-none ring-1 ring-rose-200 focus:border-rose-500";
+  "block min-h-[44px] h-11 w-full rounded-xl border border-rose-400 bg-white px-3 text-[15px] font-medium text-[#001F3F] outline-none ring-1 ring-rose-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-300";
 const TIME_SELECT =
-  "mt-0.5 block h-9 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-[#001F3F]";
+  "mt-0.5 block h-11 min-h-[42px] w-full rounded-lg border border-slate-300/90 bg-white px-2 py-1 text-[15px] font-medium text-[#001F3F] outline-none transition focus:border-[#001F3F] focus:ring-2 focus:ring-[#001F3F]/20";
 const TIME_SELECT_INVALID =
-  "mt-0.5 block h-9 w-full rounded-lg border border-rose-400 bg-white px-2 py-1 text-xs text-slate-800 outline-none ring-1 ring-rose-200 focus:border-rose-500";
+  "mt-0.5 block h-11 min-h-[42px] w-full rounded-lg border border-rose-400 bg-white px-2 py-1 text-[15px] font-medium text-[#001F3F] outline-none ring-1 ring-rose-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-300";
 
 function TimeBlock({
   title,
@@ -58,13 +70,13 @@ function TimeBlock({
   const selectClass = invalid ? TIME_SELECT_INVALID : TIME_SELECT;
   return (
     <div
-      className={`rounded-xl border bg-white/80 p-2.5 shadow-xs ${
-        invalid ? "border-rose-400" : "border-slate-100"
+      className={`rounded-xl border bg-white p-3 ${
+        invalid ? "border-rose-400" : "border-slate-300/70"
       }`}
     >
-      <p className="mb-1 text-right text-[11px] font-bold text-navy-header">{title}</p>
+      <p className="mb-1.5 text-right text-[15px] font-bold text-[#001F3F]">{title}</p>
       <div className="grid grid-cols-2 gap-1.5">
-        <label className="block text-right text-[10px] text-slate-400">
+        <label className="block text-right text-[13px] font-semibold text-slate-500">
           שעה
           <select
             className={selectClass}
@@ -80,7 +92,7 @@ function TimeBlock({
           </select>
         </label>
 
-        <label className="block text-right text-[10px] text-slate-400">
+        <label className="block text-right text-[13px] font-semibold text-slate-500">
           דק׳
           <select
             className={selectClass}
@@ -135,14 +147,14 @@ export function ParentSearchFiltersBar({
   const endTimeInvalid = parentSearchFieldIsInvalid(invalidFields, "searchEndTime");
 
   return (
-    <section className="flex flex-col space-y-4 rounded-2xl bg-transparent" dir="rtl">
+    <section className="flex flex-col space-y-5 rounded-2xl bg-transparent" dir="rtl">
       
       {/* 📍 קוביית מיקום ומזהה: סימטריים זה לצד זה */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`${SECTION_SURFACE} grid grid-cols-2 gap-3`}>
         <div className="flex flex-col">
           <label className={FIELD_LABEL}>מספר אישי (אופציונלי)</label>
           <div className="relative flex items-center">
-            <Search className="absolute right-3 h-4 w-4 text-slate-400" />
+            <Search className="absolute right-3 h-[18px] w-[18px] text-slate-400" />
             <input
               type="search"
               inputMode="search"
@@ -167,16 +179,16 @@ export function ParentSearchFiltersBar({
       </div>
 
       {/* 📅 קוביית זמנים ותאריכים */}
-      <div className="rounded-2xl border border-slate-100 bg-[#FDFBF6]/80 p-3.5 space-y-3 shadow-inner">
-        <div className="flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
-          <Calendar className="h-4 w-4 text-navy-header" />
-          <span className="text-xs font-bold text-navy-header">מתי העבודה נדרשת?</span>
+      <div className={`${SECTION_SURFACE} space-y-3`}>
+        <div className="flex items-center gap-1.5 border-b border-[#001F3F]/10 pb-2.5">
+          <Calendar className="h-[18px] w-[18px] text-[#001F3F]" />
+          <span className={SECTION_HEADING}>מתי העבודה נדרשת?</span>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           {/* בלוק התחלה */}
-          <div className="space-y-2">
-            <label className="block text-right text-[11px] font-semibold text-slate-500">תאריך התחלה</label>
+          <div className="min-w-0 space-y-2">
+            <label className={FIELD_LABEL}>תאריך התחלה</label>
             <input
               type="date"
               className={startDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
@@ -206,8 +218,8 @@ export function ParentSearchFiltersBar({
           </div>
 
           {/* בלוק סיום */}
-          <div className="space-y-2 border-r border-slate-200/40 pr-3">
-            <label className="block text-right text-[11px] font-semibold text-slate-500">תאריך סיום</label>
+          <div className="min-w-0 space-y-2 border-r border-slate-200/40 pr-3">
+            <label className={FIELD_LABEL}>תאריך סיום</label>
             <input
               type="date"
               className={endDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
@@ -231,13 +243,13 @@ export function ParentSearchFiltersBar({
       </div>
 
       {/* 🌟 קוביית איכות: שנות ניסיון ודירוג זה לצד זה */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`${SECTION_SURFACE} grid grid-cols-2 gap-3`}>
         <div className="flex flex-col">
-          <label className={FIELD_LABEL}>שנות ניסיון</label>
+          <label className={`${SECTION_HEADING} mb-2`}>שנות ניסיון</label>
           <div className="relative flex items-center">
-            <Award className="absolute right-3 h-4 w-4 text-slate-400" />
+            <Award className="absolute right-3 h-[18px] w-[18px] text-slate-400" />
             <select
-              className={`${FIELD_CONTROL} pr-9 text-xs font-semibold`}
+              className={`${FIELD_CONTROL} pr-9 font-semibold`}
               value={String(filters.minYearsExperience)}
               onChange={(e) => patch({ minYearsExperience: Number(e.target.value) as ParentSearchMinExperience })}
             >
@@ -249,11 +261,11 @@ export function ParentSearchFiltersBar({
         </div>
 
         <div className="flex flex-col">
-          <label className={FIELD_LABEL}>דירוג מינימלי</label>
+          <label className={`${SECTION_HEADING} mb-2`}>דירוג מינימלי</label>
           <div className="relative flex items-center">
-            <Star className="absolute right-3 h-4 w-4 text-slate-400" />
+            <Star className="absolute right-3 h-[18px] w-[18px] text-slate-400" />
             <select
-              className={`${FIELD_CONTROL} pr-9 text-xs font-semibold`}
+              className={`${FIELD_CONTROL} pr-9 font-semibold`}
               value={filters.minRating ?? "all"}
               onChange={(e) => patch({ minRating: e.target.value as ParentSearchMinRating })}
             >
@@ -265,53 +277,50 @@ export function ParentSearchFiltersBar({
         </div>
       </div>
 
-      {/* 💰 סליידר מחיר שעתי — אופציונלי */}
-      <div className="rounded-2xl border border-slate-100 bg-white p-3.5 shadow-xs">
-        <div className="flex items-center justify-between gap-2">
-          <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] font-bold text-slate-600">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-slate-300 accent-[#001F3F]"
-              checked={filters.maxHourlyRate != null}
-              onChange={(e) =>
-                patch({
-                  maxHourlyRate: e.target.checked ? PARENT_SEARCH_MAX_HOURLY_SLIDER : null
-                })
-              }
-            />
-            הגבל מחיר
-          </label>
-          <span className="text-xs font-bold text-slate-500">מחיר שעתי מקסימלי</span>
+      <SearchLimitToggleCard
+        title="מחיר שעתי מקסימלי"
+        toggleLabel="הגבל מחיר"
+        enabled={filters.maxHourlyRate != null}
+        onEnabledChange={(enabled) =>
+          patch({
+            maxHourlyRate: enabled ? PARENT_SEARCH_MAX_HOURLY_SLIDER : null
+          })
+        }
+        inactiveHint="ללא הגבלת מחיר"
+      >
+        <div className={SEARCH_LIMIT_VALUE_ROW}>
+          <button
+            type="button"
+            onClick={() => patch({ maxHourlyRate: null })}
+            className={SEARCH_LIMIT_CLEAR_BUTTON}
+          >
+            נקה הגבלה
+          </button>
+          <span className={SEARCH_LIMIT_VALUE_BADGE}>
+            ₪{filters.maxHourlyRate}
+          </span>
         </div>
-
-        {filters.maxHourlyRate != null ? (
-          <>
-            <div className="mt-2.5 flex items-center justify-between text-xs font-bold text-slate-500">
-              <button
-                type="button"
-                onClick={() => patch({ maxHourlyRate: null })}
-                className="text-[11px] font-semibold text-slate-500 underline underline-offset-2 transition hover:text-navy-header"
-              >
-                נקה הגבלה
-              </button>
-              <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-sm font-black tabular-nums text-emerald-700">
-                ₪{filters.maxHourlyRate}
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={PARENT_SEARCH_MAX_HOURLY_SLIDER}
-              step={5}
-              className="mt-2.5 h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-100 accent-[#001F3F] transition-all"
-              value={filters.maxHourlyRate}
-              onChange={(e) => patch({ maxHourlyRate: Number(e.target.value) })}
-            />
-          </>
-        ) : (
-          <p className="mt-2 text-right text-[11px] font-semibold text-slate-400">ללא הגבלת מחיר</p>
-        )}
-      </div>
+        <div dir="ltr">
+          <input
+            type="range"
+            min={0}
+            max={PARENT_SEARCH_MAX_HOURLY_SLIDER}
+            step={5}
+            className={SEARCH_LIMIT_SLIDER_CLASS}
+            style={searchLimitSliderProgress(
+              filters.maxHourlyRate ?? PARENT_SEARCH_MAX_HOURLY_SLIDER,
+              0,
+              PARENT_SEARCH_MAX_HOURLY_SLIDER
+            )}
+            value={filters.maxHourlyRate ?? PARENT_SEARCH_MAX_HOURLY_SLIDER}
+            onChange={(e) => patch({ maxHourlyRate: Number(e.target.value) })}
+          />
+          <div className={SEARCH_LIMIT_SLIDER_ENDS}>
+            <span>₪0</span>
+            <span>₪{PARENT_SEARCH_MAX_HOURLY_SLIDER}</span>
+          </div>
+        </div>
+      </SearchLimitToggleCard>
 
     </section>
   );
