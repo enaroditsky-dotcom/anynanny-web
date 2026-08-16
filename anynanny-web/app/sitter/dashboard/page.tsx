@@ -1085,9 +1085,6 @@ export default function SitterDashboardPage() {
             <div className="flex w-full flex-1 flex-col items-center justify-center gap-3 px-4 py-6 text-center">
               <p className="text-base font-bold text-[#001F3F]">היומן שלך פנוי כרגע</p>
               <p className="max-w-[18rem] text-sm leading-snug text-slate-600">ברגע שהורה יזמין אותך, פרטי המשמרת יופיעו כאן!</p>
-              {pendingBookingCount > 0 ? (
-                <Link href="/sitter/shifts" className="mt-1 rounded-xl bg-[#001F3F] px-4 py-2.5 text-xs font-bold text-white transition hover:brightness-110">{pendingBookingCount} בקשות ממתינות — צפייה</Link>
-              ) : null}
             </div>
           ) : (
             <DoubleShakeCircleSlot>
@@ -1185,21 +1182,11 @@ export default function SitterDashboardPage() {
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                     <Link
                       href="/sitter/availability"
-                      aria-label={
-                        pendingBookingCount > 0 || showSitterBookingApproval
-                          ? "סידור עבודה — יש בקשות ממתינות לאישור"
-                          : "סידור עבודה"
-                      }
+                      aria-label="סידור עבודה"
                       className="group flex min-h-[6rem] flex-row-reverse items-center justify-between gap-4 rounded-2xl border border-emerald-600/15 bg-emerald-50/40 p-4 text-right text-navy-header shadow-sm transition hover:border-emerald-600/30 hover:shadow-md active:scale-[0.98] sm:flex-col sm:items-end sm:justify-between sm:min-h-[6.5rem]"
                     >
-                      <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
                         <Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden />
-                        {pendingBookingCount > 0 || showSitterBookingApproval ? (
-                          <span
-                            className="absolute right-0 top-0 h-2.5 w-2.5 -translate-y-0.5 translate-x-0.5 rounded-full bg-rose-500 ring-2 ring-white"
-                            aria-hidden
-                          />
-                        ) : null}
                       </span>
                       <div className="flex flex-col text-right sm:w-full">
                         <span className="text-sm font-bold sm:text-sm">סידור עבודה</span>

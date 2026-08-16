@@ -20,6 +20,7 @@ type BookingCalendarPanelProps = {
   profileHref?: (shift: CalendarShift) => string | null;
   profileLinkLabel?: string;
   className?: string;
+  viewOptions?: { value: CalendarViewMode; label: string }[];
 };
 
 export function BookingCalendarPanel({
@@ -28,7 +29,8 @@ export function BookingCalendarPanel({
   viewModeSelectId = "calendar-view-mode",
   profileHref,
   profileLinkLabel,
-  className = ""
+  className = "",
+  viewOptions = CALENDAR_VIEW_OPTIONS
 }: BookingCalendarPanelProps) {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("today");
   const initialPeriod = new Date();
@@ -55,7 +57,7 @@ export function BookingCalendarPanel({
             onChange={(e) => setViewMode(e.target.value as CalendarViewMode)}
             className="w-full cursor-pointer appearance-none rounded-2xl border border-navy-header/10 bg-white p-3.5 text-right text-sm font-semibold text-navy-header shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-navy-header/20"
           >
-            {CALENDAR_VIEW_OPTIONS.map((option) => (
+            {viewOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -81,6 +83,14 @@ export function BookingCalendarPanel({
             currentYear={currentYear}
             onMonthChange={setCurrentMonth}
             onYearChange={setCurrentYear}
+            {...viewProps}
+          />
+        ) : viewMode === "pending_sitter_approval" ? (
+          <AllShiftsListView
+            shifts={filteredShifts}
+            title="משמרות שממתינות לאישור בייביסיטר"
+            emptyView="pending_sitter_approval"
+            sortDirection="asc"
             {...viewProps}
           />
         ) : (

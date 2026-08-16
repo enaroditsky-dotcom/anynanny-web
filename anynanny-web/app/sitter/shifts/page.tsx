@@ -15,6 +15,7 @@ import type {
 } from "@/components/bookings/booking-calendar-views";
 
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
+import { SitterParentProfilePreview } from "@/components/sitter/sitter-parent-profile-preview";
 
 import {
   BOOKINGS_TABLE,
@@ -734,10 +735,16 @@ export default function SitterShiftsPage() {
                     end_time:
                       booking.end_time,
 
+                    // Pending: never surface full address on the card.
+                    // Parent preview (and approved bookings) own that disclosure.
                     address:
-                      parentAddressById.get(
-                        booking.parent_id
-                      ) ?? "",
+                      normalizeBookingStatus(
+                        booking.status as BookingStatus
+                      ) === "pending"
+                        ? ""
+                        : parentAddressById.get(
+                            booking.parent_id
+                          ) ?? "",
 
                     total_amount_nis:
                       null
@@ -1547,7 +1554,8 @@ export default function SitterShiftsPage() {
                           }
                         </span>
 
-                        {shift.address ? (
+                        {!isPending &&
+                        shift.address ? (
                           <p className="inline-flex max-w-full flex-row-reverse items-start gap-1.5 text-sm font-medium leading-snug text-slate-700">
                             <MapPin
                               className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400"
@@ -1559,6 +1567,10 @@ export default function SitterShiftsPage() {
                                 shift.address
                               }
                             </span>
+                          </p>
+                        ) : isPending ? (
+                          <p className="text-xs font-medium text-slate-500">
+                            הכתובת המלאה תוצג לאחר אישור המשמרת.
                           </p>
                         ) : null}
                       </div>
@@ -1637,46 +1649,55 @@ export default function SitterShiftsPage() {
                     </div>
 
                     {isPending ? (
-                      <div className="grid grid-cols-2 gap-3 pt-1">
-                        <button
-                          type="button"
-                          disabled={
-                            actingId ===
-                            shift.id
-                          }
-                          onClick={() =>
-                            void handleRespond(
-                              shift,
-                              "approved"
-                            )
-                          }
-                          className="flex items-center justify-center rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-60"
-                        >
-                          {actingId ===
-                          shift.id
-                            ? "מעבד…"
-                            : "אישור משמרת"}
-                        </button>
+                      <div className="space-y-2 pt-1">
+                        <SitterParentProfilePreview
+                          bookingId={shift.id}
+                          fallbackParentName={shift.parent_name}
+                          label="צפייה בפרופיל ההורה"
+                          className="w-full justify-center rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm"
+                        />
 
-                        <button
-                          type="button"
-                          disabled={
-                            actingId ===
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            disabled={
+                              actingId ===
+                              shift.id
+                            }
+                            onClick={() =>
+                              void handleRespond(
+                                shift,
+                                "approved"
+                              )
+                            }
+                            className="flex items-center justify-center rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            {actingId ===
                             shift.id
-                          }
-                          onClick={() =>
-                            void handleRespond(
-                              shift,
-                              "rejected"
-                            )
-                          }
-                          className="flex items-center justify-center rounded-xl bg-rose-500 py-2.5 text-sm font-bold text-white shadow-sm shadow-rose-100 transition hover:bg-rose-600 disabled:opacity-60"
-                        >
-                          {actingId ===
-                          shift.id
-                            ? "מעבד…"
-                            : "דחיית בקשה"}
-                        </button>
+                              ? "מעבד…"
+                              : "אישור משמרת"}
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={
+                              actingId ===
+                              shift.id
+                            }
+                            onClick={() =>
+                              void handleRespond(
+                                shift,
+                                "rejected"
+                              )
+                            }
+                            className="flex items-center justify-center rounded-xl bg-rose-500 py-2.5 text-sm font-bold text-white shadow-sm shadow-rose-100 transition hover:bg-rose-600 disabled:opacity-60"
+                          >
+                            {actingId ===
+                            shift.id
+                              ? "מעבד…"
+                              : "דחיית בקשה"}
+                          </button>
+                        </div>
                       </div>
                     ) : null}
                   </div>

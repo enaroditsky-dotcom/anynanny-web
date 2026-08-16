@@ -5,6 +5,14 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Clock, MapPin } from "lucide-react";
 import type { BookingStatus } from "@/lib/bookings/constants";
 import { resolveBookingWindowMs, todayDateISO } from "@/lib/bookings/booking-date-utils";
+import {
+  calendarViewEmptyHint,
+  CALENDAR_VIEW_OPTIONS,
+  filterCalendarShiftsByView,
+  isUpcomingOrActiveCalendarShift,
+  PARENT_CALENDAR_VIEW_OPTIONS,
+  type CalendarViewMode
+} from "@/lib/bookings/calendar-shift-filters";
 
 export type CalendarShift = {
   id: string;
@@ -18,14 +26,13 @@ export type CalendarShift = {
   scheduleLabel: string;
 };
 
-export type CalendarViewMode = "today" | "week" | "month" | "all";
-
-export const CALENDAR_VIEW_OPTIONS: { value: CalendarViewMode; label: string }[] = [
-  { value: "today", label: "משמרות היום" },
-  { value: "week", label: "משמרות השבוע" },
-  { value: "month", label: "משמרות החודש" },
-  { value: "all", label: "כל המשמרות שנקבעו" }
-];
+export type { CalendarViewMode };
+export {
+  CALENDAR_VIEW_OPTIONS,
+  filterCalendarShiftsByView,
+  isUpcomingOrActiveCalendarShift,
+  PARENT_CALENDAR_VIEW_OPTIONS
+};
 
 const HEBREW_WEEKDAYS = ["א", "ב", "ג", "ד", "ה", "ו", "ש"] as const;
 const HEBREW_WEEKDAY_FULL = ["יום ראשון", "יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "יום שבת"] as const;
@@ -82,14 +89,6 @@ function calendarYearOptions(): number[] {
   );
 }
 
-function getMonthRangeForPeriod(year: number, month: number): { start: string; end: string } {
-  const lastDay = new Date(year, month, 0).getDate();
-  return {
-    start: `${year}-${pad2(month)}-01`,
-    end: `${year}-${pad2(month)}-${pad2(lastDay)}`
-  };
-}
-
 function formatIsraeliDate(dateStr: string): string {
   const parts = dateStr.slice(0, 10).split("-");
   if (parts.length !== 3) return dateStr;
@@ -108,52 +107,11 @@ function dateLabelClass(hasShifts: boolean): string {
 }
 
 function embeddedEmptyHint(view: CalendarViewMode): string {
-  switch (view) {
-    case "today":
-      return "אין משמרות להיום";
-    case "week":
-      return "אין משמרות השבוע";
-    case "month":
-      return "אין משמרות החודש";
-    case "all":
-      return "אין משמרות שנקבעו";
-    default:
-      return "אין משמרות להצגה";
-  }
+  return calendarViewEmptyHint(view);
 }
 
 function shiftDateKey(shift: CalendarShift): string {
   return shift.bookingDate.slice(0, 10);
-}
-
-/**
- * Scheduled calendar ("משמרות שנקבעו") — upcoming or still-active only.
- * Past end times and completed/cancelled bookings belong in history.
- */
-export function isUpcomingOrActiveCalendarShift(
-  shift: Pick<CalendarShift, "bookingDate" | "startTime" | "endTime" | "status">,
-  nowMs = Date.now()
-): boolean {
-  const status = String(shift.status ?? "").trim().toLowerCase();
-  if (status === "completed" || status === "cancelled" || status === "rejected") {
-    return false;
-  }
-
-  const window = resolveBookingWindowMs(
-    {
-      booking_date: shift.bookingDate,
-      start_time: shift.startTime,
-      end_time: shift.endTime
-    },
-    nowMs
-  );
-
-  if (!window) {
-    // Fallback when times can't be parsed: keep today and future booking dates.
-    return shift.bookingDate.slice(0, 10) >= todayDateISO();
-  }
-
-  return window.endMs >= nowMs;
 }
 
 export function buildCalendarShiftsByDate(shifts: CalendarShift[]): Map<string, CalendarShift[]> {
@@ -167,44 +125,10 @@ export function buildCalendarShiftsByDate(shifts: CalendarShift[]): Map<string, 
   return map;
 }
 
-export function filterCalendarShiftsByView(
-  shifts: CalendarShift[],
-  view: CalendarViewMode,
-  period?: { month: number; year: number },
-  nowMs = Date.now()
-): CalendarShift[] {
-  const relevant = shifts.filter((s) => isUpcomingOrActiveCalendarShift(s, nowMs));
-  const today = todayDateISO();
-  switch (view) {
-    case "today":
-      return relevant.filter((s) => shiftDateKey(s) === today);
-    case "week": {
-      const { start, end } = getWeekRange();
-      return relevant.filter((s) => {
-        const d = shiftDateKey(s);
-        return d >= start && d <= end;
-      });
-    }
-    case "month": {
-      const month = period?.month ?? new Date().getMonth() + 1;
-      const year = period?.year ?? new Date().getFullYear();
-      const { start, end } = getMonthRangeForPeriod(year, month);
-      return relevant.filter((s) => {
-        const d = shiftDateKey(s);
-        return d >= start && d <= end;
-      });
-    }
-    case "all":
-      return relevant;
-    default:
-      return relevant;
-  }
-}
-
 function bookingStatusLabel(status: BookingStatus): string {
   switch (status) {
     case "pending":
-      return "ממתין לאישור";
+      return "ממתינה לאישור הבייביסיטר";
     case "approved":
       return "מתוזמן";
     case "sitter_started":
@@ -758,9 +682,18 @@ function AllShiftsListCard({
 export function AllShiftsListView({
   shifts,
   profileHref,
-  profileLinkLabel
-}: CalendarViewsContext & { shifts: CalendarShift[] }) {
+  profileLinkLabel,
+  title = "כל המשמרות שנקבעו",
+  emptyView = "all",
+  sortDirection = "desc"
+}: CalendarViewsContext & {
+  shifts: CalendarShift[];
+  title?: string;
+  emptyView?: CalendarViewMode;
+  sortDirection?: "asc" | "desc";
+}) {
   const hasShifts = shifts.length > 0;
+  const emptyHint = embeddedEmptyHint(emptyView);
   const sortedShifts = useMemo(() => {
     return [...shifts].sort((a, b) => {
       const aWindow = resolveBookingWindowMs({
@@ -773,19 +706,20 @@ export function AllShiftsListView({
         start_time: b.startTime,
         end_time: b.endTime
       });
-      return (bWindow?.startMs ?? 0) - (aWindow?.startMs ?? 0);
+      const delta = (bWindow?.startMs ?? 0) - (aWindow?.startMs ?? 0);
+      return sortDirection === "asc" ? -delta : delta;
     });
-  }, [shifts]);
+  }, [shifts, sortDirection]);
 
   return (
     <CalendarShell
       className="h-full"
-      title="כל המשמרות שנקבעו"
-      subtitle={hasShifts ? `${shifts.length} משמרות` : embeddedEmptyHint("all")}
+      title={title}
+      subtitle={hasShifts ? `${shifts.length} משמרות` : emptyHint}
     >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
         {!hasShifts ? (
-          <p className={`py-6 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>{embeddedEmptyHint("all")}</p>
+          <p className={`py-6 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>{emptyHint}</p>
         ) : (
           <ul className="space-y-3">
             {sortedShifts.map((shift) => (

@@ -162,6 +162,7 @@ export default async function ParentDashboardPage() {
       .from(SITTER_PROFILES_TABLE)
       .select(select)
       .eq("is_public", true)
+      .not("onboarding_completed_at", "is", null)
       .limit(40);
 
     if (error) {

@@ -22,6 +22,7 @@ import {
   isFutureScheduledBooking
 } from "@/lib/bookings/booking-shift-ui";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
+import { useParentPendingBookingCount } from "@/lib/bookings/use-parent-pending-booking-count";
 import {
   acknowledgeRejectedBookingNotification,
   isRejectedWithNoteBooking,
@@ -414,6 +415,7 @@ export function ParentDashboardClient({
   const [parentId, setParentId] = useState<string | null>(
     initialActiveBooking?.parent_id ? String(initialActiveBooking.parent_id) : null
   );
+  const pendingSitterApprovalCount = useParentPendingBookingCount(parentId, Boolean(parentId));
   const [profileCardStatus] = useState<"loading" | "complete" | "incomplete">("complete");
   const [activeBooking, setActiveBooking] = useState<BookingRow | null>(
     (initialActiveBooking as BookingRow | null | undefined) ?? null
@@ -1874,9 +1876,24 @@ export function ParentDashboardClient({
                 <Link
                   href="/parent/calendar"
                   onClick={dismissStatusBanner}
+                  aria-label={
+                    pendingSitterApprovalCount > 0
+                      ? `יומן תיאום המשמרות — ${pendingSitterApprovalCount} ממתינות לאישור בייביסיטר`
+                      : "יומן תיאום המשמרות"
+                  }
                   className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
                 >
-                  <Calendar className="h-5 w-5 shrink-0 text-emerald-600" />
+                  <span className="relative inline-flex">
+                    <Calendar className="h-5 w-5 shrink-0 text-emerald-600" />
+                    {pendingSitterApprovalCount > 0 ? (
+                      <span
+                        className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-1.5 translate-x-1.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+                        aria-hidden
+                      >
+                        {pendingSitterApprovalCount > 9 ? "9+" : pendingSitterApprovalCount}
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
                     יומן תיאום המשמרות
                   </span>

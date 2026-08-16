@@ -15,6 +15,7 @@ import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SITTER_ONBOARDING_COMPLETED_COLUMN = "onboarding_completed_at";
 
 export function parseRouteSitterId(raw: unknown): string | null {
   const id = decodeURIComponent(Array.isArray(raw) ? (raw[0] ?? "") : String(raw ?? "")).trim();
@@ -255,6 +256,7 @@ async function fetchSitterProfileDirect(
       .select(fullSelect)
       .eq(fk, sitterId)
       .eq("is_public", true)
+      .not(SITTER_ONBOARDING_COMPLETED_COLUMN, "is", null)
       .maybeSingle(),
     "sitter profile direct"
   );
@@ -266,6 +268,7 @@ async function fetchSitterProfileDirect(
         .select("id, first_name, last_name, bio, hourly_rate_nis, pricing_model, package_price_nis, years_experience, is_public, updated_at")
         .eq(fk, sitterId)
         .eq("is_public", true)
+        .not(SITTER_ONBOARDING_COMPLETED_COLUMN, "is", null)
         .maybeSingle(),
       "sitter profile direct with pricing"
     );
@@ -296,6 +299,20 @@ export async function fetchParentSitterProfile(
   supabase: SupabaseClient,
   sitterId: string
 ): Promise<ParentSitterProfileLoadResult> {
+  // Application-level ownership gate protects direct URLs even if the deployed
+  // get_sitter_profile_public RPC is stale and still returns legacy rows.
+  const { data: activeProfile, error: activeProfileError } = await supabase
+    .from(SITTER_PROFILES_TABLE)
+    .select(SITTER_PROFILES_USER_COLUMN)
+    .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
+    .eq("is_public", true)
+    .not(SITTER_ONBOARDING_COMPLETED_COLUMN, "is", null)
+    .maybeSingle();
+
+  if (activeProfileError || !activeProfile) {
+    return { profile: null, reviews: [], error: null };
+  }
+
   let profile = await fetchSitterProfileDirect(supabase, sitterId);
 
   if (!profile) {
