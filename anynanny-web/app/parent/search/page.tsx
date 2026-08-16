@@ -86,8 +86,8 @@ function ParentSearchContent() {
   const parentPublicId = (user as any)?.parent_public_id || (user as any)?.user_metadata?.parent_public_id;
 
   return (
-    <MainLayout>
-      <div className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-8" dir="rtl">
+    <MainLayout showBrandHeader={false}>
+      <div className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] pb-8" dir="rtl">
         {showWait ? (
           <p className="text-center text-sm text-slate-600">טוען…</p>
         ) : redirectingToLogin ? (
@@ -98,7 +98,7 @@ function ParentSearchContent() {
 
         {showContent ? (
           <div className="space-y-5">
-            <header className="space-y-2 px-1 text-center">
+            <header className="space-y-2 px-1 pt-1 text-center sm:pt-2">
               <h1 className="text-xl font-black tracking-tight text-navy-header sm:text-2xl">
                 חיפוש מהיר באפליקציה
               </h1>
@@ -138,7 +138,7 @@ export default function ParentSearchPage() {
   return (
     <Suspense
       fallback={
-        <MainLayout>
+        <MainLayout showBrandHeader={false}>
           <div className="p-4 text-right text-sm text-slate-600">טוען…</div>
         </MainLayout>
       }
