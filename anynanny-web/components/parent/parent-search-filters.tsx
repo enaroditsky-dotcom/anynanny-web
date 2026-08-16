@@ -10,6 +10,10 @@ import {
   type ParentSearchMinExperience,
   type ParentSearchMinRating
 } from "@/lib/sitter/parent-search-filters";
+import {
+  parentSearchFieldIsInvalid,
+  type ParentSearchMandatoryField
+} from "@/lib/sitter/parent-search-validation";
 import { CityAutocomplete } from "@/components/geo/city-autocomplete";
 import { Search, Calendar, Award, Star } from "lucide-react";
 
@@ -23,12 +27,23 @@ const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] 
 const FIELD_LABEL = "block text-right text-xs font-bold text-slate-500 mb-1.5 mr-0.5";
 const FIELD_CONTROL =
   "block min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 transition focus:border-[#001F3F] focus:outline-none focus:ring-1 focus:ring-[#001F3F] disabled:opacity-50 appearance-none";
+const FIELD_CONTROL_INVALID =
+  "block min-h-11 w-full rounded-xl border border-rose-400 bg-white px-3 py-2 text-sm text-slate-800 ring-1 ring-rose-200 transition focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-400 disabled:opacity-50 appearance-none";
+const DATE_CONTROL =
+  "block h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-[#001F3F]";
+const DATE_CONTROL_INVALID =
+  "block h-10 w-full rounded-xl border border-rose-400 bg-white px-3 text-xs text-slate-800 outline-none ring-1 ring-rose-200 focus:border-rose-500";
+const TIME_SELECT =
+  "mt-0.5 block h-9 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-[#001F3F]";
+const TIME_SELECT_INVALID =
+  "mt-0.5 block h-9 w-full rounded-lg border border-rose-400 bg-white px-2 py-1 text-xs text-slate-800 outline-none ring-1 ring-rose-200 focus:border-rose-500";
 
 function TimeBlock({
   title,
   hour,
   minute,
   disabled,
+  invalid,
   onHourChange,
   onMinuteChange
 }: {
@@ -36,19 +51,26 @@ function TimeBlock({
   hour: string;
   minute: ParentSearchMinute | "";
   disabled: boolean;
+  invalid?: boolean;
   onHourChange: (hour: string) => void;
   onMinuteChange: (minute: ParentSearchMinute | "") => void;
 }) {
+  const selectClass = invalid ? TIME_SELECT_INVALID : TIME_SELECT;
   return (
-    <div className="rounded-xl border border-slate-100 bg-white/80 p-2.5 shadow-xs">
+    <div
+      className={`rounded-xl border bg-white/80 p-2.5 shadow-xs ${
+        invalid ? "border-rose-400" : "border-slate-100"
+      }`}
+    >
       <p className="mb-1 text-right text-[11px] font-bold text-navy-header">{title}</p>
       <div className="grid grid-cols-2 gap-1.5">
         <label className="block text-right text-[10px] text-slate-400">
           שעה
           <select
-            className="mt-0.5 block h-9 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-[#001F3F]"
+            className={selectClass}
             value={hour}
             disabled={disabled}
+            aria-invalid={invalid}
             onChange={(e) => onHourChange(e.target.value)}
           >
             <option value="">—</option>
@@ -61,9 +83,10 @@ function TimeBlock({
         <label className="block text-right text-[10px] text-slate-400">
           דק׳
           <select
-            className="mt-0.5 block h-9 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-[#001F3F]"
+            className={selectClass}
             value={minute}
             disabled={disabled}
+            aria-invalid={invalid}
             onChange={(e) => onMinuteChange(e.target.value as ParentSearchMinute | "")}
           >
             <option value="">—</option>
@@ -79,10 +102,12 @@ function TimeBlock({
 
 export function ParentSearchFiltersBar({
   filters,
-  onChange
+  onChange,
+  invalidFields
 }: {
   filters: ParentSearchFilters;
   onChange: (next: ParentSearchFilters) => void;
+  invalidFields?: readonly ParentSearchMandatoryField[];
 }) {
   const patch = (partial: Partial<ParentSearchFilters>) => {
     onChange({
@@ -102,6 +127,12 @@ export function ParentSearchFiltersBar({
     searchEndHour: "",
     searchEndMinute: "" as const
   };
+
+  const cityInvalid = parentSearchFieldIsInvalid(invalidFields, "selectedCity");
+  const startDateInvalid = parentSearchFieldIsInvalid(invalidFields, "searchDate");
+  const endDateInvalid = parentSearchFieldIsInvalid(invalidFields, "searchEndDate");
+  const startTimeInvalid = parentSearchFieldIsInvalid(invalidFields, "searchStartTime");
+  const endTimeInvalid = parentSearchFieldIsInvalid(invalidFields, "searchEndTime");
 
   return (
     <section className="flex flex-col space-y-4 rounded-2xl bg-transparent" dir="rtl">
@@ -129,7 +160,8 @@ export function ParentSearchFiltersBar({
           <CityAutocomplete
             value={filters.selectedCity}
             onChange={(selectedCity) => patch({ selectedCity })}
-            inputClassName={`${FIELD_CONTROL} pr-9 pl-10`}
+            invalid={cityInvalid}
+            inputClassName={`${cityInvalid ? FIELD_CONTROL_INVALID : FIELD_CONTROL} pr-9 pl-10`}
           />
         </div>
       </div>
@@ -147,8 +179,9 @@ export function ParentSearchFiltersBar({
             <label className="block text-right text-[11px] font-semibold text-slate-500">תאריך התחלה</label>
             <input
               type="date"
-              className="block h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-[#001F3F]"
+              className={startDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
               value={filters.searchDate}
+              aria-invalid={startDateInvalid}
               onChange={(e) => {
                 const searchDate = e.target.value;
                 if (!searchDate) {
@@ -166,6 +199,7 @@ export function ParentSearchFiltersBar({
               hour={filters.searchStartHour ?? ""}
               minute={filters.searchStartMinute ?? ""}
               disabled={!filters.searchDate}
+              invalid={startTimeInvalid}
               onHourChange={(searchStartHour) => patch({ searchStartHour })}
               onMinuteChange={(searchStartMinute) => patch({ searchStartMinute })}
             />
@@ -176,10 +210,11 @@ export function ParentSearchFiltersBar({
             <label className="block text-right text-[11px] font-semibold text-slate-500">תאריך סיום</label>
             <input
               type="date"
-              className="block h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-[#001F3F]"
+              className={endDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
               min={filters.searchDate || undefined}
               value={filters.searchEndDate}
               disabled={!filters.searchDate}
+              aria-invalid={endDateInvalid}
               onChange={(e) => patch({ searchEndDate: e.target.value })}
             />
             <TimeBlock
@@ -187,6 +222,7 @@ export function ParentSearchFiltersBar({
               hour={filters.searchEndHour ?? ""}
               minute={filters.searchEndMinute ?? ""}
               disabled={!filters.searchDate}
+              invalid={endTimeInvalid}
               onHourChange={(searchEndHour) => patch({ searchEndHour })}
               onMinuteChange={(searchEndMinute) => patch({ searchEndMinute })}
             />

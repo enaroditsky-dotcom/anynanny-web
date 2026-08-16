@@ -7,16 +7,12 @@ import { useAuth } from "@/components/auth-provider";
 import { PublicSitterSearchCardLink } from "@/components/sitter/public-sitter-search-card";
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
-  defaultParentSearchFilters,
   isSerialTargetedSearch,
   normalizeParentSearchFilters,
-  normalizeParentSearchServiceType,
-  type ParentSearchFilters,
-  type ParentSearchMinExperience,
-  type ParentSearchMinRating,
-  type ParentSearchTransportFilter
+  parseFiltersFromSearchParams
 } from "@/lib/sitter/parent-search-filters";
-import { fetchPublicSitterSearchBySerial, runParentSitterSearch } from "@/lib/sitter/parent-sitter-search";
+import { validateParentSearchCriteria } from "@/lib/sitter/parent-search-validation";
+import { runParentSitterSearch } from "@/lib/sitter/parent-sitter-search";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function normalizeParentSearchError(error: string | null): string | null {
@@ -25,90 +21,19 @@ function normalizeParentSearchError(error: string | null): string | null {
   return error;
 }
 
-function parseClockParam(raw: string | null): { hour: string; minute: string } {
-  const value = (raw ?? "").trim();
-  if (!value) return { hour: "", minute: "" };
-
-  if (value.includes(":")) {
-    const [hourPart, minutePart = ""] = value.split(":");
-    return {
-      hour: hourPart.trim().padStart(2, "0"),
-      minute: minutePart.trim().padStart(2, "0")
-    };
-  }
-
-  return { hour: value.padStart(2, "0"), minute: "" };
-}
-
-function readParam(params: URLSearchParams, keys: string[]): string {
-  for (const key of keys) {
-    const value = params.get(key);
-    if (value != null && value.trim() !== "") return value.trim();
-  }
-  return "";
-}
-
-function parseFiltersFromSearchParams(params: URLSearchParams): ParentSearchFilters {
-  const startClock = parseClockParam(
-    readParam(params, ["startTime", "searchStartTime"]) ||
-      (readParam(params, ["searchStartHour"])
-        ? `${readParam(params, ["searchStartHour"])}:${readParam(params, ["searchStartMinute"]) || "00"}`
-        : "")
-  );
-  const endClock = parseClockParam(
-    readParam(params, ["endTime", "searchEndTime"]) ||
-      (readParam(params, ["searchEndHour"])
-        ? `${readParam(params, ["searchEndHour"])}:${readParam(params, ["searchEndMinute"]) || "00"}`
-        : "")
-  );
-
-  const minYearsRaw = readParam(params, ["minYearsExperience", "experience"]);
-  const minYearsParsed = minYearsRaw ? Number(minYearsRaw) : 0;
-  const minYearsExperience = ([0, 1, 3, 5] as const).includes(minYearsParsed as ParentSearchMinExperience)
-    ? (minYearsParsed as ParentSearchMinExperience)
-    : 0;
-
-  const minRatingRaw = readParam(params, ["minRating", "rating"]) as ParentSearchMinRating;
-  const minRating = (["all", "4.5", "4.0", "3.5"] as const).includes(minRatingRaw) ? minRatingRaw : "all";
-
-  const transportRaw = readParam(params, ["transport"]) as ParentSearchTransportFilter;
-  const transport = (["all", "self", "taxi"] as const).includes(transportRaw) ? transportRaw : "all";
-
-  const maxHourlyRaw = readParam(params, ["maxHourlyRate", "maxRate"]);
-  const maxHourlyParsed = maxHourlyRaw ? Number(maxHourlyRaw) : null;
-  const maxHourlyRate =
-    maxHourlyParsed != null && Number.isFinite(maxHourlyParsed) && maxHourlyParsed >= 0
-      ? maxHourlyParsed
-      : null;
-
-  return normalizeParentSearchFilters({
-    searchSitterSerial: readParam(params, ["searchSitterSerial", "serial", "searchNannyId"]),
-    searchDate: readParam(params, ["date", "searchDate"]),
-    searchEndDate: readParam(params, ["endDate", "searchEndDate"]),
-    searchStartHour: startClock.hour,
-    searchStartMinute: startClock.minute,
-    searchEndHour: endClock.hour,
-    searchEndMinute: endClock.minute,
-    minYearsExperience,
-    minRating,
-    transport,
-    maxHourlyRate,
-    selectedCity: readParam(params, ["city", "selectedCity"]) as ParentSearchFilters["selectedCity"],
-    serviceType: normalizeParentSearchServiceType(
-      readParam(params, ["serviceType", "roleType", "p_service_type"])
-    )
-  });
-}
-
 function ParentSearchResultsInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoading, signedIn, effectiveRole } = useAuth();
 
+  const searchQuery = searchParams.toString();
+
   const filters = useMemo(
     () => parseFiltersFromSearchParams(searchParams),
     [searchParams]
   );
+
+  const criteria = useMemo(() => validateParentSearchCriteria(filters), [filters]);
 
   const searchKey = useMemo(
     () => JSON.stringify(normalizeParentSearchFilters(filters)),
@@ -134,6 +59,14 @@ function ParentSearchResultsInner() {
 
   const runSearch = useCallback(
     async (opts?: { force?: boolean }) => {
+      if (!criteria.ok) {
+        setSitters([]);
+        setSearchError(criteria.error);
+        setListLoading(false);
+        loadedKeyRef.current = null;
+        return;
+      }
+
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {
         setSearchError("Supabase לא מוגדר.");
@@ -145,15 +78,13 @@ function ParentSearchResultsInner() {
       const alreadyLoaded = loadedKeyRef.current === searchKey;
       if (alreadyLoaded && !opts?.force) return;
 
-      const normalized = normalizeParentSearchFilters(filters);
+      const normalized = criteria.filters;
 
       if (!alreadyLoaded) setListLoading(true);
       setSearchError(null);
 
       try {
-        const { cards, error } = isSerialTargetedSearch(normalized)
-          ? await fetchPublicSitterSearchBySerial(supabase, normalized.searchSitterSerial)
-          : await runParentSitterSearch(supabase, normalized);
+        const { cards, error } = await runParentSitterSearch(supabase, normalized);
 
         if (error) {
           console.warn("[parent/search/results] search error:", error);
@@ -175,13 +106,13 @@ function ParentSearchResultsInner() {
         setListLoading(false);
       }
     },
-    [filters, searchKey]
+    [criteria, searchKey]
   );
 
   const authSettled = !isLoading;
   const showContent = authSettled && signedIn && effectiveRole === "parent";
   const serialLookupActive = isSerialTargetedSearch(normalizeParentSearchFilters(filters));
-  const visibleSearchError = serialLookupActive ? null : searchError;
+  const visibleSearchError = criteria.ok && serialLookupActive ? null : searchError;
 
   useEffect(() => {
     if (!showContent) return;
@@ -233,19 +164,21 @@ function ParentSearchResultsInner() {
           ) : (
             <section className="space-y-3 px-1">
               {visibleSearchError ? (
-                <p className="text-right text-xs text-rose-700">{visibleSearchError}</p>
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-right text-xs text-rose-900">
+                  {visibleSearchError}
+                </p>
               ) : null}
 
               {sitters.length === 0 && !visibleSearchError ? (
                 <p className="rounded-3xl border border-navy-header/10 bg-white p-6 text-center text-sm text-slate-600 shadow-soft">
                   {serialLookupActive
-                    ? "לא נמצאה נני עם מספר אישי זה. בדקו את הקוד או שהפרופיל מפורסם."
-                    : "לא נמצאו בייביסיטרים התואמים לסינון. נסו להרחיב את החיפוש."}
+                    ? "לא נמצאה בייביסיטר פנויה עם מספר אישי זה לשעות שבחרת."
+                    : "לא נמצאו בייביסיטרים פנויים לשעות שבחרת. נסו שעות אחרות או בייביסיטר אחרת."}
                 </p>
               ) : null}
 
               {sitters.map((s) => (
-                <PublicSitterSearchCardLink key={s.id} sitter={s} />
+                <PublicSitterSearchCardLink key={s.id} sitter={s} query={searchQuery} />
               ))}
             </section>
           )}

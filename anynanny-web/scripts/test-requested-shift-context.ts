@@ -1,0 +1,280 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  formatRequestedShiftDateLabel,
+  formatRequestedShiftTimeRange,
+  requestedShiftFromFilters,
+  requestedShiftFromSearchParams,
+  validateRequestedShiftWindow
+} from "../lib/bookings/requested-shift";
+import { SITTER_UNAVAILABLE_FOR_WINDOW_MESSAGE } from "../lib/bookings/create-booking";
+import {
+  OVERLAP_BLOCKING_BOOKING_STATUSES,
+  OVERLAP_BLOCKING_SESSION_STATUSES,
+  shiftWindowsOverlap
+} from "../lib/bookings/sitter-shift-overlap";
+import {
+  buildSearchEndTimeIso,
+  buildSearchStartTimeIso,
+  defaultParentSearchFilters,
+  hasExplicitRequestedShiftFields,
+  normalizeParentSearchFilters,
+  parentSearchFiltersToUrlSearchParams,
+  parseFiltersFromSearchParams,
+  toListPublicSittersSearchRpcArgs
+} from "../lib/sitter/parent-search-filters";
+import {
+  PARENT_SEARCH_MISSING_CRITERIA_MESSAGE,
+  validateParentSearchCriteria
+} from "../lib/sitter/parent-search-validation";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+function read(relativePath: string): string {
+  return readFileSync(resolve(root, relativePath), "utf8");
+}
+
+const searchFilters = normalizeParentSearchFilters({
+  ...defaultParentSearchFilters(),
+  searchDate: "2026-08-19",
+  searchEndDate: "2026-08-19",
+  searchStartHour: "13",
+  searchStartMinute: "00",
+  searchEndHour: "16",
+  searchEndMinute: "00",
+  selectedCity: "חיפה",
+  minRating: "4"
+});
+
+assert.equal(hasExplicitRequestedShiftFields(searchFilters), true);
+
+const window = requestedShiftFromFilters(searchFilters);
+assert.ok(window);
+assert.equal(window.startDate, "2026-08-19");
+assert.equal(window.endDate, "2026-08-19");
+assert.equal(window.startIso, buildSearchStartTimeIso(searchFilters));
+assert.equal(window.endIso, buildSearchEndTimeIso(searchFilters));
+
+const rpcArgs = toListPublicSittersSearchRpcArgs(searchFilters);
+assert.equal(rpcArgs.p_start_time, window.startIso);
+assert.equal(rpcArgs.p_end_time, window.endIso);
+
+const serialRpcArgs = toListPublicSittersSearchRpcArgs(
+  normalizeParentSearchFilters({
+    ...searchFilters,
+    searchSitterSerial: "AN-1001"
+  })
+);
+assert.equal(serialRpcArgs.p_search_nanny_id, "AN-1001");
+assert.equal(serialRpcArgs.p_start_time, window.startIso);
+assert.equal(serialRpcArgs.p_end_time, window.endIso);
+assert.equal(serialRpcArgs.p_search_city, null);
+
+const blocking = { startMs: Date.parse("2026-08-19T12:00:00"), endMs: Date.parse("2026-08-19T15:00:00") };
+assert.equal(
+  shiftWindowsOverlap(blocking, {
+    startMs: Date.parse("2026-08-19T10:00:00"),
+    endMs: Date.parse("2026-08-19T23:00:00")
+  }),
+  true
+);
+assert.equal(
+  shiftWindowsOverlap(blocking, {
+    startMs: Date.parse("2026-08-19T15:00:00"),
+    endMs: Date.parse("2026-08-19T18:00:00")
+  }),
+  false
+);
+assert.equal(
+  shiftWindowsOverlap(blocking, {
+    startMs: Date.parse("2026-08-19T16:00:00"),
+    endMs: Date.parse("2026-08-19T18:00:00")
+  }),
+  false
+);
+assert.equal(
+  shiftWindowsOverlap(blocking, {
+    startMs: Date.parse("2026-08-19T12:00:00"),
+    endMs: Date.parse("2026-08-19T15:00:00")
+  }),
+  true
+);
+
+assert.deepEqual([...OVERLAP_BLOCKING_BOOKING_STATUSES], ["approved", "sitter_started", "parent_started"]);
+assert.deepEqual([...OVERLAP_BLOCKING_SESSION_STATUSES], ["confirmed", "in_progress", "active"]);
+
+assert.equal(formatRequestedShiftTimeRange(window.startIso, window.endIso), "13:00–16:00");
+assert.match(formatRequestedShiftDateLabel(window.startDate), /19/);
+assert.match(formatRequestedShiftDateLabel(window.startDate), /אוגוסט/);
+assert.match(formatRequestedShiftDateLabel(window.startDate), /2026/);
+
+const params = parentSearchFiltersToUrlSearchParams(searchFilters);
+assert.equal(params.get("date"), "2026-08-19");
+assert.equal(params.get("endDate"), "2026-08-19");
+assert.equal(params.get("startTime"), "13:00");
+assert.equal(params.get("endTime"), "16:00");
+assert.equal(params.get("city"), "חיפה");
+assert.equal(params.get("minRating"), "4");
+
+const roundTrip = requestedShiftFromSearchParams(params);
+assert.ok(roundTrip);
+assert.equal(roundTrip.startIso, window.startIso);
+assert.equal(roundTrip.endIso, window.endIso);
+
+const parsedFilters = parseFiltersFromSearchParams(params);
+assert.equal(parsedFilters.searchDate, "2026-08-19");
+assert.equal(parsedFilters.searchStartHour, "13");
+assert.equal(parsedFilters.searchStartMinute, "00");
+assert.equal(parsedFilters.searchEndHour, "16");
+assert.equal(parsedFilters.searchEndMinute, "00");
+assert.equal(parsedFilters.minRating, "4");
+assert.equal(parsedFilters.selectedCity, "חיפה");
+
+assert.equal(
+  requestedShiftFromFilters(
+    normalizeParentSearchFilters({
+      searchDate: "2026-08-19"
+    })
+  ),
+  null
+);
+
+assert.equal(
+  requestedShiftFromSearchParams(new URLSearchParams("city=חיפה&minRating=4")),
+  null
+);
+
+const validated = validateRequestedShiftWindow(window);
+assert.ok(!("error" in validated));
+assert.equal(validated.startIso, window.startIso);
+assert.equal(validated.endIso, window.endIso);
+
+assert.equal(
+  SITTER_UNAVAILABLE_FOR_WINDOW_MESSAGE,
+  "הבייביסיטר כבר אינה פנויה בשעות שבחרת. חזור לחיפוש כדי למצוא בייביסיטר אחרת."
+);
+
+const validCriteria = validateParentSearchCriteria(searchFilters);
+assert.equal(validCriteria.ok, true);
+if (validCriteria.ok) {
+  assert.equal(validCriteria.shift.startIso, window.startIso);
+  assert.equal(validCriteria.shift.endIso, window.endIso);
+  assert.equal(validCriteria.filters.selectedCity, "חיפה");
+}
+
+const missingCity = validateParentSearchCriteria(
+  normalizeParentSearchFilters({
+    ...searchFilters,
+    selectedCity: ""
+  })
+);
+assert.equal(missingCity.ok, false);
+if (!missingCity.ok) {
+  assert.equal(missingCity.error, PARENT_SEARCH_MISSING_CRITERIA_MESSAGE);
+  assert.deepEqual(missingCity.missing, ["selectedCity"]);
+}
+
+const missingTimes = validateParentSearchCriteria(
+  normalizeParentSearchFilters({
+    selectedCity: "חיפה",
+    searchDate: "2026-08-19",
+    searchEndDate: "2026-08-19"
+  })
+);
+assert.equal(missingTimes.ok, false);
+if (!missingTimes.ok) {
+  assert.equal(missingTimes.error, PARENT_SEARCH_MISSING_CRITERIA_MESSAGE);
+  assert.ok(missingTimes.missing.includes("searchStartTime"));
+  assert.ok(missingTimes.missing.includes("searchEndTime"));
+}
+
+const serialWithoutShift = validateParentSearchCriteria(
+  normalizeParentSearchFilters({
+    searchSitterSerial: "AN-1001"
+  })
+);
+assert.equal(serialWithoutShift.ok, false);
+if (!serialWithoutShift.ok) {
+  assert.equal(serialWithoutShift.error, PARENT_SEARCH_MISSING_CRITERIA_MESSAGE);
+}
+
+const serialWithShift = validateParentSearchCriteria(
+  normalizeParentSearchFilters({
+    ...searchFilters,
+    searchSitterSerial: "AN-1001"
+  })
+);
+assert.equal(serialWithShift.ok, true);
+
+const invertedRange = validateParentSearchCriteria(
+  normalizeParentSearchFilters({
+    ...searchFilters,
+    searchStartHour: "16",
+    searchEndHour: "13"
+  })
+);
+assert.equal(invertedRange.ok, false);
+if (!invertedRange.ok) {
+  assert.match(invertedRange.error, /מועד הסיום חייב להיות אחרי מועד ההתחלה/);
+}
+
+const zeroDuration = validateParentSearchCriteria(
+  normalizeParentSearchFilters({
+    ...searchFilters,
+    searchEndHour: "13",
+    searchEndMinute: "00"
+  })
+);
+assert.equal(zeroDuration.ok, false);
+
+const resultsPage = read("app/parent/search/results/page.tsx");
+assert.match(resultsPage, /validateParentSearchCriteria/);
+assert.match(resultsPage, /if \(!criteria\.ok\)/);
+assert.match(resultsPage, /runParentSitterSearch\(supabase, normalized\)/);
+assert.doesNotMatch(resultsPage, /fetchPublicSitterSearchBySerial/);
+assert.match(resultsPage, /PublicSitterSearchCardLink key=\{s\.id\} sitter=\{s\} query=\{searchQuery\}/);
+
+const searchPage = read("app/parent/search/page.tsx");
+assert.match(searchPage, /validateParentSearchCriteria/);
+assert.match(searchPage, /PARENT_SEARCH_MISSING_CRITERIA_MESSAGE|criteria\.error/);
+assert.match(searchPage, /setInvalidFields/);
+
+const searchCard = read("components/sitter/public-sitter-search-card.tsx");
+assert.match(searchCard, /parentSitterProfilePath\(sitter\.id, query\)/);
+
+const profilePage = read("app/parent/sitter/[sitterId]/page.tsx");
+assert.match(profilePage, /requestedShiftFromSearchParams/);
+assert.match(profilePage, /requestedShift=\{requestedShift\}/);
+assert.match(profilePage, /\/parent\/search\/results\?\$\{resultsQuery\}/);
+
+const modal = read("components/parent/book-shift-modal.tsx");
+assert.match(modal, /requestedShift\?: RequestedShiftWindow \| null/);
+assert.match(modal, /lockedShift \? lockedShift\.startIso : validated\.startIso/);
+assert.match(modal, /formatRequestedShiftTimeRange/);
+assert.match(modal, /lockedShift \? \(/);
+assert.match(modal, /type="date"/);
+
+const createBooking = read("lib/bookings/create-booking.ts");
+assert.match(createBooking, /sitterWindowIsAvailable/);
+assert.match(createBooking, /sitterHasOverlappingActiveShift/);
+assert.match(createBooking, /SITTER_UNAVAILABLE_FOR_WINDOW_MESSAGE/);
+assert.match(createBooking, /start_time: input.startIso/);
+assert.match(createBooking, /end_time: input.endIso/);
+assert.match(createBooking, /status: "pending"/);
+
+const searchImpl = read("lib/sitter/parent-sitter-search.ts");
+assert.match(searchImpl, /hasRequestedTimeWindow/);
+assert.match(searchImpl, /if \(!hasTimeWindow && shouldFallbackListPublicSittersRpc/);
+
+const migration = read("supabase/migrations/20260816210000_search_filter_sitter_window_availability.sql");
+assert.match(migration, /sitter_window_is_available/);
+assert.match(migration, /'approved', 'sitter_started', 'parent_started'/);
+assert.match(migration, /'confirmed', 'in_progress', 'active'/);
+assert.match(migration, /b\.start_time < p_end_time/);
+assert.match(migration, /b\.end_time > p_start_time/);
+assert.match(migration, /public\.sitter_window_is_available\(sp\.id, f\.range_start, f\.range_end\)/);
+assert.doesNotMatch(migration, /f\.search_serial is not null\s+or f\.range_start is null/);
+
+console.log("Requested shift search→booking context checks passed.");

@@ -5,9 +5,16 @@ import {
   type BookingRow
 } from "@/lib/bookings/constants";
 
-import { validateShiftWindow } from "@/lib/shift-requests/create-shift-request";
+import { sitterWindowIsAvailable } from "@/lib/bookings/sitter-window-availability";
+import {
+  resolveShiftTimeWindow,
+  sitterHasOverlappingActiveShift
+} from "@/lib/bookings/sitter-shift-overlap";
 
 export { validateShiftWindow } from "@/lib/shift-requests/create-shift-request";
+
+export const SITTER_UNAVAILABLE_FOR_WINDOW_MESSAGE =
+  "הבייביסיטר כבר אינה פנויה בשעות שבחרת. חזור לחיפוש כדי למצוא בייביסיטר אחרת.";
 
 export async function createBooking(
   supabase: SupabaseClient,
@@ -64,6 +71,42 @@ export async function createBooking(
       error:
         "לא ניתן ליצור הזמנה ללא תעריף תקין של הבייביסיטר."
     };
+  }
+
+  const proposed = resolveShiftTimeWindow({
+    booking_date: input.bookingDate,
+    start_time: input.startIso,
+    end_time: input.endIso
+  });
+
+  if (proposed) {
+    const rpcAvailability = await sitterWindowIsAvailable(
+      supabase,
+      sitterIdTrimmed,
+      input.startIso,
+      input.endIso
+    );
+
+    if (rpcAvailability.usedRpc) {
+      if (rpcAvailability.available === false) {
+        return {
+          booking: null,
+          error: SITTER_UNAVAILABLE_FOR_WINDOW_MESSAGE
+        };
+      }
+    } else {
+      const overlapping = await sitterHasOverlappingActiveShift(
+        supabase,
+        sitterIdTrimmed,
+        proposed
+      );
+      if (overlapping) {
+        return {
+          booking: null,
+          error: SITTER_UNAVAILABLE_FOR_WINDOW_MESSAGE
+        };
+      }
+    }
   }
 
   const { data, error } = await supabase

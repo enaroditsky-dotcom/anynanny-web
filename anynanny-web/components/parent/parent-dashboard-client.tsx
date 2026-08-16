@@ -24,6 +24,13 @@ import {
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { useParentPendingBookingCount } from "@/lib/bookings/use-parent-pending-booking-count";
 import {
+  acknowledgeApprovedBookingNotification,
+  isApprovedScheduleNotificationCandidate,
+  persistDismissedApprovedBookingId,
+  readDismissedApprovedBookingIds,
+  shouldShowApprovedScheduleNotification
+} from "@/lib/bookings/dismissed-approved-bookings";
+import {
   acknowledgeRejectedBookingNotification,
   isRejectedWithNoteBooking,
   persistDismissedRejectedBookingId,
@@ -179,6 +186,8 @@ function pickParentDashboardBooking(
     preferBookingId?: string | null;
     settlementLocked?: boolean;
     dismissedRejectedIds?: Set<string>;
+    dismissedApprovedIds?: Set<string>;
+    stickyApprovedNotificationId?: string | null;
   }
 ): BookingRow | null {
   if (!rows.length) return null;
@@ -187,9 +196,18 @@ function pickParentDashboardBooking(
     ? String(opts.preferBookingId)
     : null;
   const dismissedRejectedIds = opts?.dismissedRejectedIds ?? new Set<string>();
+  const dismissedApprovedIds = opts?.dismissedApprovedIds ?? new Set<string>();
+  const stickyApprovedNotificationId = opts?.stickyApprovedNotificationId ?? null;
 
   const pendingRejectedNotification = (b: BookingRow) =>
     shouldShowRejectedNotification(b, dismissedRejectedIds);
+
+  const pendingApprovedNotification = (b: BookingRow) =>
+    isApprovedScheduleNotificationCandidate(
+      b,
+      dismissedApprovedIds,
+      stickyApprovedNotificationId
+    );
 
   // בזמן Settlement אסור לעבור להזמנה אחרת.
   if (opts?.settlementLocked) {
@@ -234,7 +252,8 @@ function pickParentDashboardBooking(
       (
         isBookingDueForParentActiveShiftUi(preferred) ||
         isUnpaidCompletedBooking(preferred) ||
-        pendingRejectedNotification(preferred)
+        pendingRejectedNotification(preferred) ||
+        pendingApprovedNotification(preferred)
       )
     ) {
       return preferred;
@@ -255,16 +274,14 @@ function pickParentDashboardBooking(
     return rejectedHit;
   }
 
-  const futureConfirmed = rows.find(
-    (b) => isFutureConfirmedScheduleBooking(b)
-  );
+  const futureConfirmed = rows.find(pendingApprovedNotification);
 
   if (futureConfirmed) {
     return futureConfirmed;
   }
 
   const futurePending = rows.find(
-    (b) => isFutureScheduledBooking(b)
+    (b) => isFutureScheduledBooking(b) && !isFutureConfirmedScheduleBooking(b)
   );
 
   if (futurePending) {
@@ -407,6 +424,16 @@ export function ParentDashboardClient({
   );
   const dismissedRejectedBookingIdsRef = useRef<Set<string>>(dismissedRejectedBookingIds);
   dismissedRejectedBookingIdsRef.current = dismissedRejectedBookingIds;
+  const [dismissedApprovedBookingIds, setDismissedApprovedBookingIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const dismissedApprovedBookingIdsRef = useRef<Set<string>>(dismissedApprovedBookingIds);
+  dismissedApprovedBookingIdsRef.current = dismissedApprovedBookingIds;
+  const [stickyApprovedNotificationId, setStickyApprovedNotificationId] = useState<string | null>(
+    null
+  );
+  const stickyApprovedNotificationIdRef = useRef<string | null>(null);
+  const acknowledgedApprovedIdsRef = useRef<Set<string>>(new Set());
   const [parentRatingSummary, setParentRatingSummary] = useState<UserRatingSummary>({
     average: 0,
     count: 0
@@ -471,11 +498,19 @@ export function ParentDashboardClient({
     if (!parentId) {
       setDismissedRejectedBookingIds(new Set());
       dismissedRejectedBookingIdsRef.current = new Set();
+      setDismissedApprovedBookingIds(new Set());
+      dismissedApprovedBookingIdsRef.current = new Set();
+      stickyApprovedNotificationIdRef.current = null;
+      setStickyApprovedNotificationId(null);
+      acknowledgedApprovedIdsRef.current = new Set();
       return;
     }
-    const dismissed = readDismissedRejectedBookingIds(parentId);
-    setDismissedRejectedBookingIds(dismissed);
-    dismissedRejectedBookingIdsRef.current = dismissed;
+    const dismissedRejected = readDismissedRejectedBookingIds(parentId);
+    setDismissedRejectedBookingIds(dismissedRejected);
+    dismissedRejectedBookingIdsRef.current = dismissedRejected;
+    const dismissedApproved = readDismissedApprovedBookingIds(parentId);
+    setDismissedApprovedBookingIds(dismissedApproved);
+    dismissedApprovedBookingIdsRef.current = dismissedApproved;
   }, [parentId]);
 
   const refreshParentOnboardingStatus = useCallback(
@@ -618,11 +653,16 @@ export function ParentDashboardClient({
         const dismissedRejectedIds = readDismissedRejectedBookingIds(uid);
         dismissedRejectedBookingIdsRef.current = dismissedRejectedIds;
         setDismissedRejectedBookingIds(dismissedRejectedIds);
+        const dismissedApprovedIds = readDismissedApprovedBookingIds(uid);
+        dismissedApprovedBookingIdsRef.current = dismissedApprovedIds;
+        setDismissedApprovedBookingIds(dismissedApprovedIds);
 
         const booking = pickParentDashboardBooking(bookingRows, {
           preferBookingId: activeBookingRef.current?.id ?? null,
           settlementLocked: settlementIsLocked(),
-          dismissedRejectedIds
+          dismissedRejectedIds,
+          dismissedApprovedIds,
+          stickyApprovedNotificationId: stickyApprovedNotificationIdRef.current
         });
         const bookingSitterId =
           booking?.sitter_id != null ? String(booking.sitter_id) : null;
@@ -1558,14 +1598,22 @@ export function ParentDashboardClient({
   const dueForActiveShiftUi = Boolean(
     hasHydrated && activeBooking && isBookingDueForParentActiveShiftUi(activeBooking)
   );
+  const scheduledBookingId = activeBooking?.id ? String(activeBooking.id) : null;
+  const isStickyApprovedNotification = Boolean(
+    scheduledBookingId && stickyApprovedNotificationId === scheduledBookingId
+  );
   const isScheduledConfirmed = Boolean(
-    hasHydrated && activeBooking && isFutureConfirmedScheduleBooking(activeBooking)
+    hasHydrated &&
+      activeBooking &&
+      isFutureConfirmedScheduleBooking(activeBooking) &&
+      (isStickyApprovedNotification ||
+        shouldShowApprovedScheduleNotification(activeBooking, dismissedApprovedBookingIds))
   );
   const isScheduledPending = Boolean(
     hasHydrated &&
       activeBooking &&
       isFutureScheduledBooking(activeBooking) &&
-      !isScheduledConfirmed
+      !isFutureConfirmedScheduleBooking(activeBooking)
   );
   const isRejectedBooking = shouldShowRejectedNotification(
     activeBooking,
@@ -1645,7 +1693,6 @@ export function ParentDashboardClient({
     : inSettlement
       ? `settlement:${settlementStep ?? "open"}`
       : null;
-  const scheduledBookingId = activeBooking?.id ? String(activeBooking.id) : null;
   const rejectedBookingId = isRejectedBooking && activeBooking?.id ? String(activeBooking.id) : null;
 
   useEffect(() => {
@@ -1688,10 +1735,41 @@ export function ParentDashboardClient({
     };
   }, [isRejectedBooking, rejectedBookingId, activeBooking?.sitter_id]);
 
+  useEffect(() => {
+    if (!isScheduledConfirmed || !scheduledBookingId) return;
+    const uid = String(parentId ?? activeBooking?.parent_id ?? "").trim();
+    if (!uid) return;
+
+    stickyApprovedNotificationIdRef.current = scheduledBookingId;
+    setStickyApprovedNotificationId((prev) =>
+      prev === scheduledBookingId ? prev : scheduledBookingId
+    );
+
+    if (acknowledgedApprovedIdsRef.current.has(scheduledBookingId)) return;
+    if (activeBooking?.parent_notified_at) {
+      acknowledgedApprovedIdsRef.current.add(scheduledBookingId);
+      persistDismissedApprovedBookingId(uid, scheduledBookingId);
+      return;
+    }
+
+    acknowledgedApprovedIdsRef.current.add(scheduledBookingId);
+    persistDismissedApprovedBookingId(uid, scheduledBookingId);
+    const supabase = getSupabaseBrowserClient();
+    if (supabase) {
+      void acknowledgeApprovedBookingNotification(supabase, uid, scheduledBookingId);
+    }
+  }, [
+    isScheduledConfirmed,
+    scheduledBookingId,
+    parentId,
+    activeBooking?.parent_id,
+    activeBooking?.parent_notified_at
+  ]);
+
   const scheduledBannerDismissed = Boolean(
     hasHydrated &&
       scheduledBookingId &&
-      (isScheduledConfirmed || isScheduledPending) &&
+      isScheduledPending &&
       dismissedScheduledBookingIds.has(scheduledBookingId)
   );
   const rejectedBannerDismissed = Boolean(
@@ -1713,7 +1791,32 @@ export function ParentDashboardClient({
   const shouldHideDashboardActions = isActiveShiftExpanded;
 
   const dismissStatusBanner = () => {
-    if (scheduledBookingId && (isScheduledConfirmed || isScheduledPending)) {
+    if (scheduledBookingId && isScheduledConfirmed) {
+      const uid = String(parentId ?? activeBooking?.parent_id ?? "").trim();
+      const acknowledgedAt = new Date().toISOString();
+      if (uid) {
+        persistDismissedApprovedBookingId(uid, scheduledBookingId);
+        setDismissedApprovedBookingIds((prev) => {
+          const next = new Set(prev);
+          next.add(scheduledBookingId);
+          dismissedApprovedBookingIdsRef.current = next;
+          return next;
+        });
+        acknowledgedApprovedIdsRef.current.add(scheduledBookingId);
+        const supabase = getSupabaseBrowserClient();
+        if (supabase) {
+          void acknowledgeApprovedBookingNotification(supabase, uid, scheduledBookingId);
+        }
+      }
+      stickyApprovedNotificationIdRef.current = null;
+      setStickyApprovedNotificationId(null);
+      setActiveBooking((prev) =>
+        prev?.id === scheduledBookingId
+          ? { ...prev, parent_notified_at: prev.parent_notified_at ?? acknowledgedAt }
+          : prev
+      );
+    }
+    if (scheduledBookingId && isScheduledPending) {
       persistDismissedScheduledBookingId(scheduledBookingId);
       setDismissedScheduledBookingIds((prev) => {
         const next = new Set(prev);

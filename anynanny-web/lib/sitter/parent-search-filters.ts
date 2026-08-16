@@ -20,14 +20,31 @@ export type ParentSearchServiceRoleAlias =
   | ParentSearchServiceType;
 
 /** Minimum average sitter rating; `all` sends no `p_min_rating` filter. */
-export type ParentSearchMinRating = "all" | "4.5" | "4.0" | "3.5";
+export const PARENT_SEARCH_MIN_RATING_VALUES = ["all", "3", "4", "4.5", "5"] as const;
+export type ParentSearchMinRating = (typeof PARENT_SEARCH_MIN_RATING_VALUES)[number];
 
 export const PARENT_SEARCH_RATING_OPTIONS: { value: ParentSearchMinRating; label: string }[] = [
   { value: "all", label: "הכל" },
+  { value: "3", label: "⭐ 3 ומעלה" },
+  { value: "4", label: "⭐ 4 ומעלה" },
   { value: "4.5", label: "⭐ 4.5 ומעלה" },
-  { value: "4.0", label: "⭐ 4.0 ומעלה" },
-  { value: "3.5", label: "⭐ 3.5 ומעלה" }
+  { value: "5", label: "⭐ 5" }
 ];
+
+const LEGACY_MIN_RATING_ALIASES: Record<string, ParentSearchMinRating> = {
+  "3.0": "3",
+  "4.0": "4",
+  "5.0": "5"
+};
+
+/** Parse URL / form rating values into the canonical dropdown set. */
+export function parseParentSearchMinRating(raw: string | null | undefined): ParentSearchMinRating {
+  const value = String(raw ?? "").trim();
+  if ((PARENT_SEARCH_MIN_RATING_VALUES as readonly string[]).includes(value)) {
+    return value as ParentSearchMinRating;
+  }
+  return LEGACY_MIN_RATING_ALIASES[value] ?? "all";
+}
 
 export const PARENT_SEARCH_MAX_HOURLY_SLIDER = 150;
 
@@ -126,7 +143,7 @@ export function normalizeParentSearchFilters(
     searchEndHour: partial.searchEndHour ?? base.searchEndHour,
     searchEndMinute: partial.searchEndMinute ?? base.searchEndMinute,
     minYearsExperience: partial.minYearsExperience ?? base.minYearsExperience,
-    minRating: partial.minRating ?? base.minRating,
+    minRating: parseParentSearchMinRating(partial.minRating ?? base.minRating),
     transport: partial.transport ?? base.transport,
     maxHourlyRate: (() => {
       if (partial.maxHourlyRate === null) return null;
@@ -149,7 +166,8 @@ export function normalizeParentSearchFilters(
 
 export function minRatingToRpcValue(minRating: ParentSearchMinRating): number | null {
   if (minRating === "all") return null;
-  return Number(minRating);
+  const n = Number(minRating);
+  return Number.isFinite(n) ? n : null;
 }
 
 /** RPC `p_min_years_experience` — accepts numeric state or Hebrew labels like `3+ שנים`. */
@@ -182,7 +200,7 @@ export function isExactSitterSerialQuery(raw: string | null | undefined): boolea
   return norm != null && /^(AN|CONS)-\d+$/.test(norm);
 }
 
-/** Direct serial lookup — bypass calendar / availability RPC filters. */
+/** Exact serial lookup still bypasses city/rating/price/transport. Time windows are always sent. */
 export function shouldUseDirectSerialLookup(raw: string | null | undefined): boolean {
   return isExactSitterSerialQuery(raw);
 }
@@ -263,8 +281,8 @@ export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): 
 
   return {
     p_search_nanny_id: sitterSerialToRpcParam(safe.searchSitterSerial),
-    p_start_time: serialOnly ? null : buildSearchStartTimeIso(safe),
-    p_end_time: serialOnly ? null : buildSearchEndTimeIso(safe),
+    p_start_time: buildSearchStartTimeIso(safe),
+    p_end_time: buildSearchEndTimeIso(safe),
     p_min_years_experience: serialOnly ? 0 : minYearsExperienceToRpcValue(safe.minYearsExperience),
     p_min_rating: serialOnly ? null : minRatingToRpcValue(safe.minRating),
     p_transport: serialOnly ? "all" : safe.transport,
@@ -272,4 +290,142 @@ export function toListPublicSittersSearchRpcArgs(filters: ParentSearchFilters): 
     p_search_city: serialOnly || !safe.selectedCity ? null : safe.selectedCity,
     p_service_type: safe.serviceType
   };
+}
+
+function parseClockParam(raw: string | null): { hour: string; minute: string } {
+  const value = (raw ?? "").trim();
+  if (!value) return { hour: "", minute: "" };
+
+  if (value.includes(":")) {
+    const [hourPart, minutePart = ""] = value.split(":");
+    return {
+      hour: hourPart.trim().padStart(2, "0"),
+      minute: minutePart.trim().padStart(2, "0")
+    };
+  }
+
+  return { hour: value.padStart(2, "0"), minute: "" };
+}
+
+function readSearchParam(params: Pick<URLSearchParams, "get">, keys: string[]): string {
+  for (const key of keys) {
+    const value = params.get(key);
+    if (value != null && value.trim() !== "") return value.trim();
+  }
+  return "";
+}
+
+/** Parse `/parent/search/results` (and forwarded sitter-profile) query params into filters. */
+export function parseFiltersFromSearchParams(params: Pick<URLSearchParams, "get">): ParentSearchFilters {
+  const startClock = parseClockParam(
+    readSearchParam(params, ["startTime", "searchStartTime"]) ||
+      (readSearchParam(params, ["searchStartHour"])
+        ? `${readSearchParam(params, ["searchStartHour"])}:${readSearchParam(params, ["searchStartMinute"]) || "00"}`
+        : "")
+  );
+  const endClock = parseClockParam(
+    readSearchParam(params, ["endTime", "searchEndTime"]) ||
+      (readSearchParam(params, ["searchEndHour"])
+        ? `${readSearchParam(params, ["searchEndHour"])}:${readSearchParam(params, ["searchEndMinute"]) || "00"}`
+        : "")
+  );
+
+  const minYearsRaw = readSearchParam(params, ["minYearsExperience", "experience"]);
+  const minYearsParsed = minYearsRaw ? Number(minYearsRaw) : 0;
+  const minYearsExperience = ([0, 1, 3, 5] as const).includes(minYearsParsed as ParentSearchMinExperience)
+    ? (minYearsParsed as ParentSearchMinExperience)
+    : 0;
+
+  const minRating = parseParentSearchMinRating(readSearchParam(params, ["minRating", "rating"]));
+
+  const transportRaw = readSearchParam(params, ["transport"]) as ParentSearchTransportFilter;
+  const transport = (["all", "self", "taxi"] as const).includes(transportRaw) ? transportRaw : "all";
+
+  const maxHourlyRaw = readSearchParam(params, ["maxHourlyRate", "maxRate"]);
+  const maxHourlyParsed = maxHourlyRaw ? Number(maxHourlyRaw) : null;
+  const maxHourlyRate =
+    maxHourlyParsed != null && Number.isFinite(maxHourlyParsed) && maxHourlyParsed >= 0
+      ? maxHourlyParsed
+      : null;
+
+  return normalizeParentSearchFilters({
+    searchSitterSerial: readSearchParam(params, ["searchSitterSerial", "serial", "searchNannyId"]),
+    searchDate: readSearchParam(params, ["date", "searchDate"]),
+    searchEndDate: readSearchParam(params, ["endDate", "searchEndDate"]),
+    searchStartHour: startClock.hour,
+    searchStartMinute: startClock.minute,
+    searchEndHour: endClock.hour,
+    searchEndMinute: endClock.minute,
+    minYearsExperience,
+    minRating,
+    transport,
+    maxHourlyRate,
+    selectedCity: readSearchParam(params, ["city", "selectedCity"]) as ParentSearchFilters["selectedCity"],
+    serviceType: normalizeParentSearchServiceType(
+      readSearchParam(params, ["serviceType", "roleType", "p_service_type"])
+    )
+  });
+}
+
+/** Serialize parent search filters to the canonical results-page query params. */
+export function parentSearchFiltersToUrlSearchParams(filters: ParentSearchFilters): URLSearchParams {
+  const safe = normalizeParentSearchFilters(filters);
+  const params = new URLSearchParams();
+
+  params.set("roleType", "sitter");
+  params.set("serviceType", "babysitter");
+
+  const serial = safe.searchSitterSerial.trim();
+  if (serial) params.set("serial", serial);
+
+  if (safe.selectedCity) params.set("city", safe.selectedCity);
+  if (safe.searchDate) params.set("date", safe.searchDate);
+  if (safe.searchEndDate) params.set("endDate", safe.searchEndDate);
+
+  if (safe.searchStartHour.trim()) {
+    const hour = safe.searchStartHour.padStart(2, "0");
+    const minute = (safe.searchStartMinute || "00").padStart(2, "0");
+    params.set("startTime", `${hour}:${minute}`);
+  }
+
+  if (safe.searchEndHour.trim()) {
+    const hour = safe.searchEndHour.padStart(2, "0");
+    const minute = (safe.searchEndMinute || "00").padStart(2, "0");
+    params.set("endTime", `${hour}:${minute}`);
+  }
+
+  if (safe.minYearsExperience > 0) {
+    params.set("minYearsExperience", String(safe.minYearsExperience));
+  }
+
+  if (safe.minRating !== "all") {
+    params.set("minRating", safe.minRating);
+  }
+
+  if (safe.maxHourlyRate != null) {
+    params.set("maxHourlyRate", String(safe.maxHourlyRate));
+  }
+
+  return params;
+}
+
+export function parentSearchResultsPath(filters: ParentSearchFilters): string {
+  const query = parentSearchFiltersToUrlSearchParams(filters).toString();
+  return query ? `/parent/search/results?${query}` : "/parent/search/results";
+}
+
+/**
+ * True when the parent explicitly chose a start date plus start and end clocks.
+ * Incomplete search windows (date-only, or missing minutes) are not a bookable shift context.
+ */
+export function hasExplicitRequestedShiftFields(filters: ParentSearchFilters): boolean {
+  const safe = normalizeParentSearchFilters(filters);
+  return (
+    Boolean(safe.searchDate.trim()) &&
+    Boolean(safe.searchEndDate.trim()) &&
+    Boolean(safe.searchStartHour.trim()) &&
+    Boolean(safe.searchStartMinute.trim()) &&
+    Boolean(safe.searchEndHour.trim()) &&
+    Boolean(safe.searchEndMinute.trim())
+  );
 }

@@ -9,50 +9,13 @@ import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filter
 import {
   defaultParentSearchFilters,
   normalizeParentSearchFilters,
+  parentSearchResultsPath,
   type ParentSearchFilters
 } from "@/lib/sitter/parent-search-filters";
-
-function buildResultsSearchParams(filters: ParentSearchFilters): string {
-  const safe = normalizeParentSearchFilters(filters);
-  const params = new URLSearchParams();
-
-  params.set("roleType", "sitter");
-  params.set("serviceType", "babysitter");
-
-  const serial = safe.searchSitterSerial.trim();
-  if (serial) params.set("serial", serial);
-
-  if (safe.selectedCity) params.set("city", safe.selectedCity);
-  if (safe.searchDate) params.set("date", safe.searchDate);
-  if (safe.searchEndDate) params.set("endDate", safe.searchEndDate);
-
-  if (safe.searchStartHour.trim()) {
-    const hour = safe.searchStartHour.padStart(2, "0");
-    const minute = (safe.searchStartMinute || "00").padStart(2, "0");
-    params.set("startTime", `${hour}:${minute}`);
-  }
-
-  if (safe.searchEndHour.trim()) {
-    const hour = safe.searchEndHour.padStart(2, "0");
-    const minute = (safe.searchEndMinute || "00").padStart(2, "0");
-    params.set("endTime", `${hour}:${minute}`);
-  }
-
-  if (safe.minYearsExperience > 0) {
-    params.set("minYearsExperience", String(safe.minYearsExperience));
-  }
-
-  if (safe.minRating !== "all") {
-    params.set("minRating", safe.minRating);
-  }
-
-  if (safe.maxHourlyRate != null) {
-    params.set("maxHourlyRate", String(safe.maxHourlyRate));
-  }
-
-  const query = params.toString();
-  return query ? `/parent/search/results?${query}` : "/parent/search/results";
-}
+import {
+  validateParentSearchCriteria,
+  type ParentSearchMandatoryField
+} from "@/lib/sitter/parent-search-validation";
 
 function ParentSearchContent() {
   const router = useRouter();
@@ -60,6 +23,8 @@ function ParentSearchContent() {
   const { isLoading, signedIn, effectiveRole, user } = useAuth();
   const [draftFilters, setDraftFilters] = useState<ParentSearchFilters>(() => defaultParentSearchFilters());
   const [navigating, setNavigating] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [invalidFields, setInvalidFields] = useState<ParentSearchMandatoryField[]>([]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -74,8 +39,18 @@ function ParentSearchContent() {
 
   const handleSearch = useCallback(() => {
     const filters = normalizeParentSearchFilters(draftFilters);
+    const criteria = validateParentSearchCriteria(filters);
+    if (!criteria.ok) {
+      setSearchError(criteria.error);
+      setInvalidFields(criteria.missing);
+      setNavigating(false);
+      return;
+    }
+
+    setSearchError(null);
+    setInvalidFields([]);
     setNavigating(true);
-    router.push(buildResultsSearchParams(filters));
+    router.push(parentSearchResultsPath(filters));
   }, [draftFilters, router]);
 
   const authSettled = !isLoading;
@@ -112,9 +87,23 @@ function ParentSearchContent() {
             <div className="rounded-2xl bg-white p-1">
               <ParentSearchFiltersBar
                 filters={draftFilters}
-                onChange={(next) => setDraftFilters(normalizeParentSearchFilters(next))}
+                invalidFields={invalidFields}
+                onChange={(next) => {
+                  setDraftFilters(normalizeParentSearchFilters(next));
+                  if (searchError) setSearchError(null);
+                  if (invalidFields.length > 0) setInvalidFields([]);
+                }}
               />
             </div>
+
+            {searchError ? (
+              <p
+                className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-right text-xs text-rose-900"
+                role="alert"
+              >
+                {searchError}
+              </p>
+            ) : null}
 
             <div className="pb-4 pt-2">
               <button

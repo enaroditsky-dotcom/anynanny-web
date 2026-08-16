@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Calendar, ArrowRight, Star, User } from "lucide-react";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/lib/sitter/public-search-card";
 import { formatSitterLanguagesDisplay } from "@/lib/sitter/sitter-profile";
 import { broadcastRadarHref } from "@/lib/broadcast/parent-active-broadcast";
+import { requestedShiftFromSearchParams } from "@/lib/bookings/requested-shift";
 
 function formatReviewDate(iso: string): string {
   const t = Date.parse(iso);
@@ -54,8 +55,17 @@ export default function ParentSitterProfileView() {
           service_type: broadcastType
         })
       : null;
-  const backHref = backToBroadcast ?? "/parent/search/results";
+  const resultsQuery = searchParams.toString();
+  const backHref =
+    backToBroadcast ??
+    (resultsQuery && !fromBroadcast
+      ? `/parent/search/results?${resultsQuery}`
+      : "/parent/search/results");
   const backLabel = backToBroadcast ? "חזרה לשידור" : "חזרה לחיפוש";
+  const requestedShift = useMemo(
+    () => (fromBroadcast ? null : requestedShiftFromSearchParams(searchParams)),
+    [fromBroadcast, searchParams]
+  );
 
   useEffect(() => {
     if (isLoading) return;
@@ -271,7 +281,11 @@ export default function ParentSitterProfileView() {
             >
               <div className="text-right">
                 <p className="text-sm font-bold">תיאום משמרת</p>
-                <p className="text-xs text-slate-200">בחרו תאריך ושעות — הבקשה תישלח לאישור</p>
+                <p className="text-xs text-slate-200">
+                  {requestedShift
+                    ? "אשרו את המשמרת שחיפשתם — הבקשה תישלח לאישור"
+                    : "בחרו תאריך ושעות — הבקשה תישלח לאישור"}
+                </p>
               </div>
               <Calendar className="h-5 w-5 text-white" />
             </button>
@@ -283,6 +297,7 @@ export default function ParentSitterProfileView() {
         open={isBookingModalOpen}
         sitterId={sitterId}
         sitterName={displayName}
+        requestedShift={requestedShift}
         onClose={() => setIsBookingModalOpen(false)}
         onSuccess={() => {
           setIsBookingModalOpen(false);

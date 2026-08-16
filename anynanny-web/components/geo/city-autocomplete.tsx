@@ -24,6 +24,7 @@ type CityAutocompleteProps = {
   value: IsraelCity | "";
   onChange: (city: IsraelCity | "") => void;
   disabled?: boolean;
+  invalid?: boolean;
   inputClassName?: string;
 };
 
@@ -31,6 +32,7 @@ export function CityAutocomplete({
   value,
   onChange,
   disabled = false,
+  invalid = false,
   inputClassName = ""
 }: CityAutocompleteProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -88,6 +90,7 @@ export function CityAutocomplete({
         aria-controls="parent-search-city-list"
         placeholder="בחר עיר…"
         disabled={disabled}
+        aria-invalid={invalid}
         className={inputClassName}
         value={open ? query : value}
         onChange={(event) => {

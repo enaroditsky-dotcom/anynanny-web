@@ -12,8 +12,10 @@ import {
 import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import {
   isBookingDueForParentActiveShiftUi,
+  isFutureConfirmedScheduleBooking,
   isFutureScheduledBooking
 } from "@/lib/bookings/booking-shift-ui";
+import { shouldShowApprovedScheduleNotification } from "@/lib/bookings/dismissed-approved-bookings";
 
 export const dynamic = "force-dynamic";
 
@@ -125,25 +127,48 @@ export default async function ParentDashboardPage() {
       initialPreferences.parentSerial = publicId;
     }
 
-    const { data: bookingRows } = await supabase
-      .from("bookings")
-      .select("id, parent_id, sitter_id, status, booking_date, start_time, end_time, created_at, updated_at")
-      .eq("parent_id", parentId)
-      .in("status", [
-        "pending",
-        "approved",
-        "sitter_started",
-        "parent_started",
-        "sitter_ended"
-      ])
-      .order("updated_at", { ascending: false })
-      .limit(8);
+    const bookingSelectAttempts = [
+      "id, parent_id, sitter_id, status, booking_date, start_time, end_time, parent_notified_at, created_at, updated_at",
+      "id, parent_id, sitter_id, status, booking_date, start_time, end_time, created_at, updated_at"
+    ];
 
-    const rows = (bookingRows as BookingRow[] | null) ?? [];
-    // Prefer a due live shift; otherwise keep a future scheduled booking for confirmation UI.
+    let rows: BookingRow[] = [];
+    for (const select of bookingSelectAttempts) {
+      const { data: bookingRows, error } = await supabase
+        .from("bookings")
+        .select(select)
+        .eq("parent_id", parentId)
+        .in("status", [
+          "pending",
+          "approved",
+          "sitter_started",
+          "parent_started",
+          "sitter_ended"
+        ])
+        .order("updated_at", { ascending: false })
+        .limit(8);
+
+      if (error) {
+        if (
+          isPostgrestMissingColumnError(error.message, "parent_notified_at") ||
+          isPostgrestSchemaDriftError(error.message)
+        ) {
+          continue;
+        }
+        break;
+      }
+
+      rows = ((bookingRows as unknown) as BookingRow[] | null) ?? [];
+      break;
+    }
+
+    // Prefer a due live shift; otherwise a one-time unacked approval card, else a pending request.
     activeBooking =
       rows.find((b) => isBookingDueForParentActiveShiftUi(b)) ??
-      rows.find((b) => isFutureScheduledBooking(b)) ??
+      rows.find((b) => shouldShowApprovedScheduleNotification(b)) ??
+      rows.find(
+        (b) => isFutureScheduledBooking(b) && !isFutureConfirmedScheduleBooking(b)
+      ) ??
       null;
   }
 
