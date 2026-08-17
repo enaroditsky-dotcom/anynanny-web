@@ -3,7 +3,7 @@
 import { ArrowLeft, ChevronUp, X } from "lucide-react";
 
 const CONTROL_CLASS =
-  "inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-white/80 hover:text-slate-900";
+  "inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-slate-600 transition hover:bg-white/80 hover:text-slate-900";
 
 type BroadcastPanelControlsProps = {
   /** Active/paused radar only. Omit on the start page. */

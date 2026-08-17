@@ -24,7 +24,8 @@ import {
   SearchLimitToggleCard,
   searchLimitSliderProgress
 } from "@/components/parent/search-limit-toggle-card";
-import { Search, Calendar, Award, Star } from "lucide-react";
+import { Search, Calendar, Award, Star, Coins } from "lucide-react";
+import { RequiredFieldMark } from "@/components/ui/required-field-mark";
 
 const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] = [
   { value: 0, label: "ללא הגבלה" },
@@ -33,22 +34,43 @@ const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] 
   { value: 5, label: "5 שנים ומעלה" }
 ];
 
-const FIELD_LABEL = "mb-1.5 mr-0.5 block text-right text-[14px] font-bold text-[#001F3F]";
-const SECTION_HEADING = "text-[16px] font-bold leading-snug text-[#001F3F]";
+const FIELD_LABEL =
+  "mb-1.5 block min-h-[1.5rem] text-right text-sm font-medium leading-snug text-[#001F3F]";
+const SECTION_HEADING = "text-[1.25rem] font-semibold leading-snug text-[#001F3F]";
 const SECTION_SURFACE =
-  "rounded-[1.25rem] border border-[#001F3F]/10 bg-[#FBF8F1] p-4 shadow-[0_1px_6px_rgba(0,31,63,0.04)]";
+  "rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft";
 const FIELD_CONTROL =
-  "block min-h-[44px] w-full rounded-xl border border-slate-300/90 bg-white px-3 py-2.5 text-[15px] font-medium text-[#001F3F] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition placeholder:text-slate-400 focus:border-[#001F3F] focus:outline-none focus:ring-2 focus:ring-[#001F3F]/20 disabled:opacity-50 appearance-none";
+  "box-border block h-11 min-h-[44px] w-full max-w-full rounded-xl border border-slate-200/80 bg-white px-3 text-base font-medium leading-none text-[#001F3F] transition placeholder:text-slate-400 focus:border-[#001F3F] focus:outline-none focus:ring-2 focus:ring-[#001F3F]/15 disabled:opacity-50 appearance-none";
 const FIELD_CONTROL_INVALID =
-  "block min-h-[44px] w-full rounded-xl border border-rose-400 bg-white px-3 py-2.5 text-[15px] font-medium text-[#001F3F] ring-1 ring-rose-200 transition placeholder:text-slate-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:opacity-50 appearance-none";
+  "box-border block h-11 min-h-[44px] w-full max-w-full rounded-xl border border-rose-400 bg-white px-3 text-base font-medium leading-none text-[#001F3F] ring-1 ring-rose-200 transition placeholder:text-slate-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:opacity-50 appearance-none";
 const DATE_CONTROL =
-  "block min-h-[44px] h-11 w-full rounded-xl border border-slate-300/90 bg-white px-3 text-[15px] font-medium text-[#001F3F] outline-none transition focus:border-[#001F3F] focus:ring-2 focus:ring-[#001F3F]/20";
+  "parent-search-date box-border block h-11 min-h-[44px] w-full max-w-full rounded-xl border border-slate-200/80 bg-white px-2.5 text-base font-medium text-[#001F3F] outline-none transition focus:border-[#001F3F] focus:ring-2 focus:ring-[#001F3F]/15 disabled:opacity-50";
 const DATE_CONTROL_INVALID =
-  "block min-h-[44px] h-11 w-full rounded-xl border border-rose-400 bg-white px-3 text-[15px] font-medium text-[#001F3F] outline-none ring-1 ring-rose-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-300";
+  "parent-search-date box-border block h-11 min-h-[44px] w-full max-w-full rounded-xl border border-rose-400 bg-white px-2.5 text-base font-medium text-[#001F3F] outline-none ring-1 ring-rose-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-300 disabled:opacity-50";
 const TIME_SELECT =
-  "mt-0.5 block h-11 min-h-[42px] w-full rounded-lg border border-slate-300/90 bg-white px-2 py-1 text-[15px] font-medium text-[#001F3F] outline-none transition focus:border-[#001F3F] focus:ring-2 focus:ring-[#001F3F]/20";
+  "mt-1 box-border block h-11 min-h-[44px] w-full rounded-xl border border-slate-200/80 bg-white px-2 text-base font-medium text-[#001F3F] outline-none transition focus:border-[#001F3F] focus:ring-2 focus:ring-[#001F3F]/15 disabled:opacity-50";
 const TIME_SELECT_INVALID =
-  "mt-0.5 block h-11 min-h-[42px] w-full rounded-lg border border-rose-400 bg-white px-2 py-1 text-[15px] font-medium text-[#001F3F] outline-none ring-1 ring-rose-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-300";
+  "mt-1 box-border block h-11 min-h-[44px] w-full rounded-xl border border-rose-400 bg-white px-2 text-base font-medium text-[#001F3F] outline-none ring-1 ring-rose-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-300 disabled:opacity-50";
+const FIELD_ICON =
+  "pointer-events-none absolute right-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400";
+const PAIR_COL = "flex min-w-0 flex-col";
+
+function FieldLabel({
+  children,
+  required = false
+}: {
+  children: string;
+  required?: boolean;
+}) {
+  return (
+    <span className={FIELD_LABEL}>
+      <span className="inline-flex items-center gap-1.5">
+        {required ? <RequiredFieldMark /> : null}
+        <span className="leading-snug">{children}</span>
+      </span>
+    </span>
+  );
+}
 
 function TimeBlock({
   title,
@@ -56,6 +78,7 @@ function TimeBlock({
   minute,
   disabled,
   invalid,
+  required,
   onHourChange,
   onMinuteChange
 }: {
@@ -64,20 +87,21 @@ function TimeBlock({
   minute: ParentSearchMinute | "";
   disabled: boolean;
   invalid?: boolean;
+  required?: boolean;
   onHourChange: (hour: string) => void;
   onMinuteChange: (minute: ParentSearchMinute | "") => void;
 }) {
   const selectClass = invalid ? TIME_SELECT_INVALID : TIME_SELECT;
   return (
     <div
-      className={`rounded-xl border bg-white p-3 ${
-        invalid ? "border-rose-400" : "border-slate-300/70"
+      className={`flex h-full flex-col rounded-xl border p-3 ${
+        invalid ? "border-rose-300 bg-rose-50/40" : "border-slate-100 bg-[#FDFBF6]"
       }`}
     >
-      <p className="mb-1.5 text-right text-[15px] font-bold text-[#001F3F]">{title}</p>
+      <FieldLabel required={required}>{title}</FieldLabel>
       <div className="grid grid-cols-2 gap-1.5">
-        <label className="block text-right text-[13px] font-semibold text-slate-500">
-          שעה
+        <label className="block min-w-0 text-right text-[15px] font-medium leading-none text-slate-500">
+          <span className="mb-0 block min-h-[1rem]">שעה</span>
           <select
             className={selectClass}
             value={hour}
@@ -92,8 +116,8 @@ function TimeBlock({
           </select>
         </label>
 
-        <label className="block text-right text-[13px] font-semibold text-slate-500">
-          דק׳
+        <label className="block min-w-0 text-right text-[15px] font-medium leading-none text-slate-500">
+          <span className="mb-0 block min-h-[1rem]">דק׳</span>
           <select
             className={selectClass}
             value={minute}
@@ -147,19 +171,17 @@ export function ParentSearchFiltersBar({
   const endTimeInvalid = parentSearchFieldIsInvalid(invalidFields, "searchEndTime");
 
   return (
-    <section className="flex flex-col space-y-5 rounded-2xl bg-transparent" dir="rtl">
-      
-      {/* 📍 קוביית מיקום ומזהה: סימטריים זה לצד זה */}
-      <div className={`${SECTION_SURFACE} grid grid-cols-2 gap-3`}>
-        <div className="flex flex-col">
-          <label className={FIELD_LABEL}>מספר אישי (אופציונלי)</label>
-          <div className="relative flex items-center">
-            <Search className="absolute right-3 h-[18px] w-[18px] text-slate-400" />
+    <section className="flex flex-col gap-4" dir="rtl">
+      <div className={`${SECTION_SURFACE} grid grid-cols-2 items-start gap-3`}>
+        <div className={PAIR_COL}>
+          <FieldLabel>מספר ID</FieldLabel>
+          <div className="relative">
+            <Search className={FIELD_ICON} />
             <input
               type="search"
               inputMode="search"
               autoComplete="off"
-              placeholder="001 / AN-1001"
+              placeholder="AN-...."
               className={`${FIELD_CONTROL} pr-9`}
               value={filters.searchSitterSerial}
               onChange={(e) => patch({ searchSitterSerial: e.target.value })}
@@ -167,8 +189,8 @@ export function ParentSearchFiltersBar({
           </div>
         </div>
 
-        <div className="relative z-10 flex min-w-0 flex-col overflow-visible">
-          <label className={FIELD_LABEL}>עיר פעילות</label>
+        <div className={`relative z-10 overflow-visible ${PAIR_COL}`}>
+          <FieldLabel required>עיר פעילות</FieldLabel>
           <CityAutocomplete
             value={filters.selectedCity}
             onChange={(selectedCity) => patch({ selectedCity })}
@@ -178,17 +200,17 @@ export function ParentSearchFiltersBar({
         </div>
       </div>
 
-      {/* 📅 קוביית זמנים ותאריכים */}
       <div className={`${SECTION_SURFACE} space-y-3`}>
-        <div className="flex items-center gap-1.5 border-b border-[#001F3F]/10 pb-2.5">
-          <Calendar className="h-[18px] w-[18px] text-[#001F3F]" />
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+            <Calendar className="h-4 w-4" />
+          </span>
           <span className={SECTION_HEADING}>מתי העבודה נדרשת?</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          {/* בלוק התחלה */}
-          <div className="min-w-0 space-y-2">
-            <label className={FIELD_LABEL}>תאריך התחלה</label>
+        <div className="grid grid-cols-2 items-start gap-3">
+          <div className={`${PAIR_COL} gap-2`}>
+            <FieldLabel required>תאריך התחלה</FieldLabel>
             <input
               type="date"
               className={startDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
@@ -208,6 +230,7 @@ export function ParentSearchFiltersBar({
             />
             <TimeBlock
               title="שעת התחלה"
+              required
               hour={filters.searchStartHour ?? ""}
               minute={filters.searchStartMinute ?? ""}
               disabled={!filters.searchDate}
@@ -217,9 +240,8 @@ export function ParentSearchFiltersBar({
             />
           </div>
 
-          {/* בלוק סיום */}
-          <div className="min-w-0 space-y-2 border-r border-slate-200/40 pr-3">
-            <label className={FIELD_LABEL}>תאריך סיום</label>
+          <div className={`${PAIR_COL} gap-2`}>
+            <FieldLabel required>תאריך סיום</FieldLabel>
             <input
               type="date"
               className={endDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
@@ -231,6 +253,7 @@ export function ParentSearchFiltersBar({
             />
             <TimeBlock
               title="שעת סיום"
+              required
               hour={filters.searchEndHour ?? ""}
               minute={filters.searchEndMinute ?? ""}
               disabled={!filters.searchDate}
@@ -242,14 +265,13 @@ export function ParentSearchFiltersBar({
         </div>
       </div>
 
-      {/* 🌟 קוביית איכות: שנות ניסיון ודירוג זה לצד זה */}
-      <div className={`${SECTION_SURFACE} grid grid-cols-2 gap-3`}>
-        <div className="flex flex-col">
-          <label className={`${SECTION_HEADING} mb-2`}>שנות ניסיון</label>
-          <div className="relative flex items-center">
-            <Award className="absolute right-3 h-[18px] w-[18px] text-slate-400" />
+      <div className={`${SECTION_SURFACE} grid grid-cols-2 items-start gap-3`}>
+        <div className={PAIR_COL}>
+          <FieldLabel>שנות ניסיון</FieldLabel>
+          <div className="relative">
+            <Award className={FIELD_ICON} />
             <select
-              className={`${FIELD_CONTROL} pr-9 font-semibold`}
+              className={`${FIELD_CONTROL} pr-9`}
               value={String(filters.minYearsExperience)}
               onChange={(e) => patch({ minYearsExperience: Number(e.target.value) as ParentSearchMinExperience })}
             >
@@ -260,12 +282,12 @@ export function ParentSearchFiltersBar({
           </div>
         </div>
 
-        <div className="flex flex-col">
-          <label className={`${SECTION_HEADING} mb-2`}>דירוג מינימלי</label>
-          <div className="relative flex items-center">
-            <Star className="absolute right-3 h-[18px] w-[18px] text-slate-400" />
+        <div className={PAIR_COL}>
+          <FieldLabel>דירוג מינימלי</FieldLabel>
+          <div className="relative">
+            <Star className={FIELD_ICON} />
             <select
-              className={`${FIELD_CONTROL} pr-9 font-semibold`}
+              className={`${FIELD_CONTROL} pr-9`}
               value={filters.minRating ?? "all"}
               onChange={(e) => patch({ minRating: e.target.value as ParentSearchMinRating })}
             >
@@ -279,6 +301,7 @@ export function ParentSearchFiltersBar({
 
       <SearchLimitToggleCard
         title="מחיר שעתי מקסימלי"
+        icon={<Coins className="h-4 w-4" />}
         toggleLabel="הגבל מחיר"
         enabled={filters.maxHourlyRate != null}
         onEnabledChange={(enabled) =>

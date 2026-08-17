@@ -16,7 +16,7 @@ body {
   background: #f7f2ea;
   color: #165b73;
   font-family: var(--font-varela-round), "Varela Round", system-ui, "Segoe UI", Arial, sans-serif;
-  font-size: 1.0625rem;
+  font-size: 1.1875rem;
   line-height: 1.55;
   letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
@@ -105,4 +105,27 @@ button {
 
 .anynanny-search-slider:focus-visible {
   box-shadow: 0 0 0 3px rgba(0, 31, 63, 0.18);
+}
+
+/* Keep paired date inputs from overflowing native picker chrome on narrow mobile. */
+.parent-search-date {
+  min-width: 0;
+}
+
+.parent-search-date::-webkit-calendar-picker-indicator {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Six-spoke required marker — size only; do not inherit bold from labels. */
+.anynanny-required-mark {
+  display: inline-block;
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1;
+  color: #e11d48;
+  vertical-align: -0.05em;
 }

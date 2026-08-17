@@ -185,7 +185,7 @@ function HomeInner() {
                   <PathIcon path={path.id} />
                 </span>
 
-                <span className="block text-sm font-bold leading-tight sm:text-[15px]">
+                <span className="block text-sm font-bold leading-tight sm:text-[17px]">
                   כניסת {path.title}
                 </span>
               </button>
@@ -210,7 +210,7 @@ function HomeInner() {
             )}
           </button>
 
-          <p className="mt-0.5 text-center text-[10px] leading-snug text-slate-500 sm:text-[11px]">
+          <p className="mt-0.5 text-center text-[12px] leading-snug text-slate-500 sm:text-[13px]">
             עדיין אין לכם חשבון? צרו את החשבון המתאים לכם
           </p>
 
@@ -244,7 +244,7 @@ function HomeInner() {
                         {path.title}
                       </span>
 
-                      <span className="block text-[10px] font-medium leading-snug opacity-75 sm:text-xs">
+                      <span className="block text-[12px] font-medium leading-snug opacity-75 sm:text-xs">
                         הרשמה
                       </span>
                     </span>
@@ -255,7 +255,7 @@ function HomeInner() {
           </div>
         </section>
 
-        <p className="max-w-sm shrink-0 text-center text-[10px] leading-snug text-slate-500 sm:text-xs">
+        <p className="max-w-sm shrink-0 text-center text-[12px] leading-snug text-slate-500 sm:text-xs">
           הורים ובייביסיטריות — כל הקהילה במקום אחד.
         </p>
       </div>

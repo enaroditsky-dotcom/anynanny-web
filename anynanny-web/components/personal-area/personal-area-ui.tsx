@@ -30,7 +30,7 @@ export function PersonalAreaSection({
     <section className={`rounded-2xl border bg-white p-4 shadow-soft sm:p-5 ${accentClass}`} dir="rtl">
       <div className="mb-3 flex items-start justify-between gap-3 text-right">
         <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] font-bold text-[#001F3F]">{title}</h2>
+          <h2 className="text-[17px] font-bold text-[#001F3F]">{title}</h2>
           {description ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{description}</p> : null}
         </div>
         {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
@@ -54,7 +54,7 @@ export function PersonalChangeLink({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="text-[12px] font-semibold text-[#0B6BCB] underline decoration-[#0B6BCB]/35 underline-offset-2 transition hover:text-[#08529a] hover:decoration-[#08529a] disabled:opacity-50"
+      className="text-[14px] font-semibold text-[#0B6BCB] underline decoration-[#0B6BCB]/35 underline-offset-2 transition hover:text-[#08529a] hover:decoration-[#08529a] disabled:opacity-50"
     >
       {label}
     </button>
@@ -104,9 +104,9 @@ export function PersonalStaticRow({
   return (
     <div className="flex items-start justify-between gap-3 border-b border-[#001F3F]/8 py-3 last:border-b-0">
       <div className="min-w-0 flex-1 text-right">
-        <p className="text-[11px] font-semibold text-slate-500">{label}</p>
+        <p className="text-[13px] font-semibold text-slate-500">{label}</p>
         <p
-          className={`mt-1 text-[14px] leading-snug ${isEmpty ? "italic text-slate-400" : "font-medium text-[#001F3F]"}`}
+          className={`mt-1 text-[16px] leading-snug ${isEmpty ? "italic text-slate-400" : "font-medium text-[#001F3F]"}`}
           dir={dir}
         >
           {isEmpty ? emptyLabel : trimmed}
@@ -128,7 +128,7 @@ export function PersonalField({
 }) {
   return (
     <label className={`block text-right ${className}`}>
-      <span className="mb-1 block text-[11px] font-semibold text-slate-600">{label}</span>
+      <span className="mb-1 block text-[13px] font-semibold text-slate-600">{label}</span>
       {children}
     </label>
   );

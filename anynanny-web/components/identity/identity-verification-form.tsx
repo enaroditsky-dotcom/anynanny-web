@@ -135,13 +135,13 @@ export function IdentityVerificationForm({
           />
         </PersonalField>
 
-        <ul className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-[11px] leading-relaxed text-slate-600">
+        <ul className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-[13px] leading-relaxed text-slate-600">
           <li>הכרטיס חייב להיות על שם המשתמש שמבצע את האימות.</li>
           <li>פרטי הכרטיס יטופלו באופן מאובטח על ידי ספק התשלומים (HYP).</li>
           <li>AnyNanny אינה שומרת מספר כרטיס מלא או CVV.</li>
         </ul>
 
-        <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
+        <p className="flex items-start gap-1.5 text-[13px] text-slate-500">
           <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" aria-hidden />
           סימון &quot;משתמש מאומת&quot; יופיע רק אחרי בדיקת idStatus בשרת מול HYP (inquireTransactions).
         </p>

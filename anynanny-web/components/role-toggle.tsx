@@ -95,7 +95,7 @@ export function RoleToggle() {
       <button
         type="button"
         onClick={goParent}
-        className={`relative z-10 flex min-w-[4.25rem] flex-1 items-center justify-center rounded-full px-2 py-1 text-[11px] font-bold transition-colors duration-500 ${
+        className={`relative z-10 flex min-w-[4.25rem] flex-1 items-center justify-center rounded-full px-2 py-1 text-[13px] font-bold transition-colors duration-500 ${
           isParent ? "text-[#001F3F]" : "text-slate-500"
         }`}
       >
@@ -104,7 +104,7 @@ export function RoleToggle() {
       <button
         type="button"
         onClick={goSitter}
-        className={`relative z-10 flex min-w-[4.25rem] flex-1 items-center justify-center rounded-full px-2 py-1 text-[11px] font-bold transition-colors duration-500 ${
+        className={`relative z-10 flex min-w-[4.25rem] flex-1 items-center justify-center rounded-full px-2 py-1 text-[13px] font-bold transition-colors duration-500 ${
           !isParent ? "text-emerald-800" : "text-slate-500"
         }`}
       >

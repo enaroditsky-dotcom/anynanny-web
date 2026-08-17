@@ -16,6 +16,7 @@ import { saveSignupNamesToDevice } from '@/lib/auth/signup-names';
 import { createLegalAcceptanceRecord } from '@/lib/legal/acceptance';
 import { isProfileRole } from '@/lib/supabase/profiles';
 import { ensureSitterProfileRowForUser } from '@/lib/sitter/sitter-profile';
+import { RequiredFieldMark } from '@/components/ui/required-field-mark';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -162,7 +163,7 @@ export default function SignUpPage() {
         {!role ? (
           <div>
             <p className="mb-2 text-right text-sm font-semibold text-stone-700">
-              תפקיד <span className="text-red-500">*</span>
+              תפקיד <RequiredFieldMark />
             </p>
             <div className="grid grid-cols-2 gap-3">
               <button

@@ -108,7 +108,7 @@ export function PaymentFactory({
             <p className="text-sm font-semibold tabular-nums leading-snug text-white/95">
               {timerText}
             </p>
-            <div className="space-y-0.5 text-[11px] font-medium leading-relaxed text-white/75 sm:text-xs">
+            <div className="space-y-0.5 text-[13px] font-medium leading-relaxed text-white/75 sm:text-xs">
               <p>בסיס ₪{sitterBaseNis.toFixed(2)}</p>
             </div>
           </div>
@@ -134,7 +134,7 @@ export function PaymentFactory({
 
             {savedMethods.length > 0 ? (
               <div className="grid grid-cols-1 gap-2.5">
-                <p className="text-right text-[11px] font-medium text-white/65">כרטיסים שמורים</p>
+                <p className="text-right text-[13px] font-medium text-white/65">כרטיסים שמורים</p>
                 {savedMethods.map((method) => {
                   const selected = selectedSavedMethodId === method.id;
                   return (
@@ -199,8 +199,8 @@ export function PaymentFactory({
                       />
                     </span>
                     <span className="min-w-0 flex-1 space-y-0.5 text-right">
-                      <span className="block text-[15px] leading-tight">{label}</span>
-                      <span className="block text-[11px] font-medium leading-snug text-white/60">
+                      <span className="block text-[17px] leading-tight">{label}</span>
+                      <span className="block text-[13px] font-medium leading-snug text-white/60">
                         {hint}
                       </span>
                     </span>

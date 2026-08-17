@@ -144,11 +144,11 @@ export default function SitterOnboardingForm() {
       <div className="space-y-4">
         {namesReady ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-right">
-            <p className="text-[11px] font-semibold text-slate-500">שלום</p>
+            <p className="text-[13px] font-semibold text-slate-500">שלום</p>
             <p className="mt-0.5 text-sm font-bold text-[#001F3F]">
               {formData.firstName} {formData.lastName}
             </p>
-            <p className="mt-1 text-[11px] text-slate-500">השם נשמר מההרשמה ואין צורך להקליד שוב</p>
+            <p className="mt-1 text-[13px] text-slate-500">השם נשמר מההרשמה ואין צורך להקליד שוב</p>
           </div>
         ) : (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">

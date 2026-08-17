@@ -21,10 +21,10 @@ type SitterDashboardStats = {
 type LoadState = "idle" | "loading" | "ready" | "error";
 
 const idBadgeClass =
-  "inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100/95 px-2.5 py-1 text-[11px] font-semibold text-slate-800 ring-1 ring-slate-200/90 sm:text-xs";
+  "inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100/95 px-2.5 py-1 text-[13px] font-semibold text-slate-800 ring-1 ring-slate-200/90 sm:text-xs";
 
 const ratingBadgeClass =
-  "inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50/95 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-amber-950 ring-1 ring-amber-200/80 sm:text-xs";
+  "inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50/95 px-2.5 py-1 text-[13px] font-semibold tabular-nums text-amber-950 ring-1 ring-amber-200/80 sm:text-xs";
 
 function parseGetCurrentUserRatingResponse(data: unknown): SitterDashboardStats {
   const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;

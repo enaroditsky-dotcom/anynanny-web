@@ -897,7 +897,7 @@ export default function ParentHistoryPage() {
       </div>
 
       <div className="mx-auto max-w-sm space-y-2 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
-        <div className="flex items-center gap-1 pr-1 text-[10px] font-bold text-slate-400">
+        <div className="flex items-center gap-1 pr-1 text-[12px] font-bold text-slate-400">
           <Calendar className="h-3 w-3" />
 
           <span>
@@ -908,7 +908,7 @@ export default function ParentHistoryPage() {
         <div>
           <label
             htmlFor="history-date-filter"
-            className="mb-0.5 block pr-1 text-[9px] text-slate-400"
+            className="mb-0.5 block pr-1 text-[11px] text-slate-400"
           >
             בחירת טווח
           </label>
@@ -925,7 +925,7 @@ export default function ParentHistoryPage() {
                     .value as DateFilterMode
                 )
               }
-              className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-8 pr-3 text-[11px] font-semibold text-slate-700"
+              className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-8 pr-3 text-[13px] font-semibold text-slate-700"
             >
               <option value="last_week">
                 שבוע אחרון
@@ -960,7 +960,7 @@ export default function ParentHistoryPage() {
         "custom" ? (
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-0.5 block pr-1 text-[9px] text-slate-400">
+              <label className="mb-0.5 block pr-1 text-[11px] text-slate-400">
                 מתאריך
               </label>
 
@@ -977,7 +977,7 @@ export default function ParentHistoryPage() {
                       .value
                   )
                 }
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-2 py-1.5 text-center text-[11px] text-slate-700"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-2 py-1.5 text-center text-[13px] text-slate-700"
                 style={{
                   direction:
                     "ltr"
@@ -986,7 +986,7 @@ export default function ParentHistoryPage() {
             </div>
 
             <div>
-              <label className="mb-0.5 block pr-1 text-[9px] text-slate-400">
+              <label className="mb-0.5 block pr-1 text-[11px] text-slate-400">
                 עד תאריך
               </label>
 
@@ -1003,7 +1003,7 @@ export default function ParentHistoryPage() {
                       .value
                   )
                 }
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-2 py-1.5 text-center text-[11px] text-slate-700"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-2 py-1.5 text-center text-[13px] text-slate-700"
                 style={{
                   direction:
                     "ltr"
@@ -1012,7 +1012,7 @@ export default function ParentHistoryPage() {
             </div>
           </div>
         ) : (
-          <p className="pr-1 text-[10px] tabular-nums text-slate-500">
+          <p className="pr-1 text-[12px] tabular-nums text-slate-500">
             מציג משמרות מ-
             {activeRange.start
               .split("-")
@@ -1033,7 +1033,7 @@ export default function ParentHistoryPage() {
             <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
 
-              <p className="text-[11px]">
+              <p className="text-[13px]">
                 טוען נתונים...
               </p>
             </div>
@@ -1053,14 +1053,14 @@ export default function ParentHistoryPage() {
                   className="rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2.5">
-                    <div className="text-[13px] font-extrabold tabular-nums text-slate-800">
+                    <div className="text-[15px] font-extrabold tabular-nums text-slate-800">
                       {
                         shift.date
                       }
                     </div>
 
                     <span
-                      className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+                      className={`rounded-full px-2 py-1 text-[12px] font-bold ${
                         shift.status ===
                         "שולם"
                           ? "bg-emerald-50 text-emerald-700"
@@ -1078,20 +1078,20 @@ export default function ParentHistoryPage() {
 
                   <div className="grid grid-cols-3 gap-2">
                     <div className="min-w-0 rounded-xl bg-violet-50/70 p-2.5">
-                      <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-violet-500">
+                      <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-violet-500">
                         <UserRound className="h-3.5 w-3.5" />
 
                         שמרטפית
                       </div>
 
-                      <div className="truncate text-[12px] font-extrabold text-slate-800">
+                      <div className="truncate text-[14px] font-extrabold text-slate-800">
                         {
                           shift.nanny_name
                         }
                       </div>
 
                       <div
-                        className="mt-0.5 truncate font-mono text-[10px] font-semibold text-violet-600"
+                        className="mt-0.5 truncate font-mono text-[12px] font-semibold text-violet-600"
                         dir="ltr"
                       >
                         {
@@ -1101,14 +1101,14 @@ export default function ParentHistoryPage() {
                     </div>
 
                     <div className="min-w-0 rounded-xl bg-blue-50/70 p-2.5">
-                      <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-blue-500">
+                      <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-blue-500">
                         <Clock3 className="h-3.5 w-3.5" />
 
                         שעות
                       </div>
 
                       <div
-                        className="whitespace-nowrap text-[12px] font-extrabold tabular-nums text-slate-800"
+                        className="whitespace-nowrap text-[14px] font-extrabold tabular-nums text-slate-800"
                         dir="ltr"
                       >
                         {
@@ -1118,13 +1118,13 @@ export default function ParentHistoryPage() {
                     </div>
 
                     <div className="min-w-0 rounded-xl bg-emerald-50/70 p-2.5">
-                      <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                      <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-emerald-600">
                         <WalletCards className="h-3.5 w-3.5" />
 
                         סה״כ
                       </div>
 
-                      <div className="whitespace-nowrap text-[13px] font-extrabold tabular-nums text-emerald-700">
+                      <div className="whitespace-nowrap text-[15px] font-extrabold tabular-nums text-emerald-700">
                         {formatNis(
                           shift.total_cost
                         )}

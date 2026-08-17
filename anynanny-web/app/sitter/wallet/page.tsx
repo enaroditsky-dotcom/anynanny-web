@@ -121,7 +121,7 @@ export default function SitterWalletPage() {
 
         <header className="px-1 text-right">
           <h1 className="text-lg font-extrabold text-navy-header">הארנק שלי</h1>
-          <p className="mt-0.5 text-[11px] text-slate-500">עיבוד מאובטח דרך שער התשלומים HYP</p>
+          <p className="mt-0.5 text-[13px] text-slate-500">עיבוד מאובטח דרך שער התשלומים HYP</p>
         </header>
 
         <section className="relative overflow-hidden rounded-3xl bg-[#0B3C5D] p-6 text-white shadow-soft">
@@ -131,7 +131,7 @@ export default function SitterWalletPage() {
               ₪{isPageLoading ? "0.00" : balance.toFixed(2)}
             </span>
           </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-white/60">
+          <p className="mt-3 text-[13px] leading-relaxed text-white/60">
             הרווחים מתווספים אוטומטית לאחר אישור תשלום מאובטח ב־HYP. יתרה זמינה כוללת רק עסקאות שאושרו.
           </p>
         </section>
@@ -142,7 +142,7 @@ export default function SitterWalletPage() {
 
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
           <h2 className="text-sm font-bold text-navy-header">הכנסות ותשלומים</h2>
-          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
             הכספים מעובדים באופן מאובטח דרך שער התשלומים המורשה HYP.
           </p>
 
@@ -155,7 +155,7 @@ export default function SitterWalletPage() {
             ) : transactions.length === 0 ? (
               <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 text-center">
                 <p className="text-xs font-bold text-navy-header">אין פעולות להצגה עדיין</p>
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p className="mt-1 text-[13px] text-slate-500">
                   הרווחים ממשמרות שהושלמו ומשיכות כספים יופיעו כאן.
                 </p>
               </div>
@@ -181,7 +181,7 @@ export default function SitterWalletPage() {
                     </div>
                     <div className="min-w-0 text-right">
                       <p className="truncate text-xs font-bold text-slate-800">{tx.description}</p>
-                      <p className="text-[10px] tabular-nums text-slate-400">
+                      <p className="text-[12px] tabular-nums text-slate-400">
                         {new Date(tx.created_at).toLocaleDateString("he-IL")}
                         {tx.status === "pending" ? " · ממתין לאישור תשלום" : ""}
                       </p>

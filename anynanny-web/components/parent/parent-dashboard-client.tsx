@@ -1924,11 +1924,11 @@ export function ParentDashboardClient({
                 <h1 className="text-lg font-bold text-slate-900">שלום, {firstName}!</h1>
               </div>
               <span
-                className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[11px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200"
+                className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[13px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200"
                 dir="ltr"
               >
                 <span>{parentSerial}</span>
-                <span className="text-[9px] text-purple-500 font-normal">ID</span>
+                <span className="text-[11px] text-purple-500 font-normal">ID</span>
               </span>
             </div>
 
@@ -1938,7 +1938,7 @@ export function ParentDashboardClient({
                 <span>
                   {parentRatingSummary.average.toFixed(1)}
                 </span>
-                <span className="text-slate-400 text-[11px]">
+                <span className="text-slate-400 text-[13px]">
                   ({parentRatingSummary.count}{" "}
                   {parentRatingSummary.count === 1
                     ? "חוות דעת"
@@ -1990,14 +1990,14 @@ export function ParentDashboardClient({
                     <Calendar className="h-5 w-5 shrink-0 text-emerald-600" />
                     {pendingSitterApprovalCount > 0 ? (
                       <span
-                        className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-1.5 translate-x-1.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+                        className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-1.5 translate-x-1.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white"
                         aria-hidden
                       >
                         {pendingSitterApprovalCount > 9 ? "9+" : pendingSitterApprovalCount}
                       </span>
                     ) : null}
                   </span>
-                  <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                  <span className="text-[13px] font-semibold leading-snug text-slate-800 sm:text-xs">
                     יומן תיאום המשמרות
                   </span>
                 </Link>
@@ -2006,7 +2006,7 @@ export function ParentDashboardClient({
                   className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
                 >
                   <Wallet className="h-5 w-5 shrink-0 text-emerald-600" />
-                  <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                  <span className="text-[13px] font-semibold leading-snug text-slate-800 sm:text-xs">
                     הארנק שלי
                   </span>
                 </Link>
@@ -2015,7 +2015,7 @@ export function ParentDashboardClient({
                   className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
                 >
                   <History className="h-5 w-5 shrink-0 text-[#001F3F]" />
-                  <span className="text-[11px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                  <span className="text-[13px] font-semibold leading-snug text-slate-800 sm:text-xs">
                     היסטוריית משמרות
                   </span>
                 </Link>
@@ -2104,7 +2104,7 @@ export function ParentDashboardClient({
                     timerText={liveTimerText}
                     amountLabel={`₪${liveEarned}`}
                   />
-                  <p className="text-[11px] font-medium text-emerald-800/80">
+                  <p className="text-[13px] font-medium text-emerald-800/80">
                     סכום שנצבר: ₪{liveEarned} · ₪{currentHourlyRate ?? "--"}/שעה
                   </p>
                 </div>
@@ -2188,7 +2188,7 @@ export function ParentDashboardClient({
                   </div>
                   <p className="text-sm font-bold text-amber-900">בקשה נשלחה וממתינה לאישור</p>
                   {bookingStatus ? (
-                    <p className="text-[11px] text-amber-800/70">סטטוס: {bookingStatus}</p>
+                    <p className="text-[13px] text-amber-800/70">סטטוס: {bookingStatus}</p>
                   ) : null}
                 </div>
               ) : null}

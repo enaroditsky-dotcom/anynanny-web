@@ -98,7 +98,7 @@ export function NotificationSettingsSection() {
       </SettingsRowGroup>
 
       {hint ? (
-        <p className="px-1 text-right text-[11px] leading-relaxed text-amber-700">{hint}</p>
+        <p className="px-1 text-right text-[13px] leading-relaxed text-amber-700">{hint}</p>
       ) : null}
     </section>
   );

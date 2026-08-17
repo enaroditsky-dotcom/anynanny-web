@@ -47,7 +47,7 @@ function ShiftCard({
       <div className="flex flex-row-reverse items-start justify-between gap-2">
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${
               isSitterEnded
                 ? "bg-rose-100 text-rose-900"
                 : isSitterStarted

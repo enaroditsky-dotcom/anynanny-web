@@ -181,7 +181,7 @@ export function SitterBankDetailsModal({
               </div>
               <div>
                 <h2 className="text-sm font-black text-slate-900">פרטי חשבון בנק</h2>
-                <p className="text-[11px] text-slate-500">לצורך משיכת רווחים לארנק</p>
+                <p className="text-[13px] text-slate-500">לצורך משיכת רווחים לארנק</p>
               </div>
             </div>
             <button
@@ -209,7 +209,7 @@ export function SitterBankDetailsModal({
               }}
             >
               <label className="block space-y-1.5 text-right">
-                <span className="text-[11px] font-bold text-slate-700">מספר בנק</span>
+                <span className="text-[13px] font-bold text-slate-700">מספר בנק</span>
                 <select
                   value={form.bank_code}
                   onChange={(e) => handleBankCodeChange(e.target.value)}
@@ -227,7 +227,7 @@ export function SitterBankDetailsModal({
               </label>
 
               <label className="block space-y-1.5 text-right">
-                <span className="text-[11px] font-bold text-slate-700">שם הבנק</span>
+                <span className="text-[13px] font-bold text-slate-700">שם הבנק</span>
                 <select
                   value={form.bank_name}
                   onChange={(e) => handleBankNameChange(e.target.value)}
@@ -244,7 +244,7 @@ export function SitterBankDetailsModal({
               </label>
 
               <label className="block space-y-1.5 text-right">
-                <span className="text-[11px] font-bold text-slate-700">סניף</span>
+                <span className="text-[13px] font-bold text-slate-700">סניף</span>
                 <input
                   type="text"
                   value={form.bank_branch}
@@ -257,7 +257,7 @@ export function SitterBankDetailsModal({
               </label>
 
               <label className="block space-y-1.5 text-right">
-                <span className="text-[11px] font-bold text-slate-700">מספר חשבון</span>
+                <span className="text-[13px] font-bold text-slate-700">מספר חשבון</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -274,13 +274,13 @@ export function SitterBankDetailsModal({
               </label>
 
               {error ? (
-                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-800">
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-medium text-rose-800">
                   {error}
                 </p>
               ) : null}
 
               {saveSucceeded ? (
-                <p className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-800">
+                <p className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] font-bold text-emerald-800">
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                   {SUCCESS_TOAST}
                 </p>
@@ -299,7 +299,7 @@ export function SitterBankDetailsModal({
                   type="button"
                   disabled={locked}
                   onClick={onClose}
-                  className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 text-[11px] font-bold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
+                  className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 text-[13px] font-bold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
                 >
                   סגור
                 </button>

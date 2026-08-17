@@ -175,11 +175,11 @@ export function SitterDashboardHeader({
           </div>
           {showIdPill && displayIdValue ? (
             <span
-              className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-[11px] font-bold text-purple-800"
+              className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-[13px] font-bold text-purple-800"
               dir="ltr"
             >
               <span>{displayIdValue}</span>
-              <span className="text-[9px] font-normal text-purple-500">ID</span>
+              <span className="text-[11px] font-normal text-purple-500">ID</span>
             </span>
           ) : showPublicId && !publicIdLoaded ? (
             <span className="inline-block h-5 w-16 animate-pulse rounded-md bg-purple-100/80" aria-hidden />
@@ -192,7 +192,7 @@ export function SitterDashboardHeader({
             <div className="inline-flex items-center gap-1 rounded-md border border-amber-200/60 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
               <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
               <span>{numericRating}</span>
-              <span className="text-[11px] text-slate-400">({reviewsCount} חוות דעת)</span>
+              <span className="text-[13px] text-slate-400">({reviewsCount} חוות דעת)</span>
             </div>
           )}
         </div>

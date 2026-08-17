@@ -160,7 +160,7 @@ function PreferredAgesEditor({
         </PersonalField>
       </div>
 
-      <p className="text-[12px] text-slate-500">
+      <p className="text-[14px] text-slate-500">
         יוצג בפרופיל כ־<span className="font-semibold text-[#001F3F]" dir="ltr">{current}</span>
       </p>
     </div>
@@ -552,7 +552,7 @@ export function SitterPersonalArea({ userId }: Props) {
         accent="sky"
         action={<PersonalChangeLink onClick={() => openEdit("visibility")} />}
       >
-        <p className="text-[14px] font-medium text-[#001F3F]">{visibilityLabel}</p>
+        <p className="text-[16px] font-medium text-[#001F3F]">{visibilityLabel}</p>
       </PersonalAreaSection>
 
       <PersonalAreaSection title="רקע מקצועי" accent="emerald">
@@ -603,7 +603,7 @@ export function SitterPersonalArea({ userId }: Props) {
         accent="emerald"
         action={<PersonalChangeLink onClick={() => openEdit("skills")} />}
       >
-        <p className={`text-[14px] ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
+        <p className={`text-[16px] ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
           {skillsLabel || "לא הוגדרו כישורים נוספים"}
         </p>
       </PersonalAreaSection>
@@ -615,7 +615,7 @@ export function SitterPersonalArea({ userId }: Props) {
         action={<PersonalChangeLink onClick={() => openEdit("bio")} />}
       >
         <p
-          className={`whitespace-pre-wrap text-[14px] leading-relaxed ${
+          className={`whitespace-pre-wrap text-[16px] leading-relaxed ${
             form.bio.trim() ? "font-medium text-[#001F3F]" : "italic text-slate-400"
           }`}
         >
@@ -629,7 +629,7 @@ export function SitterPersonalArea({ userId }: Props) {
         action={<PersonalChangeLink onClick={() => openEdit("working_cities")} />}
       >
         <p
-          className={`text-[14px] leading-relaxed ${
+          className={`text-[16px] leading-relaxed ${
             form.working_cities.length ? "font-medium text-[#001F3F]" : "italic text-slate-400"
           }`}
         >
@@ -657,7 +657,7 @@ export function SitterPersonalArea({ userId }: Props) {
         accent="gold"
         action={<PersonalChangeLink onClick={() => openEdit("legal")} />}
       >
-        <p className="text-[14px] font-medium text-[#001F3F]">
+        <p className="text-[16px] font-medium text-[#001F3F]">
           {form.legal_no_criminal_declaration
             ? "הצהרת היעדר עבר פלילי רלוונטי אושרה"
             : "הצהרה טרם אושרה"}
@@ -701,7 +701,7 @@ export function SitterPersonalArea({ userId }: Props) {
                 disabled={uploadingAvatar}
               />
             </label>
-            <p className="text-center text-[11px] text-slate-500">
+            <p className="text-center text-[13px] text-slate-500">
               פורמטים מותרים: JPG, PNG, WEBP (עד 5MB)
             </p>
           </div>
@@ -784,7 +784,7 @@ export function SitterPersonalArea({ userId }: Props) {
                 );
               })}
             </div>
-            <p className="mt-2 text-[11px] text-slate-500">ניתן לבחור שפה אחת או יותר</p>
+            <p className="mt-2 text-[13px] text-slate-500">ניתן לבחור שפה אחת או יותר</p>
           </PersonalField>
         ) : null}
 
@@ -878,7 +878,7 @@ export function SitterPersonalArea({ userId }: Props) {
               }
               autoFocus
             />
-            <p className="mt-1 text-[11px] text-slate-400">
+            <p className="mt-1 text-[13px] text-slate-400">
               {draft.bio.length}/500
             </p>
           </PersonalField>

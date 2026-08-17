@@ -66,7 +66,7 @@ export function DashboardStatusCard({
             onClick={onToggleCollapse}
             aria-expanded={!collapsed}
             aria-label={collapsed ? "הרחב סטטוס משמרת" : "צמצם סטטוס משמרת"}
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-white/80 hover:text-slate-900"
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-slate-600 transition hover:bg-white/80 hover:text-slate-900"
           >
             <span>{collapsed ? "הרחב" : "צמצם"}</span>
             {collapsed ? (

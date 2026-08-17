@@ -70,7 +70,7 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
             <button
               type="button"
               onClick={() => setFormOpen(true)}
-              className="text-[12px] font-semibold text-[#0B6BCB] underline decoration-[#0B6BCB]/35 underline-offset-2 transition hover:text-[#08529a]"
+              className="text-[14px] font-semibold text-[#0B6BCB] underline decoration-[#0B6BCB]/35 underline-offset-2 transition hover:text-[#08529a]"
             >
               {cta}
             </button>
@@ -89,7 +89,7 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
             <div className="flex flex-wrap items-center justify-end gap-2">
               {verified ? <VerifiedUserBadge /> : null}
               <p
-                className={`text-[14px] font-semibold ${
+                className={`text-[16px] font-semibold ${
                   record.status === "failed"
                     ? "text-rose-700"
                     : record.status === "pending"

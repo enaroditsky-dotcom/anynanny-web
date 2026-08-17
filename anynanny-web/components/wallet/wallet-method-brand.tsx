@@ -137,16 +137,16 @@ export function BitWalletCard({ status, ready, compact, className = "" }: Visual
           <Image src="/wallet/bit-logo.png" alt="Bit" fill className="object-cover" sizes="48px" />
         </div>
         <div className="min-w-0 flex-1 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/75">bit</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/75">bit</p>
           <p className="text-sm font-extrabold tracking-tight">Bit</p>
           {status ? (
-            <p className="mt-0.5 truncate text-[10px] font-medium text-white/85" dir="ltr">
+            <p className="mt-0.5 truncate text-[12px] font-medium text-white/85" dir="ltr">
               {status}
             </p>
           ) : null}
         </div>
         {ready ? (
-          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-bold backdrop-blur-sm">
+          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold backdrop-blur-sm">
             שמור
           </span>
         ) : null}
@@ -185,18 +185,18 @@ export function PayboxWalletCard({ status, ready, compact, className = "" }: Vis
           />
         </div>
         <div className="min-w-0 flex-1 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-white/75">
             PayBox
           </p>
           <p className="text-sm font-extrabold tracking-tight">PayBox</p>
           {status ? (
-            <p className="mt-0.5 truncate text-[10px] font-medium text-white/85" dir="ltr">
+            <p className="mt-0.5 truncate text-[12px] font-medium text-white/85" dir="ltr">
               {status}
             </p>
           ) : null}
         </div>
         {ready ? (
-          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-bold backdrop-blur-sm">
+          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold backdrop-blur-sm">
             שמור
           </span>
         ) : null}
@@ -236,18 +236,18 @@ function ApplePayWalletCard({
           />
         </div>
         <div className="min-w-0 flex-1 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-white/75">
             Apple Pay
           </p>
           <p className="text-sm font-extrabold tracking-tight">Apple Pay</p>
           {status ? (
-            <p className="mt-0.5 truncate text-[10px] font-medium text-white/85" dir="ltr">
+            <p className="mt-0.5 truncate text-[12px] font-medium text-white/85" dir="ltr">
               {status}
             </p>
           ) : null}
         </div>
         {ready ? (
-          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-bold backdrop-blur-sm">
+          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold backdrop-blur-sm">
             שמור
           </span>
         ) : null}
@@ -287,18 +287,18 @@ function GooglePayWalletCard({
           />
         </div>
         <div className="min-w-0 flex-1 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-white/75">
             Google Pay
           </p>
           <p className="text-sm font-extrabold tracking-tight">Google Pay</p>
           {status ? (
-            <p className="mt-0.5 truncate text-[10px] font-medium text-white/85" dir="ltr">
+            <p className="mt-0.5 truncate text-[12px] font-medium text-white/85" dir="ltr">
               {status}
             </p>
           ) : null}
         </div>
         {ready ? (
-          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-bold backdrop-blur-sm">
+          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold backdrop-blur-sm">
             שמור
           </span>
         ) : null}
@@ -358,19 +358,19 @@ export function AnyNannyCreditCard({
         </div>
 
         <div className="min-w-0 flex-1 text-right">
-          <p className="text-[10px] font-bold tracking-wide text-[#FFB4B4]">AnyNanny</p>
+          <p className="text-[12px] font-bold tracking-wide text-[#FFB4B4]">AnyNanny</p>
           <p className="text-sm font-extrabold tracking-tight">{title}</p>
           {status ? (
-            <p className="mt-0.5 truncate font-mono text-[10px] font-semibold tracking-wider text-white/85" dir="ltr">
+            <p className="mt-0.5 truncate font-mono text-[12px] font-semibold tracking-wider text-white/85" dir="ltr">
               {status}
             </p>
           ) : (
-            <p className="mt-0.5 text-[10px] font-medium text-white/70">מאובטח · HYP</p>
+            <p className="mt-0.5 text-[12px] font-medium text-white/70">מאובטח · HYP</p>
           )}
         </div>
 
         {ready ? (
-          <span className="shrink-0 rounded-full bg-emerald-400/25 px-2 py-0.5 text-[9px] font-bold text-emerald-100 ring-1 ring-emerald-300/30">
+          <span className="shrink-0 rounded-full bg-emerald-400/25 px-2 py-0.5 text-[11px] font-bold text-emerald-100 ring-1 ring-emerald-300/30">
             שמור
           </span>
         ) : null}
@@ -472,7 +472,7 @@ export function WalletMethodCardRow({
         type="button"
         disabled={updateDisabled}
         onClick={onUpdate}
-        className="absolute bottom-2 left-2 z-[1] rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur-md ring-1 ring-white/25 transition hover:bg-black/40 disabled:opacity-50"
+        className="absolute bottom-2 left-2 z-[1] rounded-full bg-black/25 px-2.5 py-1 text-[12px] font-bold text-white backdrop-blur-md ring-1 ring-white/25 transition hover:bg-black/40 disabled:opacity-50"
       >
         {updating ? "…" : updateLabel}
       </button>

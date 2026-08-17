@@ -140,7 +140,7 @@ export function ExpertRegistrationFields({ value, onChange, compact = false }: P
           <label className="text-xs font-bold text-slate-600" htmlFor="expert-bio">
             תיאור מקצועי (ביו)
           </label>
-          <span className="text-[10px] text-slate-400">
+          <span className="text-[12px] text-slate-400">
             {value.bio.length}/{EXPERT_BIO_MAX_LENGTH}
           </span>
         </div>

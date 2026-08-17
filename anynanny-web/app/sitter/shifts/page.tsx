@@ -1441,14 +1441,14 @@ export default function SitterShiftsPage() {
                       className="rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm"
                     >
                       <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2.5">
-                        <div className="text-[13px] font-extrabold tabular-nums text-slate-800">
+                        <div className="text-[15px] font-extrabold tabular-nums text-slate-800">
                           {
                             shift.start_date_label
                           }
                         </div>
 
                         <span
-                          className={`rounded-full px-2 py-1 text-[10px] font-bold ${badge.className}`}
+                          className={`rounded-full px-2 py-1 text-[12px] font-bold ${badge.className}`}
                         >
                           {
                             badge.label
@@ -1458,20 +1458,20 @@ export default function SitterShiftsPage() {
 
                       <div className="grid grid-cols-3 gap-2">
                         <div className="min-w-0 rounded-xl bg-violet-50/70 p-2.5">
-                          <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-violet-500">
+                          <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-violet-500">
                             <UserRound className="h-3.5 w-3.5" />
 
                             הורה
                           </div>
 
-                          <div className="truncate text-[12px] font-extrabold text-slate-800">
+                          <div className="truncate text-[14px] font-extrabold text-slate-800">
                             {
                               shift.parent_name
                             }
                           </div>
 
                           {shift.address ? (
-                            <div className="mt-1 flex items-start gap-1 text-[9px] text-slate-500">
+                            <div className="mt-1 flex items-start gap-1 text-[11px] text-slate-500">
                               <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
 
                               <span className="truncate">
@@ -1484,14 +1484,14 @@ export default function SitterShiftsPage() {
                         </div>
 
                         <div className="min-w-0 rounded-xl bg-blue-50/70 p-2.5">
-                          <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-blue-500">
+                          <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-blue-500">
                             <Clock3 className="h-3.5 w-3.5" />
 
                             שעות
                           </div>
 
                           <div
-                            className="whitespace-nowrap text-[12px] font-extrabold tabular-nums text-slate-800"
+                            className="whitespace-nowrap text-[14px] font-extrabold tabular-nums text-slate-800"
                             dir="ltr"
                           >
                             {
@@ -1505,7 +1505,7 @@ export default function SitterShiftsPage() {
 
                           {shift.start_date_label !==
                           shift.end_date_label ? (
-                            <div className="mt-1 text-[9px] text-slate-500">
+                            <div className="mt-1 text-[11px] text-slate-500">
                               {
                                 shift.start_date_label
                               }{" "}
@@ -1518,13 +1518,13 @@ export default function SitterShiftsPage() {
                         </div>
 
                         <div className="min-w-0 rounded-xl bg-emerald-50/70 p-2.5">
-                          <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                          <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-emerald-600">
                             <WalletCards className="h-3.5 w-3.5" />
 
                             סה״כ
                           </div>
 
-                          <div className="whitespace-nowrap text-[13px] font-extrabold tabular-nums text-emerald-700">
+                          <div className="whitespace-nowrap text-[15px] font-extrabold tabular-nums text-emerald-700">
                             {formatNis(
                               shift.total_amount_nis
                             )}
@@ -1586,7 +1586,7 @@ export default function SitterShiftsPage() {
 
                     <div className="grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-3 text-sm">
                       <div className="flex flex-col gap-2 text-right">
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                        <p className="text-[13px] font-bold uppercase tracking-wide text-gray-500">
                           תחילת המשמרת
                         </p>
 
@@ -1617,7 +1617,7 @@ export default function SitterShiftsPage() {
                       </div>
 
                       <div className="flex flex-col gap-2 border-r border-gray-200 pr-3 text-right">
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                        <p className="text-[13px] font-bold uppercase tracking-wide text-gray-500">
                           סיום המשמרת
                         </p>
 

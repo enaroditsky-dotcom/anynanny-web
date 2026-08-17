@@ -562,7 +562,7 @@ export function SitterAvailabilityManager() {
                             }`}
                           >
                             <span>{hourLabel}</span>
-                            <span className="font-sans text-[10px] font-semibold">
+                            <span className="font-sans text-[12px] font-semibold">
                               {covered ? "פנויה" : "סגור"}
                             </span>
                           </div>

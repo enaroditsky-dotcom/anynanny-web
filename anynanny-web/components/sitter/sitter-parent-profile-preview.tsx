@@ -211,7 +211,7 @@ export function SitterParentProfilePreview({
                                 {Number(review.rating).toFixed(0)}
                               </span>
                               {review.created_at ? (
-                                <span className="text-[10px] tabular-nums text-slate-400">
+                                <span className="text-[12px] tabular-nums text-slate-400">
                                   {new Date(review.created_at).toLocaleDateString("he-IL")}
                                 </span>
                               ) : null}

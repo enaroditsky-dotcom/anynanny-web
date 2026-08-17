@@ -279,7 +279,7 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
           timerText={timerText}
           amountLabel={`₪${formatNis(accruedNis)}`}
         />
-        <p className="text-center text-[10px] font-medium text-slate-600">
+        <p className="text-center text-[12px] font-medium text-slate-600">
           ₪{ratePerMinute.toFixed(2)}/דקה · {isLive ? "מונה פעיל" : "מונה קפוא"}
         </p>
       </div>
@@ -299,7 +299,7 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
         {row.session_status === "paid" ? (
           <div className="w-full text-center p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-1">
             <h3 className="text-xs font-bold text-emerald-800">🎉 המשמרת שולמה בהצלחה!</h3>
-            <p className="text-[10px] text-emerald-600">הסיכום נחתם ונשמר בדשבורד.</p>
+            <p className="text-[12px] text-emerald-600">הסיכום נחתם ונשמר בדשבורד.</p>
           </div>
         ) : (
           <StatusCard>המשמרת הסתיימה. מעבר לתשלום.</StatusCard>
@@ -329,7 +329,7 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
 
             {checkoutClientSecret && checkoutAmountNis != null ? (
               <div className="w-full border-t border-slate-100 pt-3">
-                <p className="text-[11px] font-bold text-slate-500 text-right mb-2">בחירת אמצעי תשלום:</p>
+                <p className="text-[13px] font-bold text-slate-500 text-right mb-2">בחירת אמצעי תשלום:</p>
                 <BillingInlineCheckout
                   clientSecret={checkoutClientSecret}
                   amountNis={checkoutAmountNis}

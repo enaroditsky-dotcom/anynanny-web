@@ -850,7 +850,7 @@ export function SitterBroadcastAlertModal({
               onClick={
                 handleDismiss
               }
-              className="w-full rounded-2xl border border-slate-200 bg-white py-2 text-[11px] font-bold text-slate-400 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-2xl border border-slate-200 bg-white py-2 text-[13px] font-bold text-slate-400 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               התעלם / לא רלוונטי
             </button>

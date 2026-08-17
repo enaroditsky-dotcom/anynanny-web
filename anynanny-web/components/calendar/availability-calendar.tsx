@@ -302,7 +302,7 @@ export function AvailabilityCalendar({ sitterId, mode, parentName = "Parent" }: 
             >
               <span className={isToday ? "font-bold text-navy-900" : ""}>{cell.day}</span>
               {summary ? (
-                <span className="mt-1 flex gap-1 text-[10px] font-normal">
+                <span className="mt-1 flex gap-1 text-[12px] font-normal">
                   {summary.available > 0 ? <span className="rounded bg-emerald-100 px-1 text-emerald-800">{summary.available}</span> : null}
                   {summary.busy > 0 ? <span className="rounded bg-red-100 px-1 text-red-800">{summary.busy}</span> : null}
                 </span>
@@ -372,10 +372,10 @@ export function AvailabilityCalendar({ sitterId, mode, parentName = "Parent" }: 
                       }
                     }}
                   >
-                    <span className="w-14 shrink-0 font-mono text-[11px] text-slate-500">{slot.label}</span>
+                    <span className="w-14 shrink-0 font-mono text-[13px] text-slate-500">{slot.label}</span>
                     <span className="flex-1 font-medium capitalize">{slot.state}</span>
                     {slot.state === "busy" ? (
-                      <span className="text-[11px] text-red-700">Booked</span>
+                      <span className="text-[13px] text-red-700">Booked</span>
                     ) : null}
                   </div>
                 ))}
