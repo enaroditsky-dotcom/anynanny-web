@@ -24,7 +24,7 @@ import {
   SearchLimitToggleCard,
   searchLimitSliderProgress
 } from "@/components/parent/search-limit-toggle-card";
-import { Search, Calendar, Award, Star } from "lucide-react";
+import { Search, Calendar, Award, Star, Coins } from "lucide-react";
 import { RequiredFieldMark } from "@/components/ui/required-field-mark";
 
 const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] = [
@@ -35,8 +35,8 @@ const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] 
 ];
 
 const FIELD_LABEL =
-  "mb-1.5 block min-h-[1.5rem] text-right text-base font-medium leading-snug text-[#001F3F]";
-const SECTION_HEADING = "text-lg font-semibold leading-snug text-[#001F3F]";
+  "mb-1.5 block min-h-[1.5rem] text-right text-sm font-medium leading-snug text-[#001F3F]";
+const SECTION_HEADING = "text-[1.25rem] font-semibold leading-snug text-[#001F3F]";
 const SECTION_SURFACE =
   "rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft";
 const FIELD_CONTROL =
@@ -100,7 +100,7 @@ function TimeBlock({
     >
       <FieldLabel required={required}>{title}</FieldLabel>
       <div className="grid grid-cols-2 gap-1.5">
-        <label className="block min-w-0 text-right text-sm font-medium leading-none text-slate-500">
+        <label className="block min-w-0 text-right text-[15px] font-medium leading-none text-slate-500">
           <span className="mb-0 block min-h-[1rem]">שעה</span>
           <select
             className={selectClass}
@@ -116,7 +116,7 @@ function TimeBlock({
           </select>
         </label>
 
-        <label className="block min-w-0 text-right text-sm font-medium leading-none text-slate-500">
+        <label className="block min-w-0 text-right text-[15px] font-medium leading-none text-slate-500">
           <span className="mb-0 block min-h-[1rem]">דק׳</span>
           <select
             className={selectClass}
@@ -301,6 +301,7 @@ export function ParentSearchFiltersBar({
 
       <SearchLimitToggleCard
         title="מחיר שעתי מקסימלי"
+        icon={<Coins className="h-4 w-4" />}
         toggleLabel="הגבל מחיר"
         enabled={filters.maxHourlyRate != null}
         onEnabledChange={(enabled) =>

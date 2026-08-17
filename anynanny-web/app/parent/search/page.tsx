@@ -78,12 +78,12 @@ function ParentSearchContent() {
               <h1 className="text-2xl font-bold leading-snug text-[#001F3F]">
                 חיפוש מהיר באפליקציה
               </h1>
-              <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500">
+              <p className="mt-1 inline-flex items-center gap-1.5 text-[15px] font-medium text-slate-500">
                 <RequiredFieldMark />
                 <span>שדה חובה</span>
               </p>
               {parentPublicId ? (
-                <p className="mt-2 text-sm font-medium text-slate-500">
+                <p className="mt-2 text-[15px] font-medium text-slate-500">
                   מזהה: {parentPublicId}
                 </p>
               ) : null}
