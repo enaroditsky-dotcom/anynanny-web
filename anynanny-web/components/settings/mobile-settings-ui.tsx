@@ -222,7 +222,7 @@ export function SettingsLogoutRow({ onLogout }: { onLogout: () => void }) {
 export function SettingsLegalFooter() {
   return (
     <footer className="shrink-0 space-y-1.5 pt-3">
-      <div className="flex items-center justify-between px-1 text-[11px] font-medium text-[#001F3F]/55">
+      <div className="flex items-center justify-between px-1 text-[13px] font-medium text-[#001F3F]/55">
         <span>מדיניות פרטיות</span>
         <Link href="/terms" className="transition hover:text-[#001F3F]">
           תנאי שימוש
@@ -233,12 +233,12 @@ export function SettingsLegalFooter() {
           href="https://www.anynanny.org"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[11px] font-medium text-[#001F3F]/55 underline decoration-[#001F3F]/20 underline-offset-2 transition hover:text-[#001F3F]"
+          className="text-[13px] font-medium text-[#001F3F]/55 underline decoration-[#001F3F]/20 underline-offset-2 transition hover:text-[#001F3F]"
         >
           לאתר הבית: www.anynanny.org
         </a>
       </p>
-      <p className="text-center text-[10px] text-slate-400">{APP_VERSION}</p>
+      <p className="text-center text-[12px] text-slate-400">{APP_VERSION}</p>
     </footer>
   );
 }

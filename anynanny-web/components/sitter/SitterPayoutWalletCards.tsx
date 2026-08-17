@@ -192,7 +192,7 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
                     );
                   })}
                 </div>
-                <p className="border-t border-slate-100 px-4 py-3 text-center text-[11px] text-slate-500">
+                <p className="border-t border-slate-100 px-4 py-3 text-center text-[13px] text-slate-500">
                   כרטיס שמור ניתן לפתוח לצפייה בפרטים מוסתרים. הכספים מעובדים באופן מאובטח דרך שער התשלומים המורשה HYP.
                 </p>
               </>
@@ -241,7 +241,7 @@ function SitterMethodDetails({
 
       {kind === "card" && methods.cardHolder.trim() ? (
         <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right">
-          <p className="text-[10px] font-semibold text-slate-400">שם בעל הכרטיס</p>
+          <p className="text-[12px] font-semibold text-slate-400">שם בעל הכרטיס</p>
           <p className="mt-0.5 text-xs font-bold text-slate-800">{methods.cardHolder}</p>
         </div>
       ) : null}
@@ -255,7 +255,7 @@ function SitterMethodDetails({
 
       {(kind === "bit" || kind === "paybox") && payoutMethodConfigured(methods, kind) ? (
         <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right">
-          <p className="text-[10px] font-semibold text-slate-400">מספר טלפון רשום</p>
+          <p className="text-[12px] font-semibold text-slate-400">מספר טלפון רשום</p>
           <p className="mt-0.5 text-xs font-bold text-slate-800" dir="ltr">
             {kind === "bit"
               ? formatIsraeliMobileDisplay(methods.bitPhone)
@@ -526,7 +526,7 @@ function PayoutEditSheet({
 
           {kind === "bit" ? (
             <>
-              <p className="text-[11px] text-slate-600">מספר הנייד המחובר לחשבון Bit שלכם</p>
+              <p className="text-[13px] text-slate-600">מספר הנייד המחובר לחשבון Bit שלכם</p>
               <label className="block text-right text-xs font-bold text-slate-600">
                 מספר טלפון
                 <input
@@ -544,7 +544,7 @@ function PayoutEditSheet({
 
           {kind === "paybox" ? (
             <>
-              <p className="text-[11px] text-slate-600">מספר הנייד המחובר לחשבון PayBox שלכם</p>
+              <p className="text-[13px] text-slate-600">מספר הנייד המחובר לחשבון PayBox שלכם</p>
               <label className="block text-right text-xs font-bold text-slate-600">
                 מספר טלפון
                 <input
@@ -562,7 +562,7 @@ function PayoutEditSheet({
 
           {kind === "card" ? (
             <>
-              <p className="text-[11px] text-slate-600">
+              <p className="text-[13px] text-slate-600">
                 פרטי כרטיס למשיכה — במסד נשמרות רק 4 ספרות אחרונות, תוקף, שם ות.ז. מספר מלא ו־CVV
                 משמשים לאימות ורישום HYP בלבד ואינם נשמרים.
               </p>
@@ -654,7 +654,7 @@ function PayoutEditSheet({
                   disabled={saving || saveSucceeded}
                 />
               </label>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[12px] text-slate-400">
                 CVV מאומת בטופס בלבד ואינו נשמר במסד הנתונים (PCI).
               </p>
               <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5 text-xs font-semibold text-slate-700">

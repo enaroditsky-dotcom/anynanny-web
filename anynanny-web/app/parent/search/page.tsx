@@ -16,6 +16,7 @@ import {
   validateParentSearchCriteria,
   type ParentSearchMandatoryField
 } from "@/lib/sitter/parent-search-validation";
+import { RequiredFieldMark } from "@/components/ui/required-field-mark";
 
 function ParentSearchContent() {
   const router = useRouter();
@@ -62,57 +63,59 @@ function ParentSearchContent() {
 
   return (
     <MainLayout showBrandHeader={false}>
-      <div className="mx-auto w-full max-w-md overflow-x-hidden bg-[#FDFBF6] px-1 pb-8" dir="rtl">
+      <div className="mx-auto w-full max-w-md overflow-x-hidden bg-[#FDFBF6] pb-8" dir="rtl">
         {showWait ? (
-          <p className="text-center text-sm text-slate-600">טוען…</p>
+          <p className="text-right text-sm text-slate-600">טוען…</p>
         ) : redirectingToLogin ? (
-          <p className="text-center text-sm text-slate-600">מעבירים להתחברות…</p>
+          <p className="text-right text-sm text-slate-600">מעבירים להתחברות…</p>
         ) : !showContent ? (
-          <p className="text-center text-sm text-slate-600">טוען…</p>
+          <p className="text-right text-sm text-slate-600">טוען…</p>
         ) : null}
 
         {showContent ? (
-          <div className="space-y-6">
-            <header className="space-y-2.5 px-1 pt-1 text-center sm:pt-2">
-              <h1 className="text-center text-[26px] font-extrabold leading-[1.2] tracking-tight text-[#001F3F] sm:text-[28px]">
+          <div className="space-y-5">
+            <header className="text-right">
+              <h1 className="text-2xl font-bold leading-snug text-[#001F3F]">
                 חיפוש מהיר באפליקציה
               </h1>
+              <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500">
+                <RequiredFieldMark />
+                <span>שדה חובה</span>
+              </p>
               {parentPublicId ? (
-                <p className="inline-flex items-center gap-1 rounded-lg border border-purple-100 bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">
+                <p className="mt-2 text-sm font-medium text-slate-500">
                   מזהה: {parentPublicId}
                 </p>
               ) : null}
             </header>
 
-            <div className="rounded-[1.5rem] border border-[#001F3F]/10 bg-white/75 p-3.5 shadow-[0_2px_12px_rgba(0,31,63,0.06)]">
-              <ParentSearchFiltersBar
-                filters={draftFilters}
-                invalidFields={invalidFields}
-                onChange={(next) => {
-                  setDraftFilters(normalizeParentSearchFilters(next));
-                  if (searchError) setSearchError(null);
-                  if (invalidFields.length > 0) setInvalidFields([]);
-                }}
-              />
-            </div>
+            <ParentSearchFiltersBar
+              filters={draftFilters}
+              invalidFields={invalidFields}
+              onChange={(next) => {
+                setDraftFilters(normalizeParentSearchFilters(next));
+                if (searchError) setSearchError(null);
+                if (invalidFields.length > 0) setInvalidFields([]);
+              }}
+            />
 
             {searchError ? (
               <p
-                className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-right text-xs text-rose-900"
+                className="rounded-2xl border border-rose-200/80 bg-white px-4 py-3 text-right text-sm text-rose-900 shadow-soft"
                 role="alert"
               >
                 {searchError}
               </p>
             ) : null}
 
-            <div className="pb-4 pt-1">
+            <div className="flex justify-center pt-1">
               <button
                 type="button"
                 disabled={navigating}
                 onClick={handleSearch}
-                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#001F3F] py-4 text-[17px] font-extrabold text-white shadow-[0_4px_14px_rgba(0,31,63,0.22)] transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
+                className="inline-flex w-fit min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#001F3F] px-6 py-3 text-base font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
               >
-                <Search className="h-5 w-5" aria-hidden />
+                <Search className="h-4 w-4 shrink-0" aria-hidden />
                 חפש בייביסיטר
               </button>
             </div>

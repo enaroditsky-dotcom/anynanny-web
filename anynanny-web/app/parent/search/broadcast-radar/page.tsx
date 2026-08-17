@@ -1137,7 +1137,7 @@ function BroadcastRadarContent() {
                   </span>
                 </button>
               ) : (
-                <span className="inline-block rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
+                <span className="inline-block rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[13px] font-bold text-emerald-700">
                   ✓ החיפוש נעצר, הרשימה לפניך לבחירה
                 </span>
               )}
@@ -1162,7 +1162,7 @@ function BroadcastRadarContent() {
                   ממתינים לתגובה ראשונה...
                 </p>
 
-                <p className="mx-auto max-w-xs text-[10px] text-slate-400">
+                <p className="mx-auto max-w-xs text-[12px] text-slate-400">
                   בדרך כלל לוקח לנניז בסביבה בין 1 ל-3 דקות לאשר את
                   הקריאה בטלפון שלהן.
                 </p>
@@ -1190,20 +1190,20 @@ function BroadcastRadarContent() {
                             {sitter.name}
 
                             {sitter.rating != null ? (
-                              <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                              <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[12px] font-bold text-amber-700">
                                 <Star className="h-2.5 w-2.5 fill-current text-amber-500" />
 
                                 {sitter.rating.toFixed(1)}
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-0.5 rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                              <span className="inline-flex items-center gap-0.5 rounded-md bg-slate-50 px-1.5 py-0.5 text-[12px] font-medium text-slate-500">
                                 <Star className="h-2.5 w-2.5 text-slate-300" />
                                 טרם דורג
                               </span>
                             )}
                           </h3>
 
-                          <p className="text-[11px] font-medium text-slate-500">
+                          <p className="text-[13px] font-medium text-slate-500">
                             {sitter.experience} שנות ניסיון
                             {" • "}
 
@@ -1222,7 +1222,7 @@ function BroadcastRadarContent() {
                                   })
                                 : `/parent/sitter/${encodeURIComponent(sitter.id)}`
                             }
-                            className="inline-block text-[11px] font-semibold text-[#0B6BCB] underline decoration-[#0B6BCB]/40 underline-offset-2 transition hover:text-[#08529a]"
+                            className="inline-block text-[13px] font-semibold text-[#0B6BCB] underline decoration-[#0B6BCB]/40 underline-offset-2 transition hover:text-[#08529a]"
                           >
                             כל המידע
                           </Link>

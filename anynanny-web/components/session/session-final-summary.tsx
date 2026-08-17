@@ -47,7 +47,7 @@ export function SessionFinalSummary({
           <p className="text-xs font-semibold tabular-nums leading-snug text-white/95">סה״כ זמן: {timerText}</p>
           <p className="text-xs font-semibold leading-snug text-white/95">סה״כ לתשלום: {amountStr} ₪</p>
           {paymentStatusLabel ? (
-            <p className="text-[11px] font-semibold leading-snug text-emerald-200">{paymentStatusLabel}</p>
+            <p className="text-[13px] font-semibold leading-snug text-emerald-200">{paymentStatusLabel}</p>
           ) : null}
         </div>
       </div>

@@ -29,7 +29,7 @@ export function DashboardWelcomeHeader({
   return (
     <header className="text-right px-4" dir="rtl">
       <h1
-        className={`text-xl font-bold leading-snug text-[#001F3F] sm:text-[1.35rem] ${nameLoading ? "animate-pulse" : ""}`}
+        className={`text-xl font-bold leading-snug text-[#001F3F] ${nameLoading ? "animate-pulse" : ""}`}
       >
         {greeting}
       </h1>

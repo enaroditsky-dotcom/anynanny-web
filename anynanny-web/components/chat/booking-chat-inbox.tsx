@@ -100,7 +100,7 @@ function BookingChatInbox({
                       {row.partner_name ?? emptyPartnerLabel}
                     </span>
                     {row.partner_public_id ? (
-                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200/80">
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[12px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200/80">
                         {row.partner_public_id} ID
                       </span>
                     ) : null}

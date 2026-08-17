@@ -169,7 +169,7 @@ export function LocationPreferenceRow({ hint }: { hint: string }) {
           aria-expanded={open}
           aria-haspopup="listbox"
           disabled={busy}
-          className={`inline-flex shrink-0 items-center gap-1 rounded-xl border-2 px-2.5 py-1.5 text-[10px] font-bold shadow-[0_2px_8px_-3px_rgba(0,31,63,0.18)] transition hover:brightness-[0.98] active:scale-[0.98] disabled:opacity-60 ${badgeTone}`}
+          className={`inline-flex shrink-0 items-center gap-1 rounded-xl border-2 px-2.5 py-1.5 text-[12px] font-bold shadow-[0_2px_8px_-3px_rgba(0,31,63,0.18)] transition hover:brightness-[0.98] active:scale-[0.98] disabled:opacity-60 ${badgeTone}`}
         >
           <MapPin className="h-3 w-3 shrink-0" aria-hidden />
           <span>{getLocationPreferenceShortLabel(preference)}</span>

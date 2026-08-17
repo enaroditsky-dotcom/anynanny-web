@@ -2,8 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Zap, MapPin } from "lucide-react";
+import { MapPin, ShieldCheck } from "lucide-react";
 import { BroadcastPanelControls } from "@/components/parent/broadcast-panel-controls";
+import { AnyNannyNowHero } from "@/components/parent/anynanny-now-hero";
+import { CtaEnergyOrb } from "@/components/parent/cta-energy-orb";
 import {
   broadcastRadarHref,
   fetchActiveBroadcastForParent
@@ -93,64 +95,107 @@ export default function ParentBroadcastSetupPage() {
   };
 
   return (
-    <div dir="rtl" className="mx-auto max-w-md space-y-5 pb-8">
-      <div className="space-y-4 rounded-3xl border border-navy-header/10 bg-white p-6 text-center shadow-sm">
+    <div dir="rtl" className="-mx-4 min-w-0 overflow-x-hidden bg-[#FDFBF6] pb-10">
+      <div className="mx-auto w-[min(98vw,500px)]">
+      <div className="rounded-3xl border border-slate-200/60 bg-white px-4 pb-8 pt-5 shadow-soft">
         <BroadcastPanelControls onBack={goDashboard} />
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 shadow-inner">
-            <Zap className="h-6 w-6 fill-emerald-600" />
-          </div>
-          
-          <div className="space-y-1">
-            <h1 dir="ltr" className="text-xl font-black text-[#001F3F]">ANYNANNY NOW!</h1>
-            <p className="text-xs text-slate-500 font-medium">שידור חירום מהיר: בחר עיר ושגר קריאה לכל המטפלות הפנויות באזור</p>
-          </div>
 
-          <div className="space-y-4 pt-2 text-right">
-            <div className="space-y-1.5 relative" ref={wrapperRef}>
-              <label className="text-xs font-bold text-slate-700">עיר / אזור חיפוש:</label>
-              <div className="relative flex items-center">
-                <MapPin className="absolute right-3.5 h-4 w-4 text-slate-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => {
-                    setCity(e.target.value);
-                    setIsOpen(true);
-                  }}
-                  onFocus={() => setIsOpen(true)}
-                  placeholder="הקלד או בחר עיר בישראל..."
-                  className="w-full rounded-2xl border border-slate-300 py-3.5 pr-10 pl-4 text-sm font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
-                />
-              </div>
+        <AnyNannyNowHero />
 
-              {isOpen && filteredCities.length > 0 && (
-                <ul className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white py-1 shadow-xl">
-                  {filteredCities.map((c) => (
-                    <li
-                      key={c}
-                      onClick={() => {
-                        setCity(c);
-                        setIsOpen(false);
-                      }}
-                      className="cursor-pointer px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700"
-                    >
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-              )}
+        <div className="-mx-4 mt-6 w-[calc(100%+2rem)] px-0.5 text-center">
+          <h1
+            className="text-center text-[23px] font-medium not-italic leading-[1.25] [word-break:keep-all] max-[429px]:whitespace-normal min-[430px]:whitespace-nowrap min-[430px]:text-[24px] min-[480px]:text-[25px]"
+            style={{
+              fontStyle: "normal",
+              transform: "none",
+              fontWeight: 500,
+              letterSpacing: "normal"
+            }}
+          >
+            <span className="font-medium text-[#001F3F]">למצוא בייביסיטר</span>
+            {" "}
+            <span className="whitespace-nowrap font-medium text-[#00A86B]">מעכשיו לעכשיו</span>
+            {" "}
+            <span className="font-medium text-[#001F3F]">זה קל!</span>
+          </h1>
+        </div>
+        <p
+          className="mt-3 text-center text-[16px] font-normal leading-[1.5] text-[#001F3F]/70 not-italic min-[430px]:text-[17px]"
+          style={{ fontStyle: "normal", transform: "none" }}
+        >
+          בחרו עיר, ואנחנו נפנה מיד לבייביסיטריות הזמינות באזור.
+        </p>
+
+        <div className="space-y-6 pt-7 text-right">
+          <div className="relative space-y-2" ref={wrapperRef}>
+            <label
+              className="block whitespace-nowrap text-[16px] font-medium not-italic text-[#001F3F] min-[430px]:text-[17px]"
+              style={{ fontStyle: "normal", transform: "none" }}
+            >
+              עיר / אזור חיפוש:
+            </label>
+            <div className="relative flex items-center">
+              <MapPin className="pointer-events-none absolute right-4 h-5 w-5 text-[#001F3F]" />
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => {
+                  setCity(e.target.value);
+                  setIsOpen(true);
+                }}
+                onFocus={() => setIsOpen(true)}
+                placeholder="הקלד או בחר עיר בישראל..."
+                className="h-[52px] w-full rounded-[15px] border border-slate-200/80 bg-white py-3 pl-4 pr-12 text-[17px] font-medium not-italic text-[#001F3F] shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                style={{ fontStyle: "normal", transform: "none" }}
+              />
             </div>
 
+            {isOpen && filteredCities.length > 0 && (
+              <ul className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white py-1 shadow-xl">
+                {filteredCities.map((c) => (
+                  <li
+                    key={c}
+                    onClick={() => {
+                      setCity(c);
+                      setIsOpen(false);
+                    }}
+                    className="cursor-pointer px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700"
+                  >
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="relative mx-auto w-[90%] overflow-visible pt-2">
             <button
               type="button"
               disabled={isBroadcasting}
               onClick={handleStartBroadcast}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-4 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-60"
+              className="flex min-h-[56px] w-full items-center justify-center whitespace-nowrap rounded-[28px] py-2 pl-12 pr-3 text-center font-semibold leading-none text-white not-italic shadow-[0_10px_22px_-6px_rgba(0,168,107,0.55)] transition hover:brightness-105 disabled:opacity-60 min-[390px]:pl-[3.25rem]"
+              style={{
+                fontStyle: "normal",
+                transform: "none",
+                whiteSpace: "nowrap",
+                fontSize: "clamp(15px, 4.6vw, 18px)",
+                background:
+                  "linear-gradient(180deg, #19c56f 0%, #00A86B 48%, #088A58 100%)"
+              }}
             >
-              <Zap className="h-4 w-4 fill-white" />
-              {isBroadcasting ? "משדר לכל האזור..." : "שגר Broadcast עכשיו לעיר"}
+              {isBroadcasting ? "משדר לכל האזור..." : "חיפוש בייביסיטר מעכשיו לעכשיו"}
             </button>
+            <CtaEnergyOrb />
           </div>
+
+          <p className="flex items-start justify-center gap-2 text-right text-sm font-medium leading-relaxed text-[#001F3F]/75">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#00A86B]" aria-hidden />
+            <span>
+              הבקשה נשלחת לבייביסיטריות הרלוונטיות באזור – הראשונה שמאשרת יכולה להתאים למשמרת.
+            </span>
+          </p>
+        </div>
+      </div>
       </div>
     </div>
   );

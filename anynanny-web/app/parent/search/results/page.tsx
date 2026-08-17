@@ -164,7 +164,7 @@ function ParentSearchResultsInner() {
           ) : (
             <section className="space-y-3 px-1">
               {visibleSearchError ? (
-                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-right text-xs text-rose-900">
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-right text-sm text-rose-900">
                   {visibleSearchError}
                 </p>
               ) : null}

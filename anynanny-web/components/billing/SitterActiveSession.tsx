@@ -321,7 +321,7 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
       <div className="space-y-4">
         <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4 text-center space-y-1">
           <h3 className="text-xs font-bold text-amber-800">ההורה אישר את סיום המשמרת!</h3>
-          <p className="text-[11px] text-amber-700 leading-normal">ההורה נמצא כעת בשלב ביצוע התשלום והסליקה. מיד עם אישור העסקה המסך שלך יתעדכן.</p>
+          <p className="text-[13px] text-amber-700 leading-normal">ההורה נמצא כעת בשלב ביצוע התשלום והסליקה. מיד עם אישור העסקה המסך שלך יתעדכן.</p>
         </div>
         <BillingSessionMetrics
           timerText={timerText}
@@ -346,7 +346,7 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
         <div className="rounded-2xl bg-white border border-slate-100 p-4 text-center space-y-3 shadow-soft">
           <div className="space-y-0.5">
             <h4 className="text-xs font-bold text-slate-700">איך היה ההורה?</h4>
-            <p className="text-[10px] text-slate-400">דרגי את החוויה שלך כדי לעזור לנניז אחרות בסביבה</p>
+            <p className="text-[12px] text-slate-400">דרגי את החוויה שלך כדי לעזור לנניז אחרות בסביבה</p>
           </div>
           
           <div className="flex justify-center gap-2" dir="ltr">

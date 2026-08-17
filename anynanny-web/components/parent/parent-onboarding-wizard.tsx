@@ -393,7 +393,7 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
           <div className="border-b pb-1 pt-2 flex items-center justify-between">
             <div>
               <p className="font-bold text-sm text-[#001F3F]">אירועים מיוחדים לפינוק</p>
-              <p className="text-[11px] text-slate-500">אירועים שתרצו שנזכיר כדי לפנק אתכם</p>
+              <p className="text-[13px] text-slate-500">אירועים שתרצו שנזכיר כדי לפנק אתכם</p>
             </div>
             <button
               type="button"

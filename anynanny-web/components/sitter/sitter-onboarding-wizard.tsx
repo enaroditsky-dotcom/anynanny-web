@@ -350,11 +350,11 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
             <p className="text-center text-sm text-slate-500">טוען את פרטי ההרשמה…</p>
           ) : firstName.trim() && lastName.trim() ? (
             <div className="rounded-2xl border border-[#C5A059]/25 bg-white/80 px-4 py-3 text-right">
-              <p className="text-[11px] font-semibold text-slate-500">שלום</p>
+              <p className="text-[13px] font-semibold text-slate-500">שלום</p>
               <p className="mt-1 text-base font-bold text-[#001F3F]">
                 {firstName} {lastName}
               </p>
-              <p className="mt-1 text-[11px] text-slate-500">השם נשמר מההרשמה ואין צורך להקליד שוב</p>
+              <p className="mt-1 text-[13px] text-slate-500">השם נשמר מההרשמה ואין צורך להקליד שוב</p>
             </div>
           ) : (
             <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">

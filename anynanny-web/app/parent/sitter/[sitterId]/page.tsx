@@ -257,7 +257,7 @@ export default function ParentSitterProfileView() {
                         {Number(review.rating).toFixed(0)}
                       </span>
                       {review.created_at ? (
-                        <span className="text-[11px] tabular-nums text-slate-400">
+                        <span className="text-[13px] tabular-nums text-slate-400">
                           {formatReviewDate(review.created_at)}
                         </span>
                       ) : null}

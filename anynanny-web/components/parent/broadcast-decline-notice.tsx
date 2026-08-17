@@ -91,7 +91,7 @@ export const DeclineNoticeUnit = memo(function DeclineNoticeUnit({
               {sitter.name}
             </p>
             {sitter.rating != null ? (
-              <span className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700">
+              <span className="mt-0.5 inline-flex items-center gap-0.5 text-[12px] font-bold text-amber-700">
                 <Star className="h-2.5 w-2.5 fill-current text-amber-500" />
                 {sitter.rating.toFixed(1)}
               </span>

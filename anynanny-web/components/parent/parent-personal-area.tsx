@@ -504,7 +504,7 @@ export function ParentPersonalArea() {
         description="הכתובת שמוצגת לשמרטפית במשמרות מאושרות"
         action={<PersonalChangeLink onClick={() => openEdit("address")} />}
       >
-        <p className={`text-[14px] ${addressLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
+        <p className={`text-[16px] ${addressLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
           {displayOrEmpty(addressLabel)}
         </p>
       </PersonalAreaSection>
@@ -515,7 +515,7 @@ export function ParentPersonalArea() {
         action={<PersonalChangeLink onClick={() => openEdit("spouse")} />}
       >
         <div className="space-y-2 text-right">
-          <p className={`text-[14px] ${form.spouse ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
+          <p className={`text-[16px] ${form.spouse ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
             {spouseLabel}
           </p>
           {form.spouse?.birthDate ? (
@@ -534,7 +534,7 @@ export function ParentPersonalArea() {
         action={<PersonalChangeLink onClick={() => openEdit("children")} />}
       >
         <p
-          className={`text-[14px] leading-relaxed ${
+          className={`text-[16px] leading-relaxed ${
             form.children.length ? "font-medium text-[#001F3F]" : "italic text-slate-400"
           }`}
         >
@@ -548,7 +548,7 @@ export function ParentPersonalArea() {
         action={<PersonalChangeLink onClick={() => openEdit("special_events")} />}
       >
         <p
-          className={`text-[14px] leading-relaxed ${
+          className={`text-[16px] leading-relaxed ${
             form.special_events.length ? "font-medium text-[#001F3F]" : "italic text-slate-400"
           }`}
         >
@@ -601,7 +601,7 @@ export function ParentPersonalArea() {
                 הסרת תמונת פרופיל
               </button>
             ) : null}
-            <p className="text-center text-[11px] text-slate-500">
+            <p className="text-center text-[13px] text-slate-500">
               פורמטים מותרים: JPG, PNG, WEBP (עד 5MB)
             </p>
           </div>

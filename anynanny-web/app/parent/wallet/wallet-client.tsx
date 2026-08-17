@@ -338,7 +338,7 @@ export default function ParentWalletClient() {
 
         <header className="px-1 text-right">
           <h1 className="text-lg font-extrabold text-navy-header">הארנק שלי</h1>
-          <p className="mt-0.5 text-[11px] text-slate-500">עיבוד מאובטח דרך שער התשלומים HYP</p>
+          <p className="mt-0.5 text-[13px] text-slate-500">עיבוד מאובטח דרך שער התשלומים HYP</p>
         </header>
 
         <section className="rounded-3xl bg-[#001F3F] p-6 text-white shadow-soft relative overflow-hidden">
@@ -363,7 +363,7 @@ export default function ParentWalletClient() {
               </span>
             )}
           </div>
-          <p className="mt-3 text-[11px] text-white/60 leading-relaxed">
+          <p className="mt-3 text-[13px] text-white/60 leading-relaxed">
             מוצג כאן סכום ותאריך העסקה המאובטחת האחרונה שהושלמה בהצלחה דרך שער התשלומים HYP.
           </p>
         </section>
@@ -382,7 +382,7 @@ export default function ParentWalletClient() {
 
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
           <h2 className="text-sm font-bold text-navy-header">הכנסות ותשלומים</h2>
-          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
             הכספים מעובדים באופן מאובטח דרך שער התשלומים המורשה HYP.
           </p>
 
@@ -395,7 +395,7 @@ export default function ParentWalletClient() {
             ) : transactions.length === 0 ? (
               <div className="rounded-xl bg-slate-50/60 p-4 text-center border border-slate-100">
                 <p className="text-xs font-bold text-navy-header">אין פעולות להצגה עדיין</p>
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p className="mt-1 text-[13px] text-slate-500">
                   כאשר תבצעי תשלום, התנועות יופיעו כאן.
                 </p>
               </div>
@@ -421,7 +421,7 @@ export default function ParentWalletClient() {
                     </div>
                     <div className="min-w-0 text-right">
                       <p className="truncate text-xs font-bold text-slate-800">{tx.description}</p>
-                      <p className="text-[10px] text-slate-400 tabular-nums">
+                      <p className="text-[12px] text-slate-400 tabular-nums">
                         {new Date(tx.created_at).toLocaleDateString("he-IL")}
                       </p>
                     </div>
@@ -494,7 +494,7 @@ export default function ParentWalletClient() {
                   cardTitle={optionLabel(viewingMethod)}
                 />
 
-                <p className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right text-[11px] leading-relaxed text-slate-600">
+                <p className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right text-[13px] leading-relaxed text-slate-600">
                   {walletRailExplanation(viewingMethod)}
                 </p>
 
@@ -508,12 +508,12 @@ export default function ParentWalletClient() {
                         <p className="text-xs font-bold text-slate-800">
                           {method.brandLabel} •••• {method.last4}
                           {method.is_default ? (
-                            <span className="mr-1 text-[10px] font-semibold text-emerald-700">
+                            <span className="mr-1 text-[12px] font-semibold text-emerald-700">
                               · ברירת מחדל
                             </span>
                           ) : null}
                         </p>
-                        <p className="mt-0.5 text-[10px] tabular-nums text-slate-400" dir="ltr">
+                        <p className="mt-0.5 text-[12px] tabular-nums text-slate-400" dir="ltr">
                           תוקף {String(method.exp_month).padStart(2, "0")}/
                           {String(method.exp_year).slice(-2)}
                         </p>
@@ -580,7 +580,7 @@ export default function ParentWalletClient() {
                     );
                   })}
                 </div>
-                <p className="border-t border-slate-100 px-4 py-3 text-center text-[11px] text-slate-500">
+                <p className="border-t border-slate-100 px-4 py-3 text-center text-[13px] text-slate-500">
                   Bit, Apple Pay ו־Google Pay נבחרים כאן כמועדפים בלבד. החיוב ב־HYP מתבצע רק בתשלום משמרת.
                 </p>
               </>

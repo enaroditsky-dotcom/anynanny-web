@@ -1190,7 +1190,7 @@ export default function SitterDashboardPage() {
                       </span>
                       <div className="flex flex-col text-right sm:w-full">
                         <span className="text-sm font-bold sm:text-sm">סידור עבודה</span>
-                        <span className="text-[11px] text-slate-500 sm:hidden">ניהול ימי ושעות פעילות</span>
+                        <span className="text-[13px] text-slate-500 sm:hidden">ניהול ימי ושעות פעילות</span>
                       </div>
                     </Link>
                     <div className="grid grid-cols-2 gap-2.5 sm:col-span-2 sm:grid-cols-2">
@@ -1201,7 +1201,7 @@ export default function SitterDashboardPage() {
                       <Link href="/sitter/shifts" aria-label={pendingBookingCount > 0 ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות` : "המשמרות שלי"} className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]">
                         <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
                           <History className="h-6 w-6 stroke-[1.75]" aria-hidden />
-                          {pendingBookingCount > 0 ? (<span className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white" aria-hidden>{pendingBookingCount > 9 ? "9+" : pendingBookingCount}</span>) : null}
+                          {pendingBookingCount > 0 ? (<span className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white" aria-hidden>{pendingBookingCount > 9 ? "9+" : pendingBookingCount}</span>) : null}
                         </span>
                         <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">המשמרות שלי</span>
                       </Link>

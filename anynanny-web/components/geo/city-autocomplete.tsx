@@ -124,7 +124,7 @@ export function CityAutocomplete({
           className="absolute inset-x-0 top-full z-30 mt-1 max-h-52 overflow-y-auto overscroll-contain rounded-xl border border-slate-300/80 bg-white py-1 shadow-[0_8px_20px_rgba(0,31,63,0.12)]"
         >
           {suggestions.length === 0 ? (
-            <li className="px-3 py-3 text-right text-[12px] font-medium text-slate-400">
+            <li className="px-3 py-3 text-right text-[14px] font-medium text-slate-400">
               לא נמצאה עיר ברשימה
             </li>
           ) : (
@@ -134,7 +134,7 @@ export function CityAutocomplete({
                 <li key={city} role="option" aria-selected={selected}>
                   <button
                     type="button"
-                    className={`flex min-h-11 w-full items-center px-3 py-2 text-right text-[15px] font-medium transition ${
+                    className={`flex min-h-11 w-full items-center px-3 py-2 text-right text-[17px] font-medium transition ${
                       selected
                         ? "bg-[#001F3F]/10 font-bold text-navy-header"
                         : "text-slate-800 hover:bg-slate-50"

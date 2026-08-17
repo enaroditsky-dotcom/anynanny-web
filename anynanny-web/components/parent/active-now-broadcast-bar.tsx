@@ -49,7 +49,7 @@ export function ActiveNowBroadcastBar({
           <Zap className="h-3.5 w-3.5 fill-white" aria-hidden />
         </span>
 
-        <span className="min-w-0 flex-1 truncate text-[11px] font-bold leading-tight text-[#001F3F]">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-bold leading-tight text-[#001F3F]">
           <span className="whitespace-nowrap">AnyNanny Now</span>
           <span className="mx-1 font-semibold text-slate-300" aria-hidden>
             |
@@ -67,7 +67,7 @@ export function ActiveNowBroadcastBar({
           <span className="whitespace-nowrap text-slate-700">{responsesLabel}</span>
         </span>
 
-        <span className="flex shrink-0 items-center gap-0.5 text-[10px] font-bold text-[#001F3F]">
+        <span className="flex shrink-0 items-center gap-0.5 text-[12px] font-bold text-[#001F3F]">
           <span>הרחב</span>
           <ChevronDown className="h-3.5 w-3.5" aria-hidden />
         </span>

@@ -891,13 +891,13 @@ export function SitterPendingBookings({
                             "הורה"}
                         </p>
 
-                        <p className="mt-0.5 text-[11px] text-slate-500">
+                        <p className="mt-0.5 text-[13px] text-slate-500">
                           פרטי המשפחה המזמינה
                         </p>
 
                         <div className="mt-1.5">
                           {hasRating ? (
-                            <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-800">
+                            <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[13px] font-bold text-amber-800">
                               <Star
                                 className="h-3.5 w-3.5 fill-amber-400 text-amber-400"
                                 aria-hidden
@@ -918,7 +918,7 @@ export function SitterPendingBookings({
                               </span>
                             </div>
                           ) : (
-                            <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-500">
+                            <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] font-medium text-slate-500">
                               <Star
                                 className="h-3.5 w-3.5 text-slate-300"
                                 aria-hidden
@@ -979,7 +979,7 @@ export function SitterPendingBookings({
                     {Array.isArray(parentInfo.reviews) &&
                     parentInfo.reviews.length > 0 ? (
                       <div className="space-y-1.5 border-t border-slate-100 pt-2 text-right">
-                        <p className="text-[11px] font-semibold text-slate-500">
+                        <p className="text-[13px] font-semibold text-slate-500">
                           חוות דעת אחרונות
                         </p>
                         {parentInfo.reviews.slice(0, 2).map((review, idx) => (
@@ -988,7 +988,7 @@ export function SitterPendingBookings({
                             className="rounded-lg bg-slate-50 px-2 py-1.5"
                           >
                             <div className="flex flex-row-reverse items-center justify-between gap-2">
-                              <span className="inline-flex flex-row-reverse items-center gap-1 text-[11px] font-bold text-amber-800">
+                              <span className="inline-flex flex-row-reverse items-center gap-1 text-[13px] font-bold text-amber-800">
                                 <Star
                                   className="h-3 w-3 fill-amber-400 text-amber-400"
                                   aria-hidden
@@ -996,12 +996,12 @@ export function SitterPendingBookings({
                                 {Number(review.rating).toFixed(0)}
                               </span>
                               {review.created_at ? (
-                                <span className="text-[10px] tabular-nums text-slate-400">
+                                <span className="text-[12px] tabular-nums text-slate-400">
                                   {new Date(review.created_at).toLocaleDateString("he-IL")}
                                 </span>
                               ) : null}
                             </div>
-                            <p className="mt-0.5 text-[11px] leading-snug text-slate-700">
+                            <p className="mt-0.5 text-[13px] leading-snug text-slate-700">
                               {review.comment}
                             </p>
                           </div>
@@ -1025,7 +1025,7 @@ export function SitterPendingBookings({
                         </span>
                       </div>
                     ) : (
-                      <p className="border-t border-slate-100 pt-2 text-right text-[11px] text-slate-400">
+                      <p className="border-t border-slate-100 pt-2 text-right text-[13px] text-slate-400">
                         הכתובת המלאה תוצג
                         לאחר אישור
                         המשמרת.
@@ -1033,7 +1033,7 @@ export function SitterPendingBookings({
                     )}
                   </div>
 
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[13px] text-slate-500">
                     התקבלה{" "}
                     {new Date(
                       booking.created_at

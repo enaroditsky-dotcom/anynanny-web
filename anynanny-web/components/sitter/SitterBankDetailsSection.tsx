@@ -101,7 +101,7 @@ export function SitterBankDetailsSection({ sitterId, className = "" }: SitterBan
           </div>
           <div>
             <h2 className="text-sm font-bold text-navy-header">פרטי בנק</h2>
-            <p className="text-[11px] text-slate-500">למשיכת רווחים מהארנק</p>
+            <p className="text-[13px] text-slate-500">למשיכת רווחים מהארנק</p>
           </div>
         </div>
       </div>
@@ -115,21 +115,21 @@ export function SitterBankDetailsSection({ sitterId, className = "" }: SitterBan
         ) : filled ? (
           <dl className="space-y-2 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-3 text-right">
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-[11px] font-semibold text-slate-500">מספר בנק</dt>
+              <dt className="text-[13px] font-semibold text-slate-500">מספר בנק</dt>
               <dd className="text-xs font-bold tabular-nums text-slate-800" dir="ltr">
                 {details.bank_code || "—"}
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-[11px] font-semibold text-slate-500">שם הבנק</dt>
+              <dt className="text-[13px] font-semibold text-slate-500">שם הבנק</dt>
               <dd className="text-xs font-bold text-slate-800">{details.bank_name || "—"}</dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-[11px] font-semibold text-slate-500">סניף</dt>
+              <dt className="text-[13px] font-semibold text-slate-500">סניף</dt>
               <dd className="text-xs font-bold text-slate-800">{details.bank_branch || "—"}</dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-[11px] font-semibold text-slate-500">מספר חשבון</dt>
+              <dt className="text-[13px] font-semibold text-slate-500">מספר חשבון</dt>
               <dd className="text-xs font-bold tabular-nums text-slate-800" dir="ltr">
                 {details.bank_account_number ? maskAccount(details.bank_account_number) : "—"}
               </dd>
@@ -138,14 +138,14 @@ export function SitterBankDetailsSection({ sitterId, className = "" }: SitterBan
         ) : (
           <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-3 py-4 text-center">
             <p className="text-xs font-bold text-slate-700">עדיין לא נשמרו פרטי בנק</p>
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1 text-[13px] text-slate-500">
               הוסיפו חשבון בנק כדי שנוכל להעביר אליכם רווחים.
             </p>
           </div>
         )}
 
         {error ? (
-          <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-800">
+          <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-medium text-rose-800">
             {error}
           </p>
         ) : null}

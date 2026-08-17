@@ -11,7 +11,7 @@ import {
 export function VerifiedUserBadge({ className = "" }: { className?: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-200/80 ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[13px] font-bold text-emerald-800 ring-1 ring-emerald-200/80 ${className}`}
     >
       <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
       משתמש מאומת

@@ -780,7 +780,7 @@ export function HypCheckoutFrame({
             </button>
           </div>
 
-          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] leading-relaxed text-amber-950">
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] leading-relaxed text-amber-950">
             <p className="font-bold">
               כרטיס בדיקה
               מאושר (אל
@@ -852,7 +852,7 @@ export function HypCheckoutFrame({
                   הושלם
                 </p>
 
-                <p className="mt-1 text-[11px] leading-relaxed text-rose-700">
+                <p className="mt-1 text-[13px] leading-relaxed text-rose-700">
                   {
                     finalizeError
                   }
@@ -876,7 +876,7 @@ export function HypCheckoutFrame({
                   התשלום
                 </p>
 
-                <p className="mt-1 text-[11px] leading-relaxed text-blue-700">
+                <p className="mt-1 text-[13px] leading-relaxed text-blue-700">
                   לא נסמן את
                   המשמרת
                   כמשולמת עד

@@ -15,15 +15,15 @@ const config: Config = {
         ]
       },
       fontSize: {
-        /** Slightly roomier defaults for Varela Round on mobile + desktop */
-        xs: ["0.8125rem", { lineHeight: "1.35" }],
-        sm: ["0.9375rem", { lineHeight: "1.45" }],
-        base: ["1.0625rem", { lineHeight: "1.55" }],
-        lg: ["1.1875rem", { lineHeight: "1.5" }],
-        xl: ["1.3125rem", { lineHeight: "1.4" }],
-        "2xl": ["1.5rem", { lineHeight: "1.35" }],
-        "3xl": ["1.875rem", { lineHeight: "1.3" }],
-        "4xl": ["2.25rem", { lineHeight: "1.25" }]
+        /** Mobile-first readable scale. Weights are unchanged — size only. */
+        xs: ["0.875rem", { lineHeight: "1.4" }],
+        sm: ["1.0625rem", { lineHeight: "1.5" }],
+        base: ["1.1875rem", { lineHeight: "1.55" }],
+        lg: ["1.375rem", { lineHeight: "1.5" }],
+        xl: ["1.5rem", { lineHeight: "1.4" }],
+        "2xl": ["1.75rem", { lineHeight: "1.35" }],
+        "3xl": ["2.125rem", { lineHeight: "1.3" }],
+        "4xl": ["2.5rem", { lineHeight: "1.25" }]
       },
       colors: {
         navy: {

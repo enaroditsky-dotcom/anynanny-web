@@ -100,7 +100,7 @@ function NavLink({
         if (badgeKey === "wallet") clearWalletNotification();
         if (badgeKey === "messages") clearChatNotification();
       }}
-      className={`flex min-w-0 w-full flex-col items-center justify-center gap-1.5 rounded-xl px-1 py-1.5 text-[12px] font-semibold leading-tight transition ${
+      className={`flex min-w-0 w-full flex-col items-center justify-center gap-1.5 rounded-xl px-1 py-1.5 text-[13px] font-semibold leading-tight transition ${
         active ? "text-emerald-700" : "text-navy-header/70 hover:bg-slate-50 hover:text-navy-header"
       }`}
       aria-label={
@@ -144,7 +144,7 @@ function AnyNannyNowFab({ active }: { active: boolean }) {
         </span>
       </span>
       <span
-        className={`max-w-[5.5rem] text-center text-[9px] font-bold leading-tight ${
+        className={`max-w-[5.5rem] text-center text-[11px] font-bold leading-tight ${
           active ? "text-emerald-700" : "text-navy-header/80"
         }`}
       >
