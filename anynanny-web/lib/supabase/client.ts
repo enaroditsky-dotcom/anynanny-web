@@ -2,6 +2,11 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { markPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
+import {
+  forwardToResetPasswordNow,
+  isPasswordRecoveryDestinationPath
+} from "@/lib/auth/password-reset";
 
 let browserClient: SupabaseClient | null = null;
 let authListenerBound = false;
@@ -38,6 +43,12 @@ export function getSupabaseBrowserClient(): SupabaseClient | null {
   if (!authListenerBound) {
     authListenerBound = true;
     browserClient.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        markPasswordRecoveryEvent();
+        if (typeof window !== "undefined" && !isPasswordRecoveryDestinationPath(window.location.pathname)) {
+          forwardToResetPasswordNow();
+        }
+      }
       const token = session?.access_token;
       if (!token) return;
       // TOKEN_REFRESHED / SIGNED_IN — push JWT to the Realtime socket.

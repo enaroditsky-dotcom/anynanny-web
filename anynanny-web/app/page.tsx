@@ -6,6 +6,11 @@ import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { getSitterOnboardingGateRedirect } from "@/lib/auth/post-auth-destination";
 import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
+import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
+import {
+  forwardExplicitRecoveryCallback,
+  readAuthCallbackParams
+} from "@/lib/auth/password-reset";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type LandingPath = "parent" | "sitter";
@@ -50,11 +55,24 @@ function HomeInner() {
   const searchParams = useSearchParams();
   const isManual = searchParams.get("manual") === "true";
   const [registrationOpen, setRegistrationOpen] = useState(false);
+  const hasPkceCallback = Boolean(searchParams.get("code") || searchParams.get("type") === "recovery");
 
   useEffect(() => {
-    // בדיקת שגיאות גם ב-Query וגם ב-Hash של Supabase
     const hash = window.location.hash;
     const search = window.location.search;
+    const callback = readAuthCallbackParams(search, hash);
+
+    if (forwardExplicitRecoveryCallback()) return;
+
+    if (hasPasswordRecoveryEvent()) {
+      window.location.replace(`/auth/reset-password${search}${hash}`);
+      return;
+    }
+
+    if (callback.hasCode || callback.isRecoveryType) {
+      window.location.replace(`/auth/reset-password${search}${hash}`);
+      return;
+    }
 
     if (hash.includes("error") || search.includes("error")) {
       const queryString = search
@@ -130,6 +148,17 @@ function HomeInner() {
 
     router.push(`/${action}?${qs.toString()}`);
   };
+
+  if (hasPkceCallback) {
+    return (
+      <main
+        className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF6] px-4"
+        dir="rtl"
+      >
+        <p className="text-center text-base text-slate-600">מעבירים לאיפוס סיסמה…</p>
+      </main>
+    );
+  }
 
   return (
     <main
