@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  isCancellationColumnMissing,
+  withCancellationSelect
+} from "@/lib/bookings/cancellation-request";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
@@ -12,6 +16,9 @@ export async function fetchConfirmedShiftsForSitter(
   supabase: SupabaseClient,
   sitterId: string
 ): Promise<{ shifts: ConfirmedShiftView[]; error: string | null }> {
+  const selectWithCancellation = withCancellationSelect(
+    "id, parent_id, sitter_id, booking_date, start_time, end_time, status, payment_status, actual_start_time, created_at, updated_at"
+  );
   const selectFull =
     "id, parent_id, sitter_id, booking_date, start_time, end_time, status, actual_start_time, created_at, updated_at";
   const selectCore =
@@ -20,28 +27,41 @@ export async function fetchConfirmedShiftsForSitter(
   let rows: BookingRow[] | null = null;
   let errorMessage: string | null = null;
 
-  const full = await supabase
+  const cancellationQuery = await supabase
     .from(BOOKINGS_TABLE)
-    .select(selectFull)
+    .select(selectWithCancellation)
     .eq("sitter_id", sitterId)
     .in("status", ["approved", "sitter_started", "parent_started", "sitter_ended"])
     .order("start_time", { ascending: true });
 
-  if (full.error) {
-    errorMessage = full.error.message;
-    const core = await supabase
+  if (!cancellationQuery.error) {
+    rows = (cancellationQuery.data as unknown as BookingRow[] | null) ?? [];
+  } else if (isCancellationColumnMissing(cancellationQuery.error.message)) {
+    const full = await supabase
       .from(BOOKINGS_TABLE)
-      .select(selectCore)
+      .select(selectFull)
       .eq("sitter_id", sitterId)
       .in("status", ["approved", "sitter_started", "parent_started", "sitter_ended"])
       .order("start_time", { ascending: true });
-    if (core.error) {
-      return { shifts: [], error: core.error.message };
+
+    if (full.error) {
+      errorMessage = full.error.message;
+      const core = await supabase
+        .from(BOOKINGS_TABLE)
+        .select(selectCore)
+        .eq("sitter_id", sitterId)
+        .in("status", ["approved", "sitter_started", "parent_started", "sitter_ended"])
+        .order("start_time", { ascending: true });
+      if (core.error) {
+        return { shifts: [], error: core.error.message };
+      }
+      rows = (core.data as BookingRow[] | null) ?? [];
+      errorMessage = null;
+    } else {
+      rows = (full.data as BookingRow[] | null) ?? [];
     }
-    rows = (core.data as BookingRow[] | null) ?? [];
-    errorMessage = null;
   } else {
-    rows = (full.data as BookingRow[] | null) ?? [];
+    return { shifts: [], error: cancellationQuery.error.message };
   }
 
   const bookings = rows ?? [];

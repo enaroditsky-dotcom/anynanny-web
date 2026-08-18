@@ -23,6 +23,9 @@ import {
 } from "@/lib/bookings/booking-shift-ui";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { useParentPendingBookingCount } from "@/lib/bookings/use-parent-pending-booking-count";
+import { useCancellationAttention } from "@/lib/bookings/use-cancellation-attention";
+import { CancellationAttentionDot } from "@/components/bookings/cancellation-attention-dot";
+import { CancellationAttentionModals } from "@/components/bookings/cancellation-attention-modals";
 import {
   acknowledgeApprovedBookingNotification,
   isApprovedScheduleNotificationCandidate,
@@ -443,6 +446,7 @@ export function ParentDashboardClient({
     initialActiveBooking?.parent_id ? String(initialActiveBooking.parent_id) : null
   );
   const pendingSitterApprovalCount = useParentPendingBookingCount(parentId, Boolean(parentId));
+  const cancellationAttention = useCancellationAttention(parentId, "parent", Boolean(parentId));
   const [profileCardStatus] = useState<"loading" | "complete" | "incomplete">("complete");
   const [activeBooking, setActiveBooking] = useState<BookingRow | null>(
     (initialActiveBooking as BookingRow | null | undefined) ?? null
@@ -1981,7 +1985,9 @@ export function ParentDashboardClient({
                   href="/parent/calendar"
                   onClick={dismissStatusBanner}
                   aria-label={
-                    pendingSitterApprovalCount > 0
+                    cancellationAttention.showDot
+                      ? "יומן תיאום המשמרות — יש עדכון ביטול"
+                      : pendingSitterApprovalCount > 0
                       ? `יומן תיאום המשמרות — ${pendingSitterApprovalCount} ממתינות לאישור בייביסיטר`
                       : "יומן תיאום המשמרות"
                   }
@@ -1989,6 +1995,7 @@ export function ParentDashboardClient({
                 >
                   <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
                     <Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                    <CancellationAttentionDot visible={cancellationAttention.showDot} />
                     {pendingSitterApprovalCount > 0 ? (
                       <span
                         className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white"
@@ -2238,7 +2245,7 @@ export function ParentDashboardClient({
             </>
           ) : null}
       </div>
-
+      <CancellationAttentionModals attention={cancellationAttention} role="parent" />
     </main>
   );
 }

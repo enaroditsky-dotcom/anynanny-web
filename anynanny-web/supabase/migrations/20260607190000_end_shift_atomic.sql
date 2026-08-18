@@ -56,8 +56,11 @@ begin
 
   -- 2. Booking -> completed in the SAME transaction (rolls back with the session on error).
   --    Resolve the linked booking via sessions.booking_id, fall back to id == session id.
+  --    actual_end_time uses the same p_end_iso written to sessions.end_time (not scheduled end_time).
+  --    coalesce keeps the first actual end on idempotent retries.
   update public.bookings
-     set status = 'completed'
+     set status = 'completed',
+         actual_end_time = coalesce(actual_end_time, p_end_iso)
    where parent_id = p_parent_id
      and id = coalesce(v_row.booking_id, p_session_id);
 

@@ -14,6 +14,7 @@ import {
 } from "@/lib/session/protocol";
 
 import { updateSessionReturningRow } from "@/lib/session/sessions-query";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 
 /**
  * Only values allowed by `bookings_status_check`
@@ -55,6 +56,16 @@ function resolveHourlyRate(
   }
 
   return rate;
+}
+
+/** Same timestamp written to sessions.end_time / passed as p_end_iso — not scheduled bookings.end_time. */
+function authoritativeActualEndIso(
+  session: SupabaseSessionRow | null | undefined,
+  confirmIso: string
+): string {
+  const fromSession =
+    typeof session?.end_time === "string" ? session.end_time.trim() : "";
+  return fromSession || confirmIso;
 }
 
 function computeShiftTotals(
@@ -569,6 +580,7 @@ export async function parentConfirmEndBooking(
    *
    * ה-Session נשאר payment_pending.
    */
+  const actualEndIso = authoritativeActualEndIso(sessionRow, now);
   const {
     data,
     error
@@ -576,7 +588,8 @@ export async function parentConfirmEndBooking(
     .from(BOOKINGS_TABLE)
     .update({
       status: "completed",
-      updated_at: now
+      updated_at: now,
+      actual_end_time: actualEndIso
     })
     .eq(
       "id",
@@ -598,7 +611,35 @@ export async function parentConfirmEndBooking(
     )
     .maybeSingle();
 
-  if (error) {
+  if (error && isPostgrestMissingColumnError(error.message, "actual_end_time")) {
+    const fallback = await supabase
+      .from(BOOKINGS_TABLE)
+      .update({
+        status: "completed",
+        updated_at: now
+      })
+      .eq("id", cleanBookingId)
+      .eq("parent_id", cleanParentId)
+      .in("status", [...ENDABLE_BOOKING_STATUSES, "completed"])
+      .select(BOOKING_SELECT_MINIMAL)
+      .maybeSingle();
+
+    if (fallback.error) {
+      return {
+        row: null,
+        session: sessionRow,
+        error: fallback.error.message
+      };
+    }
+
+    if (fallback.data) {
+      return {
+        row: fallback.data as BookingRow,
+        session: sessionRow,
+        error: null
+      };
+    }
+  } else if (error) {
     return {
       row: null,
       session: sessionRow,

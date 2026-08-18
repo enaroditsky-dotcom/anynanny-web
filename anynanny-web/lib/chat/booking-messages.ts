@@ -8,8 +8,9 @@ import {
   SITTER_PROFILES_USER_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
-import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
+import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { getCachedWorkingSelect, setCachedWorkingSelect } from "@/lib/supabase/rpc-availability";
+import { getChatLifecycle } from "@/lib/chat/chat-lifecycle";
 
 export const CHAT_ELIGIBLE_BOOKING_STATUSES: BookingStatus[] = [
   "pending",
@@ -17,6 +18,14 @@ export const CHAT_ELIGIBLE_BOOKING_STATUSES: BookingStatus[] = [
   "sitter_started",
   "parent_started",
   "sitter_ended"
+];
+
+/** Cancelled/completed shifts keep their conversation if messages already exist. */
+export const CHAT_HISTORY_BOOKING_STATUSES: BookingStatus[] = ["cancelled", "completed"];
+
+export const CHAT_INBOX_BOOKING_STATUSES: BookingStatus[] = [
+  ...CHAT_ELIGIBLE_BOOKING_STATUSES,
+  ...CHAT_HISTORY_BOOKING_STATUSES
 ];
 
 export type BookingChatInboxRow = {
@@ -27,7 +36,24 @@ export type BookingChatInboxRow = {
   partner_public_id: string | null;
   schedule_label: string;
   last_message_at: string;
+  booking_status: BookingStatus | string;
+  cancelled_at: string | null;
+  actual_end_time: string | null;
+  scheduled_end_time: string | null;
+  session_end_time: string | null;
 };
+
+/** Active bookings appear even before the first message. History bookings appear only with messages. */
+export function shouldIncludeBookingInChatInbox(
+  status: string | null | undefined,
+  hasMessages: boolean
+): boolean {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  if (hasMessages) {
+    return CHAT_INBOX_BOOKING_STATUSES.includes(normalized as BookingStatus);
+  }
+  return CHAT_ELIGIBLE_BOOKING_STATUSES.includes(normalized as BookingStatus);
+}
 
 type PartnerDetails = {
   name: string | null;
@@ -46,20 +72,16 @@ async function loadSitterPartnerDetailsByIds(
   const cached = getCachedWorkingSelect(cacheKey);
   const selectAttempts = [
     ...(cached ? [cached] : []),
-    `${fk}, first_name, last_name, nanny_serial, nanny_id_number`,
     `${fk}, first_name, last_name, nanny_serial`,
-    `${fk}, first_name, last_name, nanny_id_number`,
-    `${fk}, first_name, last_name`
+    `${fk}, first_name, last_name`,
+    `${fk}, first_name, last_name, nanny_serial, nanny_id_number`,
+    `${fk}, first_name, last_name, nanny_id_number`
   ].filter((s, i, arr) => arr.indexOf(s) === i);
 
   for (const select of selectAttempts) {
     const { data, error } = await supabase.from(SITTER_PROFILES_TABLE).select(select).in(fk, partnerIds);
     if (error) {
-      if (
-        isPostgrestMissingColumnError(error.message, "nanny_serial") ||
-        isPostgrestMissingColumnError(error.message, "nanny_id_number") ||
-        isPostgrestSchemaDriftError(error.message)
-      ) {
+      if (isPostgrestSchemaDriftError(error.message)) {
         continue;
       }
       console.warn("[chat-inbox] sitter partner profiles:", error.message);
@@ -95,10 +117,8 @@ async function loadParentPartnerDetailsByIds(
   const cached = getCachedWorkingSelect(cacheKey);
   const selectAttempts = [
     ...(cached ? [cached] : []),
-    "id, first_name, last_name, parent_public_id, parent_serial, public_id, serial_id",
-    "id, first_name, last_name, parent_public_id, parent_serial, serial_id",
+    "id, first_name, last_name, parent_serial, public_id, serial_id",
     "id, first_name, last_name, parent_serial, serial_id",
-    "id, first_name, last_name, public_id, serial_id",
     "id, first_name, last_name, serial_id",
     "id, first_name, last_name"
   ].filter((s, i, arr) => arr.indexOf(s) === i);
@@ -106,13 +126,7 @@ async function loadParentPartnerDetailsByIds(
   for (const select of selectAttempts) {
     const { data, error } = await supabase.from(PROFILES_TABLE).select(select).in("id", partnerIds);
     if (error) {
-      if (
-        isPostgrestMissingColumnError(error.message, "parent_public_id") ||
-        isPostgrestMissingColumnError(error.message, "parent_serial") ||
-        isPostgrestMissingColumnError(error.message, "public_id") ||
-        isPostgrestMissingColumnError(error.message, "serial_id") ||
-        isPostgrestSchemaDriftError(error.message)
-      ) {
+      if (isPostgrestSchemaDriftError(error.message)) {
         continue;
       }
       console.warn("[chat-inbox] parent partner profiles:", error.message);
@@ -137,6 +151,76 @@ async function loadParentPartnerDetailsByIds(
   return byId;
 }
 
+const CHAT_BOOKING_SELECT_ATTEMPTS = [
+  "id, parent_id, sitter_id, booking_date, start_time, end_time, actual_end_time, cancelled_at, updated_at, status",
+  "id, parent_id, sitter_id, booking_date, start_time, end_time, cancelled_at, updated_at, status",
+  "id, parent_id, sitter_id, booking_date, start_time, end_time, updated_at, status"
+];
+
+async function loadChatInboxBookings(
+  supabase: SupabaseClient,
+  userColumn: "parent_id" | "sitter_id",
+  userId: string
+): Promise<{ data: Record<string, unknown>[] | null; error: string | null }> {
+  let lastError: string | null = null;
+  for (const select of CHAT_BOOKING_SELECT_ATTEMPTS) {
+    const { data, error } = await supabase
+      .from(BOOKINGS_TABLE)
+      .select(select)
+      .eq(userColumn, userId)
+      .in("status", CHAT_INBOX_BOOKING_STATUSES)
+      .order("updated_at", { ascending: false });
+    if (!error) {
+      return { data: ((data ?? []) as unknown as Record<string, unknown>[]), error: null };
+    }
+    lastError = error.message;
+    if (!isPostgrestSchemaDriftError(error.message)) {
+      return { data: null, error: error.message };
+    }
+  }
+  return { data: null, error: lastError };
+}
+
+async function loadSessionEndTimesByBookingIds(
+  supabase: SupabaseClient,
+  bookingIds: string[]
+): Promise<Map<string, string>> {
+  const byId = new Map<string, string>();
+  if (bookingIds.length === 0) return byId;
+
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("id, booking_id, end_time")
+    .in("booking_id", bookingIds)
+    .not("end_time", "is", null);
+
+  if (error) {
+    if (isPostgrestSchemaDriftError(error.message)) {
+      const fallback = await supabase
+        .from("sessions")
+        .select("id, end_time")
+        .in("id", bookingIds)
+        .not("end_time", "is", null);
+      if (!fallback.error) {
+        for (const row of fallback.data ?? []) {
+          const id = String((row as { id?: string }).id ?? "").trim();
+          const endTime = String((row as { end_time?: string }).end_time ?? "").trim();
+          if (id && endTime && !byId.has(id)) byId.set(id, endTime);
+        }
+      }
+      return byId;
+    }
+    return byId;
+  }
+
+  for (const row of data ?? []) {
+    const bookingId = String((row as { booking_id?: string }).booking_id ?? "").trim();
+    const endTime = String((row as { end_time?: string }).end_time ?? "").trim();
+    if (bookingId && endTime && !byId.has(bookingId)) byId.set(bookingId, endTime);
+  }
+  return byId;
+}
+
 async function fetchBookingsWithMessagesForUser(
   supabase: SupabaseClient,
   userId: string,
@@ -145,16 +229,10 @@ async function fetchBookingsWithMessagesForUser(
   const userColumn = role === "parent" ? "parent_id" : "sitter_id";
   const partnerColumn = role === "parent" ? "sitter_id" : "parent_id";
 
-  // 1. שליפת משמרות שרק נמצאות בסטטוסים המורשים לצ'אט
-  const { data: bookings, error } = await supabase
-    .from(BOOKINGS_TABLE)
-    .select("id, parent_id, sitter_id, booking_date, start_time, end_time, updated_at, status")
-    .eq(userColumn, userId)
-    .in("status", CHAT_ELIGIBLE_BOOKING_STATUSES)
-    .order("updated_at", { ascending: false });
+  const { data: bookings, error } = await loadChatInboxBookings(supabase, userColumn, userId);
 
   if (error) {
-    return { rows: [], error: error.message };
+    return { rows: [], error };
   }
 
   if (!bookings?.length) {
@@ -162,6 +240,7 @@ async function fetchBookingsWithMessagesForUser(
   }
 
   const bookingIds = bookings.map((b) => String((b as { id: string }).id));
+  const sessionEndTimes = await loadSessionEndTimesByBookingIds(supabase, bookingIds);
   const { data: messages } = await supabase
     .from(MESSAGES_TABLE)
     .select("booking_id, created_at")
@@ -190,7 +269,6 @@ async function fetchBookingsWithMessagesForUser(
       ? await loadSitterPartnerDetailsByIds(supabase, partnerIds)
       : await loadParentPartnerDetailsByIds(supabase, partnerIds);
 
-  // 3. מיפוי כל המשמרות המורשות לרשימת חלוניות השיחה (שיחה ללא הודעות תקבל את זמן עדכון המשמרת כברירת מחדל)
   const rows = bookings
     .map((booking) => {
       const row = booking as {
@@ -201,19 +279,40 @@ async function fetchBookingsWithMessagesForUser(
         start_time: string;
         end_time: string;
         updated_at: string;
+        status?: string;
+        cancelled_at?: string | null;
+        actual_end_time?: string | null;
       };
       const bookingId = String(row.id);
+      const bookingStatus = String(row.status ?? "").trim().toLowerCase();
+      const hasMessages = lastMessageAt.has(bookingId);
+      if (!shouldIncludeBookingInChatInbox(bookingStatus, hasMessages)) {
+        return null;
+      }
       const partnerUserId = String(row[partnerColumn as keyof typeof row]);
       const details = partnerDetails.get(partnerUserId);
+      const scheduledEndTime = String(row.end_time ?? "").trim() || null;
+      const actualEndTime =
+        typeof row.actual_end_time === "string" && row.actual_end_time.trim()
+          ? row.actual_end_time
+          : null;
+      const cancelledAt =
+        typeof row.cancelled_at === "string" && row.cancelled_at.trim() ? row.cancelled_at : null;
       return {
         booking_id: bookingId,
         partner_user_id: partnerUserId,
         partner_name: details?.name ?? null,
         partner_public_id: details?.publicId ?? null,
         schedule_label: formatBookingSchedule(row),
-        last_message_at: lastMessageAt.get(bookingId) ?? row.updated_at
+        last_message_at: lastMessageAt.get(bookingId) ?? row.updated_at,
+        booking_status: bookingStatus,
+        cancelled_at: cancelledAt,
+        actual_end_time: actualEndTime,
+        scheduled_end_time: scheduledEndTime,
+        session_end_time: sessionEndTimes.get(bookingId) ?? null
       };
     })
+    .filter((row): row is BookingChatInboxRow => row !== null)
     .sort((a, b) => Date.parse(b.last_message_at) - Date.parse(a.last_message_at));
 
   return { rows, error: null };
@@ -239,12 +338,44 @@ export async function findChatBookingForParentSitter(
     return { bookingId: null, error: error.message };
   }
 
-  const bookingId = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : null;
-  if (!bookingId) {
-    return { bookingId: null, error: "אין משמרת פעילה עם בייביסיטר זו — תאמו משמרת כדי לשלוח הודעה." };
+  const activeId = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : null;
+  if (activeId) {
+    return { bookingId: activeId, error: null };
   }
 
-  return { bookingId, error: null };
+  const { data: history, error: historyError } = await supabase
+    .from(BOOKINGS_TABLE)
+    .select("id")
+    .eq("parent_id", parentId)
+    .eq("sitter_id", sitterId)
+    .in("status", CHAT_HISTORY_BOOKING_STATUSES)
+    .order("updated_at", { ascending: false })
+    .limit(20);
+
+  if (historyError) {
+    return { bookingId: null, error: historyError.message };
+  }
+
+  const historyIds = (history ?? [])
+    .map((row) => (row && typeof row === "object" && "id" in row ? String((row as { id: string }).id) : ""))
+    .filter(Boolean);
+
+  if (historyIds.length > 0) {
+    const { data: messages } = await supabase
+      .from(MESSAGES_TABLE)
+      .select("booking_id, created_at")
+      .in("booking_id", historyIds)
+      .order("created_at", { ascending: false });
+
+    for (const message of messages ?? []) {
+      const bookingId = String((message as { booking_id?: string }).booking_id ?? "").trim();
+      if (bookingId) {
+        return { bookingId, error: null };
+      }
+    }
+  }
+
+  return { bookingId: null, error: "אין משמרת פעילה עם בייביסיטר זו — תאמו משמרת כדי לשלוח הודעה." };
 }
 
 export async function fetchParentBookingChatInbox(
@@ -328,6 +459,70 @@ export async function verifyBookingChatParticipant(
   return { allowed: true, partnerName, error: null };
 }
 
+export async function fetchBookingChatLifecycle(
+  supabase: SupabaseClient,
+  bookingId: string
+): Promise<{
+  status: string | null;
+  cancelledAt: string | null;
+  actualEndTime: string | null;
+  scheduledEndTime: string | null;
+  sessionEndTime: string | null;
+  error: string | null;
+}> {
+  const id = bookingId.trim();
+  let booking: Record<string, unknown> | null = null;
+  let lastError: string | null = null;
+
+  for (const select of [
+    "status, end_time, actual_end_time, cancelled_at",
+    "status, end_time, cancelled_at",
+    "status, end_time"
+  ]) {
+    const { data, error } = await supabase.from(BOOKINGS_TABLE).select(select).eq("id", id).maybeSingle();
+    if (!error) {
+      booking = (data as Record<string, unknown> | null) ?? null;
+      lastError = null;
+      break;
+    }
+    lastError = error.message;
+    if (!isPostgrestSchemaDriftError(error.message)) {
+      return {
+        status: null,
+        cancelledAt: null,
+        actualEndTime: null,
+        scheduledEndTime: null,
+        sessionEndTime: null,
+        error: error.message
+      };
+    }
+  }
+
+  if (!booking) {
+    return {
+      status: null,
+      cancelledAt: null,
+      actualEndTime: null,
+      scheduledEndTime: null,
+      sessionEndTime: null,
+      error: lastError ?? "denied"
+    };
+  }
+
+  const sessionEndTimes = await loadSessionEndTimesByBookingIds(supabase, [id]);
+  const asString = (value: unknown): string | null =>
+    typeof value === "string" && value.trim() ? value : null;
+
+  return {
+    status: asString(booking.status),
+    cancelledAt: asString(booking.cancelled_at),
+    actualEndTime: asString(booking.actual_end_time),
+    scheduledEndTime: asString(booking.end_time),
+    sessionEndTime: sessionEndTimes.get(id) ?? null,
+    error: null
+  };
+}
+
 export async function fetchBookingChatPartner(
   supabase: SupabaseClient,
   bookingId: string,
@@ -375,6 +570,26 @@ export async function sendBookingMessage(
     return { message: null, error: "הודעה ריקה" };
   }
 
+  const lifecycleState = await fetchBookingChatLifecycle(supabase, bookingId);
+  if (!lifecycleState.error) {
+    const lifecycle = getChatLifecycle(
+      {
+        status: lifecycleState.status,
+        cancelledAt: lifecycleState.cancelledAt,
+        actualEndTime: lifecycleState.actualEndTime,
+        sessionEndTime: lifecycleState.sessionEndTime,
+        scheduledEndTime: lifecycleState.scheduledEndTime
+      },
+      Date.now()
+    );
+    if (!lifecycle.writable) {
+      return {
+        message: null,
+        error: lifecycle.closedHeadline ?? "השיחה נסגרה – לא ניתן לשלוח הודעות חדשות."
+      };
+    }
+  }
+
   const { data, error } = await supabase
     .from(MESSAGES_TABLE)
     .insert({ booking_id: bookingId, sender_id: senderId, content: trimmed })
@@ -382,6 +597,10 @@ export async function sendBookingMessage(
     .single();
 
   if (error) {
+    const message = error.message.toLowerCase();
+    if (message.includes("row-level security") || message.includes("42501")) {
+      return { message: null, error: "השיחה נסגרה – לא ניתן לשלוח הודעות חדשות." };
+    }
     return { message: null, error: error.message };
   }
 

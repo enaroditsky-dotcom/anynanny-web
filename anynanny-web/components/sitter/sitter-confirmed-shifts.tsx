@@ -3,40 +3,60 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock, Square } from "lucide-react";
+import { ShiftCancellationApproveModal } from "@/components/bookings/shift-cancellation-approve-modal";
+import { ShiftCancellationRequestModal } from "@/components/bookings/shift-cancellation-request-modal";
+import { ScheduledShiftActions } from "@/components/bookings/scheduled-shift-actions";
+import { SitterParentProfilePreview } from "@/components/sitter/sitter-parent-profile-preview";
 import { isBookingDateToday } from "@/lib/bookings/booking-date-utils";
-import { cancelSitterUpcomingShift } from "@/lib/bookings/cancel-sitter-shift";
-import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
+import { CANCELLATION_COPY, type CancellationShiftLike } from "@/lib/bookings/cancellation-request";
+import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import {
   fetchConfirmedShiftsForSitter,
   type ConfirmedShiftView
 } from "@/lib/bookings/sitter-confirmed-shifts";
+import { useShiftCancellationFlow } from "@/lib/bookings/use-shift-cancellation-flow";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
-const CANCEL_SHIFT_CONFIRM_MESSAGE = "האם לבטל ולמחוק משמרת זו?";
-
-/** Upcoming confirmed shifts that have not started yet. */
-function canCancelShift(status: BookingStatus | string): boolean {
-  return status === "approved";
+function toCancellationShift(shift: ConfirmedShiftView): CancellationShiftLike {
+  return {
+    id: shift.id,
+    status: shift.status,
+    bookingDate: shift.booking_date,
+    startTime: shift.start_time,
+    endTime: shift.end_time,
+    partnerName: shift.parent_full_name ?? "הורה",
+    paymentStatus: shift.payment_status ?? null,
+    cancellationRequestedBy: shift.cancellation_requested_by ?? null,
+    cancellationRequestedRole: shift.cancellation_requested_role ?? null,
+    cancellationRequestedAt: shift.cancellation_requested_at ?? null,
+    cancellationMessage: shift.cancellation_message ?? null,
+    cancellationApprovedBy: shift.cancellation_approved_by ?? null,
+    cancellationApprovedAt: shift.cancellation_approved_at ?? null,
+    cancelledBy: shift.cancelled_by ?? null,
+    cancelledAt: shift.cancelled_at ?? null,
+    cancellationAcknowledgedAt: shift.cancellation_acknowledged_at ?? null
+  };
 }
 
 function ShiftCard({
   shift,
-  showCancel = false,
-  cancelBusy = false,
-  onCancel = () => {}
+  sitterId,
+  onRequestCancellation,
+  onApproveCancellation
 }: {
   shift: ConfirmedShiftView;
-  showCancel?: boolean;
-  cancelBusy?: boolean;
-  onCancel?: () => void;
+  sitterId: string;
+  onRequestCancellation: () => void;
+  onApproveCancellation: () => void;
 }) {
   const isPast = new Date(shift.end_time).getTime() < Date.now();
   const isToday = isBookingDateToday(shift.booking_date);
   const isSitterStarted = shift.status === "sitter_started";
   const isParentStarted = shift.status === "parent_started";
   const isSitterEnded = shift.status === "sitter_ended";
+  const cancellationShift = toCancellationShift(shift);
 
   return (
     <li
@@ -77,17 +97,24 @@ function ShiftCard({
         <CalendarClock className="h-5 w-5 shrink-0 text-[#001F3F]/70" aria-hidden />
       </div>
 
-      {showCancel ? (
-        <div className="mt-3 flex flex-row-reverse items-center justify-start border-t border-slate-100 pt-3">
-          <button
-            type="button"
-            disabled={cancelBusy}
-            onClick={onCancel}
-            className="text-sm font-semibold text-red-600 underline-offset-2 transition hover:text-red-700 hover:underline disabled:opacity-50"
-          >
-            {cancelBusy ? "מבטל משמרת…" : "ביטול משמרת"}
-          </button>
-        </div>
+      {shift.status === "approved" ? (
+        <ScheduledShiftActions
+          shift={cancellationShift}
+          viewerRole="sitter"
+          viewerUserId={sitterId}
+          profileLabel={CANCELLATION_COPY.parentProfile}
+          contactHref={`/sitter/messages?parentId=${encodeURIComponent(shift.parent_id)}`}
+          renderProfile={
+            <SitterParentProfilePreview
+              bookingId={shift.id}
+              fallbackParentName={shift.parent_full_name}
+              label={CANCELLATION_COPY.parentProfile}
+              className="px-0 py-0 text-xs font-semibold text-navy-header underline hover:bg-transparent"
+            />
+          }
+          onRequestCancellation={onRequestCancellation}
+          onApproveCancellation={onApproveCancellation}
+        />
       ) : null}
 
       {isToday && !isPast ? (
@@ -128,8 +155,6 @@ export function SitterConfirmedShifts({
   const [shifts, setShifts] = useState<ConfirmedShiftView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [cancelBusyId, setCancelBusyId] = useState<string | null>(null);
-  const [cancelError, setCancelError] = useState<string | null>(null);
   const load = useCallback(async (uid: string) => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
@@ -187,34 +212,10 @@ export function SitterConfirmedShifts({
     };
   }, [disabled, effectiveSitterId, load]);
 
-  const handleCancelShift = useCallback(
-    async (shift: ConfirmedShiftView) => {
-      if (!canCancelShift(shift.status) || cancelBusyId) return;
-      if (!window.confirm(CANCEL_SHIFT_CONFIRM_MESSAGE)) return;
-
-      const supabase = getSupabaseBrowserClient();
-      if (!supabase || !effectiveSitterId) {
-        setCancelError("Supabase לא זמין");
-        return;
-      }
-
-      setCancelError(null);
-      setCancelBusyId(shift.id);
-
-      const result = await cancelSitterUpcomingShift(supabase, effectiveSitterId, shift.id);
-
-      setCancelBusyId(null);
-
-      if (!result.ok) {
-        setCancelError(result.error);
-        return;
-      }
-
-      setShifts((prev) => prev.filter((row) => row.id !== shift.id));
-      router.refresh();
-    },
-    [cancelBusyId, effectiveSitterId, router]
-  );
+  const cancellation = useShiftCancellationFlow(() => {
+    if (effectiveSitterId) void load(effectiveSitterId);
+    router.refresh();
+  });
 
   const { upcoming, past } = useMemo(() => {
     const now = Date.now();
@@ -247,12 +248,6 @@ export function SitterConfirmedShifts({
         הבקשות.
       </p>
 
-      {cancelError ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-right text-xs text-rose-900">
-          {cancelError}
-        </p>
-      ) : null}
-
       {upcoming.length === 0 && past.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-navy-header/15 bg-white px-4 py-10 text-center shadow-sm">
           <CalendarClock className="mx-auto h-8 w-8 text-navy-header/50" />
@@ -261,7 +256,7 @@ export function SitterConfirmedShifts({
         </div>
       ) : null}
 
-      {upcoming.length > 0 ? (
+      {upcoming.length > 0 && effectiveSitterId ? (
         <div>
           <h2 className="mb-2 text-right text-sm font-bold text-[#001F3F]">משמרות קרובות</h2>
           <ul className="space-y-3">
@@ -269,25 +264,50 @@ export function SitterConfirmedShifts({
               <ShiftCard
                 key={shift.id}
                 shift={shift}
-                showCancel={canCancelShift(shift.status)}
-                cancelBusy={cancelBusyId === shift.id}
-                onCancel={() => void handleCancelShift(shift)}
+                sitterId={effectiveSitterId}
+                onRequestCancellation={() => cancellation.openRequest(toCancellationShift(shift))}
+                onApproveCancellation={() => cancellation.openApprove(toCancellationShift(shift))}
               />
             ))}
           </ul>
         </div>
       ) : null}
 
-      {past.length > 0 ? (
+      {past.length > 0 && effectiveSitterId ? (
         <div>
           <h2 className="mb-2 text-right text-sm font-bold text-slate-700">היסטוריה אחרונה</h2>
           <ul className="space-y-3">
             {past.slice(0, 10).map((shift) => (
-              <ShiftCard key={shift.id} shift={shift} />
+              <ShiftCard
+                key={shift.id}
+                shift={shift}
+                sitterId={effectiveSitterId}
+                onRequestCancellation={() => cancellation.openRequest(toCancellationShift(shift))}
+                onApproveCancellation={() => cancellation.openApprove(toCancellationShift(shift))}
+              />
             ))}
           </ul>
         </div>
       ) : null}
+
+      <ShiftCancellationRequestModal
+        open={Boolean(cancellation.requestShift)}
+        shift={cancellation.requestShift}
+        partnerName={cancellation.requestShift?.partnerName ?? "הורה"}
+        busy={cancellation.busy}
+        error={cancellation.error}
+        onClose={cancellation.close}
+        onSubmit={(message) => void cancellation.submitRequest(message)}
+      />
+      <ShiftCancellationApproveModal
+        open={Boolean(cancellation.approveShift)}
+        shift={cancellation.approveShift}
+        partnerName={cancellation.approveShift?.partnerName ?? "הורה"}
+        busy={cancellation.busy}
+        error={cancellation.error}
+        onClose={cancellation.close}
+        onConfirm={() => void cancellation.submitApproval()}
+      />
     </section>
   );
 }

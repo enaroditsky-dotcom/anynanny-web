@@ -23,7 +23,7 @@ function read(relativePath: string): string {
 
 function shift(overrides: {
   id?: string;
-  status: "pending" | "approved" | "sitter_started" | "parent_started" | "rejected" | "completed";
+  status: "pending" | "approved" | "sitter_started" | "parent_started" | "rejected" | "completed" | "cancelled";
   bookingDate: string;
   startTime: string;
   endTime: string;
@@ -93,6 +93,19 @@ for (const view of ["today", "week", "month", "all"] as const) {
     `${view} must still include today's confirmed shift`
   );
 }
+
+const cancelled = shift({
+  id: "cancelled-1",
+  status: "cancelled",
+  bookingDate: "2026-08-20",
+  startTime: "2026-08-20T18:00:00",
+  endTime: "2026-08-20T22:00:00"
+});
+
+assert.equal(isUpcomingOrActiveCalendarShift(cancelled, now), false);
+assert.ok(
+  !filterCalendarShiftsByView([approved, cancelled], "all", undefined, now).some((s) => s.id === "cancelled-1")
+);
 
 assert.ok(PARENT_CALENDAR_LOAD_STATUSES.includes("pending"));
 assert.ok(PARENT_CALENDAR_LOAD_STATUSES.includes("approved"));

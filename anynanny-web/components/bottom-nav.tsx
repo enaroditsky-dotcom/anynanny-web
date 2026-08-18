@@ -77,15 +77,13 @@ function NavLink({
   pathname,
   hasUnreadMessages,
   hasWalletUpdate,
-  clearWalletNotification,
-  clearChatNotification
+  clearWalletNotification
 }: {
   item: NavItem;
   pathname: string;
   hasUnreadMessages: boolean;
   hasWalletUpdate: boolean;
   clearWalletNotification: () => void;
-  clearChatNotification: () => void;
 }) {
   const { href, label, match, Icon, badgeKey } = item;
   const active = match(pathname);
@@ -98,7 +96,6 @@ function NavLink({
       href={href}
       onClick={() => {
         if (badgeKey === "wallet") clearWalletNotification();
-        if (badgeKey === "messages") clearChatNotification();
       }}
       className={`flex min-w-0 w-full flex-col items-center justify-center gap-1.5 rounded-xl px-1 py-1.5 text-[13px] font-semibold leading-tight transition ${
         active ? "text-emerald-700" : "text-navy-header/70 hover:bg-slate-50 hover:text-navy-header"
@@ -161,7 +158,7 @@ export function BottomNav() {
   const role = currentRole === "sitter" ? "sitter" : "parent";
 
   const { hasWalletUpdate, clearWalletNotification } = useWalletNotification(user?.id, role);
-  const { hasUnreadMessages, clearChatNotification } = useChatNotification(user?.id);
+  const { hasUnreadMessages } = useChatNotification(user?.id);
 
   if (!signedIn) return null;
   if (!pathname.startsWith("/parent/") && !pathname.startsWith("/sitter/")) return null;
@@ -184,7 +181,6 @@ export function BottomNav() {
               hasUnreadMessages={hasUnreadMessages}
               hasWalletUpdate={hasWalletUpdate}
               clearWalletNotification={clearWalletNotification}
-              clearChatNotification={clearChatNotification}
             />
           ))}
           <AnyNannyNowFab active={nowActive} />
@@ -196,7 +192,6 @@ export function BottomNav() {
               hasUnreadMessages={hasUnreadMessages}
               hasWalletUpdate={hasWalletUpdate}
               clearWalletNotification={clearWalletNotification}
-              clearChatNotification={clearChatNotification}
             />
           ))}
         </div>
@@ -218,7 +213,6 @@ export function BottomNav() {
             hasUnreadMessages={hasUnreadMessages}
             hasWalletUpdate={hasWalletUpdate}
             clearWalletNotification={clearWalletNotification}
-            clearChatNotification={clearChatNotification}
           />
         ))}
       </div>

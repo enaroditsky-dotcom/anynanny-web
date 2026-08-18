@@ -3,7 +3,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { removeRealtimeChannel, subscribePostgresChanges } from '@/lib/supabase/subscribe-postgres-changes';
-import { fetchBookingMessages, sendBookingMessage } from '@/lib/chat/booking-messages';
+import { fetchBookingChatLifecycle, fetchBookingMessages, sendBookingMessage } from '@/lib/chat/booking-messages';
+import { getChatLifecycle, type ChatLifecycle } from '@/lib/chat/chat-lifecycle';
+import { markBookingMessagesRead, notifyChatUnreadChanged } from '@/lib/chat/unread-messages';
 
 interface MessageRow {
   id: string;
@@ -17,6 +19,7 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [lifecycle, setLifecycle] = useState<ChatLifecycle | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // גלילה אוטומטית להודעה האחרונה
@@ -28,16 +31,44 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !bookingId) return;
+    if (!supabase || !bookingId || !userId) return;
+    let cancelled = false;
+
+    const markConversationRead = async () => {
+      const { ok } = await markBookingMessagesRead(supabase, bookingId, userId);
+      if (cancelled || !ok) return;
+      notifyChatUnreadChanged();
+    };
+
+    void markConversationRead();
 
     // 1. טעינה ראשונית של הודעות בצורה מאובטחת דרך הפונקציה המובנית שלך
     const loadInitialMessages = async () => {
       const { messages: fetched, error } = await fetchBookingMessages(supabase, bookingId);
+      if (cancelled) return;
       if (!error && fetched) {
         setMessages(fetched as MessageRow[]);
       }
     };
     void loadInitialMessages();
+
+    const loadLifecycle = async () => {
+      const state = await fetchBookingChatLifecycle(supabase, bookingId);
+      if (cancelled || state.error) return;
+      setLifecycle(
+        getChatLifecycle(
+          {
+            status: state.status,
+            cancelledAt: state.cancelledAt,
+            actualEndTime: state.actualEndTime,
+            sessionEndTime: state.sessionEndTime,
+            scheduledEndTime: state.scheduledEndTime
+          },
+          Date.now()
+        )
+      );
+    };
+    void loadLifecycle();
 
     // 2. האזנה להודעות חדשות בזמן אמת דרך ערוץ הריל-טיים הרשמי
     const channel = subscribePostgresChanges(supabase, `chat-${bookingId}`, {
@@ -50,17 +81,21 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
           if (prev.some((m) => m.id === incoming.id)) return prev;
           return [...prev, incoming];
         });
+        if (incoming.sender_id && incoming.sender_id !== userId) {
+          void markConversationRead();
+        }
       }
     });
 
     return () => {
+      cancelled = true;
       removeRealtimeChannel(supabase, channel);
     };
-  }, [bookingId]);
+  }, [bookingId, userId]);
 
   const sendMessageHandler = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || sending) return;
+    if (!newMessage.trim() || sending || lifecycle?.writable === false) return;
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
@@ -104,7 +139,15 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
         <div ref={messagesEndRef} />
       </div>
 
-      {/* אזור הקלט */}
+      {/* אזור הקלט / מצב קריאה בלבד */}
+      {lifecycle?.closed ? (
+        <div className="border-t bg-slate-50 px-4 py-3 text-right">
+          <p className="text-sm font-semibold text-slate-700">{lifecycle.closedHeadline}</p>
+          {lifecycle.closedSupport ? (
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">{lifecycle.closedSupport}</p>
+          ) : null}
+        </div>
+      ) : (
       <form onSubmit={sendMessageHandler} className="p-3 bg-white border-t flex gap-2 items-center">
         <input 
           value={newMessage}
@@ -121,6 +164,7 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
           {sending ? 'שולח...' : 'שלח'}
         </button>
       </form>
+      )}
     </div>
   );
 }
