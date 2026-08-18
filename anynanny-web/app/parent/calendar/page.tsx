@@ -161,17 +161,26 @@ export default function ParentCalendarPage() {
   if (!ready) {
     return (
       <div className="flex h-full min-h-0 items-center justify-center">
-        <p className="text-center text-sm text-slate-600">טוען...</p>
+        <p className="text-center text-sm font-normal text-slate-500">טוען...</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden" dir="rtl">
-      <div className="shrink-0 pb-3">
+    <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-md flex-col overflow-hidden pt-1" dir="rtl">
+      <div className="shrink-0 space-y-4 pb-4">
         <PageBackRow>
           <PageBackLink href="/parent/dashboard" />
         </PageBackRow>
+
+        <header className="text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-navy-header">
+            יומן המשמרות
+          </h1>
+          <p className="mx-auto mt-2 max-w-[22rem] text-sm font-normal leading-relaxed text-slate-500">
+            כל המשמרות שלכם במקום אחד
+          </p>
+        </header>
       </div>
 
       <BookingCalendarPanel
