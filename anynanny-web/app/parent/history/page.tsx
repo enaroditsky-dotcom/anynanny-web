@@ -9,6 +9,8 @@ import {
 
 import {
   Calendar,
+  FileSearch,
+  Filter,
   Loader2,
   RefreshCw,
   Clock3,
@@ -860,7 +862,7 @@ export default function ParentHistoryPage() {
 
   return (
     <div
-      className="w-full space-y-4 px-4 pb-4 pt-2"
+      className="mx-auto w-full min-w-0 max-w-md space-y-5 pb-4 pt-1"
       dir="rtl"
     >
       <div className="flex items-center justify-between gap-3" dir="ltr">
@@ -877,11 +879,11 @@ export default function ParentHistoryPage() {
             !parentId ||
             loadingData
           }
-          className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-40"
+          className="p-1.5 text-slate-400 hover:text-slate-600 disabled:opacity-40"
           aria-label="רענון היסטוריית משמרות"
         >
           <RefreshCw
-            className={`h-3.5 w-3.5 ${
+            className={`h-4 w-4 ${
               loadingData
                 ? "animate-spin"
                 : ""
@@ -890,27 +892,29 @@ export default function ParentHistoryPage() {
         </button>
       </div>
 
-      <div className="text-center">
-        <h1 className="text-sm font-extrabold text-navy-header">
+      <header className="text-center">
+        <h1 className="text-2xl font-semibold tracking-tight text-navy-header">
           היסטוריית משמרות
         </h1>
-      </div>
+        <p className="mx-auto mt-2 max-w-[22rem] text-sm font-normal leading-relaxed text-slate-500">
+          צפו בכל המשמרות שלכם, סננו לפי תאריכים
+          <br />
+          וגלו כל פרט במקום אחד.
+        </p>
+      </header>
 
-      <div className="mx-auto max-w-sm space-y-2 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
-        <div className="flex items-center gap-1 pr-1 text-[12px] font-bold text-slate-400">
-          <Calendar className="h-3 w-3" />
-
-          <span>
-            סינון לפי טווח תאריכים
-          </span>
+      <div className="w-full min-w-0 space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
+        <div className="flex items-center gap-2 text-base font-semibold text-navy-header">
+          <Filter className="h-4 w-4 shrink-0 text-navy-header/70" aria-hidden />
+          <span>סינון לפי טווח תאריכים</span>
         </div>
 
-        <div>
+        <div className="space-y-2">
           <label
             htmlFor="history-date-filter"
-            className="mb-0.5 block pr-1 text-[11px] text-slate-400"
+            className="block text-sm font-normal text-slate-600"
           >
-            בחירת טווח
+            בחר/י טווח
           </label>
 
           <div className="relative">
@@ -925,7 +929,7 @@ export default function ParentHistoryPage() {
                     .value as DateFilterMode
                 )
               }
-              className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-8 pr-3 text-[13px] font-semibold text-slate-700"
+              className="min-h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 py-3 pl-10 pr-3 text-base font-medium text-navy-header"
             >
               <option value="last_week">
                 שבוע אחרון
@@ -946,9 +950,10 @@ export default function ParentHistoryPage() {
 
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
               <svg
-                className="h-3.5 w-3.5 fill-current"
+                className="h-4 w-4 fill-current"
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 20 20"
+                aria-hidden
               >
                 <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
               </svg>
@@ -958,9 +963,9 @@ export default function ParentHistoryPage() {
 
         {filterMode ===
         "custom" ? (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="mb-0.5 block pr-1 text-[11px] text-slate-400">
+          <div className="grid min-w-0 grid-cols-2 gap-3">
+            <div className="min-w-0">
+              <label className="mb-1.5 block text-sm font-normal text-slate-600">
                 מתאריך
               </label>
 
@@ -977,7 +982,7 @@ export default function ParentHistoryPage() {
                       .value
                   )
                 }
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-2 py-1.5 text-center text-[13px] text-slate-700"
+                className="min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-2 py-2.5 text-center text-sm text-navy-header"
                 style={{
                   direction:
                     "ltr"
@@ -985,8 +990,8 @@ export default function ParentHistoryPage() {
               />
             </div>
 
-            <div>
-              <label className="mb-0.5 block pr-1 text-[11px] text-slate-400">
+            <div className="min-w-0">
+              <label className="mb-1.5 block text-sm font-normal text-slate-600">
                 עד תאריך
               </label>
 
@@ -1003,7 +1008,7 @@ export default function ParentHistoryPage() {
                       .value
                   )
                 }
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-2 py-1.5 text-center text-[13px] text-slate-700"
+                className="min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-2 py-2.5 text-center text-sm text-navy-header"
                 style={{
                   direction:
                     "ltr"
@@ -1012,55 +1017,71 @@ export default function ParentHistoryPage() {
             </div>
           </div>
         ) : (
-          <p className="pr-1 text-[12px] tabular-nums text-slate-500">
-            מציג משמרות מ-
-            {activeRange.start
-              .split("-")
-              .reverse()
-              .join("/")}{" "}
-            עד{" "}
-            {activeRange.end
-              .split("-")
-              .reverse()
-              .join("/")}
+          <p className="flex items-start gap-2 text-sm font-normal leading-relaxed text-slate-500">
+            <Calendar
+              className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
+              aria-hidden
+            />
+            <span>
+              מציג משמרות מ־
+              <span className="font-semibold tabular-nums text-emerald-600">
+                {activeRange.start
+                  .split("-")
+                  .reverse()
+                  .join("/")}
+              </span>
+              {" "}עד{" "}
+              <span className="font-semibold tabular-nums text-emerald-600">
+                {activeRange.end
+                  .split("-")
+                  .reverse()
+                  .join("/")}
+              </span>
+            </span>
           </p>
         )}
       </div>
 
-      <section className="mx-auto max-w-2xl space-y-2.5">
-        <div>
-          {loadingData ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-400">
-              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-
-              <p className="text-[13px]">
-                טוען נתונים...
-              </p>
+      <section className="w-full min-w-0">
+        {loadingData ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200/80 bg-white px-5 py-12 text-slate-500 shadow-soft">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            <p className="text-sm font-normal">
+              טוען נתונים...
+            </p>
+          </div>
+        ) : filteredShifts.length ===
+          0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200/80 bg-white px-5 py-12 text-center shadow-soft">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 text-slate-400">
+              <FileSearch className="h-7 w-7" aria-hidden />
             </div>
-          ) : filteredShifts.length ===
-            0 ? (
-            <div className="py-10 text-center text-xs text-slate-400">
-              לא נמצאו משמרות
-              בטווח שנבחר
-            </div>
-          ) : (
-            filteredShifts.map(
+            <p className="text-base font-semibold text-navy-header">
+              לא נמצאו משמרות בטווח שנבחר
+            </p>
+            <p className="max-w-[18rem] text-sm font-normal leading-relaxed text-slate-500">
+              נסו לשנות את טווח התאריכים או לבדוק מאוחר יותר.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredShifts.map(
               (shift) => (
                 <div
                   key={
                     shift.id
                   }
-                  className="rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm transition-shadow hover:shadow-md"
+                  className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
                 >
-                  <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2.5">
-                    <div className="text-[15px] font-extrabold tabular-nums text-slate-800">
+                  <div className="mb-3 flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                    <div className="text-base font-semibold tabular-nums text-navy-header">
                       {
                         shift.date
                       }
                     </div>
 
                     <span
-                      className={`rounded-full px-2 py-1 text-[12px] font-bold ${
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                         shift.status ===
                         "שולם"
                           ? "bg-emerald-50 text-emerald-700"
@@ -1076,22 +1097,22 @@ export default function ParentHistoryPage() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid min-w-0 grid-cols-3 gap-2">
                     <div className="min-w-0 rounded-xl bg-violet-50/70 p-2.5">
-                      <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-violet-500">
-                        <UserRound className="h-3.5 w-3.5" />
+                      <div className="mb-1 flex items-center gap-1 text-xs font-medium text-violet-500">
+                        <UserRound className="h-3.5 w-3.5 shrink-0" />
 
                         שמרטפית
                       </div>
 
-                      <div className="truncate text-[14px] font-extrabold text-slate-800">
+                      <div className="truncate text-sm font-semibold text-navy-header">
                         {
                           shift.nanny_name
                         }
                       </div>
 
                       <div
-                        className="mt-0.5 truncate font-mono text-[12px] font-semibold text-violet-600"
+                        className="mt-0.5 truncate font-mono text-xs font-medium text-violet-600"
                         dir="ltr"
                       >
                         {
@@ -1101,14 +1122,14 @@ export default function ParentHistoryPage() {
                     </div>
 
                     <div className="min-w-0 rounded-xl bg-blue-50/70 p-2.5">
-                      <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-blue-500">
-                        <Clock3 className="h-3.5 w-3.5" />
+                      <div className="mb-1 flex items-center gap-1 text-xs font-medium text-blue-500">
+                        <Clock3 className="h-3.5 w-3.5 shrink-0" />
 
                         שעות
                       </div>
 
                       <div
-                        className="whitespace-nowrap text-[14px] font-extrabold tabular-nums text-slate-800"
+                        className="whitespace-nowrap text-sm font-semibold tabular-nums text-navy-header"
                         dir="ltr"
                       >
                         {
@@ -1118,13 +1139,13 @@ export default function ParentHistoryPage() {
                     </div>
 
                     <div className="min-w-0 rounded-xl bg-emerald-50/70 p-2.5">
-                      <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-emerald-600">
-                        <WalletCards className="h-3.5 w-3.5" />
+                      <div className="mb-1 flex items-center gap-1 text-xs font-medium text-emerald-600">
+                        <WalletCards className="h-3.5 w-3.5 shrink-0" />
 
                         סה״כ
                       </div>
 
-                      <div className="whitespace-nowrap text-[15px] font-extrabold tabular-nums text-emerald-700">
+                      <div className="whitespace-nowrap text-sm font-semibold tabular-nums text-emerald-700">
                         {formatNis(
                           shift.total_cost
                         )}
@@ -1133,9 +1154,9 @@ export default function ParentHistoryPage() {
                   </div>
                 </div>
               )
-            )
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

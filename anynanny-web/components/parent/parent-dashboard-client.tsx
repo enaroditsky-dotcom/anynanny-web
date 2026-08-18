@@ -1888,7 +1888,7 @@ export function ParentDashboardClient({
   }, [statusCardKey]);
 
   return (
-    <main className="relative mx-auto max-w-md space-y-4 p-4 pb-[calc(8rem+var(--anynanny-now-dock,0px))] overflow-y-auto min-h-screen" dir="rtl">
+    <main className="relative mx-auto w-full min-w-0 max-w-md space-y-4 pb-[calc(8rem+var(--anynanny-now-dock,0px))] overflow-y-auto min-h-screen" dir="rtl">
       {rejectedDeclineNotice ? (
         <DeclineNoticeUnit
           notice={rejectedDeclineNotice}
@@ -1904,8 +1904,7 @@ export function ParentDashboardClient({
       ) : null}
 
       <div className={`space-y-4 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
-        <div className="mx-auto max-w-sm rounded-3xl bg-white p-5 shadow-sm border border-slate-200/80 space-y-4">
-          <div className="rounded-2xl bg-slate-50/70 p-4 border border-slate-100 space-y-3">
+        <div className="w-full min-w-0 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
@@ -1974,8 +1973,10 @@ export function ParentDashboardClient({
               </div>
             ) : null}
 
+        </div>
+
             {!shouldHideDashboardActions ? (
-              <div className="grid grid-cols-3 gap-2 pt-1">
+              <div className="grid min-w-0 grid-cols-3 gap-2.5">
                 <Link
                   href="/parent/calendar"
                   onClick={dismissStatusBanner}
@@ -1984,44 +1985,47 @@ export function ParentDashboardClient({
                       ? `יומן תיאום המשמרות — ${pendingSitterApprovalCount} ממתינות לאישור בייביסיטר`
                       : "יומן תיאום המשמרות"
                   }
-                  className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
+                  className="group flex min-h-[6.5rem] min-w-0 flex-col items-end justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-3 text-right shadow-sm transition hover:bg-slate-50 hover:shadow-md active:scale-[0.98]"
                 >
-                  <span className="relative inline-flex">
-                    <Calendar className="h-5 w-5 shrink-0 text-emerald-600" />
+                  <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
+                    <Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden />
                     {pendingSitterApprovalCount > 0 ? (
                       <span
-                        className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-1.5 translate-x-1.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white"
+                        className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white"
                         aria-hidden
                       >
                         {pendingSitterApprovalCount > 9 ? "9+" : pendingSitterApprovalCount}
                       </span>
                     ) : null}
                   </span>
-                  <span className="text-[13px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                  <span className="w-full text-right text-xs font-semibold leading-snug text-slate-800 sm:text-sm">
                     יומן תיאום המשמרות
                   </span>
                 </Link>
                 <Link
                   href="/parent/wallet"
-                  className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
+                  className="group flex min-h-[6.5rem] min-w-0 flex-col items-end justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-3 text-right shadow-sm transition hover:bg-slate-50 hover:shadow-md active:scale-[0.98]"
                 >
-                  <Wallet className="h-5 w-5 shrink-0 text-emerald-600" />
-                  <span className="text-[13px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
+                    <Wallet className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                  </span>
+                  <span className="w-full text-right text-xs font-semibold leading-snug text-slate-800 sm:text-sm">
                     הארנק שלי
                   </span>
                 </Link>
                 <Link
                   href="/parent/history"
-                  className="flex min-h-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200/80 bg-white px-1.5 py-3 text-center shadow-2xs transition hover:bg-slate-50"
+                  className="group flex min-h-[6.5rem] min-w-0 flex-col items-end justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-3 text-right shadow-sm transition hover:bg-slate-50 hover:shadow-md active:scale-[0.98]"
                 >
-                  <History className="h-5 w-5 shrink-0 text-[#001F3F]" />
-                  <span className="text-[13px] font-semibold leading-snug text-slate-800 sm:text-xs">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
+                    <History className="h-6 w-6 stroke-[1.75] text-[#001F3F]" aria-hidden />
+                  </span>
+                  <span className="w-full text-right text-xs font-semibold leading-snug text-slate-800 sm:text-sm">
                     היסטוריית משמרות
                   </span>
                 </Link>
               </div>
             ) : null}
-          </div>
 
           {statusCardVisible ? (
             <DashboardStatusCard
@@ -2233,7 +2237,6 @@ export function ParentDashboardClient({
               </div>
             </>
           ) : null}
-        </div>
       </div>
 
     </main>

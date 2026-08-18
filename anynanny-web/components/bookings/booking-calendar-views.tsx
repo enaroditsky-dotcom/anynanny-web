@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Clock, MapPin } from "lucide-react";
+import { Clock, FileSearch, MapPin } from "lucide-react";
 import type { BookingStatus } from "@/lib/bookings/constants";
 import { resolveBookingWindowMs, todayDateISO } from "@/lib/bookings/booking-date-utils";
 import {
@@ -63,7 +63,7 @@ const CALENDAR_YEAR_MIN = 2025;
 const CALENDAR_YEAR_MAX = 2030;
 
 export const CALENDAR_PERIOD_SELECT_CLASS =
-  "min-w-0 flex-1 cursor-pointer appearance-none rounded-xl border border-navy-header/10 bg-white px-3 py-2 text-right text-sm font-semibold text-navy-header shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-navy-header/20";
+  "min-h-11 min-w-0 flex-1 cursor-pointer appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-right text-sm font-medium text-navy-header";
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -199,6 +199,17 @@ type CalendarViewsContext = {
   profileLinkLabel?: string;
 };
 
+function CalendarEmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 text-slate-400">
+        <FileSearch className="h-7 w-7" aria-hidden />
+      </div>
+      <p className="text-base font-semibold text-navy-header">{message}</p>
+    </div>
+  );
+}
+
 function ShiftCard({
   shift,
   compact = false,
@@ -214,38 +225,38 @@ function ShiftCard({
 
   return (
     <div
-      className={`rounded-2xl border border-slate-100 p-3 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
+      className={`rounded-2xl border border-slate-200/80 p-3 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
     >
       <div className="flex items-start justify-between gap-2">
         <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
         >
           {bookingStatusLabel(shift.status)}
         </span>
         <div className="min-w-0 flex-1">
-          <p className={`truncate font-bold text-[#001F3F] ${compact ? "text-xs" : "text-sm"}`}>
+          <p className={`truncate font-semibold text-navy-header ${compact ? "text-xs" : "text-sm"}`}>
             {shift.partnerName}
           </p>
           {shift.partnerAddress?.trim() ? (
-            <p className="mt-0.5 inline-flex max-w-full flex-row-reverse items-start gap-1 text-[13px] font-medium leading-snug text-slate-700">
-              <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" aria-hidden />
+            <p className="mt-0.5 inline-flex max-w-full flex-row-reverse items-start gap-1 text-sm font-normal leading-snug text-slate-600">
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
               <span className="min-w-0 text-right">{shift.partnerAddress.trim()}</span>
             </p>
           ) : null}
-          <p className="mt-0.5 text-[13px] font-medium text-slate-600 tabular-nums">{shift.scheduleLabel}</p>
+          <p className="mt-0.5 text-sm font-normal text-slate-600 tabular-nums">{shift.scheduleLabel}</p>
         </div>
       </div>
       {!compact ? (
-        <div className="mt-2 flex items-center justify-between text-[12px] text-slate-500">
+        <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
           {href && profileLinkLabel ? (
-            <Link href={href} className="font-bold text-navy-header underline">
+            <Link href={href} className="font-semibold text-navy-header underline">
               {profileLinkLabel}
             </Link>
           ) : (
             <span />
           )}
           <span className="inline-flex items-center gap-1 tabular-nums">
-            <Clock className="h-3 w-3" aria-hidden />
+            <Clock className="h-3.5 w-3.5" aria-hidden />
             {formatClockTime(shift.startTime)} – {formatClockTime(shift.endTime)}
           </span>
         </div>
@@ -269,11 +280,11 @@ function CalendarShell({
 }) {
   return (
     <div
-      className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm ${className}`.trim()}
+      className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft ${className}`.trim()}
     >
       <div className="shrink-0 border-b border-slate-100 px-4 py-3 text-right">
-        {titleControl ?? (title ? <p className="text-sm font-bold text-navy-header">{title}</p> : null)}
-        {subtitle ? <p className="text-[13px] text-slate-500">{subtitle}</p> : null}
+        {titleControl ?? (title ? <p className="text-base font-semibold text-navy-header">{title}</p> : null)}
+        {subtitle ? <p className="mt-0.5 text-sm font-normal text-slate-500">{subtitle}</p> : null}
       </div>
       {children}
     </div>
@@ -308,15 +319,15 @@ export function TodayGridView({
       subtitle={hasShifts ? `${shifts.length} משמרות היום` : embeddedEmptyHint("today")}
     >
       <div className="shrink-0 px-4 py-2 text-right">
-        <p className={`text-lg tabular-nums ${dateLabelClass(hasShifts)}`}>{formatIsraeliDate(today)}</p>
+        <p className={`text-lg font-semibold tabular-nums ${dateLabelClass(hasShifts)}`}>{formatIsraeliDate(today)}</p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-slate-100">
         <div className="relative flex" style={{ minHeight: `${timelineHeightRem}rem` }}>
-          <div className="sticky right-0 z-[1] w-11 shrink-0 border-l border-slate-100 bg-slate-50/95">
+          <div className="sticky right-0 z-[1] w-12 shrink-0 border-l border-slate-100 bg-slate-50/95">
             {hours.map((hour) => (
               <div
                 key={hour}
-                className="flex h-14 items-start justify-center pt-1 text-[11px] font-semibold text-slate-400"
+                className="flex h-14 items-start justify-center pt-1 text-xs font-medium tabular-nums text-slate-600"
               >
                 {pad2(hour)}:00
               </div>
@@ -334,19 +345,17 @@ export function TodayGridView({
                   className={`absolute inset-x-1.5 overflow-hidden rounded-lg border border-white/80 px-2 py-1 shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
                   style={style}
                 >
-                  <p className="truncate text-[12px] font-bold text-[#001F3F]">{shift.partnerName}</p>
-                  <p className="truncate text-[11px] text-slate-600 tabular-nums">
+                  <p className="truncate text-xs font-semibold text-navy-header">{shift.partnerName}</p>
+                  <p className="truncate text-xs font-normal text-slate-600 tabular-nums">
                     {formatClockTime(shift.startTime)} – {formatClockTime(shift.endTime)}
                   </p>
                 </div>
               );
             })}
             {!hasShifts ? (
-              <p
-                className={`pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}
-              >
-                {embeddedEmptyHint("today")}
-              </p>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <CalendarEmptyState message={embeddedEmptyHint("today")} />
+              </div>
             ) : null}
           </div>
         </div>
@@ -393,7 +402,7 @@ export function WeekGridView({
       title="תצוגת שבוע"
       subtitle={weekHasShifts ? `${shifts.length} משמרות השבוע` : embeddedEmptyHint("week")}
     >
-      <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-[12px] font-bold text-slate-400">
+      <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-xs font-semibold text-slate-500">
         {HEBREW_WEEKDAYS.map((label) => (
           <div key={label}>{label}</div>
         ))}
@@ -420,13 +429,13 @@ export function WeekGridView({
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-slate-100 px-3 py-3">
-        <p className="mb-2 text-right text-xs">
+        <p className="mb-2 text-right text-sm">
           <span className={dateLabelClass(selectedShifts.length > 0)}>
             {selectedDay?.weekdayFull} · {formatIsraeliDate(selectedIso)}
           </span>
         </p>
         {selectedShifts.length === 0 ? (
-          <p className={`py-2 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>אין משמרות ביום זה</p>
+          <CalendarEmptyState message="אין משמרות ביום זה" />
         ) : (
           <div className="space-y-2">
             {selectedShifts.map((shift) => (
@@ -524,7 +533,7 @@ export function MonthGridView({
       titleControl={periodHeader}
       subtitle={monthHasShifts ? `${shifts.length} משמרות החודש` : embeddedEmptyHint("month")}
     >
-      <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-[12px] font-bold text-slate-400">
+      <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-xs font-semibold text-slate-500">
         {HEBREW_WEEKDAYS.map((label) => (
           <div key={label}>{label}</div>
         ))}
@@ -561,13 +570,13 @@ export function MonthGridView({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-slate-100 px-3 py-3">
         {selectedIso ? (
           <>
-            <p className="mb-2 text-right text-xs">
+            <p className="mb-2 text-right text-sm">
               <span className={dateLabelClass(selectedShifts.length > 0)}>
                 {formatIsraeliDate(selectedIso)}
               </span>
             </p>
             {selectedShifts.length === 0 ? (
-              <p className={`py-2 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>אין משמרות בתאריך זה</p>
+              <CalendarEmptyState message="אין משמרות בתאריך זה" />
             ) : (
               <div className="space-y-2">
                 {selectedShifts.map((shift) => (
@@ -582,10 +591,12 @@ export function MonthGridView({
               </div>
             )}
           </>
-        ) : (
-          <p className={`py-1 text-center text-xs ${monthHasShifts ? "text-slate-500" : DATE_WITHOUT_SHIFT_CLASS}`}>
-            {monthHasShifts ? "לחצו על תאריך לצפייה במשמרות" : embeddedEmptyHint("month")}
+        ) : monthHasShifts ? (
+          <p className="py-8 text-center text-sm font-normal text-slate-500">
+            לחצו על תאריך לצפייה במשמרות
           </p>
+        ) : (
+          <CalendarEmptyState message={embeddedEmptyHint("month")} />
         )}
       </div>
     </CalendarShell>
@@ -641,36 +652,36 @@ function AllShiftsListCard({
 
   return (
     <li
-      className={`rounded-2xl border border-slate-100 p-4 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
+      className={`rounded-2xl border border-slate-200/80 p-4 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
     >
       <div className="flex flex-row-reverse items-start justify-between gap-2">
         <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
         >
           {bookingStatusLabel(shift.status)}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-[#001F3F]">{shift.partnerName}</p>
+          <p className="truncate text-sm font-semibold text-navy-header">{shift.partnerName}</p>
         </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-slate-50/90 p-3">
         <div className="flex flex-col gap-1 text-right">
-          <p className="text-[12px] font-bold uppercase tracking-wide text-slate-500">תחילה</p>
-          <span className="text-lg font-bold tabular-nums text-[#001F3F]">{labels.startTimeLabel}</span>
-          <span className="text-sm font-semibold tabular-nums text-slate-700">{labels.startDateLabel}</span>
+          <p className="text-xs font-medium tracking-wide text-slate-500">תחילה</p>
+          <span className="text-lg font-semibold tabular-nums text-navy-header">{labels.startTimeLabel}</span>
+          <span className="text-sm font-normal tabular-nums text-slate-600">{labels.startDateLabel}</span>
         </div>
 
         <div className="flex flex-col gap-1 border-r border-slate-200 pr-3 text-right">
-          <p className="text-[12px] font-bold uppercase tracking-wide text-slate-500">סיום</p>
-          <span className="text-lg font-bold tabular-nums text-[#001F3F]">{labels.endTimeLabel}</span>
-          <span className="text-sm font-semibold tabular-nums text-slate-700">{labels.endDateLabel}</span>
+          <p className="text-xs font-medium tracking-wide text-slate-500">סיום</p>
+          <span className="text-lg font-semibold tabular-nums text-navy-header">{labels.endTimeLabel}</span>
+          <span className="text-sm font-normal tabular-nums text-slate-600">{labels.endDateLabel}</span>
         </div>
       </div>
 
       {href && profileLinkLabel ? (
-        <div className="mt-3 flex flex-row-reverse items-center justify-between text-[12px] text-slate-500">
-          <Link href={href} className="font-bold text-navy-header underline">
+        <div className="mt-3 flex flex-row-reverse items-center justify-between text-xs text-slate-500">
+          <Link href={href} className="font-semibold text-navy-header underline">
             {profileLinkLabel}
           </Link>
         </div>
@@ -719,7 +730,7 @@ export function AllShiftsListView({
     >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
         {!hasShifts ? (
-          <p className={`py-6 text-center text-xs ${DATE_WITHOUT_SHIFT_CLASS}`}>{emptyHint}</p>
+          <CalendarEmptyState message={emptyHint} />
         ) : (
           <ul className="space-y-3">
             {sortedShifts.map((shift) => (

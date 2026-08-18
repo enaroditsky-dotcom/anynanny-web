@@ -45,9 +45,9 @@ export function BookingCalendarPanel({
   const viewProps = { profileHref, profileLinkLabel };
 
   return (
-    <div className={`flex h-full min-h-0 w-full flex-col overflow-hidden ${className}`.trim()} dir="rtl">
-      <div className="shrink-0 pb-3">
-        <label htmlFor={viewModeSelectId} className="mb-2 block pr-1 text-xs font-bold text-slate-400">
+    <div className={`flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden ${className}`.trim()} dir="rtl">
+      <div className="w-full min-w-0 shrink-0 space-y-2 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
+        <label htmlFor={viewModeSelectId} className="block text-sm font-normal text-slate-600">
           בחר תצוגה
         </label>
         <div className="relative">
@@ -55,7 +55,7 @@ export function BookingCalendarPanel({
             id={viewModeSelectId}
             value={viewMode}
             onChange={(e) => setViewMode(e.target.value as CalendarViewMode)}
-            className="w-full cursor-pointer appearance-none rounded-2xl border border-navy-header/10 bg-white p-3.5 text-right text-sm font-semibold text-navy-header shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-navy-header/20"
+            className="min-h-11 w-full cursor-pointer appearance-none rounded-xl border border-slate-200 bg-slate-50/80 py-3 pl-10 pr-3 text-base font-medium text-navy-header"
           >
             {viewOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -63,15 +63,15 @@ export function BookingCalendarPanel({
               </option>
             ))}
           </select>
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-500">
-            <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" aria-hidden>
               <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
             </svg>
           </div>
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div className="relative mt-4 min-h-0 min-w-0 flex-1 overflow-hidden">
         {viewMode === "today" ? (
           <TodayGridView shifts={filteredShifts} {...viewProps} />
         ) : viewMode === "week" ? (
@@ -98,7 +98,7 @@ export function BookingCalendarPanel({
         )}
         {loading ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/60">
-            <Loader2 className="h-5 w-5 animate-spin text-slate-500" aria-label="טוען משמרות" />
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" aria-label="טוען משמרות" />
           </div>
         ) : null}
       </div>
