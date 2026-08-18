@@ -48,6 +48,17 @@ export type BookingRow = {
   // הודעת דחייה אוטומטית מהנני
   rejection_note?: string | null;
 
+  /** Original cancellation requester (auth user id). Role is stored separately. */
+  cancellation_requested_by?: string | null;
+  cancellation_requested_role?: "parent" | "sitter" | null;
+  cancellation_requested_at?: string | null;
+  cancellation_message?: string | null;
+  cancellation_approved_by?: string | null;
+  cancellation_approved_at?: string | null;
+  cancelled_by?: string | null;
+  cancelled_at?: string | null;
+  cancellation_acknowledged_at?: string | null;
+
   created_at: string;
   updated_at: string;
 };

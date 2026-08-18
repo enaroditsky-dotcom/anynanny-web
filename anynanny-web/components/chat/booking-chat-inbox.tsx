@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { fetchBookingChatInboxForRole, type BookingChatInboxRow } from "@/lib/chat/booking-messages";
+import { chatLifecycleFromInboxRow, type ChatLifecycle } from "@/lib/chat/chat-lifecycle";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
@@ -19,6 +20,96 @@ type BookingChatInboxProps = {
   emptyActionLabel?: string;
 };
 
+function ConversationCard({
+  row,
+  lifecycle,
+  chatHref,
+  emptyPartnerLabel
+}: {
+  row: BookingChatInboxRow;
+  lifecycle: ChatLifecycle;
+  chatHref: (bookingId: string) => string;
+  emptyPartnerLabel: string;
+}) {
+  const past = lifecycle.section === "past";
+  const cancelled = lifecycle.kind === "cancelled";
+  const completed = lifecycle.kind === "completed";
+
+  return (
+    <Link
+      href={chatHref(row.booking_id)}
+      className={`flex flex-row-reverse items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-sm transition ${
+        past
+          ? "border-slate-200 bg-slate-50 hover:bg-slate-100/80"
+          : "border-navy-header/10 bg-white hover:bg-brand-cream/40"
+      }`}
+    >
+      <span className="text-xs tabular-nums text-slate-500">
+        {new Date(row.last_message_at).toLocaleDateString("he-IL", { dateStyle: "short" })}
+      </span>
+      <span className="min-w-0 flex-1 text-right">
+        <span className="flex min-w-0 items-center justify-end gap-1.5">
+          <span className={`truncate text-sm font-semibold ${past ? "text-slate-700" : "text-[#001F3F]"}`}>
+            {row.partner_name ?? emptyPartnerLabel}
+          </span>
+          {row.partner_public_id ? (
+            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[12px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200/80">
+              {row.partner_public_id} ID
+            </span>
+          ) : null}
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-slate-500">{row.schedule_label}</span>
+        {lifecycle.label ? (
+          <span
+            className={`mt-0.5 block text-[11px] font-medium ${
+              cancelled ? "text-orange-800/90" : completed ? "text-slate-600" : "text-slate-500"
+            }`}
+          >
+            {lifecycle.label}
+          </span>
+        ) : null}
+      </span>
+      <MessageCircle
+        className={`h-5 w-5 shrink-0 ${past ? "text-slate-400" : "text-[#001F3F]"}`}
+        aria-hidden
+      />
+    </Link>
+  );
+}
+
+function ConversationSection({
+  title,
+  rows,
+  nowMs,
+  chatHref,
+  emptyPartnerLabel
+}: {
+  title: string;
+  rows: BookingChatInboxRow[];
+  nowMs: number;
+  chatHref: (bookingId: string) => string;
+  emptyPartnerLabel: string;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="space-y-2">
+      <h2 className="text-right text-sm font-bold text-navy-header">{title}</h2>
+      <ul className="space-y-2">
+        {rows.map((row) => (
+          <li key={row.booking_id}>
+            <ConversationCard
+              row={row}
+              lifecycle={chatLifecycleFromInboxRow(row, nowMs)}
+              chatHref={chatHref}
+              emptyPartnerLabel={emptyPartnerLabel}
+            />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function BookingChatInbox({
   role,
   dashboardHref,
@@ -31,6 +122,7 @@ function BookingChatInbox({
   const { isLoading, signedIn, effectiveRole } = useAuth();
   const [inbox, setInbox] = useState<BookingChatInboxRow[]>([]);
   const [loadingInbox, setLoadingInbox] = useState(true);
+  const nowMs = Date.now();
 
   const loadInbox = useCallback(async () => {
     const auth = await resolveBrowserAuth();
@@ -61,6 +153,21 @@ function BookingChatInbox({
     void loadInbox();
   }, [isLoading, signedIn, effectiveRole, role, loadInbox]);
 
+  const grouped = useMemo(() => {
+    const active: BookingChatInboxRow[] = [];
+    const past: BookingChatInboxRow[] = [];
+    for (const row of inbox) {
+      const lifecycle = chatLifecycleFromInboxRow(row, nowMs);
+      if (lifecycle.section === "active") active.push(row);
+      else past.push(row);
+    }
+    const byRecent = (a: BookingChatInboxRow, b: BookingChatInboxRow) =>
+      Date.parse(b.last_message_at) - Date.parse(a.last_message_at);
+    active.sort(byRecent);
+    past.sort(byRecent);
+    return { active, past };
+  }, [inbox, nowMs]);
+
   return (
     <>
       <div className="space-y-2">
@@ -84,34 +191,22 @@ function BookingChatInbox({
           ) : null}
         </section>
       ) : (
-        <ul className="space-y-2">
-          {inbox.map((row) => (
-            <li key={row.booking_id}>
-              <Link
-                href={chatHref(row.booking_id)}
-                className="flex flex-row-reverse items-center justify-between gap-3 rounded-2xl border border-navy-header/10 bg-white px-4 py-3 shadow-sm transition hover:bg-brand-cream/40"
-              >
-                <span className="text-xs tabular-nums text-slate-500">
-                  {new Date(row.last_message_at).toLocaleDateString("he-IL", { dateStyle: "short" })}
-                </span>
-                <span className="min-w-0 flex-1 text-right">
-                  <span className="flex min-w-0 items-center justify-end gap-1.5">
-                    <span className="truncate text-sm font-semibold text-[#001F3F]">
-                      {row.partner_name ?? emptyPartnerLabel}
-                    </span>
-                    {row.partner_public_id ? (
-                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[12px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200/80">
-                        {row.partner_public_id} ID
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="mt-0.5 block truncate text-xs text-slate-500">{row.schedule_label}</span>
-                </span>
-                <MessageCircle className="h-5 w-5 shrink-0 text-[#001F3F]" aria-hidden />
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-5">
+          <ConversationSection
+            title="שיחות פתוחות"
+            rows={grouped.active}
+            nowMs={nowMs}
+            chatHref={chatHref}
+            emptyPartnerLabel={emptyPartnerLabel}
+          />
+          <ConversationSection
+            title="שיחות קודמות"
+            rows={grouped.past}
+            nowMs={nowMs}
+            chatHref={chatHref}
+            emptyPartnerLabel={emptyPartnerLabel}
+          />
+        </div>
       )}
     </>
   );

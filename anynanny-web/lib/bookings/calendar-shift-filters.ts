@@ -2,6 +2,7 @@ import { todayDateISO, resolveBookingWindowMs } from "@/lib/bookings/booking-dat
 import { isSitterBookingAwaitingApprovalStatus } from "@/lib/bookings/booking-realtime-handler";
 import type { BookingStatus } from "@/lib/bookings/constants";
 import type { BookingStatusInput } from "@/lib/bookings/booking-status-normalize";
+import { isTemporarilyVisibleCancelledShift } from "@/lib/bookings/cancellation-request";
 
 /**
  * Canonical booking status for a parent request still waiting on the sitter.
@@ -15,6 +16,9 @@ export type CalendarShiftFilterFields = {
   startTime: string;
   endTime: string;
   status: BookingStatus;
+  cancellationRequestedBy?: string | null;
+  cancellationAcknowledgedAt?: string | null;
+  cancelledAt?: string | null;
 };
 
 export type CalendarViewMode = "today" | "week" | "month" | "all" | "pending_sitter_approval";
@@ -112,25 +116,39 @@ export function isUpcomingOrActiveCalendarShift(
   return window.endMs >= nowMs;
 }
 
+export function isActiveCalendarShiftForViewer(
+  shift: CalendarShiftFilterFields,
+  viewerUserId?: string | null,
+  nowMs = Date.now()
+): boolean {
+  if (isTemporarilyVisibleCancelledShift(shift, viewerUserId)) return true;
+  return isUpcomingOrActiveCalendarShift(shift, nowMs);
+}
+
 /** Parent calendar dataset: pending requests (any date) plus confirmed upcoming/active shifts. */
 export function isVisibleParentCalendarShift(
   shift: CalendarShiftFilterFields,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  viewerUserId?: string | null
 ): boolean {
-  return isPendingSitterApprovalCalendarShift(shift.status) || isUpcomingOrActiveCalendarShift(shift, nowMs);
+  return (
+    isPendingSitterApprovalCalendarShift(shift.status) ||
+    isActiveCalendarShiftForViewer(shift, viewerUserId, nowMs)
+  );
 }
 
 export function filterCalendarShiftsByView<T extends CalendarShiftFilterFields>(
   shifts: T[],
   view: CalendarViewMode,
   period?: { month: number; year: number },
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  viewerUserId?: string | null
 ): T[] {
   if (view === "pending_sitter_approval") {
     return shifts.filter((s) => isPendingSitterApprovalCalendarShift(s.status));
   }
 
-  const relevant = shifts.filter((s) => isUpcomingOrActiveCalendarShift(s, nowMs));
+  const relevant = shifts.filter((s) => isActiveCalendarShiftForViewer(s, viewerUserId, nowMs));
   const today = todayDateISO();
   switch (view) {
     case "today":

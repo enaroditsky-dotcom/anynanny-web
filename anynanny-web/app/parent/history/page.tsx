@@ -44,6 +44,14 @@ import {
   sessionStartValue,
   type HistorySessionRow
 } from "@/lib/session/completed-shift-history";
+import {
+  CANCELLATION_COPY,
+  cancellationHistoryLabel,
+  formatCancellationDateTime,
+  isCancellationColumnMissing,
+  pickCancellationFields,
+  withCancellationSelect
+} from "@/lib/bookings/cancellation-request";
 
 type NannyShiftHistoryItem = {
   id: string;
@@ -58,6 +66,9 @@ type NannyShiftHistoryItem = {
   total_cost: number | null;
 
   status: string;
+  cancellation_label?: string | null;
+  cancellation_message?: string | null;
+  cancelled_at_label?: string | null;
 };
 
 type DateFilterMode =
@@ -301,10 +312,53 @@ export default function ParentHistoryPage() {
            * This is safer than relying only on the sitter's
            * current profile price.
            */
-          const bookingsResult =
-            await supabase
+          const historySelect = withCancellationSelect(`
+                id,
+                sitter_id,
+                booking_date,
+                start_time,
+                end_time,
+                status,
+                hourly_rate_nis,
+                sitter_profiles (
+                  nanny_serial,
+                  nanny_id_number,
+                  hourly_rate_nis
+                ),
+                profiles:sitter_id (
+                  first_name
+                )
+              `);
+
+          let bookingsResult: {
+            data: unknown;
+            error: { message: string } | null;
+          } =
+            (await supabase
               .from("bookings")
-              .select(`
+              .select(historySelect)
+              .eq(
+                "parent_id",
+                resolvedParentId
+              )
+              .order(
+                "booking_date",
+                {
+                  ascending: false
+                }
+              )) as {
+              data: unknown;
+              error: { message: string } | null;
+            };
+
+          if (
+            bookingsResult.error &&
+            isCancellationColumnMissing(bookingsResult.error.message)
+          ) {
+            bookingsResult =
+              (await supabase
+                .from("bookings")
+                .select(`
                 id,
                 sitter_id,
                 booking_date,
@@ -321,16 +375,20 @@ export default function ParentHistoryPage() {
                   first_name
                 )
               `)
-              .eq(
-                "parent_id",
-                resolvedParentId
-              )
-              .order(
-                "booking_date",
-                {
-                  ascending: false
-                }
-              );
+                .eq(
+                  "parent_id",
+                  resolvedParentId
+                )
+                .order(
+                  "booking_date",
+                  {
+                    ascending: false
+                  }
+                )) as {
+                data: unknown;
+                error: { message: string } | null;
+              };
+          }
 
           /*
            * SESSIONS
@@ -399,6 +457,9 @@ export default function ParentHistoryPage() {
           } =
             bookingsResult;
 
+          const bookingRows =
+            (Array.isArray(data) ? data : []) as any[];
+
           if (error) {
             console.warn(
               "History: DB Response Error:",
@@ -420,11 +481,10 @@ export default function ParentHistoryPage() {
           }
 
           if (
-            data &&
-            data.length > 0
+            bookingRows.length > 0
           ) {
             const formatted =
-              data.map(
+              bookingRows.map(
                 (
                   booking: any
                 ) => {
@@ -580,6 +640,18 @@ export default function ParentHistoryPage() {
                     session
                   );
 
+                  const cancellation = pickCancellationFields(
+                    booking as Record<string, unknown>
+                  );
+                  const cancellationLabel =
+                    String(booking.status ?? "").trim().toLowerCase() === "cancelled"
+                      ? cancellationHistoryLabel(cancellation.cancellationRequestedRole)
+                      : null;
+
+                  if (cancellationLabel) {
+                    statusLabel = cancellationLabel;
+                  }
+
                   return {
                     id:
                       booking.id,
@@ -606,7 +678,16 @@ export default function ParentHistoryPage() {
                       totalCost,
 
                     status:
-                      statusLabel
+                      statusLabel,
+
+                    cancellation_label:
+                      cancellationLabel,
+
+                    cancellation_message:
+                      cancellation.cancellationMessage,
+
+                    cancelled_at_label:
+                      formatCancellationDateTime(cancellation.cancelledAt)
                   };
                 }
               );
@@ -1085,6 +1166,8 @@ export default function ParentHistoryPage() {
                         shift.status ===
                         "שולם"
                           ? "bg-emerald-50 text-emerald-700"
+                          : shift.cancellation_label
+                            ? "bg-rose-50 text-rose-700"
                           : shift.status ===
                               "ממתין לאישור"
                             ? "bg-blue-50 text-blue-700"
@@ -1152,6 +1235,18 @@ export default function ParentHistoryPage() {
                       </div>
                     </div>
                   </div>
+
+                  {shift.cancellation_message ? (
+                    <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-right text-xs leading-relaxed text-rose-900">
+                      <span className="font-semibold">{CANCELLATION_COPY.messageHistoryLabel}: </span>
+                      {shift.cancellation_message}
+                    </p>
+                  ) : null}
+                  {shift.cancelled_at_label ? (
+                    <p className="mt-1 text-right text-[11px] tabular-nums text-slate-500">
+                      בוטל ב־{shift.cancelled_at_label}
+                    </p>
+                  ) : null}
                 </div>
               )
             )}

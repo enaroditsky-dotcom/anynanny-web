@@ -10,15 +10,14 @@ import {
   TodayGridView,
   WeekGridView,
   type CalendarShift,
+  type CalendarShiftActionContext,
   type CalendarViewMode
 } from "@/components/bookings/booking-calendar-views";
 
-type BookingCalendarPanelProps = {
+type BookingCalendarPanelProps = CalendarShiftActionContext & {
   shifts: CalendarShift[];
   loading?: boolean;
   viewModeSelectId?: string;
-  profileHref?: (shift: CalendarShift) => string | null;
-  profileLinkLabel?: string;
   className?: string;
   viewOptions?: { value: CalendarViewMode; label: string }[];
 };
@@ -29,6 +28,13 @@ export function BookingCalendarPanel({
   viewModeSelectId = "calendar-view-mode",
   profileHref,
   profileLinkLabel,
+  contactHref,
+  renderProfileAction,
+  viewerRole,
+  viewerUserId,
+  onRequestCancellation,
+  onApproveCancellation,
+  onAcknowledgeCancellation,
   className = "",
   viewOptions = CALENDAR_VIEW_OPTIONS
 }: BookingCalendarPanelProps) {
@@ -38,11 +44,28 @@ export function BookingCalendarPanel({
   const [currentYear, setCurrentYear] = useState(initialPeriod.getFullYear());
 
   const filteredShifts = useMemo(
-    () => filterCalendarShiftsByView(shifts, viewMode, { month: currentMonth, year: currentYear }),
-    [shifts, viewMode, currentMonth, currentYear]
+    () =>
+      filterCalendarShiftsByView(
+        shifts,
+        viewMode,
+        { month: currentMonth, year: currentYear },
+        Date.now(),
+        viewerUserId
+      ),
+    [shifts, viewMode, currentMonth, currentYear, viewerUserId]
   );
 
-  const viewProps = { profileHref, profileLinkLabel };
+  const viewProps = {
+    profileHref,
+    profileLinkLabel,
+    contactHref,
+    renderProfileAction,
+    viewerRole,
+    viewerUserId,
+    onRequestCancellation,
+    onApproveCancellation,
+    onAcknowledgeCancellation
+  };
 
   return (
     <div className={`flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden ${className}`.trim()} dir="rtl">

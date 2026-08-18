@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { BookingCalendarPanel } from "@/components/bookings/booking-calendar-panel";
+import { ShiftCancellationApproveModal } from "@/components/bookings/shift-cancellation-approve-modal";
+import { ShiftCancellationRequestModal } from "@/components/bookings/shift-cancellation-request-modal";
 import {
   PARENT_CALENDAR_VIEW_OPTIONS,
   type CalendarShift
@@ -12,11 +14,23 @@ import {
   isVisibleParentCalendarShift,
   PARENT_CALENDAR_LOAD_STATUSES
 } from "@/lib/bookings/calendar-shift-filters";
+import {
+  isCancellationColumnMissing,
+  pickCancellationFields,
+  withCancellationSelect
+} from "@/lib/bookings/cancellation-request";
+import { useCancellationAttention } from "@/lib/bookings/use-cancellation-attention";
+import { CancellationAttentionModals } from "@/components/bookings/cancellation-attention-modals";
+import { useShiftCancellationFlow } from "@/lib/bookings/use-shift-cancellation-flow";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { normalizeBookingStatus } from "@/lib/bookings/booking-status-normalize";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
+
+const PARENT_CALENDAR_BASE_SELECT =
+  "id, parent_id, sitter_id, booking_date, start_time, end_time, status, payment_status";
 
 export default function ParentCalendarPage() {
   const router = useRouter();
@@ -31,13 +45,28 @@ export default function ParentCalendarPage() {
 
     setLoadingBookings(true);
     try {
-      const { data: rows, error } = await supabase
+      const withCancellation = await supabase
         .from(BOOKINGS_TABLE)
-        .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status")
+        .select(withCancellationSelect(PARENT_CALENDAR_BASE_SELECT))
         .eq("parent_id", resolvedParentId)
-        .in("status", PARENT_CALENDAR_LOAD_STATUSES)
+        .in("status", [...PARENT_CALENDAR_LOAD_STATUSES, "cancelled"])
         .order("booking_date", { ascending: true })
         .order("start_time", { ascending: true });
+
+      let rows: unknown[] | null = (withCancellation.data as unknown[] | null) ?? null;
+      let error = withCancellation.error;
+
+      if (error && isCancellationColumnMissing(error.message)) {
+        const fallback = await supabase
+          .from(BOOKINGS_TABLE)
+          .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status")
+          .eq("parent_id", resolvedParentId)
+          .in("status", [...PARENT_CALENDAR_LOAD_STATUSES, "cancelled"])
+          .order("booking_date", { ascending: true })
+          .order("start_time", { ascending: true });
+        rows = (fallback.data as unknown[] | null) ?? null;
+        error = fallback.error;
+      }
 
       if (error) {
         console.warn("[parent/calendar] bookings load:", error.message);
@@ -45,13 +74,13 @@ export default function ParentCalendarPage() {
         return;
       }
 
-      const bookings = rows ?? [];
+      const bookings = (rows ?? []) as Record<string, unknown>[];
       if (bookings.length === 0) {
         setAllShifts([]);
         return;
       }
 
-      const sitterIds = [...new Set(bookings.map((b) => String((b as { sitter_id: string }).sitter_id)))];
+      const sitterIds = [...new Set(bookings.map((b) => String(b.sitter_id ?? "")))].filter(Boolean);
       const { data: profiles } = await supabase
         .from(PROFILES_TABLE)
         .select("id, first_name, last_name")
@@ -66,7 +95,7 @@ export default function ParentCalendarPage() {
         if (name) nameBySitterId.set(id, name);
       }
 
-      const formatted: CalendarShift[] = bookings
+      const formatted = bookings
         .map((raw) => {
           const row = raw as {
             id: string;
@@ -75,10 +104,12 @@ export default function ParentCalendarPage() {
             start_time: string;
             end_time: string;
             status: BookingStatus;
+            payment_status?: string | null;
           };
           const status = normalizeBookingStatus(row.status);
           if (!status) return null;
-          return {
+          const cancellation = pickCancellationFields(raw);
+          const shift: CalendarShift = {
             id: row.id,
             partnerId: row.sitter_id,
             partnerName: nameBySitterId.get(row.sitter_id) ?? "שמרטפית AnyNanny",
@@ -86,11 +117,19 @@ export default function ParentCalendarPage() {
             startTime: row.start_time,
             endTime: row.end_time,
             status,
-            scheduleLabel: formatBookingSchedule(row)
+            scheduleLabel: formatBookingSchedule(row),
+            paymentStatus:
+              row.payment_status === "paid" ||
+              row.payment_status === "pending_checkout" ||
+              row.payment_status === "unpaid"
+                ? row.payment_status
+                : null,
+            ...cancellation
           };
+          return shift;
         })
         .filter((shift): shift is CalendarShift => shift != null)
-        .filter((shift) => isVisibleParentCalendarShift(shift));
+        .filter((shift) => isVisibleParentCalendarShift(shift, Date.now(), resolvedParentId));
 
       setAllShifts(formatted);
     } catch (e) {
@@ -153,8 +192,47 @@ export default function ParentCalendarPage() {
     void fetchBookedShifts(parentId);
   }, [parentId, fetchBookedShifts]);
 
+  useEffect(() => {
+    if (!parentId) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    const channel = subscribePostgresChanges(supabase, `parent-calendar-bookings-${parentId}`, {
+      event: "*",
+      table: BOOKINGS_TABLE,
+      filter: `parent_id=eq.${parentId}`,
+      handler: () => {
+        void fetchBookedShifts(parentId);
+      }
+    });
+
+    return () => {
+      removeRealtimeChannel(supabase, channel);
+    };
+  }, [parentId, fetchBookedShifts]);
+
+  const attention = useCancellationAttention(
+    parentId,
+    "parent",
+    Boolean(parentId),
+    parentId ? () => void fetchBookedShifts(parentId) : undefined
+  );
+  const cancellation = useShiftCancellationFlow(
+    parentId
+      ? () => {
+          void fetchBookedShifts(parentId);
+          void attention.refresh();
+        }
+      : undefined
+  );
+
   const profileHref = useCallback(
     (shift: CalendarShift) => `/parent/sitter/${encodeURIComponent(shift.partnerId)}`,
+    []
+  );
+
+  const contactHref = useCallback(
+    (shift: CalendarShift) => `/parent/messages?sitter_id=${encodeURIComponent(shift.partnerId)}`,
     []
   );
 
@@ -190,8 +268,37 @@ export default function ParentCalendarPage() {
         viewOptions={PARENT_CALENDAR_VIEW_OPTIONS}
         profileHref={profileHref}
         profileLinkLabel="פרופיל שמרטפית"
+        contactHref={contactHref}
+        viewerRole="parent"
+        viewerUserId={parentId}
+        onRequestCancellation={cancellation.openRequest}
+        onApproveCancellation={cancellation.openApprove}
+        onAcknowledgeCancellation={(shift) => {
+          void attention.acknowledgeApproved(shift.id).then((ok) => {
+            if (ok && parentId) void fetchBookedShifts(parentId);
+          });
+        }}
         className="min-h-0 flex-1"
       />
+      <ShiftCancellationRequestModal
+        open={Boolean(cancellation.requestShift)}
+        shift={cancellation.requestShift}
+        partnerName={cancellation.requestShift?.partnerName ?? "שמרטפית"}
+        busy={cancellation.busy}
+        error={cancellation.error}
+        onClose={cancellation.close}
+        onSubmit={(message) => void cancellation.submitRequest(message)}
+      />
+      <ShiftCancellationApproveModal
+        open={Boolean(cancellation.approveShift)}
+        shift={cancellation.approveShift}
+        partnerName={cancellation.approveShift?.partnerName ?? "שמרטפית"}
+        busy={cancellation.busy}
+        error={cancellation.error}
+        onClose={cancellation.close}
+        onConfirm={() => void cancellation.submitApproval()}
+      />
+      <CancellationAttentionModals attention={attention} role="parent" />
     </div>
   );
 }

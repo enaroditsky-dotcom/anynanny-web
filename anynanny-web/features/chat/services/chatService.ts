@@ -1,6 +1,7 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { MESSAGES_TABLE } from "@/lib/chat/constants";
+import type { IncomingChatMessageRow } from "@/lib/chat/unread-messages";
 import { subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 /**
@@ -13,7 +14,7 @@ export const chatService = {
    */
   subscribeToIncomingMessages(
     userId: string,
-    onIncomingMessage: () => void
+    onIncomingMessage: (row: IncomingChatMessageRow) => void
   ): RealtimeChannel | null {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !userId.trim()) return null;
@@ -25,9 +26,9 @@ export const chatService = {
         event: "INSERT",
         table: MESSAGES_TABLE,
         handler: (payload) => {
-          const row = payload.new as { sender_id?: string } | null;
-          if (!row || row.sender_id === userId) return;
-          onIncomingMessage();
+          const row = payload.new as IncomingChatMessageRow | null;
+          if (!row?.sender_id || row.sender_id === userId) return;
+          onIncomingMessage(row);
         }
       },
       undefined,

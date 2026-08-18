@@ -14,15 +14,29 @@ import type {
   CalendarShift
 } from "@/components/bookings/booking-calendar-views";
 
+import { CancellationAttentionModals } from "@/components/bookings/cancellation-attention-modals";
+import { ShiftCancellationApproveModal } from "@/components/bookings/shift-cancellation-approve-modal";
+import { ShiftCancellationRequestModal } from "@/components/bookings/shift-cancellation-request-modal";
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
 import { SitterParentProfilePreview } from "@/components/sitter/sitter-parent-profile-preview";
 
+import {
+  CANCELLATION_COPY,
+  cancellationHistoryLabel,
+  formatCancellationDateTime,
+  isCancellationColumnMissing,
+  pickCancellationFields,
+  withCancellationSelect
+} from "@/lib/bookings/cancellation-request";
+import { useShiftCancellationFlow } from "@/lib/bookings/use-shift-cancellation-flow";
+import { useCancellationAttention } from "@/lib/bookings/use-cancellation-attention";
 import {
   BOOKINGS_TABLE,
   type BookingStatus
 } from "@/lib/bookings/constants";
 
 import { resolveBookingWindowMs } from "@/lib/bookings/booking-date-utils";
+import { isActiveCalendarShiftForViewer } from "@/lib/bookings/calendar-shift-filters";
 
 import {
   resolveShiftTimeWindow,
@@ -124,6 +138,10 @@ interface Shift {
   end_time: string;
 
   total_amount_nis: number | null;
+
+  cancellation_requested_role?: "parent" | "sitter" | null;
+  cancellation_message?: string | null;
+  cancelled_at?: string | null;
 }
 
 type ViewType =
@@ -257,6 +275,15 @@ function statusBadge(
     return {
       label:
         "ממתינה לאישור",
+
+      className:
+        "bg-rose-50 text-rose-700"
+    };
+  }
+
+  if (status === "cancelled") {
+    return {
+      label: "בוטלה",
 
       className:
         "bg-rose-50 text-rose-700"
@@ -549,16 +576,18 @@ export default function SitterShiftsPage() {
                 BOOKINGS_TABLE
               )
               .select(
-                [
-                  "id",
-                  "parent_id",
-                  "sitter_id",
-                  "booking_date",
-                  "start_time",
-                  "end_time",
-                  "status",
-                  "hourly_rate_nis"
-                ].join(", ")
+                withCancellationSelect(
+                  [
+                    "id",
+                    "parent_id",
+                    "sitter_id",
+                    "booking_date",
+                    "start_time",
+                    "end_time",
+                    "status",
+                    "hourly_rate_nis"
+                  ].join(", ")
+                )
               )
               .eq(
                 "sitter_id",
@@ -576,13 +605,13 @@ export default function SitterShiftsPage() {
               );
           } else {
             query =
-              query.eq(
+              query.in(
                 "status",
-                "completed"
+                ["completed", "cancelled"]
               );
           }
 
-          const {
+          let {
             data,
             error
           } =
@@ -594,6 +623,35 @@ export default function SitterShiftsPage() {
                   "pending"
               }
             );
+
+          if (error && isCancellationColumnMissing(error.message)) {
+            let fallbackQuery = supabase
+              .from(BOOKINGS_TABLE)
+              .select(
+                [
+                  "id",
+                  "parent_id",
+                  "sitter_id",
+                  "booking_date",
+                  "start_time",
+                  "end_time",
+                  "status",
+                  "hourly_rate_nis"
+                ].join(", ")
+              )
+              .eq("sitter_id", sitterId);
+
+            fallbackQuery =
+              viewType === "pending"
+                ? fallbackQuery.eq("status", "pending")
+                : fallbackQuery.in("status", ["completed", "cancelled"]);
+
+            const fallback = await fallbackQuery.order("booking_date", {
+              ascending: viewType === "pending"
+            });
+            data = fallback.data;
+            error = fallback.error;
+          }
 
           if (error) {
             throw error;
@@ -869,7 +927,20 @@ export default function SitterShiftsPage() {
                     ) ?? "",
 
                   total_amount_nis:
-                    totalAmount
+                    totalAmount,
+
+                  ...(() => {
+                    const cancellation = pickCancellationFields(
+                      booking as unknown as Record<string, unknown>
+                    );
+                    return {
+                      cancellation_requested_role:
+                        cancellation.cancellationRequestedRole,
+                      cancellation_message:
+                        cancellation.cancellationMessage,
+                      cancelled_at: cancellation.cancelledAt
+                    };
+                  })()
                 };
               }
             );
@@ -926,16 +997,15 @@ export default function SitterShiftsPage() {
             return;
           }
 
-          const {
-            data,
-            error
-          } =
+          const withCancellation =
             await supabase
               .from(
                 BOOKINGS_TABLE
               )
               .select(
-                "id, parent_id, booking_date, start_time, end_time, status"
+                withCancellationSelect(
+                  "id, parent_id, booking_date, start_time, end_time, status, payment_status"
+                )
               )
               .eq(
                 "sitter_id",
@@ -944,7 +1014,8 @@ export default function SitterShiftsPage() {
               .in(
                 "status",
                 [
-                  ...SITTER_CALENDAR_CONFIRMED_STATUSES
+                  ...SITTER_CALENDAR_CONFIRMED_STATUSES,
+                  "cancelled"
                 ]
               )
               .order(
@@ -962,13 +1033,28 @@ export default function SitterShiftsPage() {
                 }
               );
 
+          let data: unknown = withCancellation.data;
+          let error = withCancellation.error;
+
+          if (error && isCancellationColumnMissing(error.message)) {
+            const fallback = await supabase
+              .from(BOOKINGS_TABLE)
+              .select("id, parent_id, booking_date, start_time, end_time, status")
+              .eq("sitter_id", sitterId)
+              .in("status", [...SITTER_CALENDAR_CONFIRMED_STATUSES, "cancelled"])
+              .order("booking_date", { ascending: true })
+              .order("start_time", { ascending: true });
+            data = fallback.data;
+            error = fallback.error;
+          }
+
           if (error) {
             throw error;
           }
 
           const bookingRows =
             (data ??
-              []) as BookingRow[];
+              []) as unknown as BookingRow[];
 
           const parentIds = [
             ...new Set(
@@ -993,8 +1079,14 @@ export default function SitterShiftsPage() {
             );
 
           setCalendarShifts(
-            bookingRows.map(
-              (row) => ({
+            bookingRows
+              .map((row): CalendarShift => {
+                const cancellation = pickCancellationFields(
+                  row as unknown as Record<string, unknown>
+                );
+                const paymentStatus =
+                  (row as { payment_status?: string | null }).payment_status;
+                return {
                 id: row.id,
 
                 partnerId:
@@ -1029,9 +1121,19 @@ export default function SitterShiftsPage() {
                 scheduleLabel:
                   formatBookingSchedule(
                     row
-                  )
+                  ),
+
+                paymentStatus:
+                  paymentStatus === "paid" ||
+                  paymentStatus === "pending_checkout" ||
+                  paymentStatus === "unpaid"
+                    ? paymentStatus
+                    : null,
+
+                ...cancellation
+              };
               })
-            )
+              .filter((shift) => isActiveCalendarShiftForViewer(shift, sitterId))
           );
         } catch (err) {
           console.error(
@@ -1282,7 +1384,7 @@ export default function SitterShiftsPage() {
       void fetchListShifts();
     };
 
-  const calendarProfileHref =
+  const calendarContactHref =
     useCallback(
       (
         shift:
@@ -1293,6 +1395,30 @@ export default function SitterShiftsPage() {
         )}`,
       []
     );
+
+  const attention = useCancellationAttention(user?.id ?? null, "sitter", Boolean(user?.id), () => {
+    void fetchCalendarShifts();
+    void fetchListShifts();
+  });
+  const cancellation = useShiftCancellationFlow(
+    () => {
+      void fetchCalendarShifts();
+      void fetchListShifts();
+      void attention.refresh();
+    }
+  );
+
+  const renderSitterParentProfile = useCallback(
+    (shift: CalendarShift) => (
+      <SitterParentProfilePreview
+        bookingId={shift.id}
+        fallbackParentName={shift.partnerName}
+        label={CANCELLATION_COPY.parentProfile}
+        className="px-0 py-0 text-xs font-semibold text-navy-header underline hover:bg-transparent"
+      />
+    ),
+    []
+  );
 
   return (
     <SitterPageShell
@@ -1388,10 +1514,24 @@ export default function SitterShiftsPage() {
                 authLoading
               }
               viewModeSelectId="sitter-shifts-calendar-view-mode"
-              profileHref={
-                calendarProfileHref
+              profileLinkLabel={CANCELLATION_COPY.parentProfile}
+              contactHref={
+                calendarContactHref
               }
-              profileLinkLabel="צור קשר"
+              renderProfileAction={
+                renderSitterParentProfile
+              }
+              viewerRole="sitter"
+              viewerUserId={user?.id ?? null}
+              onRequestCancellation={
+                cancellation.openRequest
+              }
+              onApproveCancellation={
+                cancellation.openApprove
+              }
+              onAcknowledgeCancellation={(shift) => {
+                void attention.acknowledgeApproved(shift.id);
+              }}
               className="h-full"
             />
           </div>
@@ -1433,6 +1573,15 @@ export default function SitterShiftsPage() {
                   viewType ===
                   "past"
                 ) {
+                  const cancelledLabel =
+                    shift.status === "cancelled"
+                      ? cancellationHistoryLabel(
+                          shift.cancellation_requested_role
+                        ) ?? "בוטלה"
+                      : null;
+                  const cancelledAtLabel =
+                    formatCancellationDateTime(shift.cancelled_at);
+
                   return (
                     <div
                       key={
@@ -1448,9 +1597,14 @@ export default function SitterShiftsPage() {
                         </div>
 
                         <span
-                          className={`rounded-full px-2 py-1 text-[12px] font-bold ${badge.className}`}
+                          className={`rounded-full px-2 py-1 text-[12px] font-bold ${
+                            cancelledLabel
+                              ? "bg-rose-50 text-rose-700"
+                              : badge.className
+                          }`}
                         >
                           {
+                            cancelledLabel ??
                             badge.label
                           }
                         </span>
@@ -1531,6 +1685,18 @@ export default function SitterShiftsPage() {
                           </div>
                         </div>
                       </div>
+
+                      {shift.status === "cancelled" && shift.cancellation_message ? (
+                        <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-right text-xs leading-relaxed text-rose-900">
+                          <span className="font-semibold">{CANCELLATION_COPY.messageHistoryLabel}: </span>
+                          {shift.cancellation_message}
+                        </p>
+                      ) : null}
+                      {shift.status === "cancelled" && cancelledAtLabel ? (
+                        <p className="mt-1 text-right text-[11px] tabular-nums text-slate-500">
+                          בוטל ב־{cancelledAtLabel}
+                        </p>
+                      ) : null}
                     </div>
                   );
                 }
@@ -1707,6 +1873,25 @@ export default function SitterShiftsPage() {
           </div>
         )}
       </div>
+      <ShiftCancellationRequestModal
+        open={Boolean(cancellation.requestShift)}
+        shift={cancellation.requestShift}
+        partnerName={cancellation.requestShift?.partnerName ?? "הורה"}
+        busy={cancellation.busy}
+        error={cancellation.error}
+        onClose={cancellation.close}
+        onSubmit={(message) => void cancellation.submitRequest(message)}
+      />
+      <ShiftCancellationApproveModal
+        open={Boolean(cancellation.approveShift)}
+        shift={cancellation.approveShift}
+        partnerName={cancellation.approveShift?.partnerName ?? "הורה"}
+        busy={cancellation.busy}
+        error={cancellation.error}
+        onClose={cancellation.close}
+        onConfirm={() => void cancellation.submitApproval()}
+      />
+      <CancellationAttentionModals attention={attention} role="sitter" />
     </SitterPageShell>
   );
 }

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Clock, FileSearch, MapPin } from "lucide-react";
-import type { BookingStatus } from "@/lib/bookings/constants";
+import type { BookingPaymentStatus, BookingStatus } from "@/lib/bookings/constants";
 import { resolveBookingWindowMs, todayDateISO } from "@/lib/bookings/booking-date-utils";
+import type { BookingCancellationFields, CancellationRequesterRole } from "@/lib/bookings/cancellation-request";
 import {
   calendarViewEmptyHint,
   CALENDAR_VIEW_OPTIONS,
@@ -13,6 +14,12 @@ import {
   PARENT_CALENDAR_VIEW_OPTIONS,
   type CalendarViewMode
 } from "@/lib/bookings/calendar-shift-filters";
+import { ScheduledShiftActions } from "@/components/bookings/scheduled-shift-actions";
+import { CancelledShiftAckBanner } from "@/components/bookings/cancelled-shift-ack-banner";
+import {
+  CANCELLATION_COPY,
+  isTemporarilyVisibleCancelledShift
+} from "@/lib/bookings/cancellation-request";
 
 export type CalendarShift = {
   id: string;
@@ -24,7 +31,8 @@ export type CalendarShift = {
   endTime: string;
   status: BookingStatus;
   scheduleLabel: string;
-};
+  paymentStatus?: BookingPaymentStatus | null;
+} & Partial<BookingCancellationFields>;
 
 export type { CalendarViewMode };
 export {
@@ -139,6 +147,8 @@ function bookingStatusLabel(status: BookingStatus): string {
       return "ממתין לסיום";
     case "completed":
       return "הושלם";
+    case "cancelled":
+      return CANCELLATION_COPY.approvedTitle;
     default:
       return "בפעילות";
   }
@@ -157,6 +167,8 @@ function statusBadgeClass(status: BookingStatus): string {
       return "bg-rose-50 text-rose-800 border-rose-100";
     case "completed":
       return "bg-slate-100 text-slate-700 border-slate-200";
+    case "cancelled":
+      return "bg-rose-50 text-rose-800 border-rose-100";
     default:
       return "bg-slate-100 text-slate-600 border-slate-200";
   }
@@ -175,6 +187,8 @@ function shiftAccentClass(status: BookingStatus): string {
       return "border-r-rose-500 bg-rose-50/90";
     case "completed":
       return "border-r-slate-400 bg-slate-50/90";
+    case "cancelled":
+      return "border-r-rose-400 bg-rose-50/80";
     default:
       return "border-r-navy-header bg-[#FDFBF6]";
   }
@@ -194,10 +208,19 @@ function shiftTimelineStyle(startTime: string, endTime: string): { top: string; 
   return { top: `${top}%`, height: `${height}%` };
 }
 
-type CalendarViewsContext = {
+export type CalendarShiftActionContext = {
   profileHref?: (shift: CalendarShift) => string | null;
   profileLinkLabel?: string;
+  contactHref?: (shift: CalendarShift) => string | null;
+  renderProfileAction?: (shift: CalendarShift) => ReactNode;
+  viewerRole?: CancellationRequesterRole;
+  viewerUserId?: string | null;
+  onRequestCancellation?: (shift: CalendarShift) => void;
+  onApproveCancellation?: (shift: CalendarShift) => void;
+  onAcknowledgeCancellation?: (shift: CalendarShift) => void;
 };
+
+type CalendarViewsContext = CalendarShiftActionContext;
 
 function CalendarEmptyState({ message }: { message: string }) {
   return (
@@ -210,18 +233,110 @@ function CalendarEmptyState({ message }: { message: string }) {
   );
 }
 
+function toCancellationShift(shift: CalendarShift) {
+  return {
+    id: shift.id,
+    status: shift.status,
+    bookingDate: shift.bookingDate,
+    startTime: shift.startTime,
+    endTime: shift.endTime,
+    partnerName: shift.partnerName,
+    paymentStatus: shift.paymentStatus ?? null,
+    cancellationRequestedBy: shift.cancellationRequestedBy ?? null,
+    cancellationRequestedRole: shift.cancellationRequestedRole ?? null,
+    cancellationRequestedAt: shift.cancellationRequestedAt ?? null,
+    cancellationMessage: shift.cancellationMessage ?? null,
+    cancellationApprovedBy: shift.cancellationApprovedBy ?? null,
+    cancellationApprovedAt: shift.cancellationApprovedAt ?? null,
+    cancelledBy: shift.cancelledBy ?? null,
+    cancelledAt: shift.cancelledAt ?? null,
+    cancellationAcknowledgedAt: shift.cancellationAcknowledgedAt ?? null
+  };
+}
+
+function ShiftScheduledActions({
+  shift,
+  profileHref,
+  profileLinkLabel,
+  contactHref,
+  renderProfileAction,
+  viewerRole,
+  viewerUserId,
+  onRequestCancellation,
+  onApproveCancellation,
+  onAcknowledgeCancellation
+}: CalendarViewsContext & { shift: CalendarShift }) {
+  if (isTemporarilyVisibleCancelledShift(toCancellationShift(shift), viewerUserId)) {
+    if (!onAcknowledgeCancellation) return null;
+    return <CancelledShiftAckBanner onAcknowledge={() => onAcknowledgeCancellation(shift)} />;
+  }
+
+  if (!viewerRole || !viewerUserId || !onRequestCancellation || !onApproveCancellation) {
+    const href = profileHref?.(shift) ?? null;
+    if (!href || !profileLinkLabel) return null;
+    return (
+      <div className="mt-2 text-xs">
+        <Link href={href} className="font-semibold text-navy-header underline">
+          {profileLinkLabel}
+        </Link>
+      </div>
+    );
+  }
+
+  if (shift.status !== "approved") {
+    const href = profileHref?.(shift) ?? null;
+    if (!href || !profileLinkLabel) return null;
+    return (
+      <div className="mt-2 text-xs">
+        <Link href={href} className="font-semibold text-navy-header underline">
+          {profileLinkLabel}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <ScheduledShiftActions
+      shift={toCancellationShift(shift)}
+      viewerRole={viewerRole}
+      viewerUserId={viewerUserId}
+      profileLabel={profileLinkLabel ?? ""}
+      profileHref={profileHref?.(shift) ?? null}
+      renderProfile={renderProfileAction?.(shift)}
+      contactHref={contactHref?.(shift) ?? null}
+      onRequestCancellation={() => onRequestCancellation(shift)}
+      onApproveCancellation={() => onApproveCancellation(shift)}
+    />
+  );
+}
+
 function ShiftCard({
   shift,
   compact = false,
   profileHref,
-  profileLinkLabel
-}: {
+  profileLinkLabel,
+  contactHref,
+  renderProfileAction,
+  viewerRole,
+  viewerUserId,
+  onRequestCancellation,
+  onApproveCancellation,
+  onAcknowledgeCancellation
+}: CalendarViewsContext & {
   shift: CalendarShift;
   compact?: boolean;
-  profileHref?: (shift: CalendarShift) => string | null;
-  profileLinkLabel?: string;
 }) {
-  const href = profileHref?.(shift) ?? null;
+  const actionProps = {
+    profileHref,
+    profileLinkLabel,
+    contactHref,
+    renderProfileAction,
+    viewerRole,
+    viewerUserId,
+    onRequestCancellation,
+    onApproveCancellation,
+    onAcknowledgeCancellation
+  };
 
   return (
     <div
@@ -247,20 +362,14 @@ function ShiftCard({
         </div>
       </div>
       {!compact ? (
-        <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-          {href && profileLinkLabel ? (
-            <Link href={href} className="font-semibold text-navy-header underline">
-              {profileLinkLabel}
-            </Link>
-          ) : (
-            <span />
-          )}
+        <div className="mt-2 flex items-center justify-end text-xs text-slate-500">
           <span className="inline-flex items-center gap-1 tabular-nums">
             <Clock className="h-3.5 w-3.5" aria-hidden />
             {formatClockTime(shift.startTime)} – {formatClockTime(shift.endTime)}
           </span>
         </div>
       ) : null}
+      <ShiftScheduledActions shift={shift} {...actionProps} />
     </div>
   );
 }
@@ -303,8 +412,7 @@ function SelectChevron() {
 
 export function TodayGridView({
   shifts,
-  profileHref,
-  profileLinkLabel
+  ...actionContext
 }: CalendarViewsContext & { shifts: CalendarShift[] }) {
   const today = todayDateISO();
   const hasShifts = shifts.length > 0;
@@ -360,14 +468,20 @@ export function TodayGridView({
           </div>
         </div>
       </div>
+      {hasShifts ? (
+        <div className="min-h-0 shrink-0 space-y-2 overflow-y-auto overscroll-contain border-t border-slate-100 px-3 py-3">
+          {shifts.map((shift) => (
+            <ShiftCard key={`card-${shift.id}`} shift={shift} {...actionContext} />
+          ))}
+        </div>
+      ) : null}
     </CalendarShell>
   );
 }
 
 export function WeekGridView({
   shifts,
-  profileHref,
-  profileLinkLabel
+  ...actionContext
 }: CalendarViewsContext & { shifts: CalendarShift[] }) {
   const { start } = getWeekRange();
   const startDate = new Date(`${start}T12:00:00`);
@@ -443,8 +557,7 @@ export function WeekGridView({
                 key={shift.id}
                 shift={shift}
                 compact
-                profileHref={profileHref}
-                profileLinkLabel={profileLinkLabel}
+                {...actionContext}
               />
             ))}
           </div>
@@ -460,8 +573,7 @@ export function MonthGridView({
   currentYear,
   onMonthChange,
   onYearChange,
-  profileHref,
-  profileLinkLabel
+  ...actionContext
 }: CalendarViewsContext & {
   shifts: CalendarShift[];
   currentMonth: number;
@@ -584,8 +696,7 @@ export function MonthGridView({
                     key={shift.id}
                     shift={shift}
                     compact
-                    profileHref={profileHref}
-                    profileLinkLabel={profileLinkLabel}
+                    {...actionContext}
                   />
                 ))}
               </div>
@@ -644,11 +755,9 @@ function resolveShiftScheduleLabels(
 
 function AllShiftsListCard({
   shift,
-  profileHref,
-  profileLinkLabel
+  ...actionContext
 }: CalendarViewsContext & { shift: CalendarShift }) {
   const labels = resolveShiftScheduleLabels(shift);
-  const href = profileHref?.(shift) ?? null;
 
   return (
     <li
@@ -679,24 +788,17 @@ function AllShiftsListCard({
         </div>
       </div>
 
-      {href && profileLinkLabel ? (
-        <div className="mt-3 flex flex-row-reverse items-center justify-between text-xs text-slate-500">
-          <Link href={href} className="font-semibold text-navy-header underline">
-            {profileLinkLabel}
-          </Link>
-        </div>
-      ) : null}
+      <ShiftScheduledActions shift={shift} {...actionContext} />
     </li>
   );
 }
 
 export function AllShiftsListView({
   shifts,
-  profileHref,
-  profileLinkLabel,
   title = "כל המשמרות שנקבעו",
   emptyView = "all",
-  sortDirection = "desc"
+  sortDirection = "desc",
+  ...actionContext
 }: CalendarViewsContext & {
   shifts: CalendarShift[];
   title?: string;
@@ -737,8 +839,7 @@ export function AllShiftsListView({
               <AllShiftsListCard
                 key={shift.id}
                 shift={shift}
-                profileHref={profileHref}
-                profileLinkLabel={profileLinkLabel}
+                {...actionContext}
               />
             ))}
           </ul>

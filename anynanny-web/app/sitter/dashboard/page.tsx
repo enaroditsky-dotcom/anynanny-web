@@ -47,6 +47,9 @@ import {
   sitterHasRatedSession
 } from "@/lib/ratings/sitter-session-rated";
 import { useSitterPendingBookingCount } from "@/lib/bookings/use-sitter-pending-booking-count";
+import { useCancellationAttention } from "@/lib/bookings/use-cancellation-attention";
+import { CancellationAttentionDot } from "@/components/bookings/cancellation-attention-dot";
+import { CancellationAttentionModals } from "@/components/bookings/cancellation-attention-modals";
 import { useSession } from "@/context/SessionContext";
 
 const SITTER_ROLE = "sitter" as const;
@@ -880,6 +883,7 @@ export default function SitterDashboardPage() {
 
   const onboardingPending = false;
   const pendingBookingCount = useSitterPendingBookingCount(sitterId, !onboardingPending);
+  const cancellationAttention = useCancellationAttention(sitterId, "sitter", Boolean(sitterId));
 
   const handleOnboardingSaved = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -1198,9 +1202,10 @@ export default function SitterDashboardPage() {
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10"><Wallet className="h-6 w-6 stroke-[1.75]" aria-hidden /></span>
                         <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הארנק שלי</span>
                       </Link>
-                      <Link href="/sitter/shifts" aria-label={pendingBookingCount > 0 ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות` : "המשמרות שלי"} className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]">
+                      <Link href="/sitter/shifts" aria-label={cancellationAttention.showDot ? "המשמרות שלי — יש עדכון ביטול" : pendingBookingCount > 0 ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות` : "המשמרות שלי"} className="group flex min-h-[6.5rem] flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]">
                         <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
                           <History className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                          <CancellationAttentionDot visible={cancellationAttention.showDot} />
                           {pendingBookingCount > 0 ? (<span className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white" aria-hidden>{pendingBookingCount > 9 ? "9+" : pendingBookingCount}</span>) : null}
                         </span>
                         <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">המשמרות שלי</span>
@@ -1256,6 +1261,7 @@ export default function SitterDashboardPage() {
           {sitterId ? (
             <SitterBroadcastAlertModal sitterId={sitterId} paused={showSitterBookingApproval} />
           ) : null}
+          <CancellationAttentionModals attention={cancellationAttention} role="sitter" />
         </div>
       </main>
   );
