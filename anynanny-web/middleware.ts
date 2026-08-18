@@ -1,8 +1,19 @@
 import { createSupabaseMiddlewareClient } from "@/lib/supabase/middleware-client";
+import { shouldForwardRootAuthCallback } from "@/lib/auth/password-reset";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export async function middleware(req: NextRequest) {
+  const { pathname, searchParams } = req.nextUrl;
+
+  // PKCE recovery that fell back to Site URL arrives as `/?code=...`.
+  // Forward before any landing/login UI can render.
+  if (shouldForwardRootAuthCallback(pathname, searchParams)) {
+    const dest = req.nextUrl.clone();
+    dest.pathname = "/auth/reset-password";
+    return NextResponse.redirect(dest);
+  }
+
   try {
     // `@supabase/ssr` correctly decodes `base64-...` auth cookies (auth-helpers does not).
     const { supabase, getResponse } = createSupabaseMiddlewareClient(req);

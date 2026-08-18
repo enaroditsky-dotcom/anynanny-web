@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { PageBackButton, PageBackRow } from "@/components/navigation/page-back-link";
 import { navigateAfterAuth } from "@/lib/auth/redirect-after-sign-in";
@@ -11,6 +12,8 @@ import {
   setReturningUserFlag,
   setUserRoleChoice
 } from "@/lib/auth/returning-user";
+import { forgotPasswordHref, forwardExplicitRecoveryCallback, readAuthCallbackParams, resetPasswordCallbackHref } from "@/lib/auth/password-reset";
+import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function formatLoginError(message: string): string {
@@ -74,6 +77,15 @@ function LoginInner() {
     let cancelled = false;
 
     const redirectIfSignedIn = async () => {
+      if (forwardExplicitRecoveryCallback()) return;
+      if (hasPasswordRecoveryEvent()) {
+        window.location.replace(resetPasswordCallbackHref());
+        return;
+      }
+      const callback = readAuthCallbackParams();
+      if (callback.hasCode || callback.isRecoveryType) {
+        return;
+      }
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (cancelled || !user) return;
@@ -91,7 +103,19 @@ function LoginInner() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
+      if (event === "PASSWORD_RECOVERY") {
+        window.location.replace(resetPasswordCallbackHref());
+        return;
+      }
       if (event === "SIGNED_IN" && session?.user) {
+        if (hasPasswordRecoveryEvent()) {
+          window.location.replace(resetPasswordCallbackHref());
+          return;
+        }
+        const callback = readAuthCallbackParams();
+        if (callback.hasCode || callback.isRecoveryType) {
+          return;
+        }
         setBypassLogin(true);
         void navigateAfterAuth(
           supabase,
@@ -107,7 +131,7 @@ function LoginInner() {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [nextPath, supabase, roleFromQuery]);
+  }, [nextPath, supabase, roleFromQuery, router]);
 
   if (bypassLogin) {
     return (
@@ -170,6 +194,17 @@ function LoginInner() {
           <label className="block text-sm">סיסמה
             <PasswordPeekField value={password} onChange={setPassword} disabled={busy} />
           </label>
+          <p className="pt-1 text-right">
+            <Link
+              href={forgotPasswordHref(
+                roleFromQuery === "parent" || roleFromQuery === "sitter" ? roleFromQuery : null,
+                trackFromQuery || null
+              )}
+              className="text-sm font-semibold text-navy-header underline"
+            >
+              שכחת סיסמה?
+            </Link>
+          </p>
           <button type="submit" disabled={busy} className="mt-6 w-full rounded-2xl bg-[#001F3F] py-3 text-white">התחברות</button>
         </form>
         {message && <p className="mt-4 p-3 text-center bg-rose-50 text-rose-950 text-sm">{message}</p>}
