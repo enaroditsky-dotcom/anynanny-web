@@ -182,6 +182,7 @@ function RegisterInner() {
         email: email.trim(),
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}/auth/verified`,
           data: {
             role,
             first_name: trimmedFirst,

@@ -2,15 +2,127 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import type { EmailOtpType } from "@supabase/supabase-js";
+import {
+  isExplicitRecoveryCallback,
+  readAuthCallbackParams,
+  resetPasswordCallbackHref
+} from "@/lib/auth/password-reset";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+type VerifyState = "checking" | "success" | "error";
+
+function signupOtpType(callbackType: string): EmailOtpType {
+  if (
+    callbackType === "signup" ||
+    callbackType === "email" ||
+    callbackType === "email_change" ||
+    callbackType === "invite"
+  ) {
+    return callbackType;
+  }
+  return "signup";
+}
 
 function EmailVerifiedContent() {
   const searchParams = useSearchParams();
   const errorCode = searchParams.get("error_code");
-  const [isError, setIsError] = useState(false);
+  const [verifyState, setVerifyState] = useState<VerifyState>(errorCode ? "error" : "checking");
 
   useEffect(() => {
-    setIsError(Boolean(errorCode));
+    const params = readAuthCallbackParams();
+
+    if (isExplicitRecoveryCallback(params)) {
+      window.location.replace(resetPasswordCallbackHref());
+      return;
+    }
+
+    if (errorCode && !params.hasCode && !params.hasTokenHash) {
+      setVerifyState("error");
+      return;
+    }
+
+    if (params.hasError && !params.hasCode && !params.hasTokenHash) {
+      setVerifyState("error");
+      return;
+    }
+
+    if (!params.hasCode && !params.hasTokenHash) {
+      setVerifyState(errorCode ? "error" : "success");
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setVerifyState("error");
+      return;
+    }
+
+    let cancelled = false;
+    let settled = false;
+
+    const finish = (state: VerifyState) => {
+      if (cancelled || settled) return;
+      settled = true;
+      setVerifyState(state);
+    };
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if (event === "PASSWORD_RECOVERY") {
+        window.location.replace(resetPasswordCallbackHref());
+        return;
+      }
+      if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session) {
+        finish("success");
+      }
+    });
+
+    void (async () => {
+      if (params.tokenHash) {
+        const { data, error } = await supabase.auth.verifyOtp({
+          type: signupOtpType(params.callbackType),
+          token_hash: params.tokenHash
+        });
+        if (cancelled) return;
+        if (!error && data.session) {
+          finish("success");
+          return;
+        }
+      }
+
+      if (params.code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(params.code);
+        if (cancelled) return;
+        if (!error && data.session) {
+          finish("success");
+          return;
+        }
+        const {
+          data: { session }
+        } = await supabase.auth.getSession();
+        if (cancelled) return;
+        finish(session ? "success" : "error");
+        return;
+      }
+
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+      if (cancelled) return;
+      finish(session ? "success" : "error");
+    })();
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, [errorCode]);
+
+  const isError = verifyState === "error";
+  const isChecking = verifyState === "checking";
 
   return (
     <main
@@ -22,7 +134,9 @@ function EmailVerifiedContent() {
       </div>
 
       <div className="w-full max-w-sm space-y-4 rounded-3xl border border-slate-100 bg-white p-6 shadow-soft">
-        {isError ? (
+        {isChecking ? (
+          <p className="text-sm text-slate-500">מאמתים את האימייל…</p>
+        ) : isError ? (
           <>
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 shadow-sm ring-1 ring-amber-600/10">
               <svg
