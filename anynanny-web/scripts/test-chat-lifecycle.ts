@@ -115,7 +115,11 @@ assert.match(rls, /coalesce\(b\.actual_end_time, b\.end_time\) \+ interval '24 h
 assert.match(rls, /PROPOSAL ONLY/);
 
 const confirm = readFileSync(resolve(root, "lib/bookings/parent-confirm-end-booking.ts"), "utf8");
-assert.match(confirm, /actual_end_time: actualEndIso/);
-assert.match(confirm, /p_end_iso:/);
+assert.match(confirm, /actual_end_time/);
+assert.match(confirm, /end_shift_atomic/);
+assert.doesNotMatch(confirm, /p_end_iso:/);
+assert.doesNotMatch(confirm, /p_amount:/);
+assert.doesNotMatch(confirm, /p_elapsed:/);
+assert.doesNotMatch(confirm, /p_parent_id:/);
 
 console.log("chat lifecycle ok");
