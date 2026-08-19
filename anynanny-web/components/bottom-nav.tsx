@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, MessageCircle, UserRound, Settings, Zap } from "lucide-react";
@@ -119,6 +120,34 @@ function NavLink({
   );
 }
 
+/** Elevated Sitter surprises action — same center slot as Parent AnyNanny Now. */
+function SitterSurprisesFab({ active }: { active: boolean }) {
+  return (
+    <Link
+      href="/sitter/surprises"
+      aria-label="הפתעות"
+      className="group relative z-10 -mt-7 flex w-full flex-col items-center justify-end gap-1 outline-none"
+    >
+      <Image
+        src="/sitter-surprises-button.png"
+        alt=""
+        width={1282}
+        height={1227}
+        sizes="72px"
+        priority
+        className="h-[72px] w-[72px] object-contain transition duration-200 group-active:scale-[0.96]"
+      />
+      <span
+        className={`max-w-[5.5rem] text-center text-[11px] font-bold leading-tight ${
+          active ? "text-[#9F1239]" : "text-navy-header/80"
+        }`}
+      >
+        הפתעות
+      </span>
+    </Link>
+  );
+}
+
 /** Elevated AnyNanny Now action — floats above the bottom nav rail. */
 function AnyNannyNowFab({ active }: { active: boolean }) {
   return (
@@ -164,6 +193,7 @@ export function BottomNav() {
   if (!pathname.startsWith("/parent/") && !pathname.startsWith("/sitter/")) return null;
 
   const nowActive = pathname.startsWith("/parent/broadcast");
+  const surprisesActive = pathname.startsWith("/sitter/surprises");
 
   if (role === "parent") {
     const [leftA, leftB, rightA, rightB] = parentSideItems;
@@ -199,13 +229,25 @@ export function BottomNav() {
     );
   }
 
+  const [leftA, leftB, rightA, rightB] = sitterItems;
   return (
     <nav
       aria-label="ניווט ראשי"
-      className="fixed bottom-0 left-0 right-0 z-50 w-full border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+      className="fixed bottom-0 left-0 right-0 z-50 w-full border-t border-slate-200/80 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_-12px_rgba(15,23,42,0.12)] backdrop-blur-sm"
     >
-      <div className="mx-auto grid w-full max-w-md grid-cols-4 items-center">
-        {sitterItems.map((item) => (
+      <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5">
+        {[leftA, leftB].map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            pathname={pathname}
+            hasUnreadMessages={hasUnreadMessages}
+            hasWalletUpdate={hasWalletUpdate}
+            clearWalletNotification={clearWalletNotification}
+          />
+        ))}
+        <SitterSurprisesFab active={surprisesActive} />
+        {[rightA, rightB].map((item) => (
           <NavLink
             key={item.href}
             item={item}
