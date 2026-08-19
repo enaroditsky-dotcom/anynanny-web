@@ -1,4 +1,5 @@
 import { getHypCredentials } from "@/lib/billing/hyp/create-transaction";
+import { isHypCapturedChargeCCode } from "@/lib/billing/hyp/parse-return-params";
 
 const PAY_HOST = "https://pay.hyp.co.il/p/";
 const HYP_FETCH_TIMEOUT_MS = 20_000;
@@ -229,14 +230,22 @@ export async function chargeHypSavedToken(input: HypSoftChargeInput): Promise<Hy
 
   const raw = parseQueryBody(body);
   const cCode = pick(raw, "CCode", "ccode");
-  const ok = cCode == null || cCode === "" || cCode === "0" || cCode === "00";
+  const approvalId = pick(raw, "Id", "id", "TransId");
+  const hypAmount = pick(raw, "Amount", "amount");
+  const ok =
+    isHypCapturedChargeCCode(cCode) &&
+    Boolean(approvalId) &&
+    approvalId !== "0" &&
+    Boolean(hypAmount);
 
   return {
     success: ok,
     cCode,
-    approvalId: pick(raw, "Id", "id", "ACode"),
-    amount: pick(raw, "Amount", "amount"),
+    approvalId,
+    amount: hypAmount,
     raw,
-    error: ok ? undefined : `Hyp soft charge failed (CCode=${cCode ?? "?"})`
+    error: ok
+      ? undefined
+      : `Hyp soft charge failed (CCode=${cCode ?? "missing"}, Id=${approvalId ?? "missing"}).`
   };
 }

@@ -41,6 +41,8 @@ export type BookingRow = {
 
   payment_status?: BookingPaymentStatus;
   paid_at?: string | null;
+  hyp_trans_id?: string | null;
+  charged_amount_nis?: number | null;
   stripe_checkout_session_id?: string | null;
 
   parent_notified_at?: string | null;

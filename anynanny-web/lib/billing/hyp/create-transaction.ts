@@ -350,7 +350,7 @@ export function isHypSandboxMode(
   }
 }
 
-function formatHypAmount(
+export function formatHypAmount(
   amountNis: number
 ): string {
   const amount =
@@ -371,11 +371,10 @@ function formatHypAmount(
 }
 
 /**
- * HYP Order is intentionally compact.
- *
+ * Compact Order sent on APISign — alphanumeric booking UUID without dashes.
  * Full Booking UUID is kept in Info.
  */
-function hypOrderFromBookingId(
+export function hypOrderFromBookingId(
   bookingId: string
 ): string {
   const compact =

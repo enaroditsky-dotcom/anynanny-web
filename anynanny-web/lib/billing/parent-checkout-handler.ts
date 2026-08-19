@@ -12,6 +12,8 @@ import {
 import { chargeHypSavedToken } from "@/lib/billing/hyp/token";
 import { finalizeHypPaymentSuccess } from "@/lib/billing/finalize-hyp-payment";
 import { computeAuthoritativeShiftCharge } from "@/lib/billing/compute-shift-charge";
+import { hypAmountToMinorUnits } from "@/lib/billing/hyp/payment-authority";
+import { isHypCapturedChargeCCode } from "@/lib/billing/hyp/parse-return-params";
 import { computePlatformFeeFromParentTotal } from "@/lib/billing/platform-fee";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 /** Server-safe — do not import SESSIONS_TABLE from `lib/session/protocol` (`"use client"`). */
@@ -219,12 +221,31 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
         description: String(body.description ?? "תשלום משמרת AnyNanny")
       });
 
-      if (!hypCharge.success) {
+      if (!isHypCapturedChargeCCode(hypCharge.cCode) || !hypCharge.success) {
         return NextResponse.json(
           {
             error: hypCharge.error || "חיוב הכרטיס השמור נכשל. נסו כרטיס אחר או תשלום חדש.",
             gateway: "hyp",
-            cCode: hypCharge.cCode
+            cCode: hypCharge.cCode ?? null
+          },
+          { status: 402 }
+        );
+      }
+
+      const softTransId = String(hypCharge.approvalId ?? "").trim();
+      if (!softTransId || softTransId === "0") {
+        return NextResponse.json(
+          { error: "Hyp soft charge did not return a transaction Id.", gateway: "hyp" },
+          { status: 402 }
+        );
+      }
+
+      const verifiedMinor = hypAmountToMinorUnits(hypCharge.amount);
+      if (verifiedMinor == null || verifiedMinor !== charge.amountMinorUnits) {
+        return NextResponse.json(
+          {
+            error: "Hyp charged amount does not match the authoritative shift charge.",
+            gateway: "hyp"
           },
           { status: 402 }
         );
@@ -232,12 +253,13 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
 
       await markBookingPendingCheckout(supabase, bookingId);
 
+      const verifiedAmountNis = Number((verifiedMinor / 100).toFixed(2));
       const finalized = await finalizeHypPaymentSuccess(supabase, {
         bookingId,
         sessionId: shiftSessionId,
         parentId: user.id,
-        hypApprovalId: hypCharge.approvalId,
-        amountPaid: hypCharge.amount ?? String(charge.amountMinorUnits / 100)
+        hypTransId: softTransId,
+        verifiedAmountNis
       });
 
       if (!finalized.ok) {

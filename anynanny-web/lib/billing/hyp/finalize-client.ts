@@ -34,13 +34,7 @@ function normalizeCCode(
 function isSuccessfulCCode(
   value: string | null | undefined
 ): boolean {
-  const code =
-    normalizeCCode(value);
-
-  return (
-    code === "0" ||
-    code === "00"
-  );
+  return String(value ?? "").trim() === "0";
 }
 
 /**
@@ -187,6 +181,11 @@ export async function finalizeHypCheckoutFromClient(
    * authoritative client-side requirement.
    */
   try {
+    const rawQuery =
+      typeof input?.search === "string"
+        ? input.search.replace(/^\?/, "")
+        : params.toString();
+
     const res =
       await fetch(
         "/api/hyp/complete",
@@ -209,58 +208,9 @@ export async function finalizeHypCheckoutFromClient(
                 sessionId ||
                 undefined,
 
-              hypApprovalId:
-                input?.hypApprovalId ??
-                hyp.approvalId ??
-                params.get("Id") ??
-                undefined,
-
-              amountPaid:
-                input?.amountPaid ??
-                hyp.amount ??
-                params.get(
-                  "Amount"
-                ) ??
-                undefined,
-
-              cCode,
-
               hypQuery:
-                params.toString() ||
-                undefined,
-
-              Info:
-                params.get(
-                  "Info"
-                ) ??
-                undefined,
-
-              MoreData:
-                params.get(
-                  "MoreData"
-                ) ??
-                undefined,
-
-              Order:
-                params.get(
-                  "Order"
-                ) ??
-                undefined,
-
-              Id:
-                params.get(
-                  "Id"
-                ) ??
-                undefined,
-
-              Amount:
-                params.get(
-                  "Amount"
-                ) ??
-                undefined,
-
-              CCode:
-                cCode
+                rawQuery ||
+                undefined
             })
         }
       );

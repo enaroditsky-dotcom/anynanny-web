@@ -186,7 +186,10 @@ export default function ParentCheckoutCompleteClient() {
         const result =
           await finalizeHypCheckoutFromClient(
             {
-              search: params,
+              search:
+                typeof window !== "undefined"
+                  ? window.location.search
+                  : params.toString(),
               bookingId,
               sessionId
             }
