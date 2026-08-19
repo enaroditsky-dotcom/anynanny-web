@@ -1563,11 +1563,9 @@ export function ParentDashboardClient({
 
       if (!alreadyPaidFlag) {
         const result = await finalizeHypCheckoutFromClient({
-          search: params,
+          search: window.location.search,
           bookingId: String(bookingId),
           sessionId: sessionId ? String(sessionId) : undefined,
-          hypApprovalId: hyp.approvalId ?? params.get("Id"),
-          amountPaid: hyp.amount ?? params.get("Amount"),
           cCode: hyp.cCode
         });
         if (!result.ok) {

@@ -1,53 +1,60 @@
-import { finalizeHypPaymentSuccess } from "@/lib/billing/finalize-hyp-payment";
-import {
-  isHypSuccessCCode,
-  parseHypReturnParams
-} from "@/lib/billing/hyp/parse-return-params";
+import { completeVerifiedHypPayment } from "@/lib/billing/complete-verified-hyp-payment";
+import { hasSufficientHypVerifyPayload } from "@/lib/billing/hyp/verify-transaction";
 import {
   applyHypIdentityVerificationResult,
   parseHypIdentityVerificationUserId
 } from "@/lib/identity/hyp-identity-flow";
+import { parseHypReturnParams } from "@/lib/billing/hyp/parse-return-params";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import {
-  creditParentWalletDeposit,
   parseHypWalletDepositParentId
 } from "@/lib/wallet/billing-transactions";
-import {
-  parseHypWalletPaymentMethodParentId,
-  saveHypPaymentMethodFromTransId
-} from "@/lib/wallet/parent-payment-methods";
+import { parseHypWalletPaymentMethodParentId } from "@/lib/wallet/parent-payment-methods";
 import { NextResponse } from "next/server";
 
+function ack(status: string): Response {
+  return new NextResponse(status, {
+    status: 200,
+    headers: { "Content-Type": "text/plain" }
+  });
+}
+
+function rawQueryFromParams(params: URLSearchParams): string {
+  return params.toString();
+}
+
 /**
- * Shared Hyp/YaadPay IPN handler used by:
- * - POST /api/webhooks/hyp
- * - POST /api/payments/webhook
+ * Shared Hyp Pay IPN handler.
+ * Booking payment is finalized only when the payload can be passed through
+ * official APISign What=VERIFY. Unsigned/incomplete callbacks are acknowledged
+ * but left pending.
  */
 export async function handleHypPaymentWebhook(request: Request): Promise<Response> {
+  let rawBody = "";
   let params: URLSearchParams;
+  const contentType = request.headers.get("content-type") || "";
 
   try {
-    const contentType = request.headers.get("content-type") || "";
+    rawBody = await request.text();
     if (contentType.includes("application/json")) {
-      const json = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+      const json = JSON.parse(rawBody || "{}") as Record<string, unknown>;
       params = new URLSearchParams();
       for (const [k, v] of Object.entries(json)) {
         if (v != null) params.set(k, String(v));
       }
     } else {
-      const text = await request.text();
-      params = new URLSearchParams(text);
+      params = new URLSearchParams(rawBody.replace(/^\?/, ""));
     }
   } catch {
     return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
   }
 
+  const originalQuery = contentType.includes("application/json")
+    ? ""
+    : rawBody.trim()
+      ? rawBody.trim().replace(/^\?/, "")
+      : rawQueryFromParams(params);
   const parsed = parseHypReturnParams(params);
-  const terminalNumber = params.get("masof") ?? params.get("Masof");
-  const approvalNumber = parsed.approvalId;
-  const amount = parsed.amount;
-  const bookingId = parsed.bookingId;
-  const sessionId = parsed.sessionId;
   const infoRaw = params.get("Info") ?? params.get("info") ?? parsed.raw.Info ?? parsed.raw.info ?? "";
   const moreDataRaw =
     params.get("MoreData") ?? params.get("moredata") ?? parsed.raw.MoreData ?? parsed.raw.moredata ?? "";
@@ -85,28 +92,31 @@ export async function handleHypPaymentWebhook(request: Request): Promise<Respons
       lookupKind: applied.lookupKind,
       status: applied.record.status
     });
-    return new NextResponse("OK", { status: 200, headers: { "Content-Type": "text/plain" } });
+    return ack("OK");
   }
 
-  const israeliId = params.get("UserId") ?? params.get("userid") ?? parsed.raw.UserId ?? null;
-  const brandHint =
-    params.get("Brand") ?? params.get("CardName") ?? params.get("cardname") ?? parsed.raw.Brand ?? null;
   const walletParentId =
     parseHypWalletDepositParentId(infoRaw) || parseHypWalletDepositParentId(moreDataRaw);
   const paymentMethodParentId =
     parseHypWalletPaymentMethodParentId(infoRaw) || parseHypWalletPaymentMethodParentId(moreDataRaw);
 
-  if (!isHypSuccessCCode(parsed.cCode)) {
-    console.warn(`[Hyp Webhook] Ignoring non-success CCode=${parsed.cCode}`, {
-      bookingId,
-      approvalNumber,
-      walletParentId,
-      paymentMethodParentId
+  if (walletParentId || paymentMethodParentId) {
+    console.info("[Hyp Webhook] Wallet/payment-method IPN ignored until documented VERIFY payload is present", {
+      hasSign: hasSufficientHypVerifyPayload(originalQuery),
+      wallet: Boolean(walletParentId),
+      paymentMethod: Boolean(paymentMethodParentId)
     });
-    return new NextResponse("IGNORED", {
-      status: 200,
-      headers: { "Content-Type": "text/plain" }
+    return ack("IGNORED_UNVERIFIED_WALLET");
+  }
+
+  if (!hasSufficientHypVerifyPayload(originalQuery)) {
+    console.warn("[Hyp Webhook] Shift IPN missing documented VERIFY fields; payment left pending", {
+      hasCCode: Boolean(parsed.cCode),
+      hasId: Boolean(parsed.approvalId),
+      hasAmount: Boolean(parsed.amount),
+      hasSign: /(?:^|&)Sign=/i.test(originalQuery)
     });
+    return ack("IGNORED_UNVERIFIABLE");
   }
 
   let supabase;
@@ -120,90 +130,10 @@ export async function handleHypPaymentWebhook(request: Request): Promise<Respons
     );
   }
 
-  // Save card / payment method (Info = WalletPaymentMethod_<parentUuid>).
-  if (paymentMethodParentId) {
-    if (!approvalNumber) {
-      return NextResponse.json({ error: "Missing Hyp Id for tokenization." }, { status: 400 });
-    }
-
-    const saved = await saveHypPaymentMethodFromTransId(supabase, {
-      parentId: paymentMethodParentId,
-      transId: approvalNumber,
-      israeliId,
-      brandHint,
-      makeDefault: true
-    });
-
-    if (saved.error) {
-      console.error("[Hyp Webhook] Save payment method failed:", saved.error, {
-        paymentMethodParentId,
-        approvalNumber
-      });
-      return NextResponse.json({ error: saved.error }, { status: 500 });
-    }
-
-    const depositAmount = Number(amount);
-    if (Number.isFinite(depositAmount) && depositAmount > 0) {
-      const credit = await creditParentWalletDeposit(supabase, {
-        parentId: paymentMethodParentId,
-        amount: depositAmount,
-        description: `אימות אמצעי תשלום (Hyp #${approvalNumber})`
-      });
-      if (credit.error) {
-        console.warn("[Hyp Webhook] PM wallet credit skipped:", credit.error);
-      }
-    }
-
-    console.log(
-      `[Hyp Webhook] Payment method saved parent=${paymentMethodParentId} method=${saved.method?.id} approval=${approvalNumber}`
-    );
-    return new NextResponse("OK", { status: 200, headers: { "Content-Type": "text/plain" } });
-  }
-
-  // Parent wallet top-up (Info = WalletDeposit_<parentUuid>).
-  if (walletParentId) {
-    const depositAmount = Number(amount);
-    if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
-      return NextResponse.json({ error: "Invalid wallet deposit amount." }, { status: 400 });
-    }
-
-    const credit = await creditParentWalletDeposit(supabase, {
-      parentId: walletParentId,
-      amount: depositAmount,
-      description: `טעינת ארנק מוצלח (Hyp #${approvalNumber ?? "0"})`
-    });
-
-    if (credit.error) {
-      console.error("[Hyp Webhook] Wallet deposit failed:", credit.error, {
-        walletParentId,
-        approvalNumber
-      });
-      return NextResponse.json({ error: credit.error }, { status: 500 });
-    }
-
-    if (approvalNumber) {
-      const saved = await saveHypPaymentMethodFromTransId(supabase, {
-        parentId: walletParentId,
-        transId: approvalNumber,
-        israeliId,
-        brandHint
-      });
-      if (saved.error) {
-        console.warn("[Hyp Webhook] Deposit token save skipped:", saved.error);
-      }
-    }
-
-    console.log(
-      `[Hyp Webhook] Wallet deposit ok parent=${walletParentId} amount=${depositAmount} approval=${approvalNumber}`
-    );
-    return new NextResponse("OK", { status: 200, headers: { "Content-Type": "text/plain" } });
-  }
-
-  if (!bookingId || !approvalNumber) {
-    return NextResponse.json(
-      { error: "Missing required Hyp transaction parameters (Info/booking + Id)." },
-      { status: 400 }
-    );
+  const bookingId = parsed.bookingId;
+  if (!bookingId) {
+    console.warn("[Hyp Webhook] VERIFY payload present but booking correlation missing; left pending");
+    return ack("IGNORED_UNCORRELATED");
   }
 
   const { data: booking, error: bookingErr } = await supabase
@@ -214,39 +144,29 @@ export async function handleHypPaymentWebhook(request: Request): Promise<Respons
 
   if (bookingErr || !booking?.parent_id) {
     console.error(`[Hyp Webhook] Booking not found for ID: ${bookingId}`, bookingErr);
-    return NextResponse.json({ error: "Booking linkage not found." }, { status: 404 });
+    return ack("IGNORED_UNKNOWN_BOOKING");
   }
 
-  const result = await finalizeHypPaymentSuccess(supabase, {
-    bookingId,
-    sessionId,
+  const result = await completeVerifiedHypPayment(supabase, {
     parentId: String(booking.parent_id),
-    hypApprovalId: approvalNumber,
-    amountPaid: amount
+    bookingId,
+    sessionId: parsed.sessionId,
+    originalQuery
   });
 
   if (!result.ok) {
-    console.error(`[Hyp Webhook] Finalize failed:`, result.error, {
-      terminalNumber,
-      approvalNumber,
-      bookingId
+    console.warn("[Hyp Webhook] Verified finalize declined; payment left pending", {
+      bookingId,
+      error: result.error
     });
-    return NextResponse.json({ error: result.error }, { status: 500 });
+    return ack("IGNORED_VERIFY_FAILED");
   }
 
-  const saved = await saveHypPaymentMethodFromTransId(supabase, {
-    parentId: String(booking.parent_id),
-    transId: approvalNumber,
-    israeliId,
-    brandHint
+  console.info("[Hyp Webhook] Verified payment finalized", {
+    bookingId: result.bookingId,
+    sessionIds: result.sessionIds,
+    noop: result.noop
   });
-  if (saved.error) {
-    console.warn("[Hyp Webhook] Shift token save skipped:", saved.error);
-  }
 
-  console.log(
-    `[Hyp Webhook] Successfully processed payment for Booking: ${bookingId}, Approval ID: ${approvalNumber}, sessions: ${result.sessionIds.join(",")}`
-  );
-
-  return new NextResponse("OK", { status: 200, headers: { "Content-Type": "text/plain" } });
+  return ack("OK");
 }

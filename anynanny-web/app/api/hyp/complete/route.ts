@@ -1,10 +1,4 @@
-import { finalizeHypPaymentSuccess } from "@/lib/billing/finalize-hyp-payment";
-import {
-  isHypSuccessCCode,
-  normalizeHypSessionCandidate,
-  normalizeHypUuidCandidate,
-  parseHypReturnParams
-} from "@/lib/billing/hyp/parse-return-params";
+import { completeVerifiedHypPayment } from "@/lib/billing/complete-verified-hyp-payment";
 import { createServerClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -13,23 +7,13 @@ export const runtime = "nodejs";
 type CompleteBody = {
   bookingId?: string;
   sessionId?: string;
-  hypApprovalId?: string;
-  amountPaid?: string;
-  /** Hyp response code — must be 0/00 when provided. */
-  cCode?: string;
-  /** Raw Hyp query/form for server-side parsing. */
+  /** Raw Hyp success-return query. Required for APISign What=VERIFY. */
   hypQuery?: string;
-  Info?: string;
-  MoreData?: string;
-  Order?: string;
-  Id?: string;
-  Amount?: string;
-  CCode?: string;
 };
 
 /**
- * Finalizes a shift after Hyp redirects back with checkout=success.
- * Session/booking are marked paid only here (or via the Hyp webhook).
+ * Browser Hyp return is a hint only.
+ * Payment is marked paid only after server-side APISign What=VERIFY.
  */
 export async function POST(request: Request) {
   let body: CompleteBody;
@@ -51,64 +35,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const fromQuery = body.hypQuery
-    ? parseHypReturnParams(body.hypQuery)
-    : parseHypReturnParams({
-        CCode: String(body.CCode ?? body.cCode ?? ""),
-        Info: String(body.Info ?? ""),
-        MoreData: String(body.MoreData ?? ""),
-        Order: String(body.Order ?? ""),
-        Id: String(body.Id ?? body.hypApprovalId ?? ""),
-        Amount: String(body.Amount ?? body.amountPaid ?? ""),
-        bookingId: String(body.bookingId ?? ""),
-        sessionId: String(body.sessionId ?? "")
-      });
-
-  const cCode = body.cCode ?? body.CCode ?? fromQuery.cCode;
-  if (cCode != null && String(cCode).trim() !== "" && !isHypSuccessCCode(cCode)) {
+  const originalQuery = String(body.hypQuery ?? "").trim();
+  if (!originalQuery) {
     return NextResponse.json(
-      { error: `Hyp payment was not successful (CCode=${cCode}).` },
+      { error: "hypQuery (original Hyp return parameters) is required." },
       { status: 400 }
     );
   }
 
-  const bookingId =
-    normalizeHypUuidCandidate(body.bookingId) ||
-    fromQuery.bookingId ||
-    normalizeHypUuidCandidate(body.Info) ||
-    normalizeHypUuidCandidate(body.Order);
-
-  if (!bookingId) {
-    return NextResponse.json(
-      {
-        error:
-          "bookingId is required. Ensure Hyp Info echoes the booking UUID (or pass bookingId from the client)."
-      },
-      { status: 400 }
-    );
-  }
-
-  const sessionId =
-    normalizeHypSessionCandidate(body.sessionId) ||
-    fromQuery.sessionId ||
-    normalizeHypSessionCandidate(body.MoreData);
-
-  const result = await finalizeHypPaymentSuccess(supabase, {
-    bookingId,
-    sessionId,
+  const result = await completeVerifiedHypPayment(supabase, {
     parentId: user.id,
-    hypApprovalId: body.hypApprovalId ?? body.Id ?? fromQuery.approvalId,
-    amountPaid: body.amountPaid ?? body.Amount ?? fromQuery.amount
+    bookingId: body.bookingId,
+    sessionId: body.sessionId,
+    originalQuery
   });
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json(
+      { error: result.error, pending: true },
+      { status: result.status }
+    );
   }
 
   return NextResponse.json({
     ok: true,
     status: "paid",
     bookingId: result.bookingId,
-    sessionIds: result.sessionIds
+    sessionIds: result.sessionIds,
+    noop: result.noop
   });
 }

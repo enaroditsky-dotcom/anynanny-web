@@ -80,14 +80,18 @@ export function normalizeHypSessionCandidate(raw: string | null | undefined): st
   return null;
 }
 
-/** Hyp success codes on redirect / IPN. */
+/**
+ * Hyp Pay captured-charge success.
+ * Official status codes: `0` = Approved.
+ * `00` is not listed as approved. `600`/`700`/`800` are not captures.
+ */
+export function isHypCapturedChargeCCode(cCode: string | null | undefined): boolean {
+  return String(cCode ?? "").trim() === "0";
+}
+
+/** @deprecated Use isHypCapturedChargeCCode. Missing CCode is not success. */
 export function isHypSuccessCCode(cCode: string | null | undefined): boolean {
-  if (cCode == null || String(cCode).trim() === "") {
-    // Some terminal configs omit CCode on success redirects configured in dashboard.
-    return true;
-  }
-  const c = String(cCode).trim();
-  return c === "0" || c === "00";
+  return isHypCapturedChargeCCode(cCode);
 }
 
 export function parseHypReturnParams(

@@ -197,8 +197,7 @@ function isSuccessfulCCode(
     ).trim();
 
   return (
-    code === "0" ||
-    code === "00"
+    code === "0"
   );
 }
 
@@ -423,7 +422,7 @@ export function HypCheckoutFrame({
           await finalizeHypCheckoutFromClient(
             {
               search:
-                params,
+                opts.search,
 
               bookingId,
 

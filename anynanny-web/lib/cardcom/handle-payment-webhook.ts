@@ -45,59 +45,6 @@ export async function parseCardcomWebhookPayload(request: Request): Promise<Card
   }
 }
 
-async function markBookingPaid(params: {
-  bookingId: string;
-  terminalNumber: string | null;
-  transactionId: string | null;
-  amount: number;
-}): Promise<NextResponse> {
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-  const { data: booking, error: bookingErr } = await supabaseAdmin
-    .from("bookings")
-    .select("id, status, payment_status, paid_at")
-    .eq("id", params.bookingId)
-    .maybeSingle();
-
-  if (bookingErr || !booking) {
-    console.error(`[Cardcom Webhook] Booking not found for ID: ${params.bookingId}`);
-    return NextResponse.json({ error: "Booking linkage not found." }, { status: 404 });
-  }
-
-  const row = booking as { payment_status?: string | null; paid_at?: string | null };
-  if (row.payment_status === "paid" || row.paid_at) {
-    return NextResponse.json({ status: "success", message: "Booking already paid." }, { status: 200 });
-  }
-
-  const { error: updateErr } = await supabaseAdmin
-    .from("bookings")
-    .update({
-      payment_status: "paid",
-      paid_at: new Date().toISOString(),
-      metadata: {
-        gateway: "cardcom",
-        cardcom_terminal_number: params.terminalNumber,
-        cardcom_transaction_id: params.transactionId,
-        amount_paid: params.amount
-      }
-    })
-    .eq("id", params.bookingId);
-
-  if (updateErr) {
-    console.error("[Cardcom Webhook] Failed to update booking payment state:", updateErr.message);
-    return NextResponse.json({ error: "Database transaction update failed." }, { status: 500 });
-  }
-
-  console.log(
-    `[Cardcom Webhook] Successfully processed booking payment: ${params.bookingId}, transaction: ${params.transactionId ?? "n/a"}`
-  );
-
-  return NextResponse.json({ status: "success", message: "Booking payment recorded." }, { status: 200 });
-}
-
 async function creditParentWallet(params: {
   parentId: string;
   amount: number;
@@ -122,7 +69,7 @@ async function creditParentWallet(params: {
   return NextResponse.json({ status: "success", message: "Wallet updated successfully." }, { status: 200 });
 }
 
-/** Processes Cardcom LowProfile WebHookUrl callbacks for shift payments and wallet deposits. */
+/** Processes Cardcom LowProfile WebHookUrl callbacks. Does not mark bookings paid. */
 export async function handleCardcomPaymentWebhook(request: Request): Promise<NextResponse> {
   try {
     const rawData = await parseCardcomWebhookPayload(request);
@@ -169,20 +116,19 @@ export async function handleCardcomPaymentWebhook(request: Request): Promise<Nex
     }
 
     if (returnValue && isUuid(returnValue)) {
-      const bookingPayment = await markBookingPaid({
-        bookingId: returnValue,
-        terminalNumber,
-        transactionId,
-        amount
+      // V1 shift checkout is Hyp. An unverified Cardcom webhook must not mark a booking paid.
+      console.warn("[Cardcom Webhook] Ignoring booking-shaped ReturnValue; booking paid is Hyp-only.", {
+        returnValue
       });
-      if (bookingPayment.status !== 404) {
-        return bookingPayment;
-      }
+      return NextResponse.json(
+        { status: "ignored", message: "Cardcom webhook does not mark bookings paid." },
+        { status: 200 }
+      );
     }
 
     const parentId = customFieldParentId ?? (returnValue && isUuid(returnValue) ? returnValue : null);
     if (!parentId) {
-      console.error("[Cardcom Webhook] Missing booking or parent linkage.", { returnValue });
+      console.error("[Cardcom Webhook] Missing parent linkage.", { returnValue });
       return NextResponse.json({ error: "Incomplete data." }, { status: 400 });
     }
 
