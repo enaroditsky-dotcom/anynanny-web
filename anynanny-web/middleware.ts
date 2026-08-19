@@ -6,8 +6,8 @@ import type { NextRequest } from "next/server";
 export async function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
-  // PKCE recovery that fell back to Site URL arrives as `/?code=...`.
-  // Forward before any landing/login UI can render.
+  // Explicit recovery that fell back to Site URL arrives as `/?type=recovery`.
+  // Generic signup `/?code=` is not recovery and must not be forwarded here.
   if (shouldForwardRootAuthCallback(pathname, searchParams)) {
     const dest = req.nextUrl.clone();
     dest.pathname = "/auth/reset-password";

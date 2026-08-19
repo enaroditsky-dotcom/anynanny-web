@@ -55,7 +55,7 @@ function HomeInner() {
   const searchParams = useSearchParams();
   const isManual = searchParams.get("manual") === "true";
   const [registrationOpen, setRegistrationOpen] = useState(false);
-  const hasPkceCallback = Boolean(searchParams.get("code") || searchParams.get("type") === "recovery");
+  const hasRecoveryCallback = searchParams.get("type")?.toLowerCase() === "recovery";
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -69,7 +69,7 @@ function HomeInner() {
       return;
     }
 
-    if (callback.hasCode || callback.isRecoveryType) {
+    if (callback.isRecoveryType) {
       window.location.replace(`/auth/reset-password${search}${hash}`);
       return;
     }
@@ -149,7 +149,7 @@ function HomeInner() {
     router.push(`/${action}?${qs.toString()}`);
   };
 
-  if (hasPkceCallback) {
+  if (hasRecoveryCallback) {
     return (
       <main
         className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF6] px-4"

@@ -89,7 +89,7 @@ export default function SignUpPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/verified`,
           data: {
             role,
             first_name: trimmedFirst,

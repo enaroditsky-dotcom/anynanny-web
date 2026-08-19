@@ -83,7 +83,7 @@ function LoginInner() {
         return;
       }
       const callback = readAuthCallbackParams();
-      if (callback.hasCode || callback.isRecoveryType) {
+      if (callback.isRecoveryType) {
         return;
       }
       const { data: { session } } = await supabase.auth.getSession();
@@ -113,7 +113,7 @@ function LoginInner() {
           return;
         }
         const callback = readAuthCallbackParams();
-        if (callback.hasCode || callback.isRecoveryType) {
+        if (callback.isRecoveryType) {
           return;
         }
         setBypassLogin(true);

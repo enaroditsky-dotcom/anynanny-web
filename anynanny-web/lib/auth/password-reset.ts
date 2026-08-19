@@ -59,6 +59,7 @@ export type AuthCallbackParams = {
   hasCode: boolean;
   hasTokenHash: boolean;
   isRecoveryType: boolean;
+  callbackType: string;
   code: string | null;
   tokenHash: string | null;
 };
@@ -85,11 +86,21 @@ export function readAuthCallbackParams(
     hasCode: Boolean(code),
     hasTokenHash: Boolean(tokenHash),
     isRecoveryType: type === "recovery",
+    callbackType: type,
     code,
     tokenHash
   };
 }
 
+/** True only for an explicit Supabase recovery callback — never a generic PKCE `code`. */
+export function isExplicitRecoveryCallback(params: AuthCallbackParams): boolean {
+  return params.isRecoveryType;
+}
+
+/**
+ * Markers used on `/auth/reset-password` itself.
+ * Recovery emails already land there via `redirectTo`, often as `?code=` without `type`.
+ */
 export function hasRecoveryUrlMarker(params: AuthCallbackParams): boolean {
   return params.hasCode || params.isRecoveryType || (params.hasTokenHash && params.isRecoveryType);
 }
@@ -105,15 +116,16 @@ export function resetPasswordCallbackHref(): string {
 }
 
 /**
- * If this page received a recovery callback, send it to `/auth/reset-password`
- * without dropping hash fragments. PKCE recovery often has only `?code=`.
+ * If this page received an explicit recovery callback (`type=recovery`),
+ * send it to `/auth/reset-password` without dropping hash fragments.
+ * A generic PKCE `code` is not recovery — signup confirmation uses `/auth/verified`.
  */
 export function forwardExplicitRecoveryCallback(): boolean {
   if (typeof window === "undefined") return false;
   if (isPasswordRecoveryDestinationPath(window.location.pathname)) return false;
 
   const params = readAuthCallbackParams();
-  if (!params.hasCode && !params.isRecoveryType && !params.hasTokenHash) {
+  if (!isExplicitRecoveryCallback(params)) {
     return false;
   }
 
@@ -121,14 +133,13 @@ export function forwardExplicitRecoveryCallback(): boolean {
   return true;
 }
 
-/** Site-URL fallback: `/?code=` must not stay on the landing page. */
+/** Site-URL fallback: only explicit `type=recovery` is password recovery. */
 export function shouldForwardRootAuthCallback(
   pathname: string,
   searchParams: { get(name: string): string | null; has(name: string): boolean }
 ): boolean {
   if (pathname !== "/") return false;
-  const type = (searchParams.get("type") || "").toLowerCase();
-  return searchParams.has("code") || type === "recovery";
+  return (searchParams.get("type") || "").toLowerCase() === "recovery";
 }
 
 export function forwardToResetPasswordNow(): void {
