@@ -11,7 +11,8 @@
     "test:parent-pending-sitter-approval": "npx --yes tsx scripts/test-parent-pending-sitter-approval-view.ts",
     "test:parent-approved-schedule-notification": "npx --yes tsx scripts/test-parent-approved-schedule-notification.ts",
     "test:requested-shift-context": "npx --yes tsx scripts/test-requested-shift-context.ts",
-    "test:booking-cancellation-request": "npx --yes tsx scripts/test-booking-cancellation-request.ts"
+    "test:booking-cancellation-request": "npx --yes tsx scripts/test-booking-cancellation-request.ts",
+    "test:shift-charge-authority": "npx --yes tsx scripts/test-shift-charge-authority.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",

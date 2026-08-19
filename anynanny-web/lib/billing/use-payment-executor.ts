@@ -49,7 +49,6 @@ export function usePaymentExecutor() {
   const executePayment = useCallback(
     async (params: PaymentExecutorParams): Promise<PaymentExecutorResult> => {
       const paymentSplit = parentTotalFromSitterBaseNis(params.sitterBaseNis);
-      const amountMinorUnits = Math.max(50, paymentSplit.totalMinorUnits);
 
       setBusy(true);
       setError(null);
@@ -57,7 +56,6 @@ export function usePaymentExecutor() {
       try {
         const result = await postParentCheckoutSession({
           bookingId: params.bookingId,
-          amountMinorUnits,
           currency: "ils",
           description: hypPaymentMethodDescription(params.paymentMethod, "checkout"),
           paymentMethod: params.paymentMethod,
@@ -67,8 +65,7 @@ export function usePaymentExecutor() {
               ? (params.paymentMethodId ?? undefined)
               : undefined,
           shiftDetails: {
-            sessionId: params.sessionId,
-            elapsedSeconds: params.elapsedSeconds
+            sessionId: params.sessionId
           }
         });
 

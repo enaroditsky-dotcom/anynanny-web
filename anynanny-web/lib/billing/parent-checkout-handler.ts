@@ -11,7 +11,8 @@ import {
 } from "@/lib/billing/hyp/payment-method-flags";
 import { chargeHypSavedToken } from "@/lib/billing/hyp/token";
 import { finalizeHypPaymentSuccess } from "@/lib/billing/finalize-hyp-payment";
-import { computePlatformFeeFromMinorUnits } from "@/lib/billing/platform-fee";
+import { computeAuthoritativeShiftCharge } from "@/lib/billing/compute-shift-charge";
+import { computePlatformFeeFromParentTotal } from "@/lib/billing/platform-fee";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 /** Server-safe — do not import SESSIONS_TABLE from `lib/session/protocol` (`"use client"`). */
 import { SESSIONS_TABLE } from "@/lib/billing/session-types";
@@ -19,8 +20,6 @@ import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { getParentPaymentMethodSecret } from "@/lib/wallet/parent-payment-methods";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-
-const PAYABLE_BOOKING_STATUSES = new Set(["completed", "sitter_ended", "parent_started"]);
 
 function assertRelation(name: string, label: string): string {
   const relation = String(name ?? "").trim();
@@ -31,7 +30,9 @@ function assertRelation(name: string, label: string): string {
 }
 
 export type ParentCheckoutBody = {
+  /** Ignored. Amount is derived server-side from booking/session DB fields. */
   amountMinorUnits?: number;
+  /** Ignored. Amount is derived server-side from booking/session DB fields. */
   totalPriceNis?: number;
   currency?: string;
   description?: string;
@@ -43,21 +44,8 @@ export type ParentCheckoutBody = {
   paymentMethodId?: string;
   shiftDetails?: {
     sessionId?: string;
-    elapsedSeconds?: number;
   };
 };
-
-function resolveAmountMinorUnits(body: ParentCheckoutBody): number | null {
-  const fromMinor = Number(body.amountMinorUnits);
-  if (Number.isInteger(fromMinor) && fromMinor >= 50) return fromMinor;
-
-  const fromTotal = Number(body.totalPriceNis);
-  if (Number.isFinite(fromTotal) && fromTotal > 0) {
-    return Math.max(50, Math.round(fromTotal * 100));
-  }
-
-  return null;
-}
 
 async function markBookingPendingCheckout(
   supabase: SupabaseClient,
@@ -83,17 +71,6 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const amountMinorUnits = resolveAmountMinorUnits(body);
-  if (amountMinorUnits == null) {
-    return NextResponse.json(
-      {
-        error:
-          "Provide amountMinorUnits (integer >= 50) or totalPriceNis (> 0) for the shift payment total."
-      },
-      { status: 400 }
-    );
-  }
-
   const currency = String(body.currency ?? "ils").toLowerCase();
   if (currency !== "ils") {
     return NextResponse.json({ error: "Checkout currently supports ILS only." }, { status: 400 });
@@ -115,8 +92,6 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
     );
   }
 
-  const paymentSplit = computePlatformFeeFromMinorUnits(amountMinorUnits);
-
   const { data: profile, error: profileErr } = await supabase
     .from(assertRelation(PROFILES_TABLE, "profiles"))
     .select("role")
@@ -135,6 +110,20 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
   if (!bookingId) {
     return NextResponse.json({ error: "bookingId is required." }, { status: 400 });
   }
+
+  const requestedSessionId = body.shiftDetails?.sessionId?.trim() || null;
+  const chargeResult = await computeAuthoritativeShiftCharge(supabase, user.id, {
+    bookingId,
+    sessionId: requestedSessionId
+  });
+
+  if (!chargeResult.ok) {
+    return NextResponse.json({ error: chargeResult.error }, { status: chargeResult.status });
+  }
+
+  const charge = chargeResult.charge;
+  const paymentSplit = computePlatformFeeFromParentTotal(charge.parentTotalNis);
+  const shiftSessionId = charge.sessionId;
 
   const { data: booking, error: bookingErr } = await supabase
     .from(assertRelation(BOOKINGS_TABLE, "bookings"))
@@ -156,13 +145,6 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
 
   if (String(row.parent_id) !== user.id) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-  }
-
-  if (!PAYABLE_BOOKING_STATUSES.has(String(row.status))) {
-    return NextResponse.json(
-      { error: "This booking cannot be paid in its current state." },
-      { status: 400 }
-    );
   }
 
   if (row.payment_status === "paid" || row.paid_at) {
@@ -200,8 +182,6 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const shiftSessionId = body.shiftDetails?.sessionId?.trim();
-
   const successReturn = new URL(successUrl);
   successReturn.searchParams.set("bookingId", bookingId);
   if (shiftSessionId) {
@@ -227,8 +207,8 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
     }
 
     try {
-      const charge = await chargeHypSavedToken({
-        amountNis: paymentSplit.totalNis,
+      const hypCharge = await chargeHypSavedToken({
+        amountNis: charge.amountMinorUnits / 100,
         token: secret.method.hyp_token,
         expMonth: secret.method.exp_month,
         expYear: secret.method.exp_year,
@@ -239,12 +219,12 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
         description: String(body.description ?? "תשלום משמרת AnyNanny")
       });
 
-      if (!charge.success) {
+      if (!hypCharge.success) {
         return NextResponse.json(
           {
-            error: charge.error || "חיוב הכרטיס השמור נכשל. נסו כרטיס אחר או תשלום חדש.",
+            error: hypCharge.error || "חיוב הכרטיס השמור נכשל. נסו כרטיס אחר או תשלום חדש.",
             gateway: "hyp",
-            cCode: charge.cCode
+            cCode: hypCharge.cCode
           },
           { status: 402 }
         );
@@ -256,8 +236,8 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
         bookingId,
         sessionId: shiftSessionId,
         parentId: user.id,
-        hypApprovalId: charge.approvalId,
-        amountPaid: charge.amount ?? String(paymentSplit.totalNis)
+        hypApprovalId: hypCharge.approvalId,
+        amountPaid: hypCharge.amount ?? String(charge.amountMinorUnits / 100)
       });
 
       if (!finalized.ok) {
@@ -268,18 +248,18 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
       }
 
       return NextResponse.json({
-        sessionId: charge.approvalId,
+        sessionId: hypCharge.approvalId,
         url: null,
         status: "paid",
         gateway: "hyp",
         mock: false,
         paymentMethod: "credit_card",
         paymentMethodId,
-        amountMinorUnits: paymentSplit.totalMinorUnits,
+        amountMinorUnits: charge.amountMinorUnits,
         platformFeeMinorUnits: paymentSplit.platformFeeMinorUnits,
         platformFeeNis: paymentSplit.platformFeeNis,
-        sitterBaseNis: paymentSplit.sitterBaseNis,
-        totalNis: paymentSplit.totalNis,
+        sitterBaseNis: charge.sitterBaseNis,
+        totalNis: charge.parentTotalNis,
         shiftSessionId: shiftSessionId ?? null,
         paid: true
       });
@@ -295,14 +275,14 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
   }
 
   try {
-    const amountGuard = validateHypWalletAmount(paymentMethod, paymentSplit.totalNis);
+    const amountGuard = validateHypWalletAmount(paymentMethod, charge.amountMinorUnits / 100);
     if (amountGuard) {
       return NextResponse.json({ error: amountGuard }, { status: 400 });
     }
 
     const hyp = await createHypCheckoutSession({
       bookingId,
-      amountNis: paymentSplit.totalNis,
+      amountNis: charge.amountMinorUnits / 100,
       successUrl,
       cancelUrl,
       paymentMethod,
@@ -335,7 +315,7 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
       bookingId,
       sessionId: hyp.sessionId,
       paymentMethod,
-      totalNis: paymentSplit.totalNis
+      totalNis: charge.parentTotalNis
     });
 
     return NextResponse.json({
@@ -345,11 +325,11 @@ export async function handleParentCheckout(request: Request, supabase: SupabaseC
       gateway: "hyp",
       mock: false,
       paymentMethod,
-      amountMinorUnits: paymentSplit.totalMinorUnits,
+      amountMinorUnits: charge.amountMinorUnits,
       platformFeeMinorUnits: paymentSplit.platformFeeMinorUnits,
       platformFeeNis: paymentSplit.platformFeeNis,
-      sitterBaseNis: paymentSplit.sitterBaseNis,
-      totalNis: paymentSplit.totalNis,
+      sitterBaseNis: charge.sitterBaseNis,
+      totalNis: charge.parentTotalNis,
       shiftSessionId: shiftSessionId ?? null
     });
   } catch (hypError) {

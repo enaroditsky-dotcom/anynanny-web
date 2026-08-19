@@ -332,19 +332,12 @@ export async function recordSitterEndShake(
 export async function recordParentConfirmEnd(
   supabase: SupabaseClient,
   sessionId: string,
-  parentId: string,
-  row: BillingSessionRow
+  _parentId?: string,
+  _row?: BillingSessionRow
 ): Promise<{ error: string | null; row: BillingSessionRow | null }> {
-  const endIso = new Date().toISOString();
-  const totals = computeFinalTotals(row);
-
-  // בצע עדכון אטומי: קודם ה-session, מיד אחריו ה-booking
+  // Duration, amount, and end time are derived inside end_shift_atomic.
   const { data, error } = await supabase.rpc("end_shift_atomic", {
-    p_session_id: sessionId,
-    p_parent_id: parentId,
-    p_end_iso: endIso,
-    p_elapsed: totals.elapsedSeconds,
-    p_amount: totals.amountNis
+    p_session_id: sessionId
   });
 
   if (error) {

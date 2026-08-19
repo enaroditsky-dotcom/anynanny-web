@@ -1,3 +1,4 @@
+import { computeAuthoritativeShiftCharge } from "@/lib/billing/compute-shift-charge";
 import { createHypCheckoutSession } from "@/lib/billing/hyp-checkout";
 import { resolveCheckoutRedirectUrl } from "@/lib/stripe/redirect-url";
 import { createServerClient } from "@/lib/supabase/server";
@@ -18,6 +19,7 @@ type CheckoutBody = {
 
 /**
  * Hyp checkout entrypoint — creates a hosted Hyp sandbox payment when HYP_* is configured.
+ * Amount is derived from booking/session DB fields; browser amountMinorUnits is ignored.
  * Does not mark the session paid; finalization happens on Hyp success (complete API / webhook).
  */
 export async function POST(request: Request) {
@@ -45,19 +47,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "bookingId is required." }, { status: 400 });
   }
 
-  const { data: booking, error: bookingErr } = await supabase
-    .from("bookings")
-    .select("id, parent_id, status")
-    .eq("id", bookingId)
-    .maybeSingle();
+  const chargeResult = await computeAuthoritativeShiftCharge(supabase, user.id, {
+    bookingId,
+    sessionId: body.shiftDetails?.sessionId
+  });
 
-  if (bookingErr || !booking) {
-    return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+  if (!chargeResult.ok) {
+    return NextResponse.json({ error: chargeResult.error }, { status: chargeResult.status });
   }
 
-  if (String(booking.parent_id) !== user.id) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-  }
+  const charge = chargeResult.charge;
 
   let successUrl: string;
   try {
@@ -70,20 +69,14 @@ export async function POST(request: Request) {
     successUrl = "/parent/checkout/complete?checkout=success";
   }
 
-  const amountMinorUnits = Number(body.amountMinorUnits);
-  const amountNis =
-    Number.isFinite(amountMinorUnits) && amountMinorUnits >= 50
-      ? amountMinorUnits / 100
-      : 50;
-
   try {
     const hyp = await createHypCheckoutSession({
       bookingId,
-      amountNis,
+      amountNis: charge.amountMinorUnits / 100,
       successUrl,
       paymentMethod: String(body.paymentMethod ?? "credit_card"),
       description: String(body.description ?? "תשלום משמרת AnyNanny"),
-      shiftSessionId: body.shiftDetails?.sessionId
+      shiftSessionId: charge.sessionId
     });
 
     await supabase
@@ -98,7 +91,11 @@ export async function POST(request: Request) {
       sessionId: hyp.sessionId,
       gateway: "hyp",
       mock: false,
-      status: "pending"
+      status: "pending",
+      amountMinorUnits: charge.amountMinorUnits,
+      totalNis: charge.parentTotalNis,
+      sitterBaseNis: charge.sitterBaseNis,
+      shiftSessionId: charge.sessionId
     });
   } catch (error) {
     console.error("[hyp/checkout] Hyp unavailable:", error);

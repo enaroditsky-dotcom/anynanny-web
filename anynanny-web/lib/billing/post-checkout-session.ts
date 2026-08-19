@@ -2,7 +2,8 @@ import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-metho
 
 export type ParentCheckoutRequest = {
   bookingId: string;
-  amountMinorUnits: number;
+  /** Ignored by the server. Kept optional for older clients. */
+  amountMinorUnits?: number;
   currency?: string;
   description?: string;
   successUrl?: string;
@@ -11,7 +12,6 @@ export type ParentCheckoutRequest = {
   paymentMethodId?: string;
   shiftDetails?: {
     sessionId?: string;
-    elapsedSeconds?: number;
   };
 };
 
