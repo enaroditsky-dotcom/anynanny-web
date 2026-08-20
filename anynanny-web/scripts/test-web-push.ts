@@ -217,7 +217,19 @@ assert.match(read("lib/push/badge-query.ts"), /booking_id/);
 assert.equal(computeAppBadgeCount({ unreadNonChatNotifications: 0, distinctUnreadIncomingChatBookings: 0 }), 0);
 assert.match(read("lib/push/badge.ts"), /count <= 0/);
 assert.match(read("lib/push/badge.ts"), /clearAppBadge/);
+assert.match(read("lib/push/badge.ts"), /serviceWorker\.getRegistration/);
+assert.match(read("lib/push/badge.ts"), /registration\.clearAppBadge/);
 assert.match(sw, /clearAppBadge/);
+
+// 16b. launch/resume clears OS badge without marking notifications/messages read
+assert.match(runtime, /clearAppBadge/);
+assert.match(runtime, /visibilitychange/);
+assert.match(runtime, /visibilityState !== "visible"/);
+assert.match(runtime, /addEventListener\("focus"/);
+assert.doesNotMatch(runtime, /loadAppBadgeCount/);
+assert.doesNotMatch(runtime, /refreshBadge|refreshAppBadgeBestEffort/);
+assert.doesNotMatch(runtime, /markNotificationsRead|markBookingMessagesRead|read_at/);
+assert.doesNotMatch(runtime, /from\("notifications"\)|from\("messages"\)/);
 
 // 17. notification click opens/focuses correct URL
 assert.match(sw, /notificationclick/);

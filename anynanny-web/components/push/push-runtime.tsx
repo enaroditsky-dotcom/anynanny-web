@@ -4,22 +4,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ANYNANNY_PUSH_NAVIGATE_MESSAGE } from "@/lib/push/constants";
-import { loadAppBadgeCount } from "@/lib/push/badge-query";
-import { setAppBadgeCount } from "@/lib/push/badge";
+import { clearAppBadge } from "@/lib/push/badge";
 import { loadNotificationPreferencesForUser } from "@/lib/push/preferences";
 import { reconcilePushSubscription } from "@/lib/push/register-push";
 import { registerAnyNannyServiceWorker } from "@/lib/push/service-worker-register";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-
-async function refreshBadge(userId: string): Promise<void> {
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) {
-    await setAppBadgeCount(0);
-    return;
-  }
-  const count = await loadAppBadgeCount(supabase, userId);
-  await setAppBadgeCount(count);
-}
 
 export function PushRuntime() {
   const { signedIn, user, isLoading } = useAuth();
@@ -28,14 +16,15 @@ export function PushRuntime() {
 
   const sync = useCallback(async () => {
     await registerAnyNannyServiceWorker();
-    if (!signedIn || !user?.id) {
-      await setAppBadgeCount(0);
-      return;
-    }
+    await clearAppBadge();
+    if (!signedIn || !user?.id) return;
     const prefs = await loadNotificationPreferencesForUser(user.id);
     await reconcilePushSubscription(prefs.pushEnabled);
-    await refreshBadge(user.id);
   }, [signedIn, user?.id]);
+
+  useEffect(() => {
+    void clearAppBadge();
+  }, []);
 
   useEffect(() => {
     if (isLoading) return;
@@ -44,9 +33,12 @@ export function PushRuntime() {
 
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") void sync();
+      if (document.visibilityState !== "visible") return;
+      void clearAppBadge();
+      void sync();
     };
     const onFocus = () => {
+      void clearAppBadge();
       void sync();
     };
     document.addEventListener("visibilitychange", onVisible);
