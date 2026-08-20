@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Varela_Round } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
 import { AppShellGate } from "@/components/app-shell-gate";
+import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
 
 const varelaRound = Varela_Round({
   subsets: ["hebrew", "latin"],
@@ -25,7 +26,9 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
   },
   appleWebApp: {
-    title: "AnyNanny"
+    capable: true,
+    title: "AnyNanny",
+    statusBarStyle: "default"
   }
 };
 
@@ -33,6 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="he" className={varelaRound.variable} suppressHydrationWarning>
       <body className={`${varelaRound.className} bg-[#FDFBF6] font-sans antialiased`} suppressHydrationWarning>
+        <ServiceWorkerRegister />
         <AuthProvider>
           <AppShellGate>{children}</AppShellGate>
         </AuthProvider>

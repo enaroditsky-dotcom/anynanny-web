@@ -104,7 +104,11 @@ export async function markNotificationsReadBestEffort(
   if (!uid) return;
   try {
     const result = await markNotificationsRead(supabase, uid, input);
-    if (!result.error) return;
+    if (!result.error) {
+      const { refreshAppBadgeBestEffort } = await import("@/lib/push/refresh-badge");
+      await refreshAppBadgeBestEffort(uid);
+      return;
+    }
     if (isPostgrestMissingColumnError(result.error, "read_at")) return;
     if (isDuplicateNotificationError(result.error)) return;
     console.warn("[notifications] mark read:", result.error);

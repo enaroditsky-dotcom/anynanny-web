@@ -14,7 +14,8 @@
     "test:booking-cancellation-request": "npx --yes tsx scripts/test-booking-cancellation-request.ts",
     "test:shift-charge-authority": "npx --yes tsx scripts/test-shift-charge-authority.ts",
     "test:hyp-payment-verification": "npx --yes tsx scripts/test-hyp-payment-verification.ts",
-    "test:canonical-notifications": "npx --yes tsx scripts/test-canonical-notifications.ts"
+    "test:canonical-notifications": "npx --yes tsx scripts/test-canonical-notifications.ts",
+    "test:web-push": "npx --yes tsx scripts/test-web-push.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",
@@ -26,12 +27,14 @@
     "next": "^15.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "stripe": "^22.2.1"
+    "stripe": "^22.2.1",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
