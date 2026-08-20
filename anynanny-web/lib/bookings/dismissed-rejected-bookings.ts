@@ -101,6 +101,12 @@ export async function acknowledgeRejectedBookingNotification(
     .eq("parent_id", uid)
     .eq("status", "rejected");
 
+  const { markNotificationsReadBestEffort } = await import("@/lib/notifications/read-state");
+  await markNotificationsReadBestEffort(supabase, uid, {
+    kind: "booking_rejected",
+    bookingId: id
+  });
+
   if (!error) {
     return { ok: true, error: null };
   }

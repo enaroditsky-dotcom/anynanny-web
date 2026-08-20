@@ -128,6 +128,11 @@ export async function markBookingMessagesRead(
       );
       return { ok: false, error: "read_at not updated" };
     }
+    const { markNotificationsReadBestEffort } = await import("@/lib/notifications/read-state");
+    await markNotificationsReadBestEffort(supabase, userId, {
+      kind: "chat_message",
+      bookingId: id
+    });
   }
 
   return { ok: true, error: null };
