@@ -140,12 +140,23 @@ export function NotificationSettingsSection() {
               <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700">
                 <BellRing className="h-4 w-4" strokeWidth={2} aria-hidden />
               </span>
-              <RetroToggle
-                checked={prefs.pushEnabled}
-                onChange={(next) => void handlePushChange(next)}
-                label="התראות דחיפה"
-                disabled={!hydrated}
-              />
+              <span className="flex items-center gap-1.5">
+                <span
+                  dir="ltr"
+                  aria-hidden
+                  className={`min-w-[2.25rem] text-center text-[11px] font-bold tracking-wide ${
+                    prefs.pushEnabled ? "text-[#001F3F]" : "text-slate-400"
+                  }`}
+                >
+                  {prefs.pushEnabled ? "ON" : "OFF"}
+                </span>
+                <RetroToggle
+                  checked={prefs.pushEnabled}
+                  onChange={(next) => void handlePushChange(next)}
+                  label="התראות דחיפה"
+                  disabled={!hydrated}
+                />
+              </span>
             </span>
           }
         />
