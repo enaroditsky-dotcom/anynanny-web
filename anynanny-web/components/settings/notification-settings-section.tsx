@@ -102,7 +102,7 @@ export function NotificationSettingsSection() {
         setHint(
           "כדי לקבל התראות באייפון, הוסיפו את AnyNanny למסך הבית דרך שיתוף → הוספה למסך הבית."
         );
-      } else if (result.reason === "missing-vapid") {
+      } else if (result.reason === "missing-vapid" || result.reason === "invalid-vapid") {
         setHint("התראות דחיפה עדיין לא הוגדרו בשרת.");
       }
     },

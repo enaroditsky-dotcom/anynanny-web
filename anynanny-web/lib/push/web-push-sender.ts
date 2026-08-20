@@ -1,5 +1,6 @@
 import type { WebPushError } from "web-push";
 import webpush from "web-push";
+import { sanitizeVapidPublicKeyInput } from "@/lib/push/vapid-public";
 
 export type PushSubscriptionRecord = {
   id: string;
@@ -15,9 +16,9 @@ export type WebPushSendResult =
 let vapidConfigured = false;
 
 function readServerVapid(): { publicKey: string; privateKey: string; subject: string } | null {
-  const publicKey = String(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "").trim();
-  const privateKey = String(process.env.VAPID_PRIVATE_KEY ?? "").trim();
-  const subject = String(process.env.VAPID_SUBJECT ?? "").trim();
+  const publicKey = sanitizeVapidPublicKeyInput(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+  const privateKey = sanitizeVapidPublicKeyInput(process.env.VAPID_PRIVATE_KEY);
+  const subject = String(process.env.VAPID_SUBJECT ?? "").trim().replace(/^['"]|['"]$/g, "");
   if (!publicKey || !privateKey || !subject) return null;
   return { publicKey, privateKey, subject };
 }

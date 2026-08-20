@@ -5,7 +5,7 @@ import {
   type PushPermissionState
 } from "@/lib/push/capability";
 import { registerAnyNannyServiceWorker } from "@/lib/push/service-worker-register";
-import { readPublicVapidKey, vapidPublicKeyToUint8Array } from "@/lib/push/vapid-public";
+import { readPublicVapidKey, readApplicationServerKey, InvalidVapidPublicKeyError } from "@/lib/push/vapid-public";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { readSupabaseErrorMessage } from "@/lib/supabase/postgrest-schema";
 
@@ -82,6 +82,17 @@ export async function enablePushFromUserGesture(): Promise<PushSubscribeResult> 
     return { ok: false, permission: currentNotificationPermission(), reason: "missing-vapid" };
   }
 
+  let applicationServerKey: BufferSource;
+  try {
+    applicationServerKey = readApplicationServerKey() as BufferSource;
+  } catch (err) {
+    if (err instanceof InvalidVapidPublicKeyError) {
+      console.warn("[push] subscribe failed:", err.message);
+      return { ok: false, permission: currentNotificationPermission(), reason: "invalid-vapid" };
+    }
+    throw err;
+  }
+
   const registration = await registerAnyNannyServiceWorker();
   if (!registration) {
     return { ok: false, permission: currentNotificationPermission(), reason: "no-service-worker" };
@@ -105,7 +116,7 @@ export async function enablePushFromUserGesture(): Promise<PushSubscribeResult> 
       existing ??
       (await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: vapidPublicKeyToUint8Array(publicKey) as BufferSource
+        applicationServerKey
       }));
     const saved = await persistSubscription(sub);
     if (!saved.ok) {
@@ -135,20 +146,30 @@ export async function reconcilePushSubscription(pushEnabled: boolean): Promise<v
   const capability = readBrowserPushCapability();
   if (!capability.canSubscribe) return;
   if (currentNotificationPermission() !== "granted") return;
-  if (!readPublicVapidKey()) return;
+  if (!readPublicVapidKey()) {
+    console.warn("[push] reconcile failed: NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing");
+    return;
+  }
 
   const registration = await registerAnyNannyServiceWorker();
   if (!registration) return;
   try {
     let sub = await registration.pushManager.getSubscription();
     if (!sub) {
+      const applicationServerKey = readApplicationServerKey() as BufferSource;
       sub = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: vapidPublicKeyToUint8Array(readPublicVapidKey()) as BufferSource
+        applicationServerKey
       });
     }
     await persistSubscription(sub);
   } catch (err) {
-    console.warn("[push] reconcile failed:", err);
+    const message =
+      err instanceof InvalidVapidPublicKeyError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : "subscribe failed";
+    console.warn("[push] reconcile failed:", message);
   }
 }
