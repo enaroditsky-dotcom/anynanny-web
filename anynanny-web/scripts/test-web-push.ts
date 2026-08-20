@@ -11,7 +11,11 @@ import {
 import { sendPushToSubscriptions } from "../lib/push/deliver-notification";
 import { PUSH_NOTIFICATION_KIND_LIST } from "../lib/push/kind-list";
 import { buildPrivacySafePushPayload, privacySafeBodyForKind, pushHrefForKind } from "../lib/push/payload";
-import { vapidPublicKeyToUint8Array } from "../lib/push/vapid-public";
+import {
+  decodeUrlSafeBase64ToUint8Array,
+  sanitizeVapidPublicKeyInput,
+  vapidPublicKeyToUint8Array
+} from "../lib/push/vapid-public";
 import {
   authorizePushWebhook,
   extractNotificationIdFromWebhookBody,
@@ -282,16 +286,33 @@ assert.match(sender, /process\.env\.VAPID_PRIVATE_KEY/);
 assert.doesNotMatch(sender, /console\.(log|info|warn|error).*VAPID_PRIVATE_KEY/);
 assert.doesNotMatch(registerPush, /VAPID_PRIVATE_KEY/);
 assert.match(read("lib/push/vapid-public.ts"), /NEXT_PUBLIC_VAPID_PUBLIC_KEY/);
+assert.match(read("lib/push/vapid-public.ts"), /sanitizeVapidPublicKeyInput/);
+assert.match(registerPush, /InvalidVapidPublicKeyError/);
+assert.match(settings, /invalid-vapid/);
+
+const bytes = decodeUrlSafeBase64ToUint8Array("AQID");
+assert.equal(bytes.length, 3);
+assert.equal(bytes[0], 1);
+
+const p256 = Buffer.alloc(65, 7);
+p256[0] = 4;
+const urlSafe = p256.toString("base64url");
+const std = p256.toString("base64");
+assert.equal(sanitizeVapidPublicKeyInput(`"${urlSafe}"`), urlSafe);
+assert.equal(sanitizeVapidPublicKeyInput(` \n${urlSafe}\n `), urlSafe);
+assert.deepEqual(vapidPublicKeyToUint8Array(urlSafe), new Uint8Array(p256));
+assert.deepEqual(vapidPublicKeyToUint8Array(`"${urlSafe}"`), new Uint8Array(p256));
+assert.deepEqual(vapidPublicKeyToUint8Array(` ${urlSafe} \n`), new Uint8Array(p256));
+assert.deepEqual(vapidPublicKeyToUint8Array(std), new Uint8Array(p256));
+assert.throws(() => vapidPublicKeyToUint8Array(""), /missing/);
+assert.throws(() => vapidPublicKeyToUint8Array("%%%not-base64%%%"), /not valid Base64/);
+assert.throws(() => vapidPublicKeyToUint8Array("AQID"), /not a valid VAPID public key/);
 assert.match(settings, /אילו התראות אקבל\?/);
 assert.equal(PUSH_NOTIFICATION_KIND_LIST.length, 9);
 assert.match(settings, /לא שולט בצליל התראת המערכת/);
 assert.match(bottomNav, /hasUnreadMessages/);
 assert.match(swRegister, /navigator\.serviceWorker/);
 assert.match(layoutSw, /registerAnyNannyServiceWorker/);
-
-const bytes = vapidPublicKeyToUint8Array("AQID");
-assert.equal(bytes.length, 3);
-assert.equal(bytes[0], 1);
 
 const android = detectPushCapability({
   hasWindow: true,
