@@ -9,6 +9,8 @@ import { AppShellSessionHydration } from "@/components/app-shell-session-hydrati
 import { AppShellStableBoundary } from "@/components/app-shell-stable-boundary";
 import { BottomNav } from "@/components/bottom-nav";
 import { ParentActiveNowDock } from "@/components/parent/parent-active-now-dock";
+import { PushPermissionBanner } from "@/components/push/push-permission-banner";
+import { PushRuntime } from "@/components/push/push-runtime";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
 import SessionProvider from "@/context/SessionContext";
 
@@ -103,6 +105,7 @@ export function AppShellGate({
     return (
       <SessionProvider>
         <AppShellSessionHydration />
+        <PushRuntime />
 
         <RouteTransitionShell>
           {children}
@@ -126,6 +129,7 @@ export function AppShellGate({
   return (
     <SessionProvider>
       <AppShellSessionHydration />
+      <PushRuntime />
 
       <AppShellStableBoundary>
         {/*
@@ -158,6 +162,7 @@ export function AppShellGate({
                 ].join(" ")}
               >
                 <RouteTransitionShell>
+                  <PushPermissionBanner />
                   {children}
                 </RouteTransitionShell>
               </div>
@@ -180,6 +185,7 @@ export function AppShellGate({
                 ].join(" ")}
               >
                 <RouteTransitionShell>
+                  <PushPermissionBanner />
                   {children}
                 </RouteTransitionShell>
               </div>

@@ -32,6 +32,10 @@ export type ProfileRow = {
   terms_version?: string | null;
   privacy_accepted_at?: string | null;
   privacy_version?: string | null;
+  /** User preference for Web Push. Default true. Not the same as OS permission. */
+  push_enabled?: boolean | null;
+  /** In-app sounds/haptics. Does not control OS notification sound. */
+  sound_enabled?: boolean | null;
 };
 
 export function isProfileRole(v: string | null | undefined): v is ProfileRole {

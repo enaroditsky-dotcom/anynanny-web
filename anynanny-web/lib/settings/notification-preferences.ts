@@ -5,6 +5,7 @@ export type NotificationPreferences = {
 
 export const NOTIFICATION_PREFERENCES_STORAGE_KEY = "anynanny_notification_preferences";
 
+/** Defaults ON. Canonical storage is profiles.push_enabled / sound_enabled; this is a local cache. */
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   pushEnabled: true,
   soundEnabled: true
@@ -61,21 +62,4 @@ export function arePushNotificationsEnabled(): boolean {
 
 export function areSoundAlertsEnabled(): boolean {
   return readNotificationPreferences().soundEnabled;
-}
-
-/** Ask the browser for notification permission when the user turns push on. */
-export async function requestPushNotificationPermission(): Promise<NotificationPermission | "unsupported"> {
-  if (typeof window === "undefined" || typeof Notification === "undefined") {
-    return "unsupported";
-  }
-
-  if (Notification.permission === "granted" || Notification.permission === "denied") {
-    return Notification.permission;
-  }
-
-  try {
-    return await Notification.requestPermission();
-  } catch {
-    return "denied";
-  }
 }

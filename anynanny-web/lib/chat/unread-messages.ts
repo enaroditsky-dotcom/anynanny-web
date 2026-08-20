@@ -133,6 +133,8 @@ export async function markBookingMessagesRead(
       kind: "chat_message",
       bookingId: id
     });
+    const { refreshAppBadgeBestEffort } = await import("@/lib/push/refresh-badge");
+    await refreshAppBadgeBestEffort(userId);
   }
 
   return { ok: true, error: null };
