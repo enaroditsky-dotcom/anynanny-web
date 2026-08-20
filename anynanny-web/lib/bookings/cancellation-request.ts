@@ -2,6 +2,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BookingPaymentStatus, BookingStatus } from "@/lib/bookings/constants";
 import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/booking-status-normalize";
 import { isPostgrestMissingColumnError, readSupabaseErrorMessage } from "@/lib/supabase/postgrest-schema";
+import type { CanonicalNotificationKind } from "@/lib/notifications/kinds";
+
+async function markCancellationNotificationRead(
+  supabase: SupabaseClient,
+  bookingId: string,
+  kind: Extract<
+    CanonicalNotificationKind,
+    "booking_cancellation_requested" | "booking_cancellation_approved"
+  >
+): Promise<void> {
+  try {
+    const { data } = await supabase.auth.getUser();
+    const uid = data.user?.id;
+    if (!uid) return;
+    const { markNotificationsReadBestEffort } = await import("@/lib/notifications/read-state");
+    await markNotificationsReadBestEffort(supabase, uid, { kind, bookingId });
+  } catch {
+    /* best-effort; cancellation RPC already succeeded */
+  }
+}
 
 export const CANCELLATION_MESSAGE_MAX_LENGTH = 500;
 
@@ -389,6 +409,7 @@ export async function approveBookingCancellation(
     return { ok: false, error: mapRpcError(readSupabaseErrorMessage(error)) };
   }
 
+  await markCancellationNotificationRead(supabase, id, "booking_cancellation_requested");
   return parseRpcPayload(data);
 }
 
@@ -407,6 +428,7 @@ export async function acknowledgeBookingCancellation(
     return { ok: false, error: mapRpcError(readSupabaseErrorMessage(error)) };
   }
 
+  await markCancellationNotificationRead(supabase, id, "booking_cancellation_approved");
   return parseRpcPayload(data);
 }
 

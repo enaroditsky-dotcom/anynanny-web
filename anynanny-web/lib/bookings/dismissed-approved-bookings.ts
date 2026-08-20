@@ -135,6 +135,12 @@ export async function acknowledgeApprovedBookingNotification(
     .eq("status", "approved")
     .is("parent_notified_at", null);
 
+  const { markNotificationsReadBestEffort } = await import("@/lib/notifications/read-state");
+  await markNotificationsReadBestEffort(supabase, uid, {
+    kind: "booking_approved",
+    bookingId: id
+  });
+
   if (!error) {
     return { ok: true, error: null };
   }

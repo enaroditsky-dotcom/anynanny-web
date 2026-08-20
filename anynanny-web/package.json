@@ -13,7 +13,8 @@
     "test:requested-shift-context": "npx --yes tsx scripts/test-requested-shift-context.ts",
     "test:booking-cancellation-request": "npx --yes tsx scripts/test-booking-cancellation-request.ts",
     "test:shift-charge-authority": "npx --yes tsx scripts/test-shift-charge-authority.ts",
-    "test:hyp-payment-verification": "npx --yes tsx scripts/test-hyp-payment-verification.ts"
+    "test:hyp-payment-verification": "npx --yes tsx scripts/test-hyp-payment-verification.ts",
+    "test:canonical-notifications": "npx --yes tsx scripts/test-canonical-notifications.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",
