@@ -82,7 +82,10 @@ assert.deepEqual(
     "booking_cancellation_requested",
     "booking_cancellation_approved",
     "payment_required",
-    "payment_received"
+    "payment_received",
+    "pending_no_response_reminder",
+    "booking_withdrawn_by_parent",
+    "pending_booking_expired"
   ]
 );
 assert.ok(DEFERRED_NOTIFICATION_KINDS.includes("confirm_start_required"));
@@ -97,6 +100,9 @@ assert.equal(notificationDedupeKey("payment_required", { sessionId: "s1", bookin
 assert.equal(notificationDedupeKey("payment_received", { bookingId: "b1" }), "b1");
 assert.equal(notificationHrefForKind("chat_message", "parent", { booking_id: "b1" }), "/parent/chat/b1");
 assert.equal(notificationHrefForKind("broadcast_alert", "sitter", {}), "/sitter/dashboard");
+assert.equal(notificationHrefForKind("pending_no_response_reminder", "parent", { booking_id: "b1" }), "/parent/dashboard");
+assert.equal(notificationHrefForKind("pending_booking_expired", "parent", { booking_id: "b1" }), "/parent/dashboard");
+assert.equal(notificationHrefForKind("booking_withdrawn_by_parent", "sitter", { booking_id: "b1" }), "/sitter/dashboard");
 
 // --- A. booking_request: one writer, sitter only ---
 assert.match(createBooking, /status:\s*"pending"/);
@@ -200,6 +206,7 @@ assert.doesNotMatch(swSearchFiles, /PushManager|pushManager|applicationServerKey
 
 // --- existing UI not replaced ---
 assert.match(parentDash, /shouldShowApprovedScheduleNotification|shouldShowRejectedNotification/);
+assert.match(parentDash, /PendingNoResponseReminderModal|pending_no_response_reminder/);
 assert.match(sitterPending, /fetchPendingBookingsForSitter|updateBookingStatus/);
 assert.match(broadcastModal, /playAlertSound/);
 assert.match(bottomNav, /hasUnreadMessages/);

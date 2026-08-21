@@ -26,6 +26,8 @@ import { useParentPendingBookingCount } from "@/lib/bookings/use-parent-pending-
 import { useCancellationAttention } from "@/lib/bookings/use-cancellation-attention";
 import { CancellationAttentionDot } from "@/components/bookings/cancellation-attention-dot";
 import { CancellationAttentionModals } from "@/components/bookings/cancellation-attention-modals";
+import { PendingNoResponseReminderModal } from "@/components/bookings/pending-no-response-reminder-modal";
+import { PendingWithdrawButton } from "@/components/bookings/pending-withdraw-button";
 import {
   acknowledgeApprovedBookingNotification,
   isApprovedScheduleNotificationCandidate,
@@ -1020,6 +1022,19 @@ export function ParentDashboardClient({
     clearPaymentError,
     refreshLiveShiftState
   ]);
+
+  const handlePendingWithdrawn = useCallback(
+    (bookingId: string) => {
+      setShiftError(null);
+      setActiveBooking((prev) => {
+        if (!prev || String(prev.id) !== bookingId) return prev;
+        activeBookingRef.current = null;
+        return null;
+      });
+      if (parentId) void refreshLiveShiftState(parentId);
+    },
+    [parentId, refreshLiveShiftState]
+  );
 
   useEffect(() => {
     const applyNewBooking = (detail: NewBookingEventDetail | null | undefined) => {
@@ -2170,6 +2185,13 @@ export function ParentDashboardClient({
                   {scheduledLabel ? (
                     <p className="text-xs font-medium text-amber-900/80">{scheduledLabel}</p>
                   ) : null}
+                  {scheduledBookingId ? (
+                    <PendingWithdrawButton
+                      bookingId={scheduledBookingId}
+                      onSuccess={() => handlePendingWithdrawn(scheduledBookingId)}
+                      onError={setShiftError}
+                    />
+                  ) : null}
                   <Link
                     href="/parent/calendar"
                     onClick={dismissStatusBanner}
@@ -2198,6 +2220,13 @@ export function ParentDashboardClient({
                   <p className="text-sm font-bold text-amber-900">בקשה נשלחה וממתינה לאישור</p>
                   {bookingStatus ? (
                     <p className="text-[13px] text-amber-800/70">סטטוס: {bookingStatus}</p>
+                  ) : null}
+                  {activeBooking?.id && bookingStatus === "pending" ? (
+                    <PendingWithdrawButton
+                      bookingId={String(activeBooking.id)}
+                      onSuccess={() => handlePendingWithdrawn(String(activeBooking.id))}
+                      onError={setShiftError}
+                    />
                   ) : null}
                 </div>
               ) : null}
@@ -2244,6 +2273,10 @@ export function ParentDashboardClient({
           ) : null}
       </div>
       <CancellationAttentionModals attention={cancellationAttention} role="parent" />
+      <PendingNoResponseReminderModal
+        parentId={parentId}
+        onWithdrawn={handlePendingWithdrawn}
+      />
     </main>
   );
 }

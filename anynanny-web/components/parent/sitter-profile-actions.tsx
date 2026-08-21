@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
+import { PendingWithdrawButton } from "@/components/bookings/pending-withdraw-button";
 import type { RequestedShiftWindow } from "@/lib/bookings/requested-shift";
 import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
 import { fetchPendingBookingForParentSitter } from "@/lib/bookings/todays-linked-booking";
@@ -197,6 +198,18 @@ export function SitterProfileActions({
               <p className="mt-0.5 text-xs leading-snug text-emerald-900">
                 שלחנו ל-{sitterName} בקשת תיאום משמרת. תקבלו עדכון כשתאשר או תדחה.
               </p>
+              {pendingBookingId ? (
+                <div className="mt-2">
+                  <PendingWithdrawButton
+                    bookingId={pendingBookingId}
+                    onSuccess={() => {
+                      setBookingStatus("cancelled");
+                      setActionError(null);
+                    }}
+                    onError={setActionError}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

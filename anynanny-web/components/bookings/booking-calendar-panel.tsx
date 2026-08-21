@@ -35,6 +35,8 @@ export function BookingCalendarPanel({
   onRequestCancellation,
   onApproveCancellation,
   onAcknowledgeCancellation,
+  onWithdrawPending,
+  onWithdrawPendingError,
   className = "",
   viewOptions = CALENDAR_VIEW_OPTIONS
 }: BookingCalendarPanelProps) {
@@ -64,7 +66,9 @@ export function BookingCalendarPanel({
     viewerUserId,
     onRequestCancellation,
     onApproveCancellation,
-    onAcknowledgeCancellation
+    onAcknowledgeCancellation,
+    onWithdrawPending,
+    onWithdrawPendingError
   };
 
   return (

@@ -24,6 +24,9 @@ const KIND_BODY: Record<string, string> = {
   booking_cancellation_approved: "עודכן סטטוס ביטול המשמרת",
   payment_required: "ממתין לך תשלום עבור המשמרת",
   payment_received: "התשלום עבור המשמרת התקבל",
+  pending_no_response_reminder: "הבייביסיטר עדיין לא הגיבה לבקשתך. לסגור את הפנייה לבייביסיטרית?",
+  booking_withdrawn_by_parent: "ההורה ביטל את בקשת המשמרת",
+  pending_booking_expired: "הבייביסיטר לא הגיבה לפנייתך. הבקשה נסגרה.",
   confirm_start_required: "נדרש אישור הגעה למשמרת",
   confirm_end_required: "נדרש אישור סיום משמרת",
   rating_required: "נדרש דירוג למשמרת"
