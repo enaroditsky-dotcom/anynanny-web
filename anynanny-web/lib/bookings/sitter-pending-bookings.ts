@@ -99,7 +99,11 @@ export async function updateBookingStatus(
     .maybeSingle();
 
   if (error) {
-    return { row: null, error: error.message };
+    const message = error.message ?? "";
+    if (/pending booking has expired/i.test(message)) {
+      return { row: null, error: "הבקשה פגה ולא ניתן לאשר אותה." };
+    }
+    return { row: null, error: message };
   }
 
   if (!data) {

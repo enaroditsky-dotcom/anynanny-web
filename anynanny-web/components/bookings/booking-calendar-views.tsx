@@ -14,6 +14,7 @@ import {
   PARENT_CALENDAR_VIEW_OPTIONS,
   type CalendarViewMode
 } from "@/lib/bookings/calendar-shift-filters";
+import { PendingWithdrawButton } from "@/components/bookings/pending-withdraw-button";
 import { ScheduledShiftActions } from "@/components/bookings/scheduled-shift-actions";
 import { CancelledShiftAckBanner } from "@/components/bookings/cancelled-shift-ack-banner";
 import {
@@ -218,6 +219,8 @@ export type CalendarShiftActionContext = {
   onRequestCancellation?: (shift: CalendarShift) => void;
   onApproveCancellation?: (shift: CalendarShift) => void;
   onAcknowledgeCancellation?: (shift: CalendarShift) => void;
+  onWithdrawPending?: (shift: CalendarShift) => void;
+  onWithdrawPendingError?: (message: string) => void;
 };
 
 type CalendarViewsContext = CalendarShiftActionContext;
@@ -264,11 +267,31 @@ function ShiftScheduledActions({
   viewerUserId,
   onRequestCancellation,
   onApproveCancellation,
-  onAcknowledgeCancellation
+  onAcknowledgeCancellation,
+  onWithdrawPending,
+  onWithdrawPendingError
 }: CalendarViewsContext & { shift: CalendarShift }) {
   if (isTemporarilyVisibleCancelledShift(toCancellationShift(shift), viewerUserId)) {
     if (!onAcknowledgeCancellation) return null;
     return <CancelledShiftAckBanner onAcknowledge={() => onAcknowledgeCancellation(shift)} />;
+  }
+
+  if (shift.status === "pending" && viewerRole === "parent" && onWithdrawPending) {
+    const href = profileHref?.(shift) ?? null;
+    return (
+      <div className="mt-3 flex flex-row-reverse flex-wrap items-center justify-end gap-x-4 gap-y-2 border-t border-slate-100 pt-3">
+        {href && profileLinkLabel ? (
+          <Link href={href} className="text-xs font-semibold text-navy-header underline underline-offset-2">
+            {profileLinkLabel}
+          </Link>
+        ) : null}
+        <PendingWithdrawButton
+          bookingId={shift.id}
+          onSuccess={() => onWithdrawPending(shift)}
+          onError={onWithdrawPendingError}
+        />
+      </div>
+    );
   }
 
   if (!viewerRole || !viewerUserId || !onRequestCancellation || !onApproveCancellation) {
@@ -321,7 +344,9 @@ function ShiftCard({
   viewerUserId,
   onRequestCancellation,
   onApproveCancellation,
-  onAcknowledgeCancellation
+  onAcknowledgeCancellation,
+  onWithdrawPending,
+  onWithdrawPendingError
 }: CalendarViewsContext & {
   shift: CalendarShift;
   compact?: boolean;
@@ -335,7 +360,9 @@ function ShiftCard({
     viewerUserId,
     onRequestCancellation,
     onApproveCancellation,
-    onAcknowledgeCancellation
+    onAcknowledgeCancellation,
+    onWithdrawPending,
+    onWithdrawPendingError
   };
 
   return (

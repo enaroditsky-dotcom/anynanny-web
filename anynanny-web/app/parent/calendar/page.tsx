@@ -21,6 +21,7 @@ import {
 } from "@/lib/bookings/cancellation-request";
 import { useCancellationAttention } from "@/lib/bookings/use-cancellation-attention";
 import { CancellationAttentionModals } from "@/components/bookings/cancellation-attention-modals";
+import { PendingNoResponseReminderModal } from "@/components/bookings/pending-no-response-reminder-modal";
 import { useShiftCancellationFlow } from "@/lib/bookings/use-shift-cancellation-flow";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { normalizeBookingStatus } from "@/lib/bookings/booking-status-normalize";
@@ -38,6 +39,7 @@ export default function ParentCalendarPage() {
   const [parentId, setParentId] = useState<string | null>(null);
   const [allShifts, setAllShifts] = useState<CalendarShift[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
   const fetchBookedShifts = useCallback(async (resolvedParentId: string) => {
     const supabase = getSupabaseBrowserClient();
@@ -278,8 +280,18 @@ export default function ParentCalendarPage() {
             if (ok && parentId) void fetchBookedShifts(parentId);
           });
         }}
+        onWithdrawPending={() => {
+          setWithdrawError(null);
+          if (parentId) void fetchBookedShifts(parentId);
+        }}
+        onWithdrawPendingError={(message) => setWithdrawError(message)}
         className="min-h-0 flex-1"
       />
+      {withdrawError ? (
+        <p className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-right text-sm text-rose-800" role="alert">
+          {withdrawError}
+        </p>
+      ) : null}
       <ShiftCancellationRequestModal
         open={Boolean(cancellation.requestShift)}
         shift={cancellation.requestShift}
@@ -299,6 +311,12 @@ export default function ParentCalendarPage() {
         onConfirm={() => void cancellation.submitApproval()}
       />
       <CancellationAttentionModals attention={attention} role="parent" />
+      <PendingNoResponseReminderModal
+        parentId={parentId}
+        onWithdrawn={() => {
+          if (parentId) void fetchBookedShifts(parentId);
+        }}
+      />
     </div>
   );
 }

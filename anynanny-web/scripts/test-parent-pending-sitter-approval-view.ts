@@ -12,6 +12,7 @@ import {
   PARENT_CALENDAR_VIEW_OPTIONS,
   PARENT_PENDING_SITTER_APPROVAL_STATUS
 } from "../lib/bookings/calendar-shift-filters";
+import { todayDateISO } from "../lib/bookings/booking-date-utils";
 import { isSitterBookingAwaitingApprovalStatus } from "../lib/bookings/booking-realtime-handler";
 import type { BookingStatusInput } from "../lib/bookings/booking-status-normalize";
 
@@ -37,27 +38,36 @@ function shift(overrides: {
   };
 }
 
-const now = Date.parse("2026-08-16T12:00:00");
+const now = Date.now();
+const today = todayDateISO();
+const futureDate = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 4);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+})();
 const pending = shift({
   id: "pending-1",
   status: "pending",
-  bookingDate: "2026-08-20",
-  startTime: "2026-08-20T18:00:00",
-  endTime: "2026-08-20T22:00:00"
+  bookingDate: futureDate,
+  startTime: `${futureDate}T18:00:00`,
+  endTime: `${futureDate}T22:00:00`
 });
 const approved = shift({
   id: "approved-1",
   status: "approved",
-  bookingDate: "2026-08-16",
-  startTime: "2026-08-16T18:00:00",
-  endTime: "2026-08-16T22:00:00"
+  bookingDate: today,
+  startTime: `${today}T18:00:00`,
+  endTime: `${today}T22:00:00`
 });
 const requestedAlias = shift({
   id: "requested-1",
   status: "pending",
-  bookingDate: "2026-08-21",
-  startTime: "2026-08-21T09:00:00",
-  endTime: "2026-08-21T12:00:00"
+  bookingDate: futureDate,
+  startTime: `${futureDate}T09:00:00`,
+  endTime: `${futureDate}T12:00:00`
 });
 
 assert.equal(PARENT_PENDING_SITTER_APPROVAL_STATUS, "pending");
@@ -83,7 +93,7 @@ assert.deepEqual(
 assert.ok(!pendingView.some((s) => s.status === "approved"));
 
 for (const view of ["today", "week", "month", "all"] as const) {
-  const filtered = filterCalendarShiftsByView(all, view, { month: 8, year: 2026 }, now);
+  const filtered = filterCalendarShiftsByView(all, view, { month: new Date().getMonth() + 1, year: new Date().getFullYear() }, now);
   assert.ok(
     !filtered.some((s) => isPendingSitterApprovalCalendarShift(s.status)),
     `${view} must not include pending sitter-approval requests`
@@ -97,9 +107,9 @@ for (const view of ["today", "week", "month", "all"] as const) {
 const cancelled = shift({
   id: "cancelled-1",
   status: "cancelled",
-  bookingDate: "2026-08-20",
-  startTime: "2026-08-20T18:00:00",
-  endTime: "2026-08-20T22:00:00"
+  bookingDate: futureDate,
+  startTime: `${futureDate}T18:00:00`,
+  endTime: `${futureDate}T22:00:00`
 });
 
 assert.equal(isUpcomingOrActiveCalendarShift(cancelled, now), false);

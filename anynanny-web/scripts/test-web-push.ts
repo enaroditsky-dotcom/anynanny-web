@@ -122,6 +122,17 @@ assert.doesNotMatch(chatPush.body, /m1|hello|content/);
 // 9. broadcast_alert → correct sitter deep link
 assert.equal(pushHrefForKind("broadcast_alert", "sitter", {}), "/sitter/dashboard");
 assert.equal(privacySafeBodyForKind("broadcast_alert"), "AnyNanny Now חדש באזור שלך");
+assert.equal(
+  privacySafeBodyForKind("pending_no_response_reminder"),
+  "הבייביסיטר עדיין לא הגיבה לבקשתך. לסגור את הפנייה לבייביסיטרית?"
+);
+assert.equal(
+  privacySafeBodyForKind("pending_booking_expired"),
+  "הבייביסיטר לא הגיבה לפנייתך. הבקשה נסגרה."
+);
+assert.equal(pushHrefForKind("pending_no_response_reminder", "parent", { booking_id: "b1" }), "/parent/dashboard");
+assert.equal(pushHrefForKind("pending_booking_expired", "parent", { booking_id: "b1" }), "/parent/dashboard");
+assert.equal(pushHrefForKind("booking_withdrawn_by_parent", "sitter", { booking_id: "b1" }), "/sitter/dashboard");
 
 // 10–11. expired 410 removed; one bad endpoint does not block another
 void (async () => {
