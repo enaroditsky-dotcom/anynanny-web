@@ -26,6 +26,10 @@ import { useShiftCancellationFlow } from "@/lib/bookings/use-shift-cancellation-
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { normalizeBookingStatus } from "@/lib/bookings/booking-status-normalize";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
+import {
+  fetchPublicSitterProfilesViaRpc,
+  publicSitterDisplayName
+} from "@/lib/sitter/fetch-parent-sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
@@ -83,17 +87,10 @@ export default function ParentCalendarPage() {
       }
 
       const sitterIds = [...new Set(bookings.map((b) => String(b.sitter_id ?? "")))].filter(Boolean);
-      const { data: profiles } = await supabase
-        .from(PROFILES_TABLE)
-        .select("id, first_name, last_name")
-        .in("id", sitterIds);
-
+      const publicSitters = await fetchPublicSitterProfilesViaRpc(supabase, sitterIds);
       const nameBySitterId = new Map<string, string>();
-      for (const profile of profiles ?? []) {
-        if (!profile || typeof profile !== "object" || !("id" in profile)) continue;
-        const id = String((profile as { id: string }).id);
-        const row = profile as { first_name?: string | null; last_name?: string | null };
-        const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
+      for (const [id, profile] of publicSitters) {
+        const name = publicSitterDisplayName(profile);
         if (name) nameBySitterId.set(id, name);
       }
 

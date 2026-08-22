@@ -6,10 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Calendar, ArrowRight, Star, User } from "lucide-react";
 import {
-  formatSitterDisplayName,
   type PublicSitterReview,
   type SitterProfilePublic
 } from "@/lib/sitter/sitter-profile";
+import { publicSitterDisplayName } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import {
   formatParentFacingPriceLabel,
@@ -118,7 +118,7 @@ export default function ParentSitterProfileView() {
   }, [sitterId, signedIn, effectiveRole]);
 
   const displayName =
-    formatSitterDisplayName(profile ?? undefined) || profile?.display_name || "בייביסיטר";
+    publicSitterDisplayName(profile) || profile?.nanny_serial || "בייביסיטר";
   const workingCity = profile?.working_cities?.[0] || "חיפה";
   const rateLabel = formatParentFacingPriceLabel({
     pricing_model: profile?.pricing_model,

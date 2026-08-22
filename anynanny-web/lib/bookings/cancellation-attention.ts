@@ -10,6 +10,10 @@ import {
 } from "@/lib/bookings/cancellation-request";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/booking-status-normalize";
+import {
+  fetchPublicSitterProfilesViaRpc,
+  publicSitterDisplayName
+} from "@/lib/sitter/fetch-parent-sitter-profile";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 const ATTENTION_BASE_SELECT = "id, parent_id, sitter_id, booking_date, start_time, end_time, status";
@@ -43,13 +47,28 @@ function compareAttentionItems(a: CancellationAttentionItem, b: CancellationAtte
 
 async function loadNameById(
   supabase: SupabaseClient,
-  ids: string[]
+  ids: string[],
+  sitterIds: string[]
 ): Promise<Map<string, string>> {
   const unique = [...new Set(ids.filter(Boolean))];
   const map = new Map<string, string>();
   if (unique.length === 0) return map;
 
-  const { data } = await supabase.from(PROFILES_TABLE).select("id, first_name, last_name").in("id", unique);
+  const sitterIdSet = new Set(sitterIds.filter(Boolean));
+  const sitterNameIds = unique.filter((id) => sitterIdSet.has(id));
+  const otherIds = unique.filter((id) => !sitterIdSet.has(id));
+
+  if (sitterNameIds.length > 0) {
+    const publicSitters = await fetchPublicSitterProfilesViaRpc(supabase, sitterNameIds);
+    for (const [id, profile] of publicSitters) {
+      const name = publicSitterDisplayName(profile);
+      if (name) map.set(id, name);
+    }
+  }
+
+  if (otherIds.length === 0) return map;
+
+  const { data } = await supabase.from(PROFILES_TABLE).select("id, first_name, last_name").in("id", otherIds);
   for (const profile of data ?? []) {
     if (!profile || typeof profile !== "object" || !("id" in profile)) continue;
     const id = String((profile as { id: string }).id);
@@ -159,12 +178,16 @@ export async function fetchCancellationAttentionItems(
   ];
 
   const nameIds: string[] = [];
+  const sitterIds: string[] = [];
   for (const raw of rows) {
     if (typeof raw.parent_id === "string") nameIds.push(raw.parent_id);
-    if (typeof raw.sitter_id === "string") nameIds.push(raw.sitter_id);
+    if (typeof raw.sitter_id === "string") {
+      nameIds.push(raw.sitter_id);
+      sitterIds.push(raw.sitter_id);
+    }
     if (typeof raw.cancellation_requested_by === "string") nameIds.push(raw.cancellation_requested_by);
   }
-  const names = await loadNameById(supabase, nameIds);
+  const names = await loadNameById(supabase, nameIds, sitterIds);
 
   const items = rows
     .map((raw) => mapAttentionRow(raw, userId, role, names))
