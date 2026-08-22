@@ -47,7 +47,7 @@ assert.doesNotMatch(
 assert.match(route, /fetchParentSitterProfile/);
 
 const detailRpc = read(
-  "supabase/migrations/20260816140000_require_completed_sitter_onboarding_for_discovery.sql"
+  "supabase/migrations/20260823001000_public_sitter_rpc_avatar_source.sql"
 );
 assert.match(
   detailRpc,
@@ -56,13 +56,23 @@ assert.match(
 );
 
 const searchRpc = read(
-  "supabase/migrations/20260822220000_sitter_profiles_private_select.sql"
+  "supabase/migrations/20260823001000_public_sitter_rpc_avatar_source.sql"
 );
 assert.match(
   searchRpc,
   /where coalesce\(sp\.is_public, false\) = true\s+and sp\.onboarding_completed_at is not null/,
   "search RPC must reject incomplete sitter products"
 );
+
+const overloadDrop = read(
+  "supabase/migrations/20260823002000_drop_obsolete_public_sitter_search_overload.sql"
+);
+assert.match(
+  overloadDrop,
+  /drop function if exists public\.list_public_sitters_search\(\s*text,\s*timestamptz,\s*timestamptz,\s*int,\s*numeric,\s*text,\s*numeric,\s*text,\s*text,\s*double precision,\s*double precision,\s*double precision\s*\)/,
+  "obsolete 12-arg search overload must be dropped"
+);
+assert.doesNotMatch(overloadDrop, /create or replace function/i);
 
 const sqlRegression = read("sql/test_sitter_discovery_requires_completed_onboarding.sql");
 assert.match(sqlRegression, /AN-1002/g, "AN-1002 must remain the negative regression fixture");
