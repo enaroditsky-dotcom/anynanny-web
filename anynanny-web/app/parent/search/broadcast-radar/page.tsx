@@ -23,6 +23,10 @@ import {
   formatBroadcastElapsed
 } from "@/lib/broadcast/parent-active-broadcast";
 import { fetchUserRatingSummary } from "@/lib/ratings/fetch-user-rating-summary";
+import {
+  fetchPublicSitterProfileViaRpc,
+  publicSitterDisplayName
+} from "@/lib/sitter/fetch-parent-sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   removeRealtimeChannel,
@@ -442,25 +446,13 @@ function BroadcastRadarContent() {
     }
 
     try {
-      const [
-        { data: nameRow, error: nameError },
-        { data: sitterProfile, error: sitterError },
-        ratingSummary
-      ] = await Promise.all([
+      const [sitterProfile, { data: nameRow, error: nameError }, ratingSummary] = await Promise.all([
+        fetchPublicSitterProfileViaRpc(supabase, sitterId),
         supabase
           .from("profiles")
           .select("first_name, last_name, avatar_url")
           .eq("id", sitterId)
           .maybeSingle(),
-
-        supabase
-          .from("sitter_profiles")
-          .select("hourly_rate_nis, years_experience")
-          .eq("id", sitterId)
-          .eq("is_public", true)
-          .not("onboarding_completed_at", "is", null)
-          .maybeSingle(),
-
         fetchUserRatingSummary(supabase, sitterId)
       ]);
 
@@ -468,32 +460,28 @@ function BroadcastRadarContent() {
         console.warn("[broadcast radar] profile:", nameError.message);
       }
 
-      if (sitterError) {
-        console.warn(
-          "[broadcast radar] sitter profile:",
-          sitterError.message
-        );
-      }
-
-      if (sitterError || !sitterProfile) {
+      if (!sitterProfile) {
         return;
       }
 
       const displayName =
+        publicSitterDisplayName(sitterProfile) ||
         `${nameRow?.first_name ?? ""} ${nameRow?.last_name ?? ""}`.trim() ||
         "נני זמינה";
 
+      const avatarFromRpc = sitterProfile.avatar_url?.trim() || "";
       const avatarRaw =
-        nameRow && typeof (nameRow as { avatar_url?: unknown }).avatar_url === "string"
+        avatarFromRpc ||
+        (nameRow && typeof (nameRow as { avatar_url?: unknown }).avatar_url === "string"
           ? String((nameRow as { avatar_url: string }).avatar_url).trim()
-          : "";
+          : "");
       const avatarUrl = avatarRaw.length > 0 ? avatarRaw : null;
 
       const hourlyRate = normalizePositiveNumber(
-        sitterProfile?.hourly_rate_nis
+        sitterProfile.hourly_rate_nis
       );
 
-      const experienceRaw = Number(sitterProfile?.years_experience);
+      const experienceRaw = Number(sitterProfile.years_experience);
 
       const experience =
         Number.isFinite(experienceRaw) && experienceRaw >= 0

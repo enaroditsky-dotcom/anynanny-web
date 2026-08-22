@@ -5,7 +5,10 @@ import { Star } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
-import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
+import {
+  fetchPublicSitterProfileViaRpc,
+  publicSitterDisplayName
+} from "@/lib/sitter/fetch-parent-sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
@@ -57,17 +60,8 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
       return;
     }
     if (role === "parent") {
-      const fk = SITTER_PROFILES_USER_COLUMN;
-      const { data: sp } = await supabase
-        .from(SITTER_PROFILES_TABLE)
-        .select("first_name, last_name")
-        .eq(fk, otherId)
-        .maybeSingle();
-      const n =
-        sp && typeof sp === "object"
-          ? `${(sp as { first_name?: string | null }).first_name ?? ""} ${(sp as { last_name?: string | null }).last_name ?? ""}`.trim()
-          : "";
-      setCounterpartyName(n || "הבייביסיטר");
+      const profile = await fetchPublicSitterProfileViaRpc(supabase, otherId);
+      setCounterpartyName(publicSitterDisplayName(profile) || "הבייביסיטר");
     } else {
       const { data: p } = await supabase
         .from(PROFILES_TABLE)

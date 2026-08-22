@@ -43,7 +43,6 @@ export function normalizePublicSearchCard(raw: unknown): PublicSitterSearchCard 
     first_name: first,
     last_name: last,
     display_name: pickString(row, "display_name", "displayName") ?? null,
-    email: pickString(row, "email"),
     nanny_serial: pickString(row, "nanny_serial", "nannySerial"),
     years_experience: pickNumber(row, "years_experience", "yearsExperience"),
     has_car: row.has_car === true || row.has_car === "true",

@@ -14,10 +14,7 @@ import {
   type RequestedShiftWindow
 } from "@/lib/bookings/requested-shift";
 import { PARENT_SEARCH_HOUR_OPTIONS } from "@/lib/sitter/parent-search-filters";
-import {
-  SITTER_PROFILES_TABLE,
-  SITTER_PROFILES_USER_COLUMN
-} from "@/lib/sitter/sitter-profile";
+import { fetchPublicSitterProfileViaRpc } from "@/lib/sitter/fetch-parent-sitter-profile";
 import {
   BOOK_SHIFT_MINUTE_OPTIONS,
   validateShiftWindow
@@ -85,24 +82,20 @@ export function BookShiftModal({
       }
 
       try {
-        const { data, error: rateError } = await supabase
-          .from(SITTER_PROFILES_TABLE)
-          .select("hourly_rate_nis")
-          .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
-          .maybeSingle();
+        const profile = await fetchPublicSitterProfileViaRpc(supabase, sitterId);
 
         if (cancelled) {
           return;
         }
 
-        if (rateError) {
-          console.warn("[BookShiftModal] sitter rate:", rateError.message);
+        if (!profile) {
+          console.warn("[BookShiftModal] sitter rate: public profile unavailable");
           setSitterHourlyRate(null);
           setError("לא ניתן לטעון כרגע את תעריף הבייביסיטר.");
           return;
         }
 
-        const rate = Number(data?.hourly_rate_nis);
+        const rate = Number(profile.hourly_rate_nis);
 
         if (!Number.isFinite(rate) || rate <= 0) {
           setSitterHourlyRate(null);

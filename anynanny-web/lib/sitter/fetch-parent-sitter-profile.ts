@@ -5,17 +5,13 @@ import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
   formatPreferredAgesDisplay,
   formatSitterLanguagesDisplay,
-  SITTER_PROFILES_TABLE,
-  SITTER_PROFILES_USER_COLUMN,
   type PublicSitterReview,
   type SitterProfilePublic
 } from "@/lib/sitter/sitter-profile";
-import { isPostgrestMissingFunctionError } from "@/lib/supabase/postgrest-schema";
 import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const SITTER_ONBOARDING_COMPLETED_COLUMN = "onboarding_completed_at";
 
 export function parseRouteSitterId(raw: unknown): string | null {
   const id = decodeURIComponent(Array.isArray(raw) ? (raw[0] ?? "") : String(raw ?? "")).trim();
@@ -242,94 +238,59 @@ export async function fetchSitterPublicReviews(
     );
 }
 
-async function fetchSitterProfileDirect(
+/** Cross-user public profile — SECURITY DEFINER RPC only. Never SELECT sitter_profiles. */
+export async function fetchPublicSitterProfileViaRpc(
   supabase: SupabaseClient,
   sitterId: string
 ): Promise<SitterProfilePublic | null> {
-  const fk = SITTER_PROFILES_USER_COLUMN;
-  const fullSelect =
-    "id, first_name, last_name, bio, hourly_rate_nis, pricing_model, package_price_nis, service_types, certifications, years_experience, nanny_serial, nanny_id_number, is_public, updated_at, has_car, languages, working_cities";
+  const id = String(sitterId ?? "").trim();
+  if (!id || !UUID_RE.test(id)) return null;
 
-  let read = safeSupabaseRead(
-    await supabase
-      .from(SITTER_PROFILES_TABLE)
-      .select(fullSelect)
-      .eq(fk, sitterId)
-      .eq("is_public", true)
-      .not(SITTER_ONBOARDING_COMPLETED_COLUMN, "is", null)
-      .maybeSingle(),
-    "sitter profile direct"
+  const { data: profileJson, error: profErr } = await supabase.rpc("get_sitter_profile_public", {
+    target_id: id
+  });
+
+  if (profErr || profileJson == null) return null;
+
+  const parsed = unwrapRpcProfilePayload(profileJson) ?? parseRpcJson(profileJson);
+  if (!parsed) return null;
+
+  const profile = normalizeSitterProfilePublic(parsed, id);
+  if (profile.is_public === false) return null;
+  return profile;
+}
+
+export async function fetchPublicSitterProfilesViaRpc(
+  supabase: SupabaseClient,
+  sitterIds: string[]
+): Promise<Map<string, SitterProfilePublic>> {
+  const unique = Array.from(new Set(sitterIds.map((id) => String(id ?? "").trim()).filter(Boolean)));
+  const entries = await Promise.all(
+    unique.map(async (id) => {
+      const profile = await fetchPublicSitterProfileViaRpc(supabase, id);
+      return [id, profile] as const;
+    })
   );
-
-  if (read.error) {
-    read = safeSupabaseRead(
-      await supabase
-        .from(SITTER_PROFILES_TABLE)
-        .select("id, first_name, last_name, bio, hourly_rate_nis, pricing_model, package_price_nis, years_experience, is_public, updated_at")
-        .eq(fk, sitterId)
-        .eq("is_public", true)
-        .not(SITTER_ONBOARDING_COMPLETED_COLUMN, "is", null)
-        .maybeSingle(),
-      "sitter profile direct with pricing"
-    );
+  const byId = new Map<string, SitterProfilePublic>();
+  for (const [id, profile] of entries) {
+    if (profile) byId.set(id, profile);
   }
+  return byId;
+}
 
-  if (read.error || !read.data) {
-    return null;
-  }
-
-  const profileData = {
-    ...(read.data as Record<string, unknown>)
-  };
-
-  const { data: mainProfile } = await supabase
-    .from("profiles")
-    .select("avatar_url")
-    .eq("id", sitterId)
-    .maybeSingle();
-
-  if (mainProfile?.avatar_url) {
-    profileData.avatar_url = mainProfile.avatar_url;
-  }
-
-  return normalizeSitterProfilePublic(profileData, sitterId);
+export function publicSitterDisplayName(profile: SitterProfilePublic | null | undefined): string | null {
+  if (!profile) return null;
+  const display = profile.display_name?.trim();
+  if (display) return display;
+  const combined = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+  return combined || null;
 }
 
 export async function fetchParentSitterProfile(
   supabase: SupabaseClient,
   sitterId: string
 ): Promise<ParentSitterProfileLoadResult> {
-  // Application-level ownership gate protects direct URLs even if the deployed
-  // get_sitter_profile_public RPC is stale and still returns legacy rows.
-  const { data: activeProfile, error: activeProfileError } = await supabase
-    .from(SITTER_PROFILES_TABLE)
-    .select(SITTER_PROFILES_USER_COLUMN)
-    .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
-    .eq("is_public", true)
-    .not(SITTER_ONBOARDING_COMPLETED_COLUMN, "is", null)
-    .maybeSingle();
-
-  if (activeProfileError || !activeProfile) {
-    return { profile: null, reviews: [], error: null };
-  }
-
-  let profile = await fetchSitterProfileDirect(supabase, sitterId);
-
-  if (!profile) {
-    const { data: profileJson, error: profErr } = await supabase.rpc("get_sitter_profile_public", {
-      target_id: sitterId
-    });
-
-    if (!profErr) {
-      const parsed = unwrapRpcProfilePayload(profileJson) ?? parseRpcJson(profileJson);
-      if (parsed) {
-        profile = normalizeSitterProfilePublic(parsed, sitterId);
-        if (profile.is_public === false) {
-          profile = null;
-        }
-      }
-    }
-  }
+  let profile = await fetchPublicSitterProfileViaRpc(supabase, sitterId);
 
   if (!profile) {
     return { profile: null, reviews: [], error: null };
@@ -341,7 +302,6 @@ export async function fetchParentSitterProfile(
   ]);
 
   // Authoritative published ratings (same source as the ratings system).
-  // Direct sitter_profiles select does not include avg_rating/rating_count.
   if (ratingSummary.count > 0 && ratingSummary.average > 0) {
     profile = {
       ...profile,

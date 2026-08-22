@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test:sitter-ownership": "node scripts/test-sitter-discovery-ownership.mjs",
+    "test:sitter-profiles-private": "npx --yes tsx scripts/test-sitter-profiles-private-select.ts",
     "test:parent-pending-sitter-approval": "npx --yes tsx scripts/test-parent-pending-sitter-approval-view.ts",
     "test:parent-approved-schedule-notification": "npx --yes tsx scripts/test-parent-approved-schedule-notification.ts",
     "test:requested-shift-context": "npx --yes tsx scripts/test-requested-shift-context.ts",

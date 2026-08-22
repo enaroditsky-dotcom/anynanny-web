@@ -5,10 +5,8 @@ import type { ParentPreferences, ParentBusySlot } from "@/lib/parent/types";
 import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import { createServerClient } from "@/lib/supabase/server";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
-import {
-  getSitterProfilesUserColumn,
-  SITTER_PROFILES_TABLE
-} from "@/lib/sitter/sitter-profile";
+import { listPublicSittersForDashboard } from "@/lib/sitter/parent-sitter-search";
+import { resolveSitterCardTitle } from "@/lib/sitter/public-search-card";
 import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import {
   isBookingDueForParentActiveShiftUi,
@@ -172,61 +170,22 @@ export default async function ParentDashboardPage() {
       null;
   }
 
-  // Sitters live on sitter_profiles — profiles.nanny_serial does not exist (404/400).
-  const userCol = getSitterProfilesUserColumn();
-  const sitterSelectAttempts = [
-    `${userCol}, first_name, last_name, nanny_serial, hourly_rate_nis, years_experience, avg_rating`,
-    `${userCol}, first_name, last_name, nanny_serial, hourly_rate_nis, years_experience`,
-    `${userCol}, first_name, last_name, nanny_serial, hourly_rate_nis`,
-    `${userCol}, first_name, last_name, nanny_serial`,
-    `${userCol}, first_name, last_name`
-  ];
-
-  for (const select of sitterSelectAttempts) {
-    const { data: rawNannies, error } = await supabase
-      .from(SITTER_PROFILES_TABLE)
-      .select(select)
-      .eq("is_public", true)
-      .not("onboarding_completed_at", "is", null)
-      .limit(40);
-
-    if (error) {
-      if (
-        isPostgrestMissingColumnError(error.message, "nanny_serial") ||
-        isPostgrestMissingColumnError(error.message, "hourly_rate_nis") ||
-        isPostgrestMissingColumnError(error.message, "years_experience") ||
-        isPostgrestMissingColumnError(error.message, "avg_rating") ||
-        isPostgrestSchemaDriftError(error.message)
-      ) {
-        continue;
-      }
-      break;
-    }
-
-    initialProfiles = (rawNannies || []).map((n, index) => {
-      const row = n as unknown as Record<string, unknown>;
-      const first = typeof row.first_name === "string" ? row.first_name : "";
-      const last = typeof row.last_name === "string" ? row.last_name : "";
-      const serial =
-        typeof row.nanny_serial === "string" && row.nanny_serial.trim()
-          ? row.nanny_serial.trim()
-          : `AN-${1001 + index}`;
-      const rate = Number(row.hourly_rate_nis);
-      const years = Number(row.years_experience);
-      const rating = Number(row.avg_rating);
-      return {
-        nannyName: `${first} ${last}`.trim() || `סיטר/ית ${index + 1}`,
-        anyNannyId: serial,
-        hourlyRateNis: Number.isFinite(rate) && rate > 0 ? rate : 50,
-        gender: "female" as const,
-        age: 24,
-        experienceYears: Number.isFinite(years) && years >= 0 ? years : 2,
-        reputationScore: Number.isFinite(rating) && rating > 0 ? rating : 4.8,
-        totalRatings: 0
-      };
-    });
-    break;
-  }
+  const publicSitters = await listPublicSittersForDashboard(supabase);
+  initialProfiles = publicSitters.slice(0, 40).map((card, index) => {
+    const rate = Number(card.hourly_rate_nis);
+    const years = Number(card.years_experience);
+    const rating = Number(card.avg_rating);
+    return {
+      nannyName: resolveSitterCardTitle(card) || `סיטר/ית ${index + 1}`,
+      anyNannyId: card.nanny_serial?.trim() || `AN-${1001 + index}`,
+      hourlyRateNis: Number.isFinite(rate) && rate > 0 ? rate : 50,
+      gender: "female" as const,
+      age: 24,
+      experienceYears: Number.isFinite(years) && years >= 0 ? years : 2,
+      reputationScore: Number.isFinite(rating) && rating > 0 ? rating : 4.8,
+      totalRatings: card.rating_count ?? 0
+    };
+  });
 
   const initialBusySlots: ParentBusySlot[] = [];
 

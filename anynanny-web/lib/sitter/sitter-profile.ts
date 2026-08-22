@@ -510,7 +510,10 @@ export type PublicSitterSearchCard = {
   last_name?: string | null;
   display_name: string | null;
 
-  /** From `auth.users.email` via RPC — fallback when name missing. */
+  /**
+   * Removed from list_public_sitters_search (F7). Kept optional so stale
+   * cached payloads still parse; new search RPC results never include email.
+   */
   email?: string | null;
 
   nanny_serial?: string | null;
