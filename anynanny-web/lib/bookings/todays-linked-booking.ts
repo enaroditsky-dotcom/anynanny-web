@@ -10,7 +10,10 @@ import {
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/use-shift-activation-status";
-import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
+import {
+  fetchPublicSitterProfileViaRpc,
+  publicSitterDisplayName
+} from "@/lib/sitter/fetch-parent-sitter-profile";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
@@ -172,37 +175,11 @@ async function enrichLinkedBookingView(
   let partnerSitterCode: string | null = null;
 
   if (role === "parent") {
-    const fk = SITTER_PROFILES_USER_COLUMN;
-    let sitterProfileRead = safeSupabaseRead(
-      await supabase
-        .from(SITTER_PROFILES_TABLE)
-        .select("first_name, last_name, nanny_serial, nanny_id_number")
-        .eq(fk, partnerId)
-        .maybeSingle(),
-      "sitter profile enrich"
-    );
-
-    if (
-      sitterProfileRead.error &&
-      (isPostgrestMissingColumnError(sitterProfileRead.error, "nanny_serial") ||
-        isPostgrestMissingColumnError(sitterProfileRead.error, "nanny_id_number"))
-    ) {
-      sitterProfileRead = safeSupabaseRead(
-        await supabase
-          .from(SITTER_PROFILES_TABLE)
-          .select("first_name, last_name")
-          .eq(fk, partnerId)
-          .maybeSingle(),
-        "sitter profile name fallback"
-      );
-    }
-
-    if (sitterProfileRead.data && typeof sitterProfileRead.data === "object") {
-      const sp = sitterProfileRead.data as Record<string, unknown>;
-      partnerSitterCode = pickSitterCode(sp);
+    const publicProfile = await fetchPublicSitterProfileViaRpc(supabase, partnerId);
+    if (publicProfile) {
+      partnerSitterCode = pickSitterCode(publicProfile as unknown as Record<string, unknown>);
       if (!partnerName) {
-        const fromSitter = `${sp.first_name ?? ""} ${sp.last_name ?? ""}`.trim();
-        if (fromSitter) partnerName = fromSitter;
+        partnerName = publicSitterDisplayName(publicProfile);
       }
     }
   }

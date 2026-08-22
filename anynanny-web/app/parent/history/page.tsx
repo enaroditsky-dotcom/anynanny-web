@@ -33,6 +33,10 @@ import {
 import {
   pickProfilePublicId
 } from "@/lib/public/sequential-display-id";
+import {
+  fetchPublicSitterProfilesViaRpc,
+  publicSitterDisplayName
+} from "@/lib/sitter/fetch-parent-sitter-profile";
 
 import {
   formatNis,
@@ -320,11 +324,6 @@ export default function ParentHistoryPage() {
                 end_time,
                 status,
                 hourly_rate_nis,
-                sitter_profiles (
-                  nanny_serial,
-                  nanny_id_number,
-                  hourly_rate_nis
-                ),
                 profiles:sitter_id (
                   first_name
                 )
@@ -366,11 +365,6 @@ export default function ParentHistoryPage() {
                 end_time,
                 status,
                 hourly_rate_nis,
-                sitter_profiles (
-                  nanny_serial,
-                  nanny_id_number,
-                  hourly_rate_nis
-                ),
                 profiles:sitter_id (
                   first_name
                 )
@@ -471,6 +465,13 @@ export default function ParentHistoryPage() {
             return;
           }
 
+          const publicSitters = await fetchPublicSitterProfilesViaRpc(
+            supabase,
+            bookingRows
+              .map((row) => String(row?.sitter_id ?? "").trim())
+              .filter(Boolean)
+          );
+
           if (
             sessionReadError
           ) {
@@ -514,13 +515,9 @@ export default function ParentHistoryPage() {
                     }
                   }
 
-                  const profilesObj =
-                    Array.isArray(
-                      booking.sitter_profiles
-                    )
-                      ? booking
-                          .sitter_profiles[0]
-                      : booking.sitter_profiles;
+                  const publicSitter = publicSitters.get(
+                    String(booking.sitter_id ?? "").trim()
+                  );
 
                   const nameRow =
                     Array.isArray(
@@ -531,6 +528,7 @@ export default function ParentHistoryPage() {
                       : booking.profiles;
 
                   const nannyName =
+                    publicSitterDisplayName(publicSitter) ||
                     String(
                       nameRow?.first_name ??
                         ""
@@ -539,7 +537,7 @@ export default function ParentHistoryPage() {
 
                   const publicNannyId =
                     pickProfilePublicId(
-                      profilesObj,
+                      publicSitter,
                       "sitter"
                     ) ||
                     "ללא מזהה";
@@ -627,7 +625,7 @@ export default function ParentHistoryPage() {
 
                         sitterHourlyRate:
                           booking.hourly_rate_nis ??
-                          profilesObj?.hourly_rate_nis,
+                          publicSitter?.hourly_rate_nis,
 
                         allowCalculation:
                           booking.status ===

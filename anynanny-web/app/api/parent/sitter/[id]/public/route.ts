@@ -4,9 +4,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 /**
- * Parent-facing sitter profile — sanitized JSON only.
- * Prefers direct sitter_profiles read; falls back to RPC when available.
- * Hidden fields (ID, address, military) are never returned.
+ * Parent-facing sitter profile — sanitized JSON only via get_sitter_profile_public.
+ * Hidden fields (ID, address, military, payout) are never returned.
  */
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {

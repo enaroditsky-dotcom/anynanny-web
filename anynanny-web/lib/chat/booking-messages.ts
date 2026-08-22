@@ -4,9 +4,10 @@ import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { MESSAGES_TABLE, type MessageRow } from "@/lib/chat/constants";
 import { pickProfilePublicId } from "@/lib/public/sequential-display-id";
 import {
-  SITTER_PROFILES_TABLE,
-  SITTER_PROFILES_USER_COLUMN
-} from "@/lib/sitter/sitter-profile";
+  fetchPublicSitterProfilesViaRpc,
+  fetchPublicSitterProfileViaRpc,
+  publicSitterDisplayName
+} from "@/lib/sitter/fetch-parent-sitter-profile";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { getCachedWorkingSelect, setCachedWorkingSelect } from "@/lib/supabase/rpc-availability";
@@ -67,42 +68,13 @@ async function loadSitterPartnerDetailsByIds(
   const byId = new Map<string, PartnerDetails>();
   if (partnerIds.length === 0) return byId;
 
-  const fk = SITTER_PROFILES_USER_COLUMN;
-  const cacheKey = `chat-inbox:sitter-partners`;
-  const cached = getCachedWorkingSelect(cacheKey);
-  const selectAttempts = [
-    ...(cached ? [cached] : []),
-    `${fk}, first_name, last_name, nanny_serial`,
-    `${fk}, first_name, last_name`,
-    `${fk}, first_name, last_name, nanny_serial, nanny_id_number`,
-    `${fk}, first_name, last_name, nanny_id_number`
-  ].filter((s, i, arr) => arr.indexOf(s) === i);
-
-  for (const select of selectAttempts) {
-    const { data, error } = await supabase.from(SITTER_PROFILES_TABLE).select(select).in(fk, partnerIds);
-    if (error) {
-      if (isPostgrestSchemaDriftError(error.message)) {
-        continue;
-      }
-      console.warn("[chat-inbox] sitter partner profiles:", error.message);
-      return byId;
-    }
-
-    setCachedWorkingSelect(cacheKey, select);
-    for (const profile of data ?? []) {
-      if (!profile || typeof profile !== "object") continue;
-      const row = profile as Record<string, unknown>;
-      const id = String(row[fk] ?? "").trim();
-      if (!id) continue;
-      const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || null;
-      byId.set(id, {
-        name,
-        publicId: pickProfilePublicId(row, "sitter")
-      });
-    }
-    return byId;
+  const profiles = await fetchPublicSitterProfilesViaRpc(supabase, partnerIds);
+  for (const [id, profile] of profiles) {
+    byId.set(id, {
+      name: publicSitterDisplayName(profile),
+      publicId: pickProfilePublicId(profile, "sitter")
+    });
   }
-
   return byId;
 }
 
@@ -429,19 +401,8 @@ export async function verifyBookingChatParticipant(
   const partnerId = userId === parentId ? sitterId : parentId;
 
   if (userId === parentId) {
-    const { data: profile } = await supabase
-      .from("sitter_profiles")
-      .select("first_name, last_name")
-      .eq("id", partnerId)
-      .maybeSingle();
-
-    const partnerName =
-      profile && typeof profile === "object"
-        ? `${(profile as { first_name?: string | null }).first_name ?? ""} ${(profile as { last_name?: string | null }).last_name ?? ""}`.trim() ||
-          null
-        : null;
-
-    return { allowed: true, partnerName, error: null };
+    const profile = await fetchPublicSitterProfileViaRpc(supabase, partnerId);
+    return { allowed: true, partnerName: publicSitterDisplayName(profile), error: null };
   }
 
   const { data: profile } = await supabase
