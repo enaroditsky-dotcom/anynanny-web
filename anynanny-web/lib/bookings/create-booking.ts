@@ -1,8 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  BOOKING_SOURCE_DIRECT,
   BOOKINGS_TABLE,
-  type BookingRow
+  isBookingSource,
+  type BookingRow,
+  type BookingSource
 } from "@/lib/bookings/constants";
 
 import { sitterWindowIsAvailable } from "@/lib/bookings/sitter-window-availability";
@@ -33,6 +36,12 @@ export async function createBooking(
 
     /** Snapshot of the sitter's hourly rate at booking time. */
     hourlyRateNis: number;
+
+    /**
+     * Origin of the pending request.
+     * Defaults to `direct` only for backward-compatible callers.
+     */
+    bookingSource?: BookingSource;
   }
 ): Promise<{
   booking: BookingRow | null;
@@ -56,6 +65,9 @@ export async function createBooking(
   }
 
   const hourlyRateNis = Number(input.hourlyRateNis);
+  const bookingSource: BookingSource = isBookingSource(input.bookingSource)
+    ? input.bookingSource
+    : BOOKING_SOURCE_DIRECT;
 
   /*
    * אסור ליצור הזמנה עם מחיר fallback שרירותי.
@@ -118,6 +130,7 @@ export async function createBooking(
       start_time: input.startIso,
       end_time: input.endIso,
       status: "pending",
+      booking_source: bookingSource,
 
       /*
        * זה המחיר הקובע של המשמרת.
@@ -134,6 +147,7 @@ export async function createBooking(
         "start_time",
         "end_time",
         "status",
+        "booking_source",
         "hourly_rate_nis",
         "created_at",
         "updated_at"
@@ -164,6 +178,20 @@ export async function createBooking(
         booking: null,
         error:
           "טבלת bookings עדיין לא זמינה — הריצו את המיגרציה ב-Supabase."
+      };
+    }
+
+    if (
+      lower.includes("booking_source") &&
+      (
+        lower.includes("column") ||
+        lower.includes("schema cache")
+      )
+    ) {
+      return {
+        booking: null,
+        error:
+          "השדה booking_source עדיין לא קיים או לא נטען בטבלת bookings."
       };
     }
 

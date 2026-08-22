@@ -22,7 +22,13 @@ function read(relativePath: string): string {
 }
 
 const MIGRATION = "supabase/migrations/20260821120000_pending_booking_lifecycle.sql";
+const SOURCE_MIGRATION = "supabase/migrations/20260822200000_booking_source_pending_lifecycle.sql";
 const sql = read(MIGRATION);
+const sourceSql = read(SOURCE_MIGRATION);
+const createBooking = read("lib/bookings/create-booking.ts");
+const bookingConstants = read("lib/bookings/constants.ts");
+const bookShiftModal = read("components/parent/book-shift-modal.tsx");
+const broadcastRadar = read("app/parent/search/broadcast-radar/page.tsx");
 const withdrawClient = read("lib/bookings/withdraw-pending-booking.ts");
 const reminderClient = read("lib/notifications/pending-no-response-reminder.ts");
 const reminderHook = read("lib/notifications/use-pending-no-response-reminder.ts");
@@ -217,5 +223,62 @@ assert.doesNotMatch(sql, /address|phone|national_id|hourly_rate/);
 
 assert.match(reminderHook, /NOTIFICATIONS_TABLE/);
 assert.match(reminderClient, /\.is\("read_at", null\)/);
+
+// --- booking_source: schema + write paths ---
+assert.match(bookingConstants, /export type BookingSource = "direct" \| "broadcast_now"/);
+assert.match(createBooking, /bookingSource\?: BookingSource/);
+assert.match(createBooking, /booking_source: bookingSource/);
+assert.match(bookShiftModal, /bookingSource:\s*"direct"/);
+assert.match(broadcastRadar, /bookingSource:\s*"broadcast_now"/);
+assert.match(broadcastRadar, /startIso:\s*now\.toISOString\(\)/);
+assert.match(broadcastRadar, /3 \* 60 \* 60 \* 1000/);
+
+assert.match(sourceSql, /add column if not exists booking_source text not null default 'direct'/);
+assert.match(sourceSql, /check \(booking_source in \('direct', 'broadcast_now'\)\)/);
+assert.doesNotMatch(sourceSql, /start_time > created_at/);
+assert.doesNotMatch(sourceSql, /update public\.bookings[\s\S]*booking_source = 'broadcast_now'/i);
+
+// Direct pending after start_time is eligible for expiry; NOW is not
+const expireFn = sourceSql.slice(
+  sourceSql.indexOf("create or replace function public.expire_pending_bookings()"),
+  sourceSql.indexOf("create or replace function public.notify_pending_no_response_reminders()")
+);
+assert.match(expireFn, /where b\.status = 'pending'\s+and b\.booking_source = 'direct'\s+and b\.start_time <= now\(\)/);
+assert.doesNotMatch(expireFn, /broadcast_now/);
+
+// Direct pending after start_time is blocked from approval; NOW is not
+const blockFn = sourceSql.slice(
+  sourceSql.indexOf("create or replace function public.bookings_block_expired_pending_approval()")
+);
+assert.match(blockFn, /old\.booking_source = 'direct'/);
+assert.match(blockFn, /old\.start_time <= now\(\)/);
+assert.match(blockFn, /raise exception 'pending booking has expired'/);
+assert.doesNotMatch(blockFn, /broadcast_now/);
+
+// Direct 60-minute reminder still works; NOW never receives it
+const remindFn = sourceSql.slice(
+  sourceSql.indexOf("create or replace function public.notify_pending_no_response_reminders()"),
+  sourceSql.indexOf("create or replace function public.bookings_block_expired_pending_approval()")
+);
+assert.match(remindFn, /b\.status = 'pending'/);
+assert.match(remindFn, /b\.booking_source = 'direct'/);
+assert.match(remindFn, /b\.created_at <= now\(\) - interval '60 minutes'/);
+assert.match(remindFn, /b\.start_time > now\(\)/);
+assert.doesNotMatch(remindFn, /broadcast_now/);
+
+// Withdraw stays source-agnostic; this migration does not rewrite it
+assert.doesNotMatch(sourceSql, /withdraw_pending_booking/);
+assert.match(sql, /create or replace function public\.withdraw_pending_booking\(p_booking_id uuid\)/);
+assert.doesNotMatch(sql, /booking_source/);
+assert.match(withdrawClient, /supabase\.rpc\(WITHDRAW_PENDING_BOOKING_RPC/);
+
+// Two-party cancellation still untouched by the source migration
+assert.doesNotMatch(sourceSql, /request_booking_cancellation|approve_booking_cancellation/);
+
+// Emergency mitigation must stay off
+assert.doesNotMatch(sourceSql, /enable trigger/i);
+assert.doesNotMatch(sourceSql, /create trigger bookings_block_expired_pending_approval/i);
+assert.doesNotMatch(sourceSql, /cron\.schedule/);
+assert.doesNotMatch(sourceSql, /cron\.unschedule/);
 
 console.log("pending booking lifecycle checks passed.");

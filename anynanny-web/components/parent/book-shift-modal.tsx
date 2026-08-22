@@ -202,7 +202,8 @@ export function BookShiftModal({
       endBookingDate: validated.endDate,
       startIso: lockedShift ? lockedShift.startIso : validated.startIso,
       endIso: lockedShift ? lockedShift.endIso : validated.endIso,
-      hourlyRateNis: sitterHourlyRate
+      hourlyRateNis: sitterHourlyRate,
+      bookingSource: "direct"
     });
 
     setBusy(false);
