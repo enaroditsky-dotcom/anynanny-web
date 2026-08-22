@@ -88,8 +88,7 @@ export function normalizeSitterProfilePublic(
   const first_name = pickString(raw, "first_name", "firstName");
   const last_name = pickString(raw, "last_name", "lastName");
   const display_name =
-    pickString(raw, "display_name", "displayName") ??
-    (`${first_name ?? ""} ${last_name ?? ""}`.trim() || null);
+    pickString(raw, "display_name", "displayName") ?? first_name ?? null;
   const years_experience = pickNumber(
     raw,
     "years_experience",
@@ -282,8 +281,8 @@ export function publicSitterDisplayName(profile: SitterProfilePublic | null | un
   if (!profile) return null;
   const display = profile.display_name?.trim();
   if (display) return display;
-  const combined = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
-  return combined || null;
+  const first = profile.first_name?.trim();
+  return first || null;
 }
 
 export async function fetchParentSitterProfile(

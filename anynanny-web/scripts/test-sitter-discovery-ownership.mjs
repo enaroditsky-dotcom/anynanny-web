@@ -47,7 +47,7 @@ assert.doesNotMatch(
 assert.match(route, /fetchParentSitterProfile/);
 
 const detailRpc = read(
-  "supabase/migrations/20260823001000_public_sitter_rpc_avatar_source.sql"
+  "supabase/migrations/20260823003000_respect_sitter_full_name_privacy.sql"
 );
 assert.match(
   detailRpc,
@@ -56,7 +56,7 @@ assert.match(
 );
 
 const searchRpc = read(
-  "supabase/migrations/20260823001000_public_sitter_rpc_avatar_source.sql"
+  "supabase/migrations/20260823003000_respect_sitter_full_name_privacy.sql"
 );
 assert.match(
   searchRpc,

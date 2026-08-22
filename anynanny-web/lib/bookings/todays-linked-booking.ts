@@ -140,48 +140,47 @@ async function enrichLinkedBookingView(
 
   const partnerId = String(booking[partnerColumn as keyof BookingRow]);
 
-  let profileRead = safeSupabaseRead(
-    await supabase
-      .from(PROFILES_TABLE)
-      .select(role === "sitter" ? "first_name, last_name, address" : "first_name, last_name")
-      .eq("id", partnerId)
-      .maybeSingle(),
-    "partner profile name"
-  );
-
-  if (
-    role === "sitter" &&
-    profileRead.error &&
-    (isPostgrestMissingColumnError(profileRead.error, "address") ||
-      /column|schema cache|could not find/i.test(String(profileRead.error)))
-  ) {
-    profileRead = safeSupabaseRead(
-      await supabase.from(PROFILES_TABLE).select("first_name, last_name").eq("id", partnerId).maybeSingle(),
-      "partner profile name fallback"
-    );
-  }
-
-  let partnerName =
-    profileRead.data && typeof profileRead.data === "object"
-      ? `${(profileRead.data as { first_name?: string | null }).first_name ?? ""} ${(profileRead.data as { last_name?: string | null }).last_name ?? ""}`.trim() ||
-        null
-      : null;
-
-  const partnerAddress =
-    role === "sitter" && profileRead.data && typeof profileRead.data === "object"
-      ? formatParentProfileAddress((profileRead.data as { address?: unknown }).address)
-      : null;
-
+  let partnerName: string | null = null;
+  let partnerAddress: string | null = null;
   let partnerSitterCode: string | null = null;
 
   if (role === "parent") {
     const publicProfile = await fetchPublicSitterProfileViaRpc(supabase, partnerId);
     if (publicProfile) {
       partnerSitterCode = pickSitterCode(publicProfile as unknown as Record<string, unknown>);
-      if (!partnerName) {
-        partnerName = publicSitterDisplayName(publicProfile);
-      }
+      partnerName = publicSitterDisplayName(publicProfile);
     }
+  } else {
+    let profileRead = safeSupabaseRead(
+      await supabase
+        .from(PROFILES_TABLE)
+        .select("first_name, last_name, address")
+        .eq("id", partnerId)
+        .maybeSingle(),
+      "partner profile name"
+    );
+
+    if (
+      profileRead.error &&
+      (isPostgrestMissingColumnError(profileRead.error, "address") ||
+        /column|schema cache|could not find/i.test(String(profileRead.error)))
+    ) {
+      profileRead = safeSupabaseRead(
+        await supabase.from(PROFILES_TABLE).select("first_name, last_name").eq("id", partnerId).maybeSingle(),
+        "partner profile name fallback"
+      );
+    }
+
+    partnerName =
+      profileRead.data && typeof profileRead.data === "object"
+        ? `${(profileRead.data as { first_name?: string | null }).first_name ?? ""} ${(profileRead.data as { last_name?: string | null }).last_name ?? ""}`.trim() ||
+          null
+        : null;
+
+    partnerAddress =
+      profileRead.data && typeof profileRead.data === "object"
+        ? formatParentProfileAddress((profileRead.data as { address?: unknown }).address)
+        : null;
   }
 
   return {

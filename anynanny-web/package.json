@@ -11,6 +11,7 @@
     "test:sitter-profiles-private": "npx --yes tsx scripts/test-sitter-profiles-private-select.ts",
     "test:public-sitter-rpc-avatar": "npx --yes tsx scripts/test-public-sitter-rpc-avatar-source.ts",
     "test:drop-obsolete-sitter-search-overload": "npx --yes tsx scripts/test-drop-obsolete-public-sitter-search-overload.ts",
+    "test:sitter-full-name-privacy": "npx --yes tsx scripts/test-respect-sitter-full-name-privacy.ts",
     "test:parent-pending-sitter-approval": "npx --yes tsx scripts/test-parent-pending-sitter-approval-view.ts",
     "test:parent-approved-schedule-notification": "npx --yes tsx scripts/test-parent-approved-schedule-notification.ts",
     "test:requested-shift-context": "npx --yes tsx scripts/test-requested-shift-context.ts",

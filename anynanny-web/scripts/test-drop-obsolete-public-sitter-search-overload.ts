@@ -44,9 +44,25 @@ const laterCreates = readdirSync(migrationsDir)
     const body = readFileSync(resolve(migrationsDir, name), "utf8");
     return /create or replace function public\.list_public_sitters_search\(/.test(body);
   });
-assert.deepEqual(laterCreates, [], "no later migration may recreate list_public_sitters_search");
 
-const latestCreate = avatar.slice(avatar.lastIndexOf("create or replace function public.list_public_sitters_search("));
+for (const name of laterCreates) {
+  const body = readFileSync(resolve(migrationsDir, name), "utf8");
+  assert.doesNotMatch(body, /p_parent_lat/, `${name} must not recreate 12-arg search`);
+  assert.doesNotMatch(body, /p_parent_lng/, `${name} must not recreate 12-arg search`);
+  assert.doesNotMatch(body, /p_max_distance_km/, `${name} must not recreate 12-arg search`);
+  assert.doesNotMatch(
+    body,
+    /double precision,\s*double precision,\s*double precision/,
+    `${name} must not recreate 12-arg search`
+  );
+}
+
+const latestMigration =
+  laterCreates.length > 0
+    ? laterCreates.sort().at(-1)!
+    : "20260823001000_public_sitter_rpc_avatar_source.sql";
+const latestSql = laterCreates.length > 0 ? read(`supabase/migrations/${latestMigration}`) : avatar;
+const latestCreate = latestSql.slice(latestSql.lastIndexOf("create or replace function public.list_public_sitters_search("));
 const header = latestCreate.slice(0, latestCreate.indexOf("returns jsonb"));
 assert.match(header, /p_service_type text default null/);
 assert.doesNotMatch(header, /p_parent_lat/);

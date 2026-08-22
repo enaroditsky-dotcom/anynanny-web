@@ -75,15 +75,13 @@ export function parsePublicSearchCards(raw: unknown): PublicSitterSearchCard[] {
   return value.map(normalizePublicSearchCard).filter((c): c is PublicSitterSearchCard => c != null);
 }
 
-/** הלוגיקה המרכזית להצגת השם */
+/** הלוגיקה המרכזית להצגת השם — prefers the RPC privacy-safe display_name. */
 export function resolveSitterCardTitle(card: PublicSitterSearchCard): string {
-  const first = card.first_name?.trim();
-  const last = card.last_name?.trim();
-  const combined = `${first ?? ""} ${last ?? ""}`.trim();
-  if (combined) return combined;
-
   const display = card.display_name?.trim();
   if (display && display.toLowerCase() !== "user") return display;
+
+  const first = card.first_name?.trim();
+  if (first) return first;
 
   if (card.nanny_serial) {
     const serial = card.nanny_serial.trim().toUpperCase();
