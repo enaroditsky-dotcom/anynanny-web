@@ -268,6 +268,8 @@ assert.match(createBooking, /SITTER_UNAVAILABLE_FOR_WINDOW_MESSAGE/);
 assert.match(createBooking, /start_time: input.startIso/);
 assert.match(createBooking, /end_time: input.endIso/);
 assert.match(createBooking, /status: "pending"/);
+assert.match(createBooking, /booking_source: bookingSource/);
+assert.match(modal, /bookingSource:\s*"direct"/);
 
 const searchImpl = read("lib/sitter/parent-sitter-search.ts");
 assert.match(searchImpl, /hasRequestedTimeWindow/);

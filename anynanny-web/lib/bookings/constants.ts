@@ -21,6 +21,15 @@ export type BookingPaymentStatus =
   | "pending_checkout"
   | "paid";
 
+export type BookingSource = "direct" | "broadcast_now";
+
+export const BOOKING_SOURCE_DIRECT = "direct" as const;
+export const BOOKING_SOURCE_BROADCAST_NOW = "broadcast_now" as const;
+
+export function isBookingSource(value: unknown): value is BookingSource {
+  return value === BOOKING_SOURCE_DIRECT || value === BOOKING_SOURCE_BROADCAST_NOW;
+}
+
 export type BookingRow = {
   id: string;
   parent_id: string;
@@ -29,6 +38,9 @@ export type BookingRow = {
   start_time: string;
   end_time: string;
   status: BookingStatus;
+
+  /** direct = scheduled request. broadcast_now = AnyNanny NOW parent select. */
+  booking_source?: BookingSource;
 
   /** Snapshot of sitter rate at booking time — canonical for live + settlement. */
   hourly_rate_nis?: number | null;

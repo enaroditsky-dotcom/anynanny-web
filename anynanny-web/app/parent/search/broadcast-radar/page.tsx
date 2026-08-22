@@ -938,7 +938,8 @@ function BroadcastRadarContent() {
           endBookingDate,
           startIso: now.toISOString(),
           endIso: endTime.toISOString(),
-          hourlyRateNis: sitter.hourlyRate
+          hourlyRateNis: sitter.hourlyRate,
+          bookingSource: "broadcast_now"
         }
       );
 

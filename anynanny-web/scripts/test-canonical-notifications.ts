@@ -106,6 +106,7 @@ assert.equal(notificationHrefForKind("booking_withdrawn_by_parent", "sitter", { 
 
 // --- A. booking_request: one writer, sitter only ---
 assert.match(createBooking, /status:\s*"pending"/);
+assert.match(createBooking, /booking_source: bookingSource/);
 assert.doesNotMatch(createBooking, /notifications/);
 assert.doesNotMatch(createBooking, /createInAppNotification/);
 assert.match(bookingInsertMig, /notify_booking_insert/);
