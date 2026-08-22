@@ -9,9 +9,9 @@ function read(relativePath: string): string {
 }
 
 const F7 = "supabase/migrations/20260822220000_sitter_profiles_private_select.sql";
-const PUBLIC_PROFILE = "supabase/migrations/20260816140000_require_completed_sitter_onboarding_for_discovery.sql";
+const AVATAR_RPC = "supabase/migrations/20260823001000_public_sitter_rpc_avatar_source.sql";
 const sql = read(F7);
-const publicProfileSql = read(PUBLIC_PROFILE);
+const publicProfileSql = read(AVATAR_RPC);
 
 const CROSS_USER_APP_FILES = [
   "lib/sitter/fetch-parent-sitter-profile.ts",
@@ -136,7 +136,9 @@ assert.match(ownRowSql, /create policy "sitter_profiles_select_own"/);
 assert.match(ownRowSql, /auth\.uid\(\) = id/);
 
 // 3–5. Public RPC projections.
-const searchFn = sql.slice(sql.indexOf("create or replace function public.list_public_sitters_search"));
+const searchFn = publicProfileSql.slice(
+  publicProfileSql.indexOf("create or replace function public.list_public_sitters_search")
+);
 assert.match(searchFn, /security definer/);
 assert.match(searchFn, /set search_path = public/);
 assert.match(sql, /grant execute on function public.list_public_sitters_search\(/);
