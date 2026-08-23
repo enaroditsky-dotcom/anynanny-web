@@ -8,7 +8,6 @@ import {
   DoubleShakeShiftPanel
 } from "@/components/session/double-shake-circle-button";
 import { ParentSessionTimerCircle } from "@/components/session/parent-double-shake-idle-circle";
-import { BillingInlineCheckout } from "@/components/billing/BillingInlineCheckout";
 import { BillingSessionMetrics } from "@/components/billing/BillingSessionMetrics";
 import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import {
@@ -16,7 +15,6 @@ import {
   resolveBillingLifecyclePhase,
   shakeSet
 } from "@/lib/billing/billing-lifecycle";
-import { postBillingCheckout } from "@/lib/billing/post-billing-checkout";
 import {
   formatNis,
   recordParentConfirmEnd,
@@ -75,14 +73,10 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
 
   const [startBusy, setStartBusy] = useState(false);
   const [confirmEndBusy, setConfirmEndBusy] = useState(false);
-  const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
-  const [checkoutAmountNis, setCheckoutAmountNis] = useState<number | null>(null);
   
   // מודאל הדירוג ייפתח מיד עם סיום המשמרת
   const [ratingOpen, setRatingOpen] = useState(false);
-  // משתנה בוליאני שמסמן שההורה סיים לדרג ואפשר לעבור לשלב הסליקה
   const [ratingCompleted, setRatingCompleted] = useState(false);
 
   // Real-time listener לעדכונים מול ה-Database
@@ -161,80 +155,24 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
     }
   }, [commitSessionRow, confirmEndBusy, parentId, row, sessionId, lifecyclePhase]);
 
-  // פונקציית יצירת סשן תשלום (Hyp / Cardcom)
-  const handleStartPayment = useCallback(async () => {
-    if (checkoutBusy || !row) return;
-
-    setCheckoutBusy(true);
-    setActionError(null);
-    triggerHaptic([120, 60, 120]);
-
-    try {
-      const result = await postBillingCheckout({ sessionId });
-
-      if (!result.ok) {
-        setActionError(result.error);
-        return;
-      }
-
-      if (result.alreadyPaid) {
-        await refresh();
-        return;
-      }
-
-      if (result.clientSecret) {
-        setCheckoutClientSecret(result.clientSecret);
-        setCheckoutAmountNis(result.amount ?? accruedNis);
-      } else {
-        setActionError("לא התקבל מפתח סליקה תקין מחברת הסליקה.");
-      }
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "שגיאה בהכנת התשלום.");
-    } finally {
-      setCheckoutBusy(false);
-    }
-  }, [accruedNis, checkoutBusy, refresh, row, sessionId]);
-
-  // מופעל אוטומטית ברגע שההורה מסיים לדרג במודאל
   const handleRatingResolved = useCallback(() => {
     setRatingOpen(false);
     setRatingCompleted(true);
-    // 🔥 מעבר אוטומטי ומיידי לשלב הפקת אמצעי התשלום והסליקה
-    void handleStartPayment();
-  }, [handleStartPayment]);
-
-  const handlePaymentSuccess = useCallback(async () => {
-    setCheckoutClientSecret(null);
-    setCheckoutAmountNis(null);
-
-    try {
-      await refresh();
-      window.setTimeout(() => void refresh(), 1500);
-      window.setTimeout(() => void refresh(), 4000);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "שגיאה בעדכון סטטוס התשלום.");
-    }
-  }, [refresh]);
+  }, []);
 
   const handleLocalReset = useCallback(async () => {
     setActionError(null);
-    setCheckoutClientSecret(null);
-    setCheckoutAmountNis(null);
     setRatingOpen(false);
     setRatingCompleted(false);
     await refresh();
   }, [refresh]);
 
-  // פתיחת מודאל הדירוג אוטומטית ברגע שהמשמרת אושרה כהלכה על ידי שני הצדדים
   useEffect(() => {
     if (!genuinelyCompleted) {
-      setCheckoutClientSecret(null);
-      setCheckoutAmountNis(null);
       setRatingOpen(false);
       setRatingCompleted(false);
       return;
     }
-    // פותח את המודאל רק אם הוא עדיין לא דורג בסבב הנוכחי
     if (!ratingCompleted) {
       setRatingOpen(true);
     }
@@ -302,7 +240,7 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
             <p className="text-[12px] text-emerald-600">הסיכום נחתם ונשמר בדשבורד.</p>
           </div>
         ) : (
-          <StatusCard>המשמרת הסתיימה. מעבר לתשלום.</StatusCard>
+          <StatusCard>המשמרת הסתיימה.</StatusCard>
         )}
         
         <BillingSessionMetrics
@@ -312,34 +250,6 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
           isLive={false}
           headline="סיכום סופי"
         />
-
-        {/* שלב בחירת אמצעי תשלום וסליקה: מוצג אוטומטית רק לאחר שהדירוג הושלם והמשמרת לא שולמה עדיין */}
-        {ratingCompleted && row.session_status !== "paid" && (
-          <div className="w-full space-y-2 pt-1">
-            {!checkoutClientSecret ? (
-              <button
-                type="button"
-                disabled={checkoutBusy}
-                onClick={() => void handleStartPayment()}
-                className="w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-70"
-              >
-                {checkoutBusy ? "מכין מסך סליקה…" : "פתח אמצעי תשלום"}
-              </button>
-            ) : null}
-
-            {checkoutClientSecret && checkoutAmountNis != null ? (
-              <div className="w-full border-t border-slate-100 pt-3">
-                <p className="text-[13px] font-bold text-slate-500 text-right mb-2">בחירת אמצעי תשלום:</p>
-                <BillingInlineCheckout
-                  clientSecret={checkoutClientSecret}
-                  amountNis={checkoutAmountNis}
-                  onSuccess={() => void handlePaymentSuccess()}
-                  onError={(message) => setActionError(message)}
-                />
-              </div>
-            ) : null}
-          </div>
-        )}
       </div>
     );
   } else {

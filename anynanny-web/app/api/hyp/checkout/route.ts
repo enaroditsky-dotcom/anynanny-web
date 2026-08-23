@@ -1,6 +1,6 @@
 import { computeAuthoritativeShiftCharge } from "@/lib/billing/compute-shift-charge";
 import { createHypCheckoutSession } from "@/lib/billing/hyp-checkout";
-import { resolveCheckoutRedirectUrl } from "@/lib/stripe/redirect-url";
+import { resolveCheckoutRedirectUrl } from "@/lib/billing/checkout-redirect-url";
 import { createServerClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 

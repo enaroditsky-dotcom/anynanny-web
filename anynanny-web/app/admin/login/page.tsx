@@ -26,14 +26,14 @@ export default function AdminLoginPage() {
       return;
     }
 
-    router.push("/admin/review");
+    router.push("/admin/chat-logs");
     router.refresh();
   };
 
   return (
     <main className="mx-auto max-w-md p-6 md:py-20">
       <h1 className="mb-2 text-2xl font-semibold text-navy-900">Admin Access</h1>
-      <p className="mb-6 text-sm text-navy-700">Enter admin password to access review and chat logs.</p>
+      <p className="mb-6 text-sm text-navy-700">Enter admin password to access chat logs.</p>
 
       <form className="space-y-3 rounded-xl border border-navy-200 bg-white p-5 shadow-sm" onSubmit={handleSubmit}>
         <label className="block text-sm text-navy-900" htmlFor="adminPassword">

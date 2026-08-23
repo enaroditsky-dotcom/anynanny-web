@@ -7,8 +7,6 @@ import {
   validateHypWalletAmount
 } from "@/lib/billing/hyp/payment-method-flags";
 import { resolveCheckoutRedirectUrl } from "@/lib/billing/checkout-redirect-url";
-import { readCardcomCredentials, resolveCardcomWebhookUrl } from "@/lib/cardcom/config";
-import { createCardcomLowProfile } from "@/lib/cardcom/low-profile-create";
 import { createServerClient } from "@/lib/supabase/server";
 import { buildHypWalletDepositInfo } from "@/lib/wallet/billing-transactions";
 import { buildHypWalletPaymentMethodInfo } from "@/lib/wallet/parent-payment-methods";
@@ -28,7 +26,7 @@ type DepositBody = {
 
 /**
  * Parent wallet deposit / payment-method entrypoint.
- * Prefers Hyp Pay (configured in this project); falls back to Cardcom LowProfile.
+ * HYP Pay is the only current payment provider.
  */
 export async function POST(request: Request) {
   let body: DepositBody;
@@ -108,91 +106,47 @@ export async function POST(request: Request) {
     ? buildHypWalletPaymentMethodInfo(parentId)
     : buildHypWalletDepositInfo(parentId);
 
-  if (isHypConfigured()) {
-    try {
-      const hyp = await createHypTransaction({
-        amountNis: chargeAmount,
-        bookingId: hypInfo,
-        description,
-        paymentMethod: preferredMethod,
-        pageLang: "HEB",
-        clientName: parentName.split(/\s+/)[0] || "Parent",
-        clientLastName: parentName.split(/\s+/).slice(1).join(" ") || "AnyNanny",
-        successUrl,
-        cancelUrl,
-        shiftSessionId: null
-      });
-
-      return NextResponse.json({
-        url: hyp.checkoutUrl,
-        sessionId: hyp.sessionId,
-        gateway: "hyp",
-        amount: chargeAmount,
-        tokenOnly: isTokenOnly,
-        purpose,
-        paymentMethod: preferredMethod
-      });
-    } catch (error) {
-      console.error("[israel-deposit] Hyp failed:", error);
-      if (!readCardcomCredentials()) {
-        return NextResponse.json(
-          {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Hyp payment initiation failed. Check HYP_* environment variables."
-          },
-          { status: 502 }
-        );
-      }
-    }
-  }
-
-  const cardcom = readCardcomCredentials();
-  if (!cardcom) {
+  if (!isHypConfigured()) {
     return NextResponse.json(
       {
         error:
-          "Payment gateway is not configured. Set HYP_* (preferred) or CARDCOM_* environment variables."
+          "Hyp is not configured. Set HYP_MASOF (or HYP_TERMINAL_ID), HYP_API_KEY, HYP_PASSP, and HYP_USER."
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 
   try {
-    const result = await createCardcomLowProfile({
-      terminalNumber: cardcom.terminalNumber,
-      apiName: cardcom.apiName,
-      apiPassword: cardcom.apiPassword,
-      apiUrl: cardcom.apiUrl,
-      sumToBill: chargeAmount,
+    const hyp = await createHypTransaction({
+      amountNis: chargeAmount,
+      bookingId: hypInfo,
       description,
+      paymentMethod: preferredMethod,
+      pageLang: "HEB",
+      clientName: parentName.split(/\s+/)[0] || "Parent",
+      clientLastName: parentName.split(/\s+/).slice(1).join(" ") || "AnyNanny",
       successUrl,
       cancelUrl,
-      returnValue: parentId,
-      customerEmail: user.email ?? null,
-      customerName: parentName,
-      webhookUrl: resolveCardcomWebhookUrl(request)
+      shiftSessionId: null
     });
-
-    if (!result.ok) {
-      console.error("[israel-deposit] Cardcom failed:", result.error);
-      return NextResponse.json({ error: result.error }, { status: result.httpStatus ?? 502 });
-    }
 
     return NextResponse.json({
-      url: result.url,
-      sessionId: result.lowProfileId,
-      gateway: "cardcom",
+      url: hyp.checkoutUrl,
+      sessionId: hyp.sessionId,
+      gateway: "hyp",
       amount: chargeAmount,
       tokenOnly: isTokenOnly,
-      purpose
+      purpose,
+      paymentMethod: preferredMethod
     });
   } catch (error) {
-    console.error("[israel-deposit] Cardcom exception:", error);
+    console.error("[israel-deposit] Hyp failed:", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Payment network error."
+        error:
+          error instanceof Error
+            ? error.message
+            : "Hyp payment initiation failed. Check HYP_* environment variables."
       },
       { status: 502 }
     );

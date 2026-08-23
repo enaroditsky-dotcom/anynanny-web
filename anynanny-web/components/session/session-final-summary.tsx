@@ -12,10 +12,6 @@ type SessionFinalSummaryProps = {
   elapsedSeconds: number;
   amountNis: number;
   onDismiss: () => void;
-  /** Parent-only: open Stripe Checkout for the linked booking. */
-  payAvailable?: boolean;
-  payBusy?: boolean;
-  onPay?: () => void;
   /** When known (e.g. after webhook), show a short status under the amount. */
   paymentStatusLabel?: string | null;
 };
@@ -28,9 +24,6 @@ export function SessionFinalSummary({
   elapsedSeconds,
   amountNis,
   onDismiss,
-  payAvailable = false,
-  payBusy = false,
-  onPay,
   paymentStatusLabel
 }: SessionFinalSummaryProps) {
   const timerText = formatElapsed(elapsedSeconds);
@@ -51,18 +44,6 @@ export function SessionFinalSummary({
           ) : null}
         </div>
       </div>
-      {payAvailable && onPay ? (
-        <button
-          type="button"
-          disabled={payBusy}
-          onClick={() => {
-            onPay();
-          }}
-          className="w-full max-w-[17rem] rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-bold text-white shadow-md backdrop-blur-sm transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {payBusy ? "פותחים תשלום מאובטח…" : "מעבר לתשלום מאובטח (Stripe)"}
-        </button>
-      ) : null}
       <button
         type="button"
         onClick={() => {
