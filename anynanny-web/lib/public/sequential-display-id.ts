@@ -11,8 +11,13 @@ import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 
 export const PUBLIC_DISPLAY_ID_BASE = 1000;
+/** Legacy unscoped key — never trusted as a source of truth. Cleared on logout. */
 export const PARENT_DISPLAY_ID_STORAGE_KEY = "anynanny_parent_display_id";
 export const SITTER_DISPLAY_ID_STORAGE_KEY = "anynanny_sitter_display_id";
+
+export function parentDisplayIdCacheKey(userId: string): string {
+  return `${PARENT_DISPLAY_ID_STORAGE_KEY}:${userId.trim()}`;
+}
 
 const PARENT_SERIAL_RE = /^P-\d+$/i;
 const SITTER_SERIAL_RE = /^AN-\d+$/i;
@@ -38,7 +43,7 @@ export function formatSitterPublicIdFromSerial(serialId: number | null | undefin
   return `AN-${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
 }
 
-function normalizeParentSerial(raw: unknown): string | null {
+export function normalizeParentSerial(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const v = raw.trim();
   if (!v) return null;
@@ -141,7 +146,7 @@ async function readParentPublicIdFromProfiles(
 
     setCachedWorkingSelect(cacheKey, select);
     const publicId = pickProfilePublicId(data, "parent");
-    if (publicId) cacheParentDisplayId(publicId);
+    if (publicId) cacheParentDisplayId(publicId, userId);
     return { publicId, error: null };
   }
 
@@ -202,11 +207,9 @@ export async function fetchProfilePublicId(
 ): Promise<{ publicId: string | null; error: string | null }> {
   if (!userId.trim()) return { publicId: null, error: null };
 
-  // Prefer local cache to avoid repeat network probes while navigating.
-  if (expectedRole === "parent") {
-    const cached = readCachedParentDisplayId();
-    if (cached) return { publicId: cached, error: null };
-  } else {
+  // Sitters may reuse a device cache to skip repeat probes. Parent IDs must
+  // never use the legacy unscoped cache — DB profile is the source of truth.
+  if (expectedRole === "sitter") {
     const cached = readCachedSitterDisplayId();
     if (cached) return { publicId: cached, error: null };
   }
@@ -225,33 +228,83 @@ export async function fetchProfilePublicId(
   }
 
   const fromTable = await readParentPublicIdFromProfiles(supabase, userId);
-  if (fromTable.publicId) return fromTable;
+  if (fromTable.publicId) {
+    cacheParentDisplayId(fromTable.publicId, userId);
+    return fromTable;
+  }
 
   const ensured = normalizeParentSerial(await rpcText(supabase, "ensure_parent_public_id"));
   if (ensured) {
-    cacheParentDisplayId(ensured);
+    cacheParentDisplayId(ensured, userId);
     return { publicId: ensured, error: null };
   }
 
   return fromTable;
 }
 
-export function readCachedParentDisplayId(): string | null {
+/**
+ * Profile/DB serial wins. Legacy unscoped cache is never trusted.
+ * Another user's scoped cache is never returned for this user.
+ * Missing profile serial → null (hide badge); do not invent P-1001.
+ */
+export function resolveTrustedParentDisplayId(input: {
+  userId: string;
+  profileSerial?: unknown;
+  scopedCacheValue?: string | null;
+  scopedCacheOwnerId?: string | null;
+  legacyUnscopedCache?: string | null;
+}): string | null {
+  const fromProfile =
+    typeof input.profileSerial === "object" && input.profileSerial !== null
+      ? pickProfilePublicId(input.profileSerial, "parent")
+      : normalizeParentSerial(input.profileSerial);
+  if (fromProfile) return fromProfile;
+
+  void input.legacyUnscopedCache;
+  void input.scopedCacheValue;
+  const uid = input.userId.trim();
+  const owner = (input.scopedCacheOwnerId ?? "").trim();
+  if (!uid || !owner || uid !== owner) return null;
+  // Same-user scoped cache is still not a substitute for a missing DB serial.
+  return null;
+}
+
+/** Label for the Parent dashboard ID badge, or null to hide it. */
+export function parentDashboardSerialLabel(raw: string | null | undefined): string | null {
+  return normalizeParentSerial(raw);
+}
+
+export function readCachedParentDisplayId(userId?: string | null): string | null {
   if (typeof window === "undefined") return null;
+  const uid = typeof userId === "string" ? userId.trim() : "";
+  if (!uid) return null;
   try {
-    const raw = localStorage.getItem(PARENT_DISPLAY_ID_STORAGE_KEY);
-    return normalizeParentSerial(raw);
+    return normalizeParentSerial(localStorage.getItem(parentDisplayIdCacheKey(uid)));
   } catch {
     return null;
   }
 }
 
-export function cacheParentDisplayId(id: string | null | undefined): void {
+export function cacheParentDisplayId(id: string | null | undefined, userId?: string | null): void {
   if (typeof window === "undefined") return;
   try {
+    localStorage.removeItem(PARENT_DISPLAY_ID_STORAGE_KEY);
+    const uid = typeof userId === "string" ? userId.trim() : "";
     const normalized = normalizeParentSerial(id);
-    if (normalized) localStorage.setItem(PARENT_DISPLAY_ID_STORAGE_KEY, normalized);
-    else localStorage.removeItem(PARENT_DISPLAY_ID_STORAGE_KEY);
+    if (!uid) return;
+    if (normalized) localStorage.setItem(parentDisplayIdCacheKey(uid), normalized);
+    else localStorage.removeItem(parentDisplayIdCacheKey(uid));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearParentDisplayIdCache(userId?: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(PARENT_DISPLAY_ID_STORAGE_KEY);
+    const uid = typeof userId === "string" ? userId.trim() : "";
+    if (uid) localStorage.removeItem(parentDisplayIdCacheKey(uid));
   } catch {
     /* ignore */
   }
@@ -278,9 +331,15 @@ export function cacheSitterDisplayId(id: string | null | undefined): void {
   }
 }
 
-export function resolveParentPublicDisplayId(serialId?: number | null): string | null {
-  const cached = readCachedParentDisplayId();
-  if (cached) return cached;
+export function resolveParentPublicDisplayId(
+  serialId?: number | null,
+  userId?: string | null
+): string | null {
+  const uid = typeof userId === "string" ? userId.trim() : "";
+  if (uid) {
+    const cached = readCachedParentDisplayId(uid);
+    if (cached) return cached;
+  }
   return formatParentPublicIdFromSerial(serialId ?? null);
 }
 

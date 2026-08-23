@@ -25,7 +25,7 @@ export default async function ParentDashboardPage() {
         initialProfiles={[]}
         initialPreferences={{
           parentName: "הורה",
-          parentSerial: "P-1001",
+          parentSerial: "",
           favoriteSitterId: "",
           locationLabel: "ישראל",
           minRate: 30,
@@ -53,7 +53,7 @@ export default async function ParentDashboardPage() {
 
   let initialPreferences: ParentPreferences & { parentSerial?: string } = {
     parentName: user?.email?.split("@")[0] || "הורה",
-    parentSerial: "P-1001",
+    parentSerial: "",
     favoriteSitterId: "",
     locationLabel: "ישראל",
     minRate: 30,
