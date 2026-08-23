@@ -22,7 +22,8 @@
     "test:pending-booking-lifecycle": "npx --yes tsx scripts/test-pending-booking-lifecycle.ts",
     "test:web-push": "npx --yes tsx scripts/test-web-push.ts",
     "test:parent-wallet-billing-grants": "npx --yes tsx scripts/test-parent-wallet-billing-grant-hardening.ts",
-    "test:delete-current-user-grants": "npx --yes tsx scripts/test-delete-current-user-execute-grants.ts"
+    "test:delete-current-user-grants": "npx --yes tsx scripts/test-delete-current-user-execute-grants.ts",
+    "test:delete-account-avatar-cleanup": "npx --yes tsx scripts/test-delete-account-avatar-cleanup.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",
