@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { assertMarketplacePairAllowed } from "@/lib/safety/enforcement";
 
 export type PendingBookingView = BookingRow & {
   parent_full_name: string | null;
@@ -80,6 +81,25 @@ export async function updateBookingStatus(
   bookingId: string,
   status: Extract<BookingStatus, "approved" | "rejected">
 ): Promise<{ row: BookingRow | null; error: string | null }> {
+  if (status === "approved") {
+    const { data: existing } = await supabase
+      .from(BOOKINGS_TABLE)
+      .select("parent_id, sitter_id")
+      .eq("id", bookingId)
+      .eq("sitter_id", sitterId)
+      .maybeSingle();
+    const parentId =
+      existing && typeof existing === "object" && "parent_id" in existing
+        ? String((existing as { parent_id: string }).parent_id)
+        : "";
+    if (parentId) {
+      const pairCheck = await assertMarketplacePairAllowed(supabase, sitterId, parentId);
+      if (!pairCheck.ok) {
+        return { row: null, error: pairCheck.error };
+      }
+    }
+  }
+
   const patch = {
     status,
     rejection_note:

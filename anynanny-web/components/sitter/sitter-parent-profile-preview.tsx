@@ -11,7 +11,10 @@ import {
   X
 } from "lucide-react";
 
+import { UserSafetyActions } from "@/components/safety/user-safety-actions";
+
 export type SitterVisibleParentPreview = {
+  id?: string | null;
   first_name?: string | null;
   avatar_url?: string | null;
   rating_average?: number | null;
@@ -30,6 +33,7 @@ export type SitterVisibleParentPreview = {
 
 type Props = {
   bookingId: string;
+  parentUserId?: string | null;
   fallbackParentName?: string | null;
   label?: string;
   className?: string;
@@ -47,6 +51,7 @@ function normalizeRatingCount(value: unknown): number {
 
 export function SitterParentProfilePreview({
   bookingId,
+  parentUserId = null,
   fallbackParentName,
   label = "פרטי ההורה",
   className = ""
@@ -258,6 +263,13 @@ export function SitterParentProfilePreview({
                       </p>
                     </div>
                   )}
+
+                  {(parent.id || parentUserId) ? (
+                    <UserSafetyActions
+                      targetUserId={String(parent.id || parentUserId)}
+                      targetName={parent.first_name || fallbackParentName}
+                    />
+                  ) : null}
 
                   <button
                     type="button"

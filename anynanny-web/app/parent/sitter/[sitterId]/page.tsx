@@ -11,6 +11,7 @@ import {
 } from "@/lib/sitter/sitter-profile";
 import { publicSitterDisplayName } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
+import { UserSafetyActions } from "@/components/safety/user-safety-actions";
 import {
   formatParentFacingPriceLabel,
   formatPublicExperienceLabel,
@@ -273,6 +274,8 @@ export default function ParentSitterProfileView() {
             <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
               פעולות
             </h2>
+
+            <UserSafetyActions targetUserId={sitterId} targetName={displayName} />
 
             <button
               type="button"

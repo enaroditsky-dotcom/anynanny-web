@@ -12,6 +12,7 @@ import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { getCachedWorkingSelect, setCachedWorkingSelect } from "@/lib/supabase/rpc-availability";
 import { getChatLifecycle } from "@/lib/chat/chat-lifecycle";
+import { assertMarketplacePairAllowed } from "@/lib/safety/enforcement";
 
 export const CHAT_ELIGIBLE_BOOKING_STATUSES: BookingStatus[] = [
   "pending",
@@ -376,7 +377,7 @@ export async function verifyBookingChatParticipant(
   supabase: SupabaseClient,
   bookingId: string,
   userId: string
-): Promise<{ allowed: boolean; partnerName: string | null; error: string | null }> {
+): Promise<{ allowed: boolean; partnerId: string | null; partnerName: string | null; error: string | null }> {
   const { data, error } = await supabase
     .from(BOOKINGS_TABLE)
     .select("parent_id, sitter_id")
@@ -384,25 +385,25 @@ export async function verifyBookingChatParticipant(
     .maybeSingle();
 
   if (error) {
-    return { allowed: false, partnerName: null, error: error.message };
+    return { allowed: false, partnerId: null, partnerName: null, error: error.message };
   }
 
   if (!data) {
-    return { allowed: false, partnerName: null, error: "denied" };
+    return { allowed: false, partnerId: null, partnerName: null, error: "denied" };
   }
 
   const parentId = String((data as { parent_id: string }).parent_id);
   const sitterId = String((data as { sitter_id: string }).sitter_id);
 
   if (userId !== parentId && userId !== sitterId) {
-    return { allowed: false, partnerName: null, error: "denied" };
+    return { allowed: false, partnerId: null, partnerName: null, error: "denied" };
   }
 
   const partnerId = userId === parentId ? sitterId : parentId;
 
   if (userId === parentId) {
     const profile = await fetchPublicSitterProfileViaRpc(supabase, partnerId);
-    return { allowed: true, partnerName: publicSitterDisplayName(profile), error: null };
+    return { allowed: true, partnerId, partnerName: publicSitterDisplayName(profile), error: null };
   }
 
   const { data: profile } = await supabase
@@ -417,7 +418,7 @@ export async function verifyBookingChatParticipant(
         null
       : null;
 
-  return { allowed: true, partnerName, error: null };
+  return { allowed: true, partnerId, partnerName, error: null };
 }
 
 export async function fetchBookingChatLifecycle(
@@ -548,6 +549,27 @@ export async function sendBookingMessage(
         message: null,
         error: lifecycle.closedHeadline ?? "השיחה נסגרה – לא ניתן לשלוח הודעות חדשות."
       };
+    }
+  }
+
+  const { data: bookingRow } = await supabase
+    .from(BOOKINGS_TABLE)
+    .select("parent_id, sitter_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  const parentId =
+    bookingRow && typeof bookingRow === "object" && "parent_id" in bookingRow
+      ? String((bookingRow as { parent_id: string }).parent_id)
+      : "";
+  const sitterId =
+    bookingRow && typeof bookingRow === "object" && "sitter_id" in bookingRow
+      ? String((bookingRow as { sitter_id: string }).sitter_id)
+      : "";
+  const counterpartId = senderId === parentId ? sitterId : parentId;
+  if (counterpartId) {
+    const pairCheck = await assertMarketplacePairAllowed(supabase, senderId, counterpartId);
+    if (!pairCheck.ok) {
+      return { message: null, error: pairCheck.error };
     }
   }
 

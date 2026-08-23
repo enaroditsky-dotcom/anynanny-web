@@ -107,6 +107,7 @@ function ShiftCard({
           renderProfile={
             <SitterParentProfilePreview
               bookingId={shift.id}
+              parentUserId={shift.parent_id}
               fallbackParentName={shift.parent_full_name}
               label={CANCELLATION_COPY.parentProfile}
               className="px-0 py-0 text-xs font-semibold text-navy-header underline hover:bg-transparent"

@@ -11,6 +11,7 @@ import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
 import { fetchPendingBookingForParentSitter } from "@/lib/bookings/todays-linked-booking";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { UserSafetyActions } from "@/components/safety/user-safety-actions";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
@@ -225,6 +226,7 @@ export function SitterProfileActions({
       ) : null}
 
       <div className="grid grid-cols-1 gap-3">
+        <UserSafetyActions targetUserId={sitterId} targetName={sitterName} />
         <button
           type="button"
           onClick={() => void handleSendMessage()}

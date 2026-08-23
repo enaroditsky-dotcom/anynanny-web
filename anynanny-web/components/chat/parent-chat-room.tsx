@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { PageBackLink } from "@/components/navigation/page-back-link";
+import { UserSafetyActions } from "@/components/safety/user-safety-actions";
 import { verifyBookingChatParticipant } from "@/lib/chat/booking-messages";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -75,14 +76,20 @@ export function BookingChat({ bookingId, messagesHref }: BookingChatProps) {
 export function BookingChatHeader({ bookingId, backHref }: { bookingId: string; backHref: string }) {
   const { user } = useAuth();
   const [title, setTitle] = useState("שיחה");
+  const [partnerId, setPartnerId] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !user?.id) return;
 
     void (async () => {
-      const { partnerName } = await verifyBookingChatParticipant(supabase, bookingId, user.id);
+      const { partnerName, partnerId: nextPartnerId } = await verifyBookingChatParticipant(
+        supabase,
+        bookingId,
+        user.id
+      );
       if (partnerName) setTitle(partnerName);
+      if (nextPartnerId) setPartnerId(nextPartnerId);
     })();
   }, [bookingId, user?.id]);
 
@@ -94,6 +101,11 @@ export function BookingChatHeader({ bookingId, backHref }: { bookingId: string; 
           {title}
         </h1>
       </div>
+      {partnerId ? (
+        <div className="flex justify-end">
+          <UserSafetyActions targetUserId={partnerId} targetName={title} />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { ChatLogsTable } from "@/components/admin/chat-logs-table";
+import { requireAdminPage } from "@/lib/admin/require-admin";
 import { listChatInitiations } from "@/lib/chat/repository";
 
 export default async function AdminChatLogsPage() {
+  await requireAdminPage();
   const logs = await listChatInitiations();
   const sortedLogs = [...logs].sort((a, b) => new Date(b.initiatedAt).getTime() - new Date(a.initiatedAt).getTime());
 

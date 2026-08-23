@@ -1412,6 +1412,7 @@ export default function SitterShiftsPage() {
     (shift: CalendarShift) => (
       <SitterParentProfilePreview
         bookingId={shift.id}
+        parentUserId={shift.partnerId}
         fallbackParentName={shift.partnerName}
         label={CANCELLATION_COPY.parentProfile}
         className="px-0 py-0 text-xs font-semibold text-navy-header underline hover:bg-transparent"
@@ -1818,6 +1819,7 @@ export default function SitterShiftsPage() {
                       <div className="space-y-2 pt-1">
                         <SitterParentProfilePreview
                           bookingId={shift.id}
+                          parentUserId={shift.parent_id}
                           fallbackParentName={shift.parent_name}
                           label="צפייה בפרופיל ההורה"
                           className="w-full justify-center rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm"

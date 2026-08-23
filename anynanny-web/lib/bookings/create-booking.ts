@@ -13,6 +13,7 @@ import {
   resolveShiftTimeWindow,
   sitterHasOverlappingActiveShift
 } from "@/lib/bookings/sitter-shift-overlap";
+import { assertMarketplacePairAllowed } from "@/lib/safety/enforcement";
 
 export { validateShiftWindow } from "@/lib/shift-requests/create-shift-request";
 
@@ -83,6 +84,15 @@ export async function createBooking(
       error:
         "לא ניתן ליצור הזמנה ללא תעריף תקין של הבייביסיטר."
     };
+  }
+
+  const pairCheck = await assertMarketplacePairAllowed(
+    supabase,
+    parentIdTrimmed,
+    sitterIdTrimmed
+  );
+  if (!pairCheck.ok) {
+    return { booking: null, error: pairCheck.error };
   }
 
   const proposed = resolveShiftTimeWindow({
