@@ -20,7 +20,8 @@
     "test:hyp-payment-verification": "npx --yes tsx scripts/test-hyp-payment-verification.ts",
     "test:canonical-notifications": "npx --yes tsx scripts/test-canonical-notifications.ts",
     "test:pending-booking-lifecycle": "npx --yes tsx scripts/test-pending-booking-lifecycle.ts",
-    "test:web-push": "npx --yes tsx scripts/test-web-push.ts"
+    "test:web-push": "npx --yes tsx scripts/test-web-push.ts",
+    "test:parent-wallet-billing-grants": "npx --yes tsx scripts/test-parent-wallet-billing-grant-hardening.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",
