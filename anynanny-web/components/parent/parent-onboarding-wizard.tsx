@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
@@ -8,7 +8,20 @@ import { IdentityOnboardingCard } from "@/components/identity/identity-onboardin
 import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
 import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import { clearSecondRoleInProgress } from "@/lib/auth/product-profiles";
+import {
+  coalesceSignupNames,
+  hasCompleteSignupNames,
+  namesFromUserMetadata,
+  readSignupNamesFromDevice,
+  saveSignupNamesToDevice
+} from "@/lib/auth/signup-names";
+import {
+  buildParentOnboardingSavePayload,
+  PARENT_ONBOARDING_ADDRESS_ERROR,
+  validateParentOnboardingRequiredFields
+} from "@/lib/parent/parent-onboarding";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 type SpecialEvent = {
   id: string;
@@ -32,9 +45,10 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Parent Details
+  // Names come from signup — never re-collected here.
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [namesLoading, setNamesLoading] = useState(true);
   const [birthDate, setBirthDate] = useState("");
 
   // Address (Structured)
@@ -80,19 +94,56 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
     setSpecialEvents(specialEvents.filter(e => e.id !== id));
   };
 
+  useEffect(() => {
+    void (async () => {
+      const auth = await resolveBrowserAuth();
+      if (!auth.ok || !auth.supabase || !auth.userId) {
+        const cached = readSignupNamesFromDevice();
+        if (cached) {
+          setFirstName(cached.first_name);
+          setLastName(cached.last_name);
+        }
+        setNamesLoading(false);
+        return;
+      }
+
+      const {
+        data: { user }
+      } = await auth.supabase.auth.getUser();
+
+      const { data: profileRow } = await auth.supabase
+        .from(PROFILES_TABLE)
+        .select("first_name, last_name")
+        .eq("id", auth.userId)
+        .maybeSingle();
+
+      const resolved = coalesceSignupNames(
+        profileRow,
+        namesFromUserMetadata(user?.user_metadata as Record<string, unknown> | undefined),
+        readSignupNamesFromDevice()
+      );
+
+      if (resolved.first_name) setFirstName(resolved.first_name);
+      if (resolved.last_name) setLastName(resolved.last_name);
+      if (hasCompleteSignupNames(resolved)) {
+        saveSignupNamesToDevice(resolved);
+      }
+      setNamesLoading(false);
+    })();
+  }, []);
+
   const goToVerificationStep = () => {
-    if (!firstName || !lastName) {
-      setError("יש למלא את שם ההורה.");
-      return;
-    }
-    if (selectedCity.length === 0 || !street || !houseNumber) {
-      setError("יש להזין כתובת מלאה ומובנית (עיר, רחוב ומספר בית).");
-      return;
-    }
-    const dobError = getAccountDobEligibilityError("parent", birthDate);
-    if (dobError) {
-      setError(dobError);
-      setStep(1);
+    const requiredError = validateParentOnboardingRequiredFields({
+      city: selectedCity[0],
+      street,
+      houseNumber,
+      birthDate
+    });
+    if (requiredError) {
+      setError(requiredError);
+      if (requiredError !== PARENT_ONBOARDING_ADDRESS_ERROR) {
+        setStep(1);
+      }
       return;
     }
     setError(null);
@@ -101,18 +152,17 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
 
   const handleFinish = async () => {
     if (busy) return;
-    if (!firstName || !lastName) {
-      setError("יש למלא את שם ההורה.");
-      return;
-    }
-    if (selectedCity.length === 0 || !street || !houseNumber) {
-      setError("יש להזין כתובת מלאה ומובנית (עיר, רחוב ומספר בית).");
-      return;
-    }
-    const dobError = getAccountDobEligibilityError("parent", birthDate);
-    if (dobError) {
-      setError(dobError);
-      setStep(1);
+    const requiredError = validateParentOnboardingRequiredFields({
+      city: selectedCity[0],
+      street,
+      houseNumber,
+      birthDate
+    });
+    if (requiredError) {
+      setError(requiredError);
+      if (requiredError !== PARENT_ONBOARDING_ADDRESS_ERROR) {
+        setStep(1);
+      }
       return;
     }
 
@@ -129,27 +179,24 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
 
       // שמירה אמיתית במסד הנתונים ועדכון חותמת הזמן לסיום השאלון
       const { error: dbError } = await auth.supabase
-        .from("profiles")
-        .update({
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          birth_date: birthDate || null,
-          address: {
-            // IsraelCity is a plain string (e.g. "חיפה"), not an object with `.name`.
+        .from(PROFILES_TABLE)
+        .update(
+          buildParentOnboardingSavePayload({
+            firstName,
+            lastName,
+            birthDate,
             city: selectedCity[0] || "",
-            street: street.trim(),
-            houseNumber: houseNumber.trim()
-          },
-          spouse: hasSpouse ? {
-            firstName: spouseFirstName.trim(),
-            lastName: spouseLastName.trim(),
-            birthDate: spouseBirthDate || null
-          } : null,
-          wedding_date: weddingDate || null,
-          children,
-          special_events: specialEvents,
-          parent_onboarding_completed_at: new Date().toISOString()
-        })
+            street,
+            houseNumber,
+            hasSpouse,
+            spouseFirstName,
+            spouseLastName,
+            spouseBirthDate,
+            weddingDate,
+            children,
+            specialEvents
+          })
+        )
         .eq("id", auth.userId);
 
       if (dbError) {
@@ -184,26 +231,21 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
       {step === 1 && (
         <div className="space-y-4 text-right">
           <p className="font-bold text-sm text-[#001F3F] border-b pb-1">פרטי הורה מוביל</p>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">שם פרטי *</label>
-            <input
-              type="text"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="w-full rounded-2xl border-2 border-[#C5A059]/30 bg-white p-3.5 text-sm"
-              placeholder="שם פרטי"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">שם משפחה *</label>
-            <input
-              type="text"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className="w-full rounded-2xl border-2 border-[#C5A059]/30 bg-white p-3.5 text-sm"
-              placeholder="שם משפחה"
-            />
-          </div>
+          {namesLoading ? (
+            <p className="text-center text-sm text-slate-500">טוען את פרטי ההרשמה…</p>
+          ) : firstName.trim() && lastName.trim() ? (
+            <div className="rounded-2xl border border-[#C5A059]/25 bg-white/80 px-4 py-3 text-right">
+              <p className="text-[13px] font-semibold text-slate-500">שלום</p>
+              <p className="mt-1 text-base font-bold text-[#001F3F]">
+                {firstName} {lastName}
+              </p>
+              <p className="mt-1 text-[13px] text-slate-500">השם נשמר מההרשמה ואין צורך להקליד שוב</p>
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              לא נמצא שם מההרשמה. אפשר להמשיך — השם שכבר נשמר בהרשמה לא ישתנה.
+            </p>
+          )}
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">תאריך לידה *</label>
             <input
