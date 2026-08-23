@@ -66,7 +66,7 @@ import {
 import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
 import { readParentPreferredCheckoutMethod } from "@/lib/wallet/parent-preferred-checkout-method";
 import type { ParentBusySlot, ParentPreferences } from "@/lib/parent/types";
-import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
+import { fetchProfilePublicId, parentDashboardSerialLabel } from "@/lib/public/sequential-display-id";
 import { fetchRejectedSitterSnapshot } from "@/lib/sitter/fetch-rejected-sitter-snapshot";
 import {
   clearParentSessionRatedLocally,
@@ -1682,6 +1682,7 @@ export function ParentDashboardClient({
 
   const onboardingPending = profileCardStatus === "incomplete";
   const firstName = prefs.parentName ? prefs.parentName.trim().split(" ")[0] : "הורה";
+  const parentSerialLabel = parentDashboardSerialLabel(parentSerial);
   const showLiveShiftCard =
     (dueForActiveShiftUi && Boolean(activeBooking)) ||
     showLiveTimer ||
@@ -1939,13 +1940,15 @@ export function ParentDashboardClient({
                 </div>
                 <h1 className="text-lg font-bold text-slate-900">שלום, {firstName}!</h1>
               </div>
-              <span
-                className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[13px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200"
-                dir="ltr"
-              >
-                <span>{parentSerial}</span>
-                <span className="text-[11px] text-purple-500 font-normal">ID</span>
-              </span>
+              {parentSerialLabel ? (
+                <span
+                  className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[13px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200"
+                  dir="ltr"
+                >
+                  <span>{parentSerialLabel}</span>
+                  <span className="text-[11px] text-purple-500 font-normal">ID</span>
+                </span>
+              ) : null}
             </div>
 
             <div className="flex items-center justify-start">
