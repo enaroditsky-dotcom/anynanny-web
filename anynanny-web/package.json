@@ -24,6 +24,7 @@
     "test:parent-wallet-billing-grants": "npx --yes tsx scripts/test-parent-wallet-billing-grant-hardening.ts",
     "test:delete-current-user-grants": "npx --yes tsx scripts/test-delete-current-user-execute-grants.ts",
     "test:delete-account-avatar-cleanup": "npx --yes tsx scripts/test-delete-account-avatar-cleanup.ts",
+    "test:privacy-policy-content-alignment": "npx --yes tsx scripts/test-privacy-policy-content-alignment.ts",
     "test:parent-onboarding-ux": "npx --yes tsx scripts/test-parent-onboarding-ux.ts",
     "test:parent-public-id-display": "npx --yes tsx scripts/test-parent-public-id-display.ts"
   },

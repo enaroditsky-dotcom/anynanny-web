@@ -2,7 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
+/** Terms of Service document version. Unchanged by Privacy Policy text updates. */
 export const LEGAL_DOC_VERSION = "1.0" as const;
+export const TERMS_DOC_VERSION = LEGAL_DOC_VERSION;
+/** Privacy Policy document version. Bumped when substantive privacy text changes. */
+export const PRIVACY_DOC_VERSION = "1.1" as const;
 
 export type LegalAcceptanceRecord = {
   terms_accepted_at: string;
@@ -16,9 +20,9 @@ export function createLegalAcceptanceRecord(
 ): LegalAcceptanceRecord {
   return {
     terms_accepted_at: acceptedAt,
-    terms_version: LEGAL_DOC_VERSION,
+    terms_version: TERMS_DOC_VERSION,
     privacy_accepted_at: acceptedAt,
-    privacy_version: LEGAL_DOC_VERSION
+    privacy_version: PRIVACY_DOC_VERSION
   };
 }
 
