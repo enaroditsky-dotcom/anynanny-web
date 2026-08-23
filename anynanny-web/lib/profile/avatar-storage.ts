@@ -58,3 +58,45 @@ export async function removeOwnAvatar(
   const { error } = await supabase.storage.from(AVATARS_BUCKET).remove([avatarObjectPath(userId)]);
   return { error: error?.message ?? null };
 }
+
+function isSafeAvatarObjectName(name: string): boolean {
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+  if (trimmed === "." || trimmed === "..") return false;
+  if (trimmed.includes("/") || trimmed.includes("\\")) return false;
+  return true;
+}
+
+/**
+ * Best-effort Storage cleanup for account deletion.
+ * User id comes only from the authenticated session — never from caller input.
+ */
+export async function removeAuthenticatedUserAvatars(
+  supabase: SupabaseClient
+): Promise<{ error: string | null }> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = String(authData?.user?.id ?? "").trim();
+  if (authError || !userId) {
+    return { error: authError?.message || "Not authenticated." };
+  }
+
+  const { data: objects, error: listError } = await supabase.storage
+    .from(AVATARS_BUCKET)
+    .list(userId);
+
+  if (listError) {
+    return { error: listError.message };
+  }
+
+  const paths = (objects ?? [])
+    .map((object) => String(object.name ?? "").trim())
+    .filter(isSafeAvatarObjectName)
+    .map((name) => `${userId}/${name}`);
+
+  if (paths.length === 0) {
+    return { error: null };
+  }
+
+  const { error: removeError } = await supabase.storage.from(AVATARS_BUCKET).remove(paths);
+  return { error: removeError?.message ?? null };
+}
