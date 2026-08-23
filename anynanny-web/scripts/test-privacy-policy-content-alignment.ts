@@ -55,11 +55,11 @@ assert.match(policy, /מוחקת לצמיתות את חשבון ההתחברות
 assert.match(policy, /תיעוד עסקאות ותשלומים/);
 assert.match(policy, /גרסה \{PRIVACY_DOC_VERSION\}/);
 
-assert.equal(LEGAL_DOC_VERSION, "1.0");
-assert.equal(TERMS_DOC_VERSION, "1.0");
+assert.equal(LEGAL_DOC_VERSION, "1.1");
+assert.equal(TERMS_DOC_VERSION, "1.1");
 assert.equal(PRIVACY_DOC_VERSION, "1.1");
 const record = createLegalAcceptanceRecord("2026-08-23T00:00:00.000Z");
-assert.equal(record.terms_version, "1.0");
+assert.equal(record.terms_version, "1.1");
 assert.equal(record.privacy_version, "1.1");
 
 assert.match(deleteAccount, /removeAuthenticatedUserAvatars\(supabase\)/);
