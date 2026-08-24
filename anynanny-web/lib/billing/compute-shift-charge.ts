@@ -1,6 +1,8 @@
 import { PARENT_PLATFORM_FEE_MULTIPLIER } from "@/lib/sitter/public-search-card";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
+import { bookingRequiresAdminReview } from "@/lib/bookings/stuck-shift-review";
 import { SESSIONS_TABLE } from "@/lib/billing/session-types";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export { PARENT_PLATFORM_FEE_MULTIPLIER } from "@/lib/sitter/public-search-card";
@@ -153,6 +155,13 @@ function isPayableBookingStatus(status: unknown): boolean {
   return PAYABLE_STATUS_SET.has(String(status ?? "").trim().toLowerCase());
 }
 
+/** Review-held shifts must not enter Hyp/amount resolution. Formula itself is unchanged. */
+export function isBookingBlockedFromAuthoritativeCharge(booking: {
+  requires_admin_review?: boolean | null;
+}): boolean {
+  return bookingRequiresAdminReview(booking);
+}
+
 /**
  * Server-only: derive the Hyp charge from booking + session rows.
  * Ignores any browser-supplied amount / elapsed.
@@ -173,11 +182,32 @@ export async function computeAuthoritativeShiftCharge(
     return { ok: false, error: "Unauthorized.", status: 403 };
   }
 
-  const { data: booking, error: bookingErr } = await supabase
+  const withReview = await supabase
     .from(BOOKINGS_TABLE)
-    .select("id, parent_id, status, payment_status, paid_at, hourly_rate_nis")
+    .select("id, parent_id, status, payment_status, paid_at, hourly_rate_nis, requires_admin_review")
     .eq("id", bookingId)
     .maybeSingle();
+
+  let booking = withReview.data as {
+    id: string;
+    parent_id: string;
+    status: string;
+    payment_status?: string | null;
+    paid_at?: string | null;
+    hourly_rate_nis?: unknown;
+    requires_admin_review?: boolean | null;
+  } | null;
+  let bookingErr = withReview.error;
+
+  if (bookingErr && isPostgrestMissingColumnError(bookingErr.message, "requires_admin_review")) {
+    const core = await supabase
+      .from(BOOKINGS_TABLE)
+      .select("id, parent_id, status, payment_status, paid_at, hourly_rate_nis")
+      .eq("id", bookingId)
+      .maybeSingle();
+    booking = core.data as typeof booking;
+    bookingErr = core.error;
+  }
 
   if (bookingErr) {
     return { ok: false, error: "Failed to load booking.", status: 500 };
@@ -188,6 +218,10 @@ export async function computeAuthoritativeShiftCharge(
 
   if (String(booking.parent_id) !== parentId) {
     return { ok: false, error: "Forbidden.", status: 403 };
+  }
+
+  if (isBookingBlockedFromAuthoritativeCharge(booking)) {
+    return { ok: false, error: "This booking is awaiting operator review.", status: 400 };
   }
 
   if (!isPayableBookingStatus(booking.status)) {

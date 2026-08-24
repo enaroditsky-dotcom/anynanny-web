@@ -9,7 +9,6 @@ import { SitterDoubleShakeIdleCircle } from "@/components/session/sitter-double-
 import { SitterConfirmedShifts } from "@/components/sitter/sitter-confirmed-shifts";
 import { SitterPendingBookings } from "@/components/sitter/sitter-pending-bookings";
 import { SitterShiftApprovalCard } from "@/components/sitter/sitter-shift-approval-card";
-import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import { bookingRowToCircleView } from "@/lib/bookings/circle-booking-state";
 import { isSitterBookingAwaitingApprovalStatus } from "@/lib/bookings/booking-realtime-handler";
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
@@ -155,11 +154,6 @@ export function SitterShiftsPageContent() {
     [applyCircleBooking, reloadTodaysBooking]
   );
 
-  const handleDevReset = useCallback(() => {
-    setConfirmedRefreshNonce((n) => n + 1);
-    void reloadTodaysBooking();
-  }, [reloadTodaysBooking]);
-
   if (authState === "loading") {
     return <p className="text-right text-sm text-slate-600">טוען משמרות…</p>;
   }
@@ -208,10 +202,6 @@ export function SitterShiftsPageContent() {
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pb-1 pe-0.5">
         <SitterPendingBookings sitterId={sitterId} onResponded={handleBookingResponded} />
         <SitterConfirmedShifts sitterId={sitterId} refreshNonce={confirmedRefreshNonce} />
-      </div>
-
-      <div className="shrink-0 pt-2">
-        <StuckShiftDevResetButton role="sitter" variant="button" onSuccess={handleDevReset} />
       </div>
     </div>
   );

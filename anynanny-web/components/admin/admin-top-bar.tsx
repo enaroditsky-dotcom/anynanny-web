@@ -33,6 +33,14 @@ export function AdminTopBar() {
             Reports
           </Link>
           <Link
+            href="/admin/shift-reviews"
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              pathname === "/admin/shift-reviews" ? "bg-navy-800 text-white" : "bg-slate-100 text-navy-800"
+            }`}
+          >
+            Shift Reviews
+          </Link>
+          <Link
             href="/admin/chat-logs"
             className={`rounded-lg px-3 py-2 text-sm font-medium ${
               pathname === "/admin/chat-logs" ? "bg-navy-800 text-white" : "bg-slate-100 text-navy-800"

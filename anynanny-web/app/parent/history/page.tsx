@@ -57,6 +57,8 @@ import {
   pickCancellationFields,
   withCancellationSelect
 } from "@/lib/bookings/cancellation-request";
+import { STUCK_SHIFT_REVIEW_LABEL } from "@/lib/bookings/stuck-shift-review";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 
 type NannyShiftHistoryItem = {
   id: string;
@@ -88,8 +90,11 @@ type DateFilterMode =
  */
 function parentHistoryStatusLabel(
   bookingStatus: string,
-  session: HistorySessionRow | null | undefined
+  session: HistorySessionRow | null | undefined,
+  requiresAdminReview?: boolean | null
 ): string {
+  if (requiresAdminReview === true) return STUCK_SHIFT_REVIEW_LABEL;
+
   const status = String(bookingStatus ?? "").trim().toLowerCase();
 
   if (status === "completed") return "שולם";
@@ -325,6 +330,7 @@ export default function ParentHistoryPage() {
                 end_time,
                 status,
                 hourly_rate_nis,
+                requires_admin_review,
                 profiles:sitter_id (
                   first_name
                 )
@@ -354,6 +360,44 @@ export default function ParentHistoryPage() {
           if (
             bookingsResult.error &&
             isCancellationColumnMissing(bookingsResult.error.message)
+          ) {
+            bookingsResult =
+              (await supabase
+                .from("bookings")
+                .select(`
+                id,
+                sitter_id,
+                booking_date,
+                start_time,
+                end_time,
+                status,
+                hourly_rate_nis,
+                requires_admin_review,
+                profiles:sitter_id (
+                  first_name
+                )
+              `)
+                .eq(
+                  "parent_id",
+                  resolvedParentId
+                )
+                .order(
+                  "booking_date",
+                  {
+                    ascending: false
+                  }
+                )) as {
+                data: unknown;
+                error: { message: string } | null;
+              };
+          }
+
+          if (
+            bookingsResult.error &&
+            isPostgrestMissingColumnError(
+              bookingsResult.error.message,
+              "requires_admin_review"
+            )
           ) {
             bookingsResult =
               (await supabase
@@ -636,14 +680,17 @@ export default function ParentHistoryPage() {
 
                   let statusLabel = parentHistoryStatusLabel(
                     String(booking.status ?? ""),
-                    session
+                    session,
+                    booking.requires_admin_review === true
                   );
 
                   const cancellation = pickCancellationFields(
                     booking as Record<string, unknown>
                   );
                   const cancellationLabel =
-                    String(booking.status ?? "").trim().toLowerCase() === "cancelled"
+                    booking.requires_admin_review === true
+                      ? null
+                      : String(booking.status ?? "").trim().toLowerCase() === "cancelled"
                       ? cancellationHistoryLabel(cancellation.cancellationRequestedRole)
                       : null;
 
