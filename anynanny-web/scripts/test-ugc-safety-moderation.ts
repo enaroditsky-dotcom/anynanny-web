@@ -152,6 +152,20 @@ const chatHeader = read("components/chat/parent-chat-room.tsx");
 assert.match(chatHeader, /UserSafetyActions/);
 assert.match(chatHeader, /partnerId/);
 
+const safetyActions = read("components/safety/user-safety-actions.tsx");
+assert.match(safetyActions, /ביטחון ודיווח/);
+assert.match(
+  safetyActions,
+  /אם נתקלת בהתנהגות לא הולמת או שיש לך חשש לגבי משתמש זה, ניתן לדווח עליו או לחסום אותו/
+);
+assert.match(safetyActions, /דיווח/);
+assert.match(safetyActions, /חסימה/);
+assert.match(safetyActions, /ReportUserSheet/);
+assert.match(safetyActions, /blockUser/);
+assert.match(safetyActions, /role="dialog"/);
+assert.doesNotMatch(safetyActions, /בטל חסימה/);
+assert.doesNotMatch(safetyActions, />חסום</);
+
 const parentSettings = read("app/parent/settings/page.tsx");
 const sitterSettings = read("app/sitter/settings/page.tsx");
 assert.match(parentSettings, /BlockedUsersSection/);
