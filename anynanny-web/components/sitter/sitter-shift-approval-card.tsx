@@ -27,6 +27,7 @@ import {
 } from "@/lib/bookings/sitter-pending-bookings";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { UserSafetyActions } from "@/components/safety/user-safety-actions";
 
 type Props = {
   sitterId: string;
@@ -364,6 +365,13 @@ export function SitterShiftApprovalCard({
           </button>
         </div>
 
+        {booking.parent_id ? (
+          <UserSafetyActions
+            targetUserId={booking.parent_id}
+            targetName={booking.partner_full_name}
+          />
+        ) : null}
+
         <p className="text-right text-sm font-semibold text-slate-700">
           {booking.schedule_label ||
             formatBookingSchedule(
@@ -637,6 +645,13 @@ export function SitterShiftApprovalCard({
                       </p>
                     </div>
                   )}
+
+                  {booking.parent_id ? (
+                    <UserSafetyActions
+                      targetUserId={booking.parent_id}
+                      targetName={parentInfo.first_name || booking.partner_full_name}
+                    />
+                  ) : null}
 
                   <button
                     type="button"

@@ -130,6 +130,15 @@ assert.equal(
   privacySafeBodyForKind("pending_booking_expired"),
   "הבייביסיטר לא הגיבה לפנייתך. הבקשה נסגרה."
 );
+assert.equal(privacySafeBodyForKind("shift_end_reminder"), "המשמרת מתוכננת להסתיים בעוד 30 דקות.");
+assert.equal(
+  privacySafeBodyForKind("shift_cancelled_no_start"),
+  "המשמרת בוטלה אוטומטית מכיוון שלא אושרה התחלת המשמרת."
+);
+assert.equal(pushHrefForKind("shift_end_reminder", "parent", { booking_id: "b1" }), "/parent/dashboard");
+assert.equal(pushHrefForKind("shift_end_reminder", "sitter", { booking_id: "b1" }), "/sitter/dashboard");
+assert.equal(pushHrefForKind("shift_cancelled_no_start", "parent", { booking_id: "b1" }), "/parent/dashboard");
+assert.equal(pushHrefForKind("shift_cancelled_no_start", "sitter", { booking_id: "b1" }), "/sitter/dashboard");
 assert.equal(pushHrefForKind("pending_no_response_reminder", "parent", { booking_id: "b1" }), "/parent/dashboard");
 assert.equal(pushHrefForKind("pending_booking_expired", "parent", { booking_id: "b1" }), "/parent/dashboard");
 assert.equal(pushHrefForKind("booking_withdrawn_by_parent", "sitter", { booking_id: "b1" }), "/sitter/dashboard");

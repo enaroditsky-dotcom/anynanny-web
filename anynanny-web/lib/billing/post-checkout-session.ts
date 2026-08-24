@@ -112,7 +112,6 @@ export function formatParentCheckoutError(error: string): string {
     normalized.includes("endpoint") ||
     normalized.includes("not found") ||
     normalized.includes("404") ||
-    normalized.includes("cardcom") ||
     normalized.includes("gateway") ||
     normalized.includes("hyp") ||
     normalized.includes("timeout") ||

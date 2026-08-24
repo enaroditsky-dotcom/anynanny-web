@@ -27,6 +27,8 @@ const KIND_BODY: Record<string, string> = {
   pending_no_response_reminder: "הבייביסיטר עדיין לא הגיבה לבקשתך. לסגור את הפנייה לבייביסיטרית?",
   booking_withdrawn_by_parent: "ההורה ביטל את בקשת המשמרת",
   pending_booking_expired: "הבייביסיטר לא הגיבה לפנייתך. הבקשה נסגרה.",
+  shift_end_reminder: "המשמרת מתוכננת להסתיים בעוד 30 דקות.",
+  shift_cancelled_no_start: "המשמרת בוטלה אוטומטית מכיוון שלא אושרה התחלת המשמרת.",
   confirm_start_required: "נדרש אישור הגעה למשמרת",
   confirm_end_required: "נדרש אישור סיום משמרת",
   rating_required: "נדרש דירוג למשמרת"

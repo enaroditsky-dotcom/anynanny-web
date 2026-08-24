@@ -2,6 +2,7 @@ import { DeleteAccountSection } from "@/components/account/delete-account-sectio
 import { LogoutButton } from "@/components/account/logout-button";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section";
+import { BlockedUsersSection } from "@/components/safety/blocked-users-section";
 import { FileText, Shield, ExternalLink } from "lucide-react";
 
 export default function ParentSettingsPage() {
@@ -22,6 +23,8 @@ export default function ParentSettingsPage() {
       <div className="mt-6">
         <NotificationSettingsSection />
       </div>
+
+      <BlockedUsersSection />
 
       {/* מידע משפטי ותקנון - דרישת חנויות Apple ו-Google */}
       <div className="mt-6 rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft space-y-3 text-right">

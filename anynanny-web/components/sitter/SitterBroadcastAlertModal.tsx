@@ -7,6 +7,8 @@ import {
   subscribePostgresChanges
 } from "@/lib/supabase/subscribe-postgres-changes";
 import { areSoundAlertsEnabled } from "@/lib/settings/notification-preferences";
+import { ACCOUNT_SUSPENDED_MESSAGE, BLOCKED_PAIR_MESSAGE } from "@/lib/safety/constants";
+import { assertMarketplacePairAllowed, fetchIsAccountSuspended } from "@/lib/safety/enforcement";
 import { Zap } from "lucide-react";
 
 interface BroadcastAlertModalProps {
@@ -722,6 +724,30 @@ export function SitterBroadcastAlertModal({
 
           setLoading(false);
           return;
+        }
+
+        if (await fetchIsAccountSuspended(supabase, user.id)) {
+          alert(ACCOUNT_SUSPENDED_MESSAGE);
+          setLoading(false);
+          return;
+        }
+
+        const { data: alertRow } = await supabase
+          .from("broadcast_alerts")
+          .select("parent_id")
+          .eq("id", alertId)
+          .maybeSingle();
+        const parentId =
+          alertRow && typeof alertRow === "object" && "parent_id" in alertRow
+            ? String((alertRow as { parent_id?: string }).parent_id ?? "")
+            : "";
+        if (parentId) {
+          const pairCheck = await assertMarketplacePairAllowed(supabase, user.id, parentId);
+          if (!pairCheck.ok) {
+            alert(pairCheck.error === ACCOUNT_SUSPENDED_MESSAGE ? ACCOUNT_SUSPENDED_MESSAGE : BLOCKED_PAIR_MESSAGE);
+            setLoading(false);
+            return;
+          }
         }
 
         const {

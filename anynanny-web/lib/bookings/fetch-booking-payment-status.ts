@@ -6,7 +6,7 @@ export type BookingPaymentStatus = "unknown" | "unpaid" | "paid";
 
 /**
  * Payment columns (`payment_status`, `paid_at`) are optional — production may lack them.
- * Uses only `id` (+ optional Stripe columns when present) so client never 400s.
+ * Uses only `id` so client never 400s on optional payment columns.
  */
 export async function fetchBookingPaymentStatus(
   supabase: SupabaseClient,

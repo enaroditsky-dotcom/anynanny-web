@@ -1,4 +1,4 @@
-import { ADMIN_AUTH_COOKIE, isValidAdminPassword } from "@/lib/admin/auth";
+import { adminAuthCookieOptions, isValidAdminPassword } from "@/lib/admin/auth";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -10,15 +10,7 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({ ok: true });
-  response.cookies.set({
-    name: ADMIN_AUTH_COOKIE,
-    value: "1",
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    path: "/",
-    maxAge: 60 * 60 * 8
-  });
+  response.cookies.set(adminAuthCookieOptions(60 * 60 * 8));
 
   return response;
 }

@@ -37,10 +37,32 @@ function read(relativePath: string): string {
   return readFileSync(resolve(root, relativePath), "utf8");
 }
 
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function localYmd(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+/**
+ * Future local calendar day so `validateShiftWindow`'s "not in the past" check
+ * stays valid regardless of when the suite runs. Overlap math below uses a
+ * separate fixed timeline and does not depend on this date.
+ */
+function futureShiftDate(daysAhead = 14): string {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + daysAhead);
+  return localYmd(date);
+}
+
+const SHIFT_DATE = futureShiftDate();
+
 const searchFilters = normalizeParentSearchFilters({
   ...defaultParentSearchFilters(),
-  searchDate: "2026-08-19",
-  searchEndDate: "2026-08-19",
+  searchDate: SHIFT_DATE,
+  searchEndDate: SHIFT_DATE,
   searchStartHour: "13",
   searchStartMinute: "00",
   searchEndHour: "16",
@@ -53,8 +75,8 @@ assert.equal(hasExplicitRequestedShiftFields(searchFilters), true);
 
 const window = requestedShiftFromFilters(searchFilters);
 assert.ok(window);
-assert.equal(window.startDate, "2026-08-19");
-assert.equal(window.endDate, "2026-08-19");
+assert.equal(window.startDate, SHIFT_DATE);
+assert.equal(window.endDate, SHIFT_DATE);
 assert.equal(window.startIso, buildSearchStartTimeIso(searchFilters));
 assert.equal(window.endIso, buildSearchEndTimeIso(searchFilters));
 
@@ -111,13 +133,20 @@ assert.deepEqual([...OVERLAP_BLOCKING_BOOKING_STATUSES], ["approved", "sitter_st
 assert.deepEqual([...OVERLAP_BLOCKING_SESSION_STATUSES], ["confirmed", "in_progress", "active"]);
 
 assert.equal(formatRequestedShiftTimeRange(window.startIso, window.endIso), "13:00–16:00");
-assert.match(formatRequestedShiftDateLabel(window.startDate), /19/);
-assert.match(formatRequestedShiftDateLabel(window.startDate), /אוגוסט/);
-assert.match(formatRequestedShiftDateLabel(window.startDate), /2026/);
+const shiftDateLabel = formatRequestedShiftDateLabel(window.startDate);
+const expectedShiftDateLabel = new Date(`${SHIFT_DATE}T12:00:00`).toLocaleDateString("he-IL", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric"
+});
+assert.equal(shiftDateLabel, expectedShiftDateLabel);
+assert.match(shiftDateLabel, new RegExp(String(Number(SHIFT_DATE.slice(8, 10)))));
+assert.match(shiftDateLabel, new RegExp(SHIFT_DATE.slice(0, 4)));
 
 const params = parentSearchFiltersToUrlSearchParams(searchFilters);
-assert.equal(params.get("date"), "2026-08-19");
-assert.equal(params.get("endDate"), "2026-08-19");
+assert.equal(params.get("date"), SHIFT_DATE);
+assert.equal(params.get("endDate"), SHIFT_DATE);
 assert.equal(params.get("startTime"), "13:00");
 assert.equal(params.get("endTime"), "16:00");
 assert.equal(params.get("city"), "חיפה");
@@ -129,7 +158,7 @@ assert.equal(roundTrip.startIso, window.startIso);
 assert.equal(roundTrip.endIso, window.endIso);
 
 const parsedFilters = parseFiltersFromSearchParams(params);
-assert.equal(parsedFilters.searchDate, "2026-08-19");
+assert.equal(parsedFilters.searchDate, SHIFT_DATE);
 assert.equal(parsedFilters.searchStartHour, "13");
 assert.equal(parsedFilters.searchStartMinute, "00");
 assert.equal(parsedFilters.searchEndHour, "16");
@@ -140,7 +169,7 @@ assert.equal(parsedFilters.selectedCity, "חיפה");
 assert.equal(
   requestedShiftFromFilters(
     normalizeParentSearchFilters({
-      searchDate: "2026-08-19"
+      searchDate: SHIFT_DATE
     })
   ),
   null
@@ -184,8 +213,8 @@ if (!missingCity.ok) {
 const missingTimes = validateParentSearchCriteria(
   normalizeParentSearchFilters({
     selectedCity: "חיפה",
-    searchDate: "2026-08-19",
-    searchEndDate: "2026-08-19"
+    searchDate: SHIFT_DATE,
+    searchEndDate: SHIFT_DATE
   })
 );
 assert.equal(missingTimes.ok, false);
@@ -273,7 +302,7 @@ assert.match(modal, /bookingSource:\s*"direct"/);
 
 const searchImpl = read("lib/sitter/parent-sitter-search.ts");
 assert.match(searchImpl, /hasRequestedTimeWindow/);
-assert.match(searchImpl, /if \(!hasTimeWindow && shouldFallbackListPublicSittersRpc/);
+assert.match(searchImpl, /isSerialTargetedSearch\(filters\) && !hasRequestedTimeWindow\(filters\)/);
 
 const migration = read("supabase/migrations/20260816210000_search_filter_sitter_window_availability.sql");
 assert.match(migration, /sitter_window_is_available/);

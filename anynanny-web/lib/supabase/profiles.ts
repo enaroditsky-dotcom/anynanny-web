@@ -36,6 +36,9 @@ export type ProfileRow = {
   push_enabled?: boolean | null;
   /** In-app sounds/haptics. Does not control OS notification sound. */
   sound_enabled?: boolean | null;
+  /** Operator suspension. Null means the account is active. */
+  suspended_at?: string | null;
+  suspended_reason?: string | null;
 };
 
 export function isProfileRole(v: string | null | undefined): v is ProfileRole {

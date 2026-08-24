@@ -3,6 +3,7 @@ import type { BookingPaymentStatus, BookingStatus } from "@/lib/bookings/constan
 import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/booking-status-normalize";
 import { isPostgrestMissingColumnError, readSupabaseErrorMessage } from "@/lib/supabase/postgrest-schema";
 import type { CanonicalNotificationKind } from "@/lib/notifications/kinds";
+import { NO_START_CONFIRMATION_REASON } from "@/lib/bookings/no-start-cancellation";
 
 async function markCancellationNotificationRead(
   supabase: SupabaseClient,
@@ -50,6 +51,7 @@ export const CANCELLATION_COPY = {
   contact: "צור קשר",
   cancelledByParent: "משמרת בוטלה לבקשת ההורה",
   cancelledBySitter: "משמרת בוטלה לבקשת הנני",
+  cancelledNoStart: "המשמרת בוטלה אוטומטית מכיוון שלא אושרה התחלת המשמרת.",
   messageHistoryLabel: "הודעת הביטול",
   roleParent: "ההורה",
   roleSitter: "הנני",
@@ -275,6 +277,16 @@ export function cancellationHistoryLabel(
   if (role === "parent") return CANCELLATION_COPY.cancelledByParent;
   if (role === "sitter") return CANCELLATION_COPY.cancelledBySitter;
   return null;
+}
+
+export { NO_START_CONFIRMATION_REASON };
+
+/** Maps stored cancellation_message codes to Hebrew for history UI. */
+export function formatStoredCancellationMessage(message: string | null | undefined): string | null {
+  const trimmed = String(message ?? "").trim();
+  if (!trimmed) return null;
+  if (trimmed === NO_START_CONFIRMATION_REASON) return CANCELLATION_COPY.cancelledNoStart;
+  return trimmed;
 }
 
 function pad2(n: number): string {

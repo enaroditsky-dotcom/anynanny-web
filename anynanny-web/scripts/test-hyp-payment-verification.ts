@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeShiftChargeFromTrustedInputs } from "../lib/billing/compute-shift-charge";
@@ -268,11 +268,15 @@ assert.match(webhookSrc, /hasSufficientHypVerifyPayload/);
 assert.match(webhookSrc, /completeVerifiedHypPayment/);
 assert.doesNotMatch(webhookSrc, /finalizeHypPaymentSuccess\(supabase, \{\s*bookingId,/);
 
-// TEST 17 Cardcom UUID does not mark paid
-const cardcomSrc = read("lib/cardcom/handle-payment-webhook.ts");
-assert.doesNotMatch(cardcomSrc, /payment_status:\s*"paid"/);
-assert.doesNotMatch(cardcomSrc, /markBookingPaid/);
-assert.match(cardcomSrc, /does not mark bookings paid/);
+// TEST 17 Cardcom is not a current payment path
+assert.equal(existsSync(resolve(root, "lib/cardcom/handle-payment-webhook.ts")), false);
+assert.equal(existsSync(resolve(root, "app/api/cardcom/checkout/route.ts")), false);
+assert.equal(existsSync(resolve(root, "app/api/webhooks/cardcom/route.ts")), false);
+assert.equal(existsSync(resolve(root, "app/api/billing/israel-webhook/route.ts")), false);
+const israelDepositSrc = read("app/api/billing/israel-deposit/route.ts");
+assert.doesNotMatch(israelDepositSrc, /cardcom/i);
+assert.doesNotMatch(israelDepositSrc, /CARDCOM_/);
+assert.match(israelDepositSrc, /gateway:\s*"hyp"/);
 
 // TEST 18 only this session
 const finalizeSrc = read("lib/billing/finalize-hyp-payment.ts");

@@ -24,6 +24,7 @@ import {
   CANCELLATION_COPY,
   cancellationHistoryLabel,
   formatCancellationDateTime,
+  formatStoredCancellationMessage,
   isCancellationColumnMissing,
   pickCancellationFields,
   withCancellationSelect
@@ -1412,6 +1413,7 @@ export default function SitterShiftsPage() {
     (shift: CalendarShift) => (
       <SitterParentProfilePreview
         bookingId={shift.id}
+        parentUserId={shift.partnerId}
         fallbackParentName={shift.partnerName}
         label={CANCELLATION_COPY.parentProfile}
         className="px-0 py-0 text-xs font-semibold text-navy-header underline hover:bg-transparent"
@@ -1686,10 +1688,10 @@ export default function SitterShiftsPage() {
                         </div>
                       </div>
 
-                      {shift.status === "cancelled" && shift.cancellation_message ? (
+                      {shift.status === "cancelled" && formatStoredCancellationMessage(shift.cancellation_message) ? (
                         <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-right text-xs leading-relaxed text-rose-900">
                           <span className="font-semibold">{CANCELLATION_COPY.messageHistoryLabel}: </span>
-                          {shift.cancellation_message}
+                          {formatStoredCancellationMessage(shift.cancellation_message)}
                         </p>
                       ) : null}
                       {shift.status === "cancelled" && cancelledAtLabel ? (
@@ -1818,6 +1820,7 @@ export default function SitterShiftsPage() {
                       <div className="space-y-2 pt-1">
                         <SitterParentProfilePreview
                           bookingId={shift.id}
+                          parentUserId={shift.parent_id}
                           fallbackParentName={shift.parent_name}
                           label="צפייה בפרופיל ההורה"
                           className="w-full justify-center rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm"

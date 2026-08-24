@@ -414,6 +414,7 @@ export async function GET(
 
     return NextResponse.json({
       parent: {
+        id: booking.parent_id,
         first_name:
           String(
             publicParentProfile

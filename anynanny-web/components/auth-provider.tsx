@@ -8,6 +8,7 @@ import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { readSupabaseErrorMessage } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { sanitizeGreetingDisplayName } from "@/lib/user/greeting-display-name";
 
 export type DashboardViewRole = "parent" | "sitter";
@@ -19,6 +20,7 @@ export type AuthUiState = {
   displayName: string | null;
   effectiveRole: ProfileRole | null;
   currentRole: DashboardViewRole;
+  suspendedAt: string | null;
   refresh: () => Promise<void>;
 };
 
@@ -28,27 +30,38 @@ async function loadAuthState(): Promise<{
   user: User | null;
   displayName: string | null;
   effectiveRole: ProfileRole | null;
+  suspendedAt: string | null;
 }> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
-    return { user: null, displayName: null, effectiveRole: null };
+    return { user: null, displayName: null, effectiveRole: null, suspendedAt: null };
   }
 
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { user: null, displayName: null, effectiveRole: null };
+    return { user: null, displayName: null, effectiveRole: null, suspendedAt: null };
   }
 
   const metaFirst = typeof user.user_metadata?.first_name === "string" ? user.user_metadata.first_name.trim() : "";
   const metaLast = typeof user.user_metadata?.last_name === "string" ? user.user_metadata.last_name.trim() : "";
   const metaName = `${metaFirst} ${metaLast}`.trim() || null;
 
-  const { data: profile } = await supabase
+  let profileQuery = await supabase
     .from(PROFILES_TABLE)
-    .select("role, first_name, last_name")
+    .select("role, first_name, last_name, suspended_at")
     .eq("id", user.id)
     .maybeSingle();
+
+  if (profileQuery.error && isPostgrestMissingColumnError(profileQuery.error.message, "suspended_at")) {
+    profileQuery = await supabase
+      .from(PROFILES_TABLE)
+      .select("role, first_name, last_name")
+      .eq("id", user.id)
+      .maybeSingle();
+  }
+
+  const { data: profile } = profileQuery;
 
   const effectiveRole = await resolveRoleForUser(supabase, user);
   const displayName = sanitizeGreetingDisplayName(
@@ -56,7 +69,15 @@ async function loadAuthState(): Promise<{
     user.email
   ) ?? sanitizeGreetingDisplayName(metaName, user.email);
 
-  return { user, displayName, effectiveRole };
+  return {
+    user,
+    displayName,
+    effectiveRole,
+    suspendedAt:
+      profile && typeof profile === "object" && "suspended_at" in profile
+        ? String((profile as { suspended_at?: string | null }).suspended_at ?? "") || null
+        : null
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -65,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [effectiveRole, setEffectiveRole] = useState<ProfileRole | null>(null);
+  const [suspendedAt, setSuspendedAt] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -72,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(next.user);
       setDisplayName(next.displayName);
       setEffectiveRole(next.effectiveRole);
+      setSuspendedAt(next.suspendedAt);
     } catch (error) {
       console.warn("[auth] refresh failed:", readSupabaseErrorMessage(error));
     }
@@ -98,10 +121,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       displayName,
       effectiveRole,
+      suspendedAt,
       currentRole: (pathname.startsWith("/sitter") || pathname.startsWith("/session")) ? "sitter" : "parent",
       refresh
     }),
-    [isLoading, user, displayName, effectiveRole, pathname, refresh]
+    [isLoading, user, displayName, effectiveRole, suspendedAt, pathname, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

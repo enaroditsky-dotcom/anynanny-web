@@ -25,12 +25,12 @@ export function AdminTopBar() {
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 p-4">
         <nav className="flex items-center gap-2">
           <Link
-            href="/admin/review"
+            href="/admin/reports"
             className={`rounded-lg px-3 py-2 text-sm font-medium ${
-              pathname === "/admin/review" ? "bg-navy-800 text-white" : "bg-slate-100 text-navy-800"
+              pathname === "/admin/reports" ? "bg-navy-800 text-white" : "bg-slate-100 text-navy-800"
             }`}
           >
-            Review
+            Reports
           </Link>
           <Link
             href="/admin/chat-logs"
