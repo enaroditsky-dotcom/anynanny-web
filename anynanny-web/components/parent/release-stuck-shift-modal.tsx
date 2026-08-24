@@ -70,12 +70,9 @@ export function ReleaseStuckShiftModal({
         <p className="mt-3 text-sm leading-relaxed text-slate-600">
           {warning ?? RELEASE_STUCK_SHIFT_COPY.warning}
         </p>
-        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-          {RELEASE_STUCK_SHIFT_COPY.irreversible}
-        </p>
 
         <fieldset className="mt-4 space-y-2" disabled={busy}>
-          <legend className="mb-2 text-sm font-semibold text-navy-header">סיבה</legend>
+          <legend className="mb-2 text-sm font-semibold text-navy-header">בחרו סיבה</legend>
           {RELEASE_STUCK_SHIFT_REASONS.map((reason) => {
             const inputId = `${titleId}-${reason.id}`;
             return (
