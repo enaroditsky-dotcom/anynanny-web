@@ -1,11 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { resetStuckShiftsForParent } from "@/lib/bookings/parent-reset-stuck-shifts";
-import { resetStuckShiftsForSitter } from "@/lib/bookings/sitter-reset-stuck-shifts";
-import { clearHypPendingCheckout } from "@/lib/billing/hyp/pending-checkout";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
-
+/**
+ * Intentionally inert.
+ *
+ * This used to call parent/sitter-wide DELETE via resetStuckShiftsFor*.
+ * Production stuck-shift recovery lives on the Parent and Sitter dashboards
+ * (displayed booking/session → requires_admin_review). This component cannot
+ * identify a single displayed booking+session, so it must not reset broadly
+ * and must not render a user-facing action.
+ *
+ * Keep this file on disk. Do not wire it back into production UI.
+ */
 type Props = {
   className?: string;
   variant?: "button" | "link";
@@ -13,58 +18,6 @@ type Props = {
   onSuccess?: () => void | Promise<void>;
 };
 
-export function StuckShiftDevResetButton({
-  className = "",
-  variant = "button",
-  role = "sitter",
-  onSuccess
-}: Props) {
-  const [busy, setBusy] = useState(false);
-
-  const handleReset = useCallback(async () => {
-    if (busy) return;
-    if (!window.confirm("לאפס את המשמרת?")) return;
-
-    setBusy(true);
-
-    try {
-      const auth = await resolveBrowserAuth();
-
-      if (auth.ok) {
-        if (role === "parent") {
-          await resetStuckShiftsForParent(auth.supabase, auth.userId);
-          clearHypPendingCheckout();
-        } else {
-          await resetStuckShiftsForSitter(auth.supabase, auth.userId);
-        }
-      }
-
-      await onSuccess?.();
-
-      window.location.assign(
-        role === "parent" ? "/parent/dashboard" : "/sitter/dashboard"
-      );
-    } catch (err) {
-      console.warn("[StuckShiftDevResetButton] reset failed", err);
-
-      window.location.assign(
-        role === "parent" ? "/parent/dashboard" : "/sitter/dashboard"
-      );
-    }
-  }, [busy, role, onSuccess]);
-
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => void handleReset()}
-      className={`${className} ${
-        variant === "link"
-          ? "text-xs text-slate-500 underline"
-          : "w-full rounded-xl border border-dashed border-amber-400 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-950"
-      }`}
-    >
-      {busy ? "מאפס…" : "שחרור משמרת תקועה"}
-    </button>
-  );
+export function StuckShiftDevResetButton(_props: Props) {
+  return null;
 }

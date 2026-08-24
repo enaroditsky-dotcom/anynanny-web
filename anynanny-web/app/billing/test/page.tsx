@@ -68,12 +68,17 @@ function BillingTestPageInner() {
   const billingState = useMemo(() => getBillingState(debugRow), [debugRow]);
 
   const resetShakes = async () => {
+    // Intentionally inert. Clearing Double-Shake timestamps is not allowed
+    // from this deployed test route; evidence must be preserved.
+    return;
+
     if (!sessionId.trim() || resetBusy) return;
     const auth = await resolveBrowserAuth();
     if (!auth.ok) return;
 
     setResetBusy(true);
-    await auth.supabase
+    const supabase = (auth as Extract<typeof auth, { ok: true }>).supabase;
+    await supabase
       .from(SESSIONS_TABLE)
       .update({
         sitter_start_shake: null,
@@ -137,14 +142,7 @@ function BillingTestPageInner() {
           </button>
         </div>
 
-        <button
-          type="button"
-          disabled={resetBusy || !sessionId.trim()}
-          onClick={() => void resetShakes()}
-          className="w-full rounded-xl border border-rose-300/90 bg-rose-50/50 px-4 py-2.5 text-sm font-semibold text-rose-800 disabled:opacity-50"
-        >
-          {resetBusy ? "מאפס…" : "איפוס כל ה-shakes (לבדיקה)"}
-        </button>
+        {/* Shake-reset is a test/debug helper and is not wired in production-facing UI. */}
       </section>
 
       {debugRow ? (

@@ -50,6 +50,10 @@ export type BookingRow = {
 
   requires_admin_review?: boolean;
   admin_notes?: string | null;
+  stuck_release_reason?: string | null;
+  stuck_release_detail?: string | null;
+  stuck_released_at?: string | null;
+  stuck_released_by?: string | null;
 
   payment_status?: BookingPaymentStatus;
   paid_at?: string | null;

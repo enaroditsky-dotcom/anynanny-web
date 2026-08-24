@@ -28,6 +28,7 @@ import { CancellationAttentionDot } from "@/components/bookings/cancellation-att
 import { CancellationAttentionModals } from "@/components/bookings/cancellation-attention-modals";
 import { PendingNoResponseReminderModal } from "@/components/bookings/pending-no-response-reminder-modal";
 import { PendingWithdrawButton } from "@/components/bookings/pending-withdraw-button";
+import { ReleaseStuckShiftModal } from "@/components/parent/release-stuck-shift-modal";
 import {
   acknowledgeApprovedBookingNotification,
   isApprovedScheduleNotificationCandidate,
@@ -50,7 +51,18 @@ import {
   type NewBookingEventDetail
 } from "@/lib/bookings/new-booking-reset";
 import { parentConfirmEndBooking } from "@/lib/bookings/parent-confirm-end-booking";
-import { resetStuckShiftsForParent } from "@/lib/bookings/parent-reset-stuck-shifts";
+import {
+  bookingRequiresAdminReview,
+  hasConfirmedDoubleShakeStart,
+  STUCK_SHIFT_REVIEW_LABEL,
+  STUCK_SHIFT_REVIEW_SUPPORT
+} from "@/lib/bookings/stuck-shift-review";
+import {
+  RELEASE_STUCK_SHIFT_COPY,
+  markDisplayedStuckShiftForReview,
+  resolveDisplayedStuckShiftTargets,
+  type ReleaseStuckShiftReasonId
+} from "@/lib/bookings/release-displayed-stuck-shift";
 import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-method";
 import { parseHypReturnParams } from "@/lib/billing/hyp/parse-return-params";
 import {
@@ -103,11 +115,11 @@ import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, U
 import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 const BOOKING_LIVE_SELECT =
-  "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, hourly_rate_nis, parent_notified_at, created_at, updated_at";
+  "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, hourly_rate_nis, parent_notified_at, requires_admin_review, created_at, updated_at";
 
 /** Fallback when `parent_notified_at` is not yet migrated. */
 const BOOKING_LIVE_SELECT_LEGACY =
-  "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, hourly_rate_nis, created_at, updated_at";
+  "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, hourly_rate_nis, requires_admin_review, created_at, updated_at";
 
 const LIVE_BOOKING_FETCH_STATUSES = [
   "pending",
@@ -236,7 +248,7 @@ function pickParentDashboardBooking(
   }
 
   const dueLive = rows.filter(
-    (b) => isBookingDueForParentActiveShiftUi(b)
+    (b) => isBookingDueForParentActiveShiftUi(b) && !bookingRequiresAdminReview(b)
   );
 
   for (const status of LIVE_BOOKING_STATUS_PRIORITY) {
@@ -254,6 +266,7 @@ function pickParentDashboardBooking(
 
     if (
       preferred &&
+      !bookingRequiresAdminReview(preferred) &&
       (
         isBookingDueForParentActiveShiftUi(preferred) ||
         isUnpaidCompletedBooking(preferred) ||
@@ -294,7 +307,9 @@ function pickParentDashboardBooking(
   }
 
   const fallbackRow = rows.find(
-    (b) => !isRejectedWithNoteBooking(b) || pendingRejectedNotification(b)
+    (b) =>
+      !bookingRequiresAdminReview(b) &&
+      (!isRejectedWithNoteBooking(b) || pendingRejectedNotification(b))
   );
 
   return dueLive[0] ?? fallbackRow ?? null;
@@ -572,6 +587,9 @@ export function ParentDashboardClient({
   }, []);
 
   const [releasingStuckShift, setReleasingStuckShift] = useState(false);
+  const [releaseStuckModalOpen, setReleaseStuckModalOpen] = useState(false);
+  const [releaseStuckModalError, setReleaseStuckModalError] = useState<string | null>(null);
+  const [stuckShiftReviewNotice, setStuckShiftReviewNotice] = useState(false);
 
   const refreshLiveShiftState = useCallback(async (uid: string) => {
     if (refreshInFlightRef.current) {
@@ -670,6 +688,7 @@ export function ParentDashboardClient({
           dismissedApprovedIds,
           stickyApprovedNotificationId: stickyApprovedNotificationIdRef.current
         });
+        setStuckShiftReviewNotice(bookingRows.some((row) => bookingRequiresAdminReview(row)));
         const bookingSitterId =
           booking?.sitter_id != null ? String(booking.sitter_id) : null;
         const bookingStatus = normalizeStatus(booking?.status);
@@ -993,33 +1012,80 @@ export function ParentDashboardClient({
     }
   }, [clearToIdleDashboard, clearSettlementLock, lockSettlement]);
 
-  const handleReleaseStuckShift = useCallback(async () => {
+  const handleOpenReleaseStuckShiftModal = useCallback(() => {
     if (releasingStuckShift) return;
-    if (!window.confirm("לשחרר משמרת תקועה ולנקות את מצב ההמתנה?")) return;
+    setReleaseStuckModalError(null);
+    setReleaseStuckModalOpen(true);
+  }, [releasingStuckShift]);
+
+  const handleCloseReleaseStuckShiftModal = useCallback(() => {
+    if (releasingStuckShift) return;
+    setReleaseStuckModalOpen(false);
+    setReleaseStuckModalError(null);
+  }, [releasingStuckShift]);
+
+  const handleConfirmReleaseStuckShift = useCallback(async (
+    reasonId: ReleaseStuckShiftReasonId,
+    detail: string
+  ) => {
+    if (releasingStuckShift) return;
+
+    const targets = resolveDisplayedStuckShiftTargets(activeBooking, activeSession);
+    if ("error" in targets) {
+      setReleaseStuckModalError(targets.error);
+      setShiftError(targets.error);
+      return;
+    }
 
     setReleasingStuckShift(true);
+    setReleaseStuckModalError(null);
     setShiftError(null);
-    clearToIdleDashboard();
-    clearHypPendingCheckout();
-    clearPaymentError();
 
     try {
       const auth = await resolveBrowserAuth();
-      if (auth.ok) {
-        await resetStuckShiftsForParent(auth.supabase, auth.userId);
-        await refreshLiveShiftState(auth.userId).catch(() => undefined);
-        clearToIdleDashboard();
+      if (!auth.ok) {
+        const message = RELEASE_STUCK_SHIFT_COPY.genericFailure;
+        setReleaseStuckModalError(message);
+        setShiftError(message);
+        return;
       }
+
+      const result = await markDisplayedStuckShiftForReview(auth.supabase, {
+        actorId: auth.userId,
+        actorRole: "parent",
+        parentId: auth.userId,
+        bookingId: targets.bookingId,
+        sessionId: targets.sessionId,
+        reasonId,
+        detail
+      });
+
+      if (!result.ok) {
+        setReleaseStuckModalError(result.error);
+        setShiftError(result.error);
+        await refreshLiveShiftState(auth.userId).catch(() => undefined);
+        return;
+      }
+
+      setStuckShiftReviewNotice(true);
+      await refreshLiveShiftState(auth.userId).catch(() => undefined);
+      setReleaseStuckModalOpen(false);
     } catch (err) {
       console.warn("[parent-dashboard] release stuck shift", err);
-      clearToIdleDashboard();
+      const message = RELEASE_STUCK_SHIFT_COPY.genericFailure;
+      setReleaseStuckModalError(message);
+      setShiftError(message);
+      if (parentId) {
+        await refreshLiveShiftState(parentId).catch(() => undefined);
+      }
     } finally {
       setReleasingStuckShift(false);
     }
   }, [
     releasingStuckShift,
-    clearToIdleDashboard,
-    clearPaymentError,
+    activeBooking,
+    activeSession,
+    parentId,
     refreshLiveShiftState
   ]);
 
@@ -1695,15 +1761,12 @@ export function ParentDashboardClient({
    * leftovers or a rejected Broadcast request) — those are not stuck shifts.
    */
   const showStuckShiftReleaseButton =
-    showLiveTimer ||
-    awaitingEndApproval ||
-    inSettlement ||
-    (dueForActiveShiftUi &&
-      Boolean(activeBooking) &&
-      (bookingStatus === "approved" ||
-        bookingStatus === "sitter_started" ||
-        bookingStatus === "parent_started" ||
-        bookingStatus === "sitter_ended"));
+    Boolean(activeBooking?.id) &&
+    !inSettlement &&
+    !bookingRequiresAdminReview(activeBooking) &&
+    (hasConfirmedDoubleShakeStart(activeSession) ||
+      showLiveTimer ||
+      awaitingEndApproval);
   const showScheduledCard = isScheduledConfirmed || isScheduledPending;
   const showShiftCard = showLiveShiftCard || showScheduledCard;
   const statusCardKey = activeBooking?.id
@@ -1993,6 +2056,16 @@ export function ParentDashboardClient({
               </div>
             ) : null}
 
+            {stuckShiftReviewNotice ? (
+              <div
+                role="status"
+                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-right text-xs text-amber-950"
+              >
+                <p className="font-bold">{STUCK_SHIFT_REVIEW_LABEL}</p>
+                <p className="mt-1 leading-snug">{STUCK_SHIFT_REVIEW_SUPPORT}</p>
+              </div>
+            ) : null}
+
         </div>
 
             {!shouldHideDashboardActions ? (
@@ -2253,7 +2326,7 @@ export function ParentDashboardClient({
                   <button
                     type="button"
                     disabled={releasingStuckShift}
-                    onClick={() => void handleReleaseStuckShift()}
+                    onClick={handleOpenReleaseStuckShiftModal}
                     className="w-full rounded-xl border border-amber-300 bg-amber-50/50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 shadow-2xs disabled:opacity-60"
                   >
                     {releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}
@@ -2275,6 +2348,13 @@ export function ParentDashboardClient({
             </>
           ) : null}
       </div>
+      <ReleaseStuckShiftModal
+        open={releaseStuckModalOpen}
+        busy={releasingStuckShift}
+        error={releaseStuckModalError}
+        onClose={handleCloseReleaseStuckShiftModal}
+        onConfirm={(reasonId, detail) => void handleConfirmReleaseStuckShift(reasonId, detail)}
+      />
       <CancellationAttentionModals attention={cancellationAttention} role="parent" />
       <PendingNoResponseReminderModal
         parentId={parentId}

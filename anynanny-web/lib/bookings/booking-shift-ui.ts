@@ -1,4 +1,5 @@
 import type { BookingRow, BookingStatus } from "@/lib/bookings/constants";
+import { bookingRequiresAdminReview } from "@/lib/bookings/stuck-shift-review";
 import { isBookingDateToday } from "@/lib/bookings/booking-date-utils";
 import { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
 import {
@@ -84,8 +85,9 @@ export function isNowWithinShiftActivationWindow(
  * is gated separately via {@link isNowWithinShiftActivationWindow}.
  */
 export function isBookingEligibleForLiveShiftUi(
-  booking: Pick<BookingRow, "status">
+  booking: Pick<BookingRow, "status"> & { requires_admin_review?: boolean | null }
 ): boolean {
+  if (bookingRequiresAdminReview(booking)) return false;
   if (isBookingTerminalStatus(booking.status)) return false;
 
   if (booking.status === "pending") {
@@ -115,9 +117,10 @@ type ParentShiftScheduleFields = Pick<
  * Future/long-term approved bookings must NOT open arrival/timer UI.
  */
 export function isBookingDueForParentActiveShiftUi(
-  booking: ParentShiftScheduleFields,
+  booking: ParentShiftScheduleFields & { requires_admin_review?: boolean | null },
   nowMs = Date.now()
 ): boolean {
+  if (bookingRequiresAdminReview(booking)) return false;
   const status = normalizeBookingStatus(booking.status);
   if (!status || isBookingTerminalStatus(status)) return false;
 
@@ -160,11 +163,12 @@ export function isFutureConfirmedScheduleBooking(
   );
 }
 
-/** True when an early finish or cancellation should block session timer UI for today. */
+/** True when an early finish, cancellation, or operator review should block session timer UI. */
 export function doesBookingBlockSessionShiftUi(
-  booking: Pick<BookingRow, "status"> | null | undefined
+  booking: (Pick<BookingRow, "status"> & { requires_admin_review?: boolean | null }) | null | undefined
 ): boolean {
   if (!booking) return false;
+  if (bookingRequiresAdminReview(booking)) return true;
   return isBookingTerminalStatus(booking.status);
 }
 

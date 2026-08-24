@@ -7,7 +7,7 @@ import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-car
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name";
 import { SitterMandatoryRatingPanel } from "@/components/session/sitter-mandatory-rating-panel";
-import { resetStuckShiftsForSitter } from "@/lib/bookings/sitter-reset-stuck-shifts";
+import { ReleaseStuckShiftModal } from "@/components/parent/release-stuck-shift-modal";
 import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
 import { SitterBroadcastAlertModal } from "@/components/sitter/SitterBroadcastAlertModal"; 
@@ -35,7 +35,15 @@ import {
 import { doesBookingBlockSessionShiftUi, SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-ui";
 import { isSitterBookingAwaitingApprovalStatus, isSitterShiftCircleStatus } from "@/lib/bookings/booking-realtime-handler";
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
-import { fetchTodayBookingShiftGate, fetchTodaysPendingBookingRequest, type TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
+import { fetchTodayBookingShiftGate, fetchTodaysPendingBookingRequest, fetchStuckShiftReviewLinks, type TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
+import { bookingRequiresAdminReview, hasConfirmedDoubleShakeStart, sessionLinkedToReviewBooking, STUCK_SHIFT_REVIEW_LABEL, STUCK_SHIFT_REVIEW_SUPPORT } from "@/lib/bookings/stuck-shift-review";
+import {
+  RELEASE_STUCK_SHIFT_COPY,
+  SITTER_RELEASE_STUCK_SHIFT_WARNING,
+  markDisplayedStuckShiftForReview,
+  resolveDisplayedStuckShiftTargets,
+  type ReleaseStuckShiftReasonId
+} from "@/lib/bookings/release-displayed-stuck-shift";
 import { buildShiftWindowMs, normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
 import { useTodaysLinkedBooking, type TodaysLinkedBookingSyncPayload } from "@/lib/bookings/use-todays-linked-booking";
 import { sitterCompleteSession } from "@/lib/session/sitter-complete-session";
@@ -160,6 +168,10 @@ export default function SitterDashboardPage() {
   const [sitterPublicDisplayId, setSitterPublicDisplayId] = useState<string | null>(null);
   const [sitterSerialLoaded, setSitterSerialLoaded] = useState(false);
   const [pendingApprovalBooking, setPendingApprovalBooking] = useState<TodaysLinkedBookingView | null>(null);
+  const [stuckShiftReviewNotice, setStuckShiftReviewNotice] = useState(false);
+  const [releaseStuckModalOpen, setReleaseStuckModalOpen] = useState(false);
+  const [releasingStuckShift, setReleasingStuckShift] = useState(false);
+  const [releaseStuckModalError, setReleaseStuckModalError] = useState<string | null>(null);
   const [checkingAuthEnforcement, setCheckingAuthEnforcement] = useState(true);
   const lastBookingToastKeyRef = useRef<string | null>(null);
   const lastRealtimeToastAtRef = useRef<number>(0);
@@ -335,17 +347,24 @@ export default function SitterDashboardPage() {
     const pendList = pendRes.data.filter((row) => pendingStatuses.has(String(row.status)));
     const actList = actRes.data;
 
-    const pending = pendList[0] ?? null;
+    const reviewLinks = await fetchStuckShiftReviewLinks(supabase, uid, "sitter");
+    setStuckShiftReviewNotice(reviewLinks.length > 0);
+    const isReviewSession = (row: SupabaseSessionRow | null | undefined) =>
+      sessionLinkedToReviewBooking(row, reviewLinks);
+
+    const pending = pendList.find((row) => !isReviewSession(row)) ?? null;
     let endConfirm: SupabaseSessionRow | null = null;
     let activeOnly: SupabaseSessionRow | null = null;
 
     for (const row of actList) {
+      if (isReviewSession(row)) continue;
       if (rowMatchesEndConfirm(row, uid)) {
         endConfirm = row;
         break;
       }
     }
     for (const row of actList) {
+      if (isReviewSession(row)) continue;
       if (row.status === "active" && row.sitter_id === uid && !parentRequestedEndAt(row)) {
         activeOnly = row;
         break;
@@ -389,6 +408,10 @@ export default function SitterDashboardPage() {
       if (alreadyRated) {
         completedShow = null;
       }
+    }
+
+    if (completedShow && isReviewSession(completedShow)) {
+      completedShow = null;
     }
 
     // Pair terminal session to today's settlement booking — do not resurface an old paid twin.
@@ -803,21 +826,91 @@ export default function SitterDashboardPage() {
     suppressCompletedSummaryIdRef
   ]);
 
-  const handleDevReset = useCallback(async () => {
-    if (!window.confirm("לאפס את המשמרת?")) return;
+  const handleOpenReleaseStuckShiftModal = useCallback(() => {
+    if (releasingStuckShift) return;
+    setReleaseStuckModalError(null);
+    setReleaseStuckModalOpen(true);
+  }, [releasingStuckShift]);
+
+  const handleCloseReleaseStuckShiftModal = useCallback(() => {
+    if (releasingStuckShift) return;
+    setReleaseStuckModalOpen(false);
+    setReleaseStuckModalError(null);
+  }, [releasingStuckShift]);
+
+  const displayedStuckBooking = todaysBooking ?? activeCircleBooking;
+  const displayedStuckSession = endConfirmRow ?? activeShiftRow;
+
+  const handleConfirmReleaseStuckShift = useCallback(async (
+    reasonId: ReleaseStuckShiftReasonId,
+    detail: string
+  ) => {
+    if (releasingStuckShift) return;
+
+    const targets = resolveDisplayedStuckShiftTargets(displayedStuckBooking, displayedStuckSession);
+    if ("error" in targets) {
+      setReleaseStuckModalError(targets.error);
+      setBanner(targets.error);
+      return;
+    }
+
+    setReleasingStuckShift(true);
+    setReleaseStuckModalError(null);
+    setBanner(null);
 
     try {
       const auth = await resolveBrowserAuth();
-      if (auth.ok) await resetStuckShiftsForSitter(auth.supabase, auth.userId);
-      
-      setCompletedSummaryRow(null);
-      clearSitterShiftUi();
-      router.refresh(); 
-      
+      if (!auth.ok) {
+        const message = RELEASE_STUCK_SHIFT_COPY.genericFailure;
+        setReleaseStuckModalError(message);
+        setBanner(message);
+        return;
+      }
+
+      const result = await markDisplayedStuckShiftForReview(auth.supabase, {
+        actorId: auth.userId,
+        actorRole: "sitter",
+        bookingId: targets.bookingId,
+        sessionId: targets.sessionId,
+        reasonId,
+        detail
+      });
+
+      if (!result.ok) {
+        setReleaseStuckModalError(result.error);
+        setBanner(result.error);
+        if (sitterId) {
+          await refreshForUser(auth.supabase, sitterId).catch(() => undefined);
+        }
+        return;
+      }
+
+      setStuckShiftReviewNotice(true);
+      await reloadTodaysBooking().catch(() => undefined);
+      if (sitterId) {
+        await refreshForUser(auth.supabase, sitterId).catch(() => undefined);
+      }
+      setReleaseStuckModalOpen(false);
     } catch (err) {
-      window.location.reload(); 
+      console.warn("[sitter-dashboard] release stuck shift", err);
+      const message = RELEASE_STUCK_SHIFT_COPY.genericFailure;
+      setReleaseStuckModalError(message);
+      setBanner(message);
+      const supabase = getSupabaseBrowserClient();
+      if (supabase && sitterId) {
+        await refreshForUser(supabase, sitterId).catch(() => undefined);
+      }
+    } finally {
+      setReleasingStuckShift(false);
     }
-  }, [clearSitterShiftUi, router, setCompletedSummaryRow]);
+  }, [
+    releasingStuckShift,
+    displayedStuckBooking,
+    displayedStuckSession,
+    sitterId,
+    refreshForUser,
+    reloadTodaysBooking
+  ]);
 
   const liveElapsed = useMemo(() => {
     const row = endConfirmRow ?? activeShiftRow;
@@ -912,6 +1005,7 @@ export default function SitterDashboardPage() {
   const hasBookingAnchor = Boolean(todaysBooking?.id || todayBookingShiftGate?.id);
   const sitterHasLiveBooking =
     Boolean(activeCircleBooking) &&
+    !bookingRequiresAdminReview(activeCircleBooking) &&
     isSitterShiftCircleStatus(activeCircleBooking?.status) &&
     !isSitterBookingAwaitingApprovalStatus(todayBookingShiftGate?.status ?? null);
 
@@ -946,11 +1040,18 @@ export default function SitterDashboardPage() {
     Boolean(completedSummaryRow) &&
     !sitterInFlightActive &&
     !showSitterAwaitingParentApproval;
-  const showReleaseStuckShiftButton =
-    sitterInFlightActive ||
+  const sitterInSettlement =
     showSitterAwaitingParentApproval ||
     showSitterWaitingForPayment ||
     showSitterCompletedClosure;
+  const showReleaseStuckShiftButton =
+    Boolean(displayedStuckBooking?.id) &&
+    Boolean(displayedStuckSession?.id) &&
+    !sitterInSettlement &&
+    !bookingRequiresAdminReview(displayedStuckBooking) &&
+    (hasConfirmedDoubleShakeStart(displayedStuckSession) ||
+      Boolean(activeShiftRow) ||
+      Boolean(endConfirmRow));
   
   const showSitterIdleWelcome =
     bookingGuardReady &&
@@ -1120,6 +1221,15 @@ export default function SitterDashboardPage() {
             avatarUrl={sitterAvatarUrl}
           />
         </div>
+          {stuckShiftReviewNotice ? (
+            <div
+              role="status"
+              className="shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-right text-xs text-amber-950"
+            >
+              <p className="font-bold">{STUCK_SHIFT_REVIEW_LABEL}</p>
+              <p className="mt-1 leading-snug">{STUCK_SHIFT_REVIEW_SUPPORT}</p>
+            </div>
+          ) : null}
           {forceEndToast ? (
             <div role="status" aria-live="polite" className="flex shrink-0 flex-row-reverse items-center justify-between gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-right text-sm font-semibold text-emerald-900">
               <button type="button" aria-label="סגור" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-800/70 transition hover:bg-emerald-100 hover:text-emerald-950" onClick={() => setForceEndToast(null)}>
@@ -1261,7 +1371,14 @@ export default function SitterDashboardPage() {
           {!shouldHideDashboardActions && sitterBootstrapComplete && sitterId && !onboardingPending ? (
             <div className="flex w-full shrink-0 flex-col gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3 rounded-b-3xl">
               {showReleaseStuckShiftButton ? (
-                <button type="button" onClick={() => void handleDevReset()} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-[0.97]"><span>שחרור משמרת תקועה</span></button>
+                <button
+                  type="button"
+                  disabled={releasingStuckShift}
+                  onClick={handleOpenReleaseStuckShiftModal}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-[0.97] disabled:opacity-60"
+                >
+                  <span>{releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}</span>
+                </button>
               ) : null}
               <LogoutButton />
             </div>
@@ -1270,6 +1387,16 @@ export default function SitterDashboardPage() {
             <SitterBroadcastAlertModal sitterId={sitterId} paused={showSitterBookingApproval} />
           ) : null}
           <CancellationAttentionModals attention={cancellationAttention} role="sitter" />
+          <ReleaseStuckShiftModal
+            open={releaseStuckModalOpen}
+            busy={releasingStuckShift}
+            error={releaseStuckModalError}
+            warning={SITTER_RELEASE_STUCK_SHIFT_WARNING}
+            onClose={handleCloseReleaseStuckShiftModal}
+            onConfirm={(reasonId, detail) => {
+              void handleConfirmReleaseStuckShift(reasonId, detail);
+            }}
+          />
         </div>
       </main>
   );

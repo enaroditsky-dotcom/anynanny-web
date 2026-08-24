@@ -1,3 +1,5 @@
+import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
+import { bookingRequiresAdminReview } from "@/lib/bookings/stuck-shift-review";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -9,6 +11,14 @@ function isPlausibleUuidSessionId(value: string): boolean {
 export type SubmitSessionRatingResult =
   | { ok: true }
   | { ok: false; error: string };
+
+type SessionRatingRow = {
+  id?: string;
+  parent_id?: string | null;
+  sitter_id?: string | null;
+  status?: string | null;
+  booking_id?: string | null;
+};
 
 /** Persist a 1–5 star rating (+ optional comment) for a completed session. */
 export async function submitSessionRating(
@@ -39,13 +49,44 @@ export async function submitSessionRating(
     return { ok: false, error: "יש להתחבר כדי לשלוח דירוג." };
   }
 
-  const { data: sessionRow, error: sessErr } = await supabase
+  let sessionRow: SessionRatingRow | null = null;
+
+  const withBooking = await supabase
     .from(SESSIONS_TABLE)
-    .select("id, parent_id, sitter_id, status")
+    .select("id, parent_id, sitter_id, status, booking_id")
     .eq("id", sid)
     .maybeSingle();
 
-  if (sessErr || !sessionRow) {
+  if (withBooking.error && /booking_id|schema cache|column/i.test(String(withBooking.error.message ?? ""))) {
+    const core = await supabase
+      .from(SESSIONS_TABLE)
+      .select("id, parent_id, sitter_id, status")
+      .eq("id", sid)
+      .maybeSingle();
+    if (core.error || !core.data) {
+      return { ok: false, error: "לא נמצא סשן לדירוג." };
+    }
+    sessionRow = core.data as SessionRatingRow;
+  } else if (withBooking.error || !withBooking.data) {
+    return { ok: false, error: "לא נמצא סשן לדירוג." };
+  } else {
+    sessionRow = withBooking.data as SessionRatingRow;
+  }
+
+  const linkedBookingId =
+    sessionRow?.booking_id != null ? String(sessionRow.booking_id).trim() : "";
+  if (linkedBookingId) {
+    const { data: linkedBooking } = await supabase
+      .from(BOOKINGS_TABLE)
+      .select("requires_admin_review")
+      .eq("id", linkedBookingId)
+      .maybeSingle();
+    if (bookingRequiresAdminReview(linkedBooking as { requires_admin_review?: boolean | null } | null)) {
+      return { ok: false, error: "לא ניתן לדרג משמרת שנמצאת בבדיקה." };
+    }
+  }
+
+  if (!sessionRow) {
     return { ok: false, error: "לא נמצא סשן לדירוג." };
   }
 

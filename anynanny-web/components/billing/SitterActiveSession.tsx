@@ -37,22 +37,15 @@ function triggerHaptic(pattern: number[]) {
 }
 
 function BillingResetButton({
-  busy,
-  onClick
+  busy: _busy,
+  onClick: _onClick
 }: {
   busy: boolean;
   onClick: () => void;
 }) {
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={onClick}
-      className="w-full rounded-xl border border-dashed border-amber-400 bg-amber-50/90 px-3 py-2.5 text-xs font-semibold text-amber-950 transition hover:bg-amber-100 disabled:opacity-60"
-    >
-      {busy ? "מאפס משמרת…" : "איפוס משמרת תקועה"}
-    </button>
-  );
+  // Intentionally not rendered. Clearing Double-Shake timestamps is not an
+  // allowed recovery action; evidence must be preserved for review/payment.
+  return null;
 }
 
 function StatusCard({ children }: { children: ReactNode }) {
@@ -197,6 +190,11 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
   };
 
   const handleResetShakes = useCallback(async () => {
+    // Intentionally inert. Double-Shake timestamps are review evidence and
+    // must not be cleared by a test/debug reset. This function is kept on
+    // disk but is not wired into any rendered UI.
+    return;
+
     if (resetBusy) return;
     if (
       !window.confirm(
@@ -207,42 +205,46 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
     }
 
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
+    const client = supabase as NonNullable<typeof supabase>;
+    if (client) {
+      setResetBusy(true);
+      setActionError(null);
+
+      try {
+        const { data, error: updateError } = await client
+          .from(SESSIONS_TABLE)
+          .update({
+            sitter_start_shake: null,
+            parent_start_shake: null,
+            sitter_end_shake: null,
+            parent_end_shake: null,
+            session_status: "confirmed"
+          })
+          .eq("id", sessionId)
+          .eq("sitter_id", sitterId)
+          .select(BILLING_SESSION_SELECT)
+          .maybeSingle();
+
+        const resetErrorMessage =
+          updateError == null
+            ? null
+            : String((updateError as { message?: string }).message ?? "שגיאה באיפוס המשמרת.");
+        if (resetErrorMessage) {
+          setActionError(resetErrorMessage);
+          return;
+        }
+
+        if (data && typeof data === "object") {
+          commitSessionRow(data as BillingSessionRow);
+        }
+        await refresh();
+      } catch (err: unknown) {
+        setActionError((err as Error).message || "שגיאה באיפוס המשמרת.");
+      } finally {
+        setResetBusy(false);
+      }
+    } else {
       setActionError("Supabase לא מוגדר.");
-      return;
-    }
-
-    setResetBusy(true);
-    setActionError(null);
-
-    try {
-      const { data, error: updateError } = await supabase
-        .from(SESSIONS_TABLE)
-        .update({
-          sitter_start_shake: null,
-          parent_start_shake: null,
-          sitter_end_shake: null,
-          parent_end_shake: null,
-          session_status: "confirmed"
-        })
-        .eq("id", sessionId)
-        .eq("sitter_id", sitterId)
-        .select(BILLING_SESSION_SELECT)
-        .maybeSingle();
-
-      if (updateError) {
-        setActionError(updateError.message);
-        return;
-      }
-
-      if (data && typeof data === "object") {
-        commitSessionRow(data as BillingSessionRow);
-      }
-      await refresh();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "שגיאה באיפוס המשמרת.");
-    } finally {
-      setResetBusy(false);
     }
   }, [commitSessionRow, refresh, resetBusy, sessionId, sitterId]);
 
@@ -252,7 +254,6 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
         <section className="rounded-3xl border border-rose-200 bg-rose-50 p-5 text-center shadow-soft">
           <p className="text-sm font-semibold text-rose-800">{error}</p>
         </section>
-        <BillingResetButton busy={resetBusy} onClick={() => void handleResetShakes()} />
       </div>
     );
   }
@@ -406,12 +407,6 @@ export function SitterActiveSession({ sessionId, sitterId, className = "" }: Sit
           ) : null}
         </div>
       </DoubleShakeShiftPanel>
-
-      {!isFinishedEntirely && row?.session_status !== "paid" && (
-        <div className="mt-3 shrink-0 px-1">
-          <BillingResetButton busy={resetBusy} onClick={() => void handleResetShakes()} />
-        </div>
-      )}
     </div>
   );
 }

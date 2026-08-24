@@ -9,7 +9,6 @@ import {
 } from "@/components/session/double-shake-circle-button";
 import { ParentSessionTimerCircle } from "@/components/session/parent-double-shake-idle-circle";
 import { BillingSessionMetrics } from "@/components/billing/BillingSessionMetrics";
-import { StuckShiftDevResetButton } from "@/components/sitter/stuck-shift-dev-reset";
 import {
   readStrictSessionStatus,
   resolveBillingLifecyclePhase,
@@ -160,13 +159,6 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
     setRatingCompleted(true);
   }, []);
 
-  const handleLocalReset = useCallback(async () => {
-    setActionError(null);
-    setRatingOpen(false);
-    setRatingCompleted(false);
-    await refresh();
-  }, [refresh]);
-
   useEffect(() => {
     if (!genuinelyCompleted) {
       setRatingOpen(false);
@@ -178,19 +170,10 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
     }
   }, [genuinelyCompleted, ratingCompleted]);
 
-  const showEmergencyReset =
-    sessionStatus === "sitter_started" ||
-    sessionStatus === "in_progress" ||
-    lifecyclePhase === "WAITING_PARENT_END_SHAKE" ||
-    genuinelyCompleted;
-
   if (error && !row) {
     return (
       <div className={`flex min-h-0 flex-1 flex-col ${className}`}>
         <StatusCard>{error}</StatusCard>
-        <div className="mt-auto shrink-0 pt-2 text-center">
-          <StuckShiftDevResetButton role="parent" variant="link" onSuccess={() => void handleLocalReset()} />
-        </div>
       </div>
     );
   }
@@ -274,16 +257,6 @@ export function ParentActiveSession({ sessionId, parentId, className = "" }: Par
           </p>
         ) : null}
       </DoubleShakeShiftPanel>
-
-      {showEmergencyReset ? (
-        <div className="shrink-0 pb-1 text-center">
-          <StuckShiftDevResetButton
-            role="parent"
-            variant="link"
-            onSuccess={() => void handleLocalReset()}
-          />
-        </div>
-      ) : null}
 
       {ratingOpen && genuinelyCompleted ? (
         <SessionRatingModal

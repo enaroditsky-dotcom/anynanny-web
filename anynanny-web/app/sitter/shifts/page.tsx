@@ -35,6 +35,10 @@ import {
   BOOKINGS_TABLE,
   type BookingStatus
 } from "@/lib/bookings/constants";
+import {
+  isSitterPastHistoryBooking,
+  STUCK_SHIFT_REVIEW_LABEL
+} from "@/lib/bookings/stuck-shift-review";
 
 import { resolveBookingWindowMs } from "@/lib/bookings/booking-date-utils";
 import { isActiveCalendarShiftForViewer } from "@/lib/bookings/calendar-shift-filters";
@@ -116,6 +120,7 @@ interface BookingRow {
   status: string;
 
   hourly_rate_nis?: number | null;
+  requires_admin_review?: boolean | null;
 }
 
 interface Shift {
@@ -131,6 +136,7 @@ interface Shift {
   end_date_label: string;
 
   status: string;
+  requires_admin_review?: boolean | null;
 
   address: string;
 
@@ -267,11 +273,19 @@ function resolveShiftScheduleLabels(
 
 function statusBadge(
   status: string,
-  viewType: ViewType
+  viewType: ViewType,
+  requiresAdminReview?: boolean | null
 ): {
   label: string;
   className: string;
 } {
+  if (requiresAdminReview === true) {
+    return {
+      label: STUCK_SHIFT_REVIEW_LABEL,
+      className: "bg-amber-50 text-amber-800"
+    };
+  }
+
   if (status === "pending") {
     return {
       label:
@@ -571,6 +585,18 @@ export default function SitterShiftsPage() {
             return;
           }
 
+          const listSelectColumns = [
+            "id",
+            "parent_id",
+            "sitter_id",
+            "booking_date",
+            "start_time",
+            "end_time",
+            "status",
+            "hourly_rate_nis",
+            "requires_admin_review"
+          ].join(", ");
+
           let query =
             supabase
               .from(
@@ -578,16 +604,7 @@ export default function SitterShiftsPage() {
               )
               .select(
                 withCancellationSelect(
-                  [
-                    "id",
-                    "parent_id",
-                    "sitter_id",
-                    "booking_date",
-                    "start_time",
-                    "end_time",
-                    "status",
-                    "hourly_rate_nis"
-                  ].join(", ")
+                  listSelectColumns
                 )
               )
               .eq(
@@ -628,18 +645,7 @@ export default function SitterShiftsPage() {
           if (error && isCancellationColumnMissing(error.message)) {
             let fallbackQuery = supabase
               .from(BOOKINGS_TABLE)
-              .select(
-                [
-                  "id",
-                  "parent_id",
-                  "sitter_id",
-                  "booking_date",
-                  "start_time",
-                  "end_time",
-                  "status",
-                  "hourly_rate_nis"
-                ].join(", ")
-              )
+              .select(listSelectColumns)
               .eq("sitter_id", sitterId);
 
             fallbackQuery =
@@ -654,13 +660,77 @@ export default function SitterShiftsPage() {
             error = fallback.error;
           }
 
+          if (
+            error &&
+            isPostgrestMissingColumnError(
+              error.message,
+              "requires_admin_review"
+            )
+          ) {
+            const withoutReview = [
+              "id",
+              "parent_id",
+              "sitter_id",
+              "booking_date",
+              "start_time",
+              "end_time",
+              "status",
+              "hourly_rate_nis"
+            ].join(", ");
+            let retry = supabase
+              .from(BOOKINGS_TABLE)
+              .select(withoutReview)
+              .eq("sitter_id", sitterId);
+            retry =
+              viewType === "pending"
+                ? retry.eq("status", "pending")
+                : retry.in("status", ["completed", "cancelled"]);
+            const retryResult = await retry.order("booking_date", {
+              ascending: viewType === "pending"
+            });
+            data = retryResult.data;
+            error = retryResult.error;
+          }
+
           if (error) {
             throw error;
           }
 
-          const bookingRows =
+          let bookingRows =
             (data ??
               []) as unknown as BookingRow[];
+
+          if (viewType === "past") {
+            const reviewSelect = withCancellationSelect(listSelectColumns);
+            let reviewResult = await supabase
+              .from(BOOKINGS_TABLE)
+              .select(reviewSelect)
+              .eq("sitter_id", sitterId)
+              .eq("requires_admin_review", true);
+
+            if (reviewResult.error && isCancellationColumnMissing(reviewResult.error.message)) {
+              reviewResult = await supabase
+                .from(BOOKINGS_TABLE)
+                .select(listSelectColumns)
+                .eq("sitter_id", sitterId)
+                .eq("requires_admin_review", true);
+            }
+
+            if (
+              !reviewResult.error &&
+              Array.isArray(reviewResult.data)
+            ) {
+              const byId = new Map(
+                bookingRows.map((row) => [row.id, row])
+              );
+              for (const row of reviewResult.data as unknown as BookingRow[]) {
+                if (isSitterPastHistoryBooking(row) && !byId.has(row.id)) {
+                  byId.set(row.id, row);
+                }
+              }
+              bookingRows = [...byId.values()];
+            }
+          }
 
           const parentIds = [
             ...new Set(
@@ -784,6 +854,9 @@ export default function SitterShiftsPage() {
 
                     status:
                       booking.status,
+
+                    requires_admin_review:
+                      booking.requires_admin_review === true,
 
                     booking_date:
                       booking.booking_date,
@@ -912,6 +985,9 @@ export default function SitterShiftsPage() {
 
                   status:
                     booking.status,
+
+                  requires_admin_review:
+                    booking.requires_admin_review === true,
 
                   booking_date:
                     booking.booking_date,
@@ -1557,7 +1633,8 @@ export default function SitterShiftsPage() {
                 const badge =
                   statusBadge(
                     shift.status,
-                    viewType
+                    viewType,
+                    shift.requires_admin_review
                   );
 
                 const isPending =
@@ -1576,7 +1653,9 @@ export default function SitterShiftsPage() {
                   "past"
                 ) {
                   const cancelledLabel =
-                    shift.status === "cancelled"
+                    shift.requires_admin_review
+                      ? null
+                      : shift.status === "cancelled"
                       ? cancellationHistoryLabel(
                           shift.cancellation_requested_role
                         ) ?? "בוטלה"

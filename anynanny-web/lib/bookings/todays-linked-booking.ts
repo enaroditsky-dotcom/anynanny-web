@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
 import { isBookingEligibleForLiveShiftUi } from "@/lib/bookings/booking-shift-ui";
 import { isSitterShiftCircleStatus } from "@/lib/bookings/booking-realtime-handler";
+import { bookingRequiresAdminReview, excludeStuckShiftReviewBookings } from "@/lib/bookings/stuck-shift-review";
 import {
   IN_FLIGHT_BOOKING_STATUSES,
   isBookingLiveAcrossMidnight,
@@ -116,7 +117,9 @@ export function formatParentShiftApproveButtonLabel(
 export type TodayBookingShiftGate = Pick<
   BookingRow,
   "id" | "status" | "parent_id" | "sitter_id"
->;
+> & {
+  requires_admin_review?: boolean | null;
+};
 
 async function enrichLinkedBookingView(
   supabase: SupabaseClient,
@@ -256,19 +259,33 @@ async function fetchInFlightLinkedBooking(
 ): Promise<BookingRow | null> {
   const participantColumn = role === "parent" ? "parent_id" : "sitter_id";
 
-  const { data, error } = await supabase
+  let rows: BookingRow[] = [];
+  const withReview = await supabase
     .from(BOOKINGS_TABLE)
-    .select(BOOKING_SELECT_MINIMAL)
+    .select(`${BOOKING_SELECT_MINIMAL}, requires_admin_review`)
     .eq(participantColumn, userId)
     .in("status", statuses)
     .order("updated_at", { ascending: false })
-    .limit(5);
+    .limit(8);
 
-  if (error || !data?.length) {
-    return null;
+  if (withReview.error) {
+    if (!isPostgrestMissingColumnError(withReview.error.message, "requires_admin_review")) {
+      return null;
+    }
+    const core = await supabase
+      .from(BOOKINGS_TABLE)
+      .select(BOOKING_SELECT_MINIMAL)
+      .eq(participantColumn, userId)
+      .in("status", statuses)
+      .order("updated_at", { ascending: false })
+      .limit(8);
+    if (core.error || !core.data?.length) return null;
+    rows = core.data as BookingRow[];
+  } else {
+    rows = (withReview.data as BookingRow[]) ?? [];
   }
 
-  for (const row of data as BookingRow[]) {
+  for (const row of excludeStuckShiftReviewBookings(rows)) {
     if (isBookingLiveAcrossMidnight(row)) {
       return row;
     }
@@ -287,15 +304,14 @@ async function fetchLinkedBookingRow(
   const linkedStatuses =
     role === "sitter" ? SITTER_TODAYS_LINKED_BOOKING_STATUSES : TODAYS_LINKED_BOOKING_STATUSES;
 
-  const { data: todayRow, error: todayError } = await supabase
+  const { data: todayRows, error: todayError } = await supabase
     .from(BOOKINGS_TABLE)
-    .select(BOOKING_SELECT_MINIMAL)
+    .select(`${BOOKING_SELECT_MINIMAL}, requires_admin_review`)
     .eq(participantColumn, userId)
     .eq("booking_date", today)
     .in("status", linkedStatuses)
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(8);
 
   if (todayError) {
     // Date filter/select failed — fall back to status-only so the dashboard still hydrates.
@@ -309,8 +325,9 @@ async function fetchLinkedBookingRow(
     return { row: crossMidnight, error: crossMidnight ? null : todayError.message };
   }
 
-  if (todayRow) {
-    return { row: todayRow as BookingRow, error: null };
+  const todayLive = excludeStuckShiftReviewBookings((todayRows as BookingRow[]) ?? [])[0] ?? null;
+  if (todayLive) {
+    return { row: todayLive, error: null };
   }
 
   const crossMidnight = await fetchInFlightLinkedBooking(
@@ -344,19 +361,45 @@ async function fetchActiveShiftGateRow(
   const today = todayDateISO();
   const { data, error } = await supabase
     .from(BOOKINGS_TABLE)
-    .select("id, status, parent_id, sitter_id")
+    .select("id, status, parent_id, sitter_id, requires_admin_review")
     .eq(participantColumn, userId)
     .eq("booking_date", today)
     .order("updated_at", { ascending: false })
     .limit(5);
 
   if (error || !data?.length) {
+    if (error && isPostgrestMissingColumnError(error.message, "requires_admin_review")) {
+      const fallback = await supabase
+        .from(BOOKINGS_TABLE)
+        .select("id, status, parent_id, sitter_id")
+        .eq(participantColumn, userId)
+        .eq("booking_date", today)
+        .order("updated_at", { ascending: false })
+        .limit(5);
+      if (fallback.error || !fallback.data?.length) return null;
+      const fallbackRows = fallback.data as TodayBookingShiftGate[];
+      return (
+        fallbackRows.find((row) => {
+          const status = normalizeBookingStatus(row.status as BookingStatusInput) ?? row.status;
+          return (
+            status === "pending" ||
+            status === "approved" ||
+            status === "sitter_started" ||
+            status === "parent_started" ||
+            status === "sitter_ended"
+          );
+        }) ??
+        fallbackRows[0] ??
+        null
+      );
+    }
     return null;
   }
 
   const rows = data as TodayBookingShiftGate[];
   // Prefer a live/approved shift over a stale completed row from earlier today.
   const livePreferred = rows.find((row) => {
+    if (bookingRequiresAdminReview(row)) return false;
     const status = normalizeBookingStatus(row.status as BookingStatusInput) ?? row.status;
     return (
       status === "pending" ||
@@ -367,7 +410,8 @@ async function fetchActiveShiftGateRow(
     );
   });
 
-  return livePreferred ?? rows[0] ?? null;
+  const nonReview = rows.find((row) => !bookingRequiresAdminReview(row));
+  return livePreferred ?? nonReview ?? null;
 }
 
 function gateFromBooking(row: BookingRow): TodayBookingShiftGate {
@@ -422,17 +466,33 @@ export async function fetchLinkedBookingById(
   bookingId: string,
   role: "parent" | "sitter"
 ): Promise<TodaysLinkedBookingView | null> {
-  const { data: row, error } = await supabase
+  const withReview = await supabase
     .from(BOOKINGS_TABLE)
-    .select(BOOKING_SELECT_MINIMAL)
+    .select(`${BOOKING_SELECT_MINIMAL}, requires_admin_review`)
     .eq("id", bookingId)
     .maybeSingle();
 
-  if (error || !row) {
+  let row = withReview.data as BookingRow | null;
+  if (withReview.error) {
+    if (!isPostgrestMissingColumnError(withReview.error.message, "requires_admin_review")) {
+      return null;
+    }
+    const core = await supabase
+      .from(BOOKINGS_TABLE)
+      .select(BOOKING_SELECT_MINIMAL)
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (core.error || !core.data) {
+      return null;
+    }
+    row = core.data as BookingRow;
+  }
+
+  if (!row || bookingRequiresAdminReview(row)) {
     return null;
   }
 
-  return enrichLinkedBookingView(supabase, row as BookingRow, role);
+  return enrichLinkedBookingView(supabase, row, role);
 }
 
 export async function fetchTodaysLinkedBooking(
@@ -462,4 +522,40 @@ export async function fetchTodayBookingShiftGate(
   role: "parent" | "sitter"
 ): Promise<TodayBookingShiftGate | null> {
   return fetchActiveShiftGateRow(supabase, userId, role);
+}
+
+/** Booking IDs currently held for operator review — never drive live Double-Shake UI. */
+export async function fetchStuckShiftReviewBookingIds(
+  supabase: SupabaseClient,
+  userId: string,
+  role: "parent" | "sitter"
+): Promise<Set<string>> {
+  const links = await fetchStuckShiftReviewLinks(supabase, userId, role);
+  return new Set(links.map((row) => row.id));
+}
+
+export async function fetchStuckShiftReviewLinks(
+  supabase: SupabaseClient,
+  userId: string,
+  role: "parent" | "sitter"
+): Promise<Array<{ id: string; parent_id: string; sitter_id: string }>> {
+  const participantColumn = role === "parent" ? "parent_id" : "sitter_id";
+  const { data, error } = await supabase
+    .from(BOOKINGS_TABLE)
+    .select("id, parent_id, sitter_id, requires_admin_review")
+    .eq(participantColumn, userId)
+    .eq("requires_admin_review", true)
+    .limit(20);
+
+  if (error) {
+    return [];
+  }
+
+  return ((data as Array<{ id?: string | null; parent_id?: string | null; sitter_id?: string | null }> | null) ?? [])
+    .map((row) => ({
+      id: String(row.id ?? "").trim(),
+      parent_id: String(row.parent_id ?? "").trim(),
+      sitter_id: String(row.sitter_id ?? "").trim()
+    }))
+    .filter((row) => row.id);
 }
