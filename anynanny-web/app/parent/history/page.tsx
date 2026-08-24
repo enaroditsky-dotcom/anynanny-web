@@ -52,6 +52,7 @@ import {
   CANCELLATION_COPY,
   cancellationHistoryLabel,
   formatCancellationDateTime,
+  formatStoredCancellationMessage,
   isCancellationColumnMissing,
   pickCancellationFields,
   withCancellationSelect
@@ -1234,10 +1235,10 @@ export default function ParentHistoryPage() {
                     </div>
                   </div>
 
-                  {shift.cancellation_message ? (
+                  {formatStoredCancellationMessage(shift.cancellation_message) ? (
                     <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-right text-xs leading-relaxed text-rose-900">
                       <span className="font-semibold">{CANCELLATION_COPY.messageHistoryLabel}: </span>
-                      {shift.cancellation_message}
+                      {formatStoredCancellationMessage(shift.cancellation_message)}
                     </p>
                   ) : null}
                   {shift.cancelled_at_label ? (

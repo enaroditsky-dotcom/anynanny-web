@@ -8,6 +8,7 @@ import {
   CANCELLATION_MESSAGE_MAX_LENGTH,
   cancellationHistoryLabel,
   formatCancellationShiftWhen,
+  formatStoredCancellationMessage,
   incomingCancellationSentence,
   isIncomingCancellationRequest,
   isIncomingPendingCancellation,
@@ -78,6 +79,11 @@ assert.equal(isCancellationRequestPending(approved), false);
 
 assert.equal(cancellationHistoryLabel("parent"), "משמרת בוטלה לבקשת ההורה");
 assert.equal(cancellationHistoryLabel("sitter"), "משמרת בוטלה לבקשת הנני");
+assert.equal(
+  formatStoredCancellationMessage("no_start_confirmation"),
+  "המשמרת בוטלה אוטומטית מכיוון שלא אושרה התחלת המשמרת."
+);
+assert.equal(formatStoredCancellationMessage("שינוי תוכניות"), "שינוי תוכניות");
 assert.equal(formatCancellationShiftWhen(approved), "26/08/2026, 03:00–13:00");
 assert.match(
   incomingCancellationSentence(approved, "אדי"),

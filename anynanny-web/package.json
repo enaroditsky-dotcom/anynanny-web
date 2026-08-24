@@ -20,6 +20,7 @@
     "test:hyp-payment-verification": "npx --yes tsx scripts/test-hyp-payment-verification.ts",
     "test:canonical-notifications": "npx --yes tsx scripts/test-canonical-notifications.ts",
     "test:pending-booking-lifecycle": "npx --yes tsx scripts/test-pending-booking-lifecycle.ts",
+    "test:shift-end-reminder": "npx --yes tsx scripts/test-shift-end-reminder.ts",
     "test:web-push": "npx --yes tsx scripts/test-web-push.ts",
     "test:parent-wallet-billing-grants": "npx --yes tsx scripts/test-parent-wallet-billing-grant-hardening.ts",
     "test:delete-current-user-grants": "npx --yes tsx scripts/test-delete-current-user-execute-grants.ts",

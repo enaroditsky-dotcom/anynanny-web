@@ -10,7 +10,9 @@ export const CANONICAL_NOTIFICATION_KINDS = [
   "payment_received",
   "pending_no_response_reminder",
   "booking_withdrawn_by_parent",
-  "pending_booking_expired"
+  "pending_booking_expired",
+  "shift_end_reminder",
+  "shift_cancelled_no_start"
 ] as const;
 
 export type CanonicalNotificationKind = (typeof CANONICAL_NOTIFICATION_KINDS)[number];
@@ -46,6 +48,8 @@ export type CanonicalNotificationPayload = {
   approved_role?: string | null;
   cancelled_by?: string | null;
   cancelled_role?: string | null;
+  recipient_role?: string | null;
+  cancellation_reason?: string | null;
   hyp_approval_id?: string | null;
   session_ids?: string[] | null;
   amount?: string | null;
@@ -92,6 +96,9 @@ export function notificationHrefForKind(
   if (kind === "booking_request") return "/sitter/dashboard";
   if (kind === "pending_no_response_reminder" || kind === "pending_booking_expired") {
     return "/parent/dashboard";
+  }
+  if (kind === "shift_end_reminder" || kind === "shift_cancelled_no_start") {
+    return role === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
   }
   if (kind === "booking_withdrawn_by_parent") return "/sitter/dashboard";
   return role === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
