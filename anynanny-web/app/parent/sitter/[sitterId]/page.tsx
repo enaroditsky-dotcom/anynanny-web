@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { Calendar, ArrowRight, Star, User } from "lucide-react";
+import { Calendar, ArrowRight, ChevronDown, Star, User } from "lucide-react";
 import {
   type PublicSitterReview,
   type SitterProfilePublic
@@ -43,6 +43,7 @@ export default function ParentSitterProfileView() {
   const [fetching, setFetching] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [reviewsOpen, setReviewsOpen] = useState(false);
 
   const fromBroadcast = searchParams.get("from") === "broadcast";
   const broadcastAlertId = (searchParams.get("alertId") ?? "").trim();
@@ -117,6 +118,10 @@ export default function ParentSitterProfileView() {
       void loadSitter();
     }
   }, [sitterId, signedIn, effectiveRole]);
+
+  useEffect(() => {
+    setReviewsOpen(false);
+  }, [sitterId]);
 
   const displayName =
     publicSitterDisplayName(profile) || profile?.nanny_serial || "בייביסיטר";
@@ -239,42 +244,54 @@ export default function ParentSitterProfileView() {
             <p className="mt-1 text-sm text-slate-700">{profile.bio || "אין פירוט זמין"}</p>
           </div>
 
-          <div className="border-t border-slate-100 pt-3 text-right space-y-2">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              חוות דעת
-            </h2>
-            {writtenReviews.length === 0 ? (
-              <p className="text-sm text-slate-500">עדיין אין חוות דעת כתובות.</p>
-            ) : (
-              <ul className="space-y-2.5">
-                {writtenReviews.map((review, idx) => (
-                  <li
-                    key={`${review.created_at}-${idx}`}
-                    className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right"
-                  >
-                    <div className="flex flex-row-reverse items-center justify-between gap-2">
-                      <span className="inline-flex flex-row-reverse items-center gap-1 text-xs font-bold text-amber-900">
-                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
-                        {Number(review.rating).toFixed(0)}
-                      </span>
-                      {review.created_at ? (
-                        <span className="text-[13px] tabular-nums text-slate-400">
-                          {formatReviewDate(review.created_at)}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{review.comment}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="border-t border-slate-100 pt-3 text-right">
+            <button
+              type="button"
+              aria-expanded={reviewsOpen}
+              aria-controls="sitter-profile-reviews"
+              onClick={() => setReviewsOpen((open) => !open)}
+              className="flex min-h-9 w-full items-center justify-between gap-2 text-right"
+            >
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                חוות דעת ({writtenReviews.length})
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 text-slate-400 transition ${reviewsOpen ? "rotate-180" : ""}`}
+                aria-hidden
+              />
+            </button>
+            {reviewsOpen ? (
+              <div id="sitter-profile-reviews" className="mt-2 space-y-2">
+                {writtenReviews.length === 0 ? (
+                  <p className="text-sm text-slate-500">עדיין אין חוות דעת</p>
+                ) : (
+                  <ul className="space-y-2.5">
+                    {writtenReviews.map((review, idx) => (
+                      <li
+                        key={`${review.created_at}-${idx}`}
+                        className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right"
+                      >
+                        <div className="flex flex-row-reverse items-center justify-between gap-2">
+                          <span className="inline-flex flex-row-reverse items-center gap-1 text-xs font-bold text-amber-900">
+                            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
+                            {Number(review.rating).toFixed(0)}
+                          </span>
+                          {review.created_at ? (
+                            <span className="text-[13px] tabular-nums text-slate-400">
+                              {formatReviewDate(review.created_at)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{review.comment}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="border-t border-slate-100 pt-3 space-y-2">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
-              פעולות
-            </h2>
-
             <UserSafetyActions targetUserId={sitterId} targetName={displayName} />
 
             <button
