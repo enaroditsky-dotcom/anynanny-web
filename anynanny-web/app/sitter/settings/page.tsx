@@ -32,8 +32,6 @@ export default function SitterSettingsPage() {
 
         <a
           href="/terms"
-          target="_blank"
-          rel="noopener noreferrer"
           className="flex items-center justify-between rounded-xl p-2.5 transition hover:bg-slate-50"
         >
           <div className="flex items-center gap-2.5">
@@ -42,7 +40,6 @@ export default function SitterSettingsPage() {
             </div>
             <span className="text-sm font-bold text-slate-700">תנאי שימוש (Terms of Service)</span>
           </div>
-          <ExternalLink className="h-4 w-4 text-slate-400" />
         </a>
 
         <a
