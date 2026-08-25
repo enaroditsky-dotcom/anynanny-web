@@ -1,4 +1,4 @@
-package com.example.any_nanny
+package org.anynanny.app
 
 import io.flutter.embedding.android.FlutterActivity
 
