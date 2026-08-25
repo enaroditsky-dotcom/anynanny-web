@@ -57,3 +57,7 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("com.google.androidbrowserhelper:androidbrowserhelper:2.7.0")
+}

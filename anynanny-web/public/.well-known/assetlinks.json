@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.anynanny.app",
+      "sha256_cert_fingerprints": [
+        "01:72:F5:D4:66:87:6E:88:DD:57:52:FE:7E:59:DC:79:29:73:70:E8:26:B4:3A:ED:4A:32:44:E2:AE:AA:30:92"
+      ]
+    }
+  }
+]

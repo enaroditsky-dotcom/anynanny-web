@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App-to-site Digital Asset Links statement. Cert fingerprints belong in
+         anynanny-web/public/.well-known/assetlinks.json only.
+         After the Play Console app exists, add the Google Play App Signing SHA-256
+         there. Do not invent a placeholder fingerprint. -->
+    <string name="asset_statements">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": { \"namespace\": \"web\", \"site\": \"https://www.anynanny.org\" } }]</string>
+</resources>
