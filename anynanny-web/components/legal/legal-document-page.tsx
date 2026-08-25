@@ -7,16 +7,22 @@ import { PageBackButton, PageBackRow } from "@/components/navigation/page-back-l
 
 function LegalDocumentPageInner({
   title,
-  children
+  children,
+  onBack
 }: {
   title: string;
   children: ReactNode;
+  onBack?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get("from");
 
   const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
     if (from && from.startsWith("/") && !from.startsWith("//")) {
       router.push(from);
       return;
@@ -48,10 +54,12 @@ function LegalDocumentPageInner({
 
 export function LegalDocumentPage({
   title,
-  children
+  children,
+  onBack
 }: {
   title: string;
   children: ReactNode;
+  onBack?: () => void;
 }) {
   return (
     <Suspense
@@ -61,7 +69,9 @@ export function LegalDocumentPage({
         </main>
       }
     >
-      <LegalDocumentPageInner title={title}>{children}</LegalDocumentPageInner>
+      <LegalDocumentPageInner title={title} onBack={onBack}>
+        {children}
+      </LegalDocumentPageInner>
     </Suspense>
   );
 }
