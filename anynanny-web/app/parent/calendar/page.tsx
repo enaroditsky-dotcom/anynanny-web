@@ -24,6 +24,8 @@ import { CancellationAttentionModals } from "@/components/bookings/cancellation-
 import { PendingNoResponseReminderModal } from "@/components/bookings/pending-no-response-reminder-modal";
 import { useShiftCancellationFlow } from "@/lib/bookings/use-shift-cancellation-flow";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
+import { coerceBookingPaymentStatus } from "@/lib/bookings/payment-status-label";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { normalizeBookingStatus } from "@/lib/bookings/booking-status-normalize";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import {
@@ -35,7 +37,7 @@ import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 const PARENT_CALENDAR_BASE_SELECT =
-  "id, parent_id, sitter_id, booking_date, start_time, end_time, status, payment_status";
+  "id, parent_id, sitter_id, booking_date, start_time, end_time, status, payment_status, paid_at";
 
 export default function ParentCalendarPage() {
   const router = useRouter();
@@ -65,13 +67,31 @@ export default function ParentCalendarPage() {
       if (error && isCancellationColumnMissing(error.message)) {
         const fallback = await supabase
           .from(BOOKINGS_TABLE)
-          .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status")
+          .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status, payment_status, paid_at")
           .eq("parent_id", resolvedParentId)
           .in("status", [...PARENT_CALENDAR_LOAD_STATUSES, "cancelled"])
           .order("booking_date", { ascending: true })
           .order("start_time", { ascending: true });
         rows = (fallback.data as unknown[] | null) ?? null;
         error = fallback.error;
+      }
+
+      if (
+        error &&
+        (
+          isPostgrestMissingColumnError(error.message, "payment_status") ||
+          isPostgrestMissingColumnError(error.message, "paid_at")
+        )
+      ) {
+        const withoutPayment = await supabase
+          .from(BOOKINGS_TABLE)
+          .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status")
+          .eq("parent_id", resolvedParentId)
+          .in("status", [...PARENT_CALENDAR_LOAD_STATUSES, "cancelled"])
+          .order("booking_date", { ascending: true })
+          .order("start_time", { ascending: true });
+        rows = (withoutPayment.data as unknown[] | null) ?? null;
+        error = withoutPayment.error;
       }
 
       if (error) {
@@ -104,10 +124,15 @@ export default function ParentCalendarPage() {
             end_time: string;
             status: BookingStatus;
             payment_status?: string | null;
+            paid_at?: string | null;
           };
           const status = normalizeBookingStatus(row.status);
           if (!status) return null;
           const cancellation = pickCancellationFields(raw);
+          const paidAt =
+            row.paid_at != null && String(row.paid_at).trim() !== ""
+              ? String(row.paid_at)
+              : null;
           const shift: CalendarShift = {
             id: row.id,
             partnerId: row.sitter_id,
@@ -117,12 +142,8 @@ export default function ParentCalendarPage() {
             endTime: row.end_time,
             status,
             scheduleLabel: formatBookingSchedule(row),
-            paymentStatus:
-              row.payment_status === "paid" ||
-              row.payment_status === "pending_checkout" ||
-              row.payment_status === "unpaid"
-                ? row.payment_status
-                : null,
+            paymentStatus: coerceBookingPaymentStatus(row.payment_status),
+            paidAt,
             ...cancellation
           };
           return shift;

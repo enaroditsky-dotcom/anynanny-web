@@ -39,6 +39,12 @@ import {
   isSitterPastHistoryBooking,
   STUCK_SHIFT_REVIEW_LABEL
 } from "@/lib/bookings/stuck-shift-review";
+import {
+  BOOKING_SHIFT_ENDED_LABEL,
+  bookingPaymentStatusLabel,
+  resolveBookingPaymentDisplayKind,
+  type BookingPaymentDisplayKind
+} from "@/lib/bookings/payment-status-label";
 
 import { resolveBookingWindowMs } from "@/lib/bookings/booking-date-utils";
 import { isActiveCalendarShiftForViewer } from "@/lib/bookings/calendar-shift-filters";
@@ -121,6 +127,8 @@ interface BookingRow {
 
   hourly_rate_nis?: number | null;
   requires_admin_review?: boolean | null;
+  payment_status?: string | null;
+  paid_at?: string | null;
 }
 
 interface Shift {
@@ -137,6 +145,8 @@ interface Shift {
 
   status: string;
   requires_admin_review?: boolean | null;
+  payment_status?: string | null;
+  paid_at?: string | null;
 
   address: string;
 
@@ -271,12 +281,21 @@ function resolveShiftScheduleLabels(
   };
 }
 
+function paymentBadgeClass(kind: BookingPaymentDisplayKind): string {
+  if (kind === "paid") return "bg-emerald-50 text-emerald-700";
+  if (kind === "pending_checkout") return "bg-rose-50 text-rose-800";
+  return "bg-amber-50 text-amber-800";
+}
+
 function statusBadge(
   status: string,
   viewType: ViewType,
-  requiresAdminReview?: boolean | null
+  requiresAdminReview?: boolean | null,
+  payment?: { paymentStatus?: string | null; paidAt?: string | null }
 ): {
   label: string;
+  completionLabel?: string;
+  paymentLabel?: string;
   className: string;
 } {
   if (requiresAdminReview === true) {
@@ -309,11 +328,18 @@ function statusBadge(
     viewType === "past" ||
     status === "completed"
   ) {
+    const kind = resolveBookingPaymentDisplayKind({
+      paymentStatus: payment?.paymentStatus,
+      paidAt: payment?.paidAt
+    });
     return {
-      label: "בוצעה",
-
-      className:
-        "bg-emerald-50 text-emerald-700"
+      label: BOOKING_SHIFT_ENDED_LABEL,
+      completionLabel: BOOKING_SHIFT_ENDED_LABEL,
+      paymentLabel: bookingPaymentStatusLabel({
+        paymentStatus: payment?.paymentStatus,
+        paidAt: payment?.paidAt
+      }),
+      className: paymentBadgeClass(kind)
     };
   }
 
@@ -594,7 +620,9 @@ export default function SitterShiftsPage() {
             "end_time",
             "status",
             "hourly_rate_nis",
-            "requires_admin_review"
+            "requires_admin_review",
+            "payment_status",
+            "paid_at"
           ].join(", ");
 
           let query =
@@ -658,6 +686,45 @@ export default function SitterShiftsPage() {
             });
             data = fallback.data;
             error = fallback.error;
+          }
+
+          if (
+            error &&
+            (
+              isPostgrestMissingColumnError(
+                error.message,
+                "payment_status"
+              ) ||
+              isPostgrestMissingColumnError(
+                error.message,
+                "paid_at"
+              )
+            )
+          ) {
+            const withoutPayment = [
+              "id",
+              "parent_id",
+              "sitter_id",
+              "booking_date",
+              "start_time",
+              "end_time",
+              "status",
+              "hourly_rate_nis",
+              "requires_admin_review"
+            ].join(", ");
+            let retryPayment = supabase
+              .from(BOOKINGS_TABLE)
+              .select(withoutPayment)
+              .eq("sitter_id", sitterId);
+            retryPayment =
+              viewType === "pending"
+                ? retryPayment.eq("status", "pending")
+                : retryPayment.in("status", ["completed", "cancelled"]);
+            const paymentFallback = await retryPayment.order("booking_date", {
+              ascending: viewType === "pending"
+            });
+            data = paymentFallback.data;
+            error = paymentFallback.error;
           }
 
           if (
@@ -1006,6 +1073,12 @@ export default function SitterShiftsPage() {
                   total_amount_nis:
                     totalAmount,
 
+                  payment_status:
+                    booking.payment_status ?? null,
+
+                  paid_at:
+                    booking.paid_at ?? null,
+
                   ...(() => {
                     const cancellation = pickCancellationFields(
                       booking as unknown as Record<string, unknown>
@@ -1081,7 +1154,7 @@ export default function SitterShiftsPage() {
               )
               .select(
                 withCancellationSelect(
-                  "id, parent_id, booking_date, start_time, end_time, status, payment_status"
+                  "id, parent_id, booking_date, start_time, end_time, status, payment_status, paid_at"
                 )
               )
               .eq(
@@ -1116,13 +1189,31 @@ export default function SitterShiftsPage() {
           if (error && isCancellationColumnMissing(error.message)) {
             const fallback = await supabase
               .from(BOOKINGS_TABLE)
-              .select("id, parent_id, booking_date, start_time, end_time, status")
+              .select("id, parent_id, booking_date, start_time, end_time, status, payment_status, paid_at")
               .eq("sitter_id", sitterId)
               .in("status", [...SITTER_CALENDAR_CONFIRMED_STATUSES, "cancelled"])
               .order("booking_date", { ascending: true })
               .order("start_time", { ascending: true });
             data = fallback.data;
             error = fallback.error;
+          }
+
+          if (
+            error &&
+            (
+              isPostgrestMissingColumnError(error.message, "payment_status") ||
+              isPostgrestMissingColumnError(error.message, "paid_at")
+            )
+          ) {
+            const withoutPayment = await supabase
+              .from(BOOKINGS_TABLE)
+              .select("id, parent_id, booking_date, start_time, end_time, status")
+              .eq("sitter_id", sitterId)
+              .in("status", [...SITTER_CALENDAR_CONFIRMED_STATUSES, "cancelled"])
+              .order("booking_date", { ascending: true })
+              .order("start_time", { ascending: true });
+            data = withoutPayment.data;
+            error = withoutPayment.error;
           }
 
           if (error) {
@@ -1163,6 +1254,7 @@ export default function SitterShiftsPage() {
                 );
                 const paymentStatus =
                   (row as { payment_status?: string | null }).payment_status;
+                const paidAtRaw = (row as { paid_at?: string | null }).paid_at;
                 return {
                 id: row.id,
 
@@ -1205,6 +1297,11 @@ export default function SitterShiftsPage() {
                   paymentStatus === "pending_checkout" ||
                   paymentStatus === "unpaid"
                     ? paymentStatus
+                    : null,
+
+                paidAt:
+                  paidAtRaw != null && String(paidAtRaw).trim() !== ""
+                    ? String(paidAtRaw)
                     : null,
 
                 ...cancellation
@@ -1634,7 +1731,11 @@ export default function SitterShiftsPage() {
                   statusBadge(
                     shift.status,
                     viewType,
-                    shift.requires_admin_review
+                    shift.requires_admin_review,
+                    {
+                      paymentStatus: shift.payment_status,
+                      paidAt: shift.paid_at
+                    }
                   );
 
                 const isPending =
@@ -1678,16 +1779,26 @@ export default function SitterShiftsPage() {
                         </div>
 
                         <span
-                          className={`rounded-full px-2 py-1 text-[12px] font-bold ${
+                          className={`rounded-full px-2 py-1 text-center text-[12px] font-bold ${
                             cancelledLabel
                               ? "bg-rose-50 text-rose-700"
                               : badge.className
                           }`}
                         >
-                          {
-                            cancelledLabel ??
+                          {cancelledLabel ? (
+                            cancelledLabel
+                          ) : badge.paymentLabel ? (
+                            <>
+                              <span className="block leading-tight">
+                                {badge.completionLabel ?? badge.label}
+                              </span>
+                              <span className="mt-0.5 block text-[11px] font-semibold leading-tight">
+                                {badge.paymentLabel}
+                              </span>
+                            </>
+                          ) : (
                             badge.label
-                          }
+                          )}
                         </span>
                       </div>
 

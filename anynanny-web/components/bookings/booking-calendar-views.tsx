@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Clock, FileSearch, MapPin } from "lucide-react";
 import type { BookingPaymentStatus, BookingStatus } from "@/lib/bookings/constants";
+import {
+  bookingPaymentStatusLabel,
+  resolveBookingPaymentDisplayKind
+} from "@/lib/bookings/payment-status-label";
 import { resolveBookingWindowMs, todayDateISO } from "@/lib/bookings/booking-date-utils";
 import type { BookingCancellationFields, CancellationRequesterRole } from "@/lib/bookings/cancellation-request";
 import {
@@ -33,6 +37,7 @@ export type CalendarShift = {
   status: BookingStatus;
   scheduleLabel: string;
   paymentStatus?: BookingPaymentStatus | null;
+  paidAt?: string | null;
 } & Partial<BookingCancellationFields>;
 
 export type { CalendarViewMode };
@@ -173,6 +178,42 @@ function statusBadgeClass(status: BookingStatus): string {
     default:
       return "bg-slate-100 text-slate-600 border-slate-200";
   }
+}
+
+function completedCalendarPaymentClass(shift: CalendarShift): string {
+  const kind = resolveBookingPaymentDisplayKind({
+    paymentStatus: shift.paymentStatus,
+    paidAt: shift.paidAt
+  });
+  if (kind === "paid") return "bg-emerald-50 text-emerald-800 border-emerald-100";
+  if (kind === "pending_checkout") return "bg-rose-50 text-rose-800 border-rose-100";
+  return "bg-amber-50 text-amber-800 border-amber-100";
+}
+
+function CalendarShiftStatusBadge({ shift }: { shift: CalendarShift }) {
+  if (shift.status === "completed") {
+    return (
+      <span
+        className={`shrink-0 rounded-full border px-2 py-0.5 text-center text-xs font-semibold ${completedCalendarPaymentClass(shift)}`}
+      >
+        <span className="block leading-tight whitespace-nowrap">הושלם</span>
+        <span className="mt-0.5 block text-[11px] font-semibold leading-tight whitespace-nowrap">
+          {bookingPaymentStatusLabel({
+            paymentStatus: shift.paymentStatus,
+            paidAt: shift.paidAt
+          })}
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
+    >
+      {bookingStatusLabel(shift.status)}
+    </span>
+  );
 }
 
 function shiftAccentClass(status: BookingStatus): string {
@@ -370,11 +411,7 @@ function ShiftCard({
       className={`rounded-2xl border border-slate-200/80 p-3 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
-        >
-          {bookingStatusLabel(shift.status)}
-        </span>
+        <CalendarShiftStatusBadge shift={shift} />
         <div className="min-w-0 flex-1">
           <p className={`truncate font-semibold text-navy-header ${compact ? "text-xs" : "text-sm"}`}>
             {shift.partnerName}
@@ -791,11 +828,7 @@ function AllShiftsListCard({
       className={`rounded-2xl border border-slate-200/80 p-4 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
     >
       <div className="flex flex-row-reverse items-start justify-between gap-2">
-        <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
-        >
-          {bookingStatusLabel(shift.status)}
-        </span>
+        <CalendarShiftStatusBadge shift={shift} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-navy-header">{shift.partnerName}</p>
         </div>

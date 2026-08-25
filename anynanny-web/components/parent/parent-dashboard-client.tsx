@@ -58,6 +58,11 @@ import {
   STUCK_SHIFT_REVIEW_SUPPORT
 } from "@/lib/bookings/stuck-shift-review";
 import {
+  isBookingPaymentPaid,
+  parsePaymentBookingIdParam,
+  PARENT_PAYMENT_BOOKING_QUERY_PARAM
+} from "@/lib/bookings/payment-status-label";
+import {
   RELEASE_STUCK_SHIFT_COPY,
   markDisplayedStuckShiftForReview,
   resolveDisplayedStuckShiftTargets,
@@ -190,11 +195,63 @@ function normalizeStatus(status: unknown): string {
 }
 
 function isUnpaidCompletedBooking(b: BookingRow): boolean {
-  const paymentStatus = normalizeStatus(
-    (b as BookingRow & { payment_status?: string }).payment_status
+  return (
+    normalizeStatus(b.status) === "completed" &&
+    !isBookingPaymentPaid({
+      paymentStatus: b.payment_status,
+      paidAt: b.paid_at
+    })
   );
-  const paidAt = (b as BookingRow & { paid_at?: string | null }).paid_at;
-  return normalizeStatus(b.status) === "completed" && paymentStatus !== "paid" && !paidAt;
+}
+
+function readPaymentBookingIdFromLocation(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has(PARENT_PAYMENT_BOOKING_QUERY_PARAM)) return null;
+  const parsed = parsePaymentBookingIdParam(params.get(PARENT_PAYMENT_BOOKING_QUERY_PARAM));
+  if (!parsed) {
+    stripPaymentBookingIdFromUrl();
+    return null;
+  }
+  return parsed;
+}
+
+function stripPaymentBookingIdFromUrl(): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(PARENT_PAYMENT_BOOKING_QUERY_PARAM)) return;
+  url.searchParams.delete(PARENT_PAYMENT_BOOKING_QUERY_PARAM);
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, "", next);
+}
+
+async function fetchOwnedParentBookingById(
+  supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
+  parentId: string,
+  bookingId: string
+): Promise<BookingRow | null> {
+  const id = parsePaymentBookingIdParam(bookingId);
+  const uid = String(parentId ?? "").trim();
+  if (!id || !uid) return null;
+
+  const attempts = [
+    `${BOOKING_LIVE_SELECT}, payment_status, paid_at`,
+    BOOKING_LIVE_SELECT,
+    BOOKING_LIVE_SELECT_LEGACY
+  ];
+
+  for (const select of attempts) {
+    const { data, error } = await supabase
+      .from(BOOKINGS_TABLE)
+      .select(select)
+      .eq("id", id)
+      .eq("parent_id", uid)
+      .maybeSingle();
+    if (error) continue;
+    return ((data as BookingRow | null) ?? null);
+  }
+
+  return null;
 }
 
 function pickParentDashboardBooking(
@@ -672,6 +729,33 @@ export function ParentDashboardClient({
           continue;
         }
 
+        const requestedPaymentBookingId = readPaymentBookingIdFromLocation();
+        let paymentRecoveryBooking: BookingRow | null = null;
+        if (requestedPaymentBookingId) {
+          const owned = await fetchOwnedParentBookingById(
+            supabase,
+            uid,
+            requestedPaymentBookingId
+          );
+          if (!owned) {
+            stripPaymentBookingIdFromUrl();
+          } else if (
+            isBookingPaymentPaid({
+              paymentStatus: owned.payment_status,
+              paidAt: owned.paid_at
+            })
+          ) {
+            stripPaymentBookingIdFromUrl();
+          } else if (normalizeStatus(owned.status) !== "completed") {
+            stripPaymentBookingIdFromUrl();
+          } else {
+            paymentRecoveryBooking = owned;
+            if (!bookingRows.some((row) => String(row.id) === String(owned.id))) {
+              bookingRows = [owned, ...bookingRows];
+            }
+          }
+        }
+
         // Always re-read parent-scoped dismissals from localStorage so login/refresh
         // cannot resurface a booking the parent already dismissed with X.
         const dismissedRejectedIds = readDismissedRejectedBookingIds(uid);
@@ -681,8 +765,10 @@ export function ParentDashboardClient({
         dismissedApprovedBookingIdsRef.current = dismissedApprovedIds;
         setDismissedApprovedBookingIds(dismissedApprovedIds);
 
-        const booking = pickParentDashboardBooking(bookingRows, {
-          preferBookingId: activeBookingRef.current?.id ?? null,
+        const preferDashboardBookingId =
+          paymentRecoveryBooking?.id ?? activeBookingRef.current?.id ?? null;
+        const booking = paymentRecoveryBooking ?? pickParentDashboardBooking(bookingRows, {
+          preferBookingId: preferDashboardBookingId,
           settlementLocked: settlementIsLocked(),
           dismissedRejectedIds,
           dismissedApprovedIds,
@@ -872,11 +958,13 @@ export function ParentDashboardClient({
           continue;
         }
 
-        const settlementSession = await fetchLatestParentSessionRow(supabase, uid, {
-          statuses: [...SESSION_SETTLEMENT_FETCH_STATUSES],
-          orderBy: "created_at",
-          ascending: false
-        });
+        const settlementSession = paymentRecoveryBooking
+          ? { row: null as SupabaseSessionRow | null }
+          : await fetchLatestParentSessionRow(supabase, uid, {
+              statuses: [...SESSION_SETTLEMENT_FETCH_STATUSES],
+              orderBy: "created_at",
+              ascending: false
+            });
 
         let settlementRow = settlementSession.row;
         if (
@@ -1577,6 +1665,7 @@ export function ParentDashboardClient({
         "checkout",
         "paid",
         "bookingId",
+        PARENT_PAYMENT_BOOKING_QUERY_PARAM,
         "shiftSessionId",
         "sessionId",
         "gateway",

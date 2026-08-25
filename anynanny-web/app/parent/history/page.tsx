@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { PageBackButton } from "@/components/navigation/page-back-link";
 
 import {
@@ -59,6 +60,13 @@ import {
 } from "@/lib/bookings/cancellation-request";
 import { STUCK_SHIFT_REVIEW_LABEL } from "@/lib/bookings/stuck-shift-review";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
+import {
+  BOOKING_PAYMENT_STATUS_LABELS,
+  parentCompletedShiftPaymentActionLabel,
+  parentPaymentRecoveryHref,
+  resolveBookingPaymentDisplayKind,
+  type BookingPaymentDisplayKind
+} from "@/lib/bookings/payment-status-label";
 
 type NannyShiftHistoryItem = {
   id: string;
@@ -73,6 +81,8 @@ type NannyShiftHistoryItem = {
   total_cost: number | null;
 
   status: string;
+  paymentKind?: BookingPaymentDisplayKind | null;
+  paymentActionLabel?: string | null;
   cancellation_label?: string | null;
   cancellation_message?: string | null;
   cancelled_at_label?: string | null;
@@ -91,13 +101,21 @@ type DateFilterMode =
 function parentHistoryStatusLabel(
   bookingStatus: string,
   session: HistorySessionRow | null | undefined,
-  requiresAdminReview?: boolean | null
+  requiresAdminReview?: boolean | null,
+  payment?: { paymentStatus?: string | null; paidAt?: string | null }
 ): string {
   if (requiresAdminReview === true) return STUCK_SHIFT_REVIEW_LABEL;
 
   const status = String(bookingStatus ?? "").trim().toLowerCase();
 
-  if (status === "completed") return "שולם";
+  if (status === "completed") {
+    return BOOKING_PAYMENT_STATUS_LABELS[
+      resolveBookingPaymentDisplayKind({
+        paymentStatus: payment?.paymentStatus,
+        paidAt: payment?.paidAt
+      })
+    ];
+  }
   if (status === "rejected") return "נדחתה";
   if (status === "cancelled") return "בוטלה";
   if (status === "pending") return "ממתינה לאישור";
@@ -331,6 +349,8 @@ export default function ParentHistoryPage() {
                 status,
                 hourly_rate_nis,
                 requires_admin_review,
+                payment_status,
+                paid_at,
                 profiles:sitter_id (
                   first_name
                 )
@@ -373,6 +393,8 @@ export default function ParentHistoryPage() {
                 status,
                 hourly_rate_nis,
                 requires_admin_review,
+                payment_status,
+                paid_at,
                 profiles:sitter_id (
                   first_name
                 )
@@ -410,6 +432,52 @@ export default function ParentHistoryPage() {
                 end_time,
                 status,
                 hourly_rate_nis,
+                payment_status,
+                paid_at,
+                profiles:sitter_id (
+                  first_name
+                )
+              `)
+                .eq(
+                  "parent_id",
+                  resolvedParentId
+                )
+                .order(
+                  "booking_date",
+                  {
+                    ascending: false
+                  }
+                )) as {
+                data: unknown;
+                error: { message: string } | null;
+              };
+          }
+
+          if (
+            bookingsResult.error &&
+            (
+              isPostgrestMissingColumnError(
+                bookingsResult.error.message,
+                "payment_status"
+              ) ||
+              isPostgrestMissingColumnError(
+                bookingsResult.error.message,
+                "paid_at"
+              )
+            )
+          ) {
+            bookingsResult =
+              (await supabase
+                .from("bookings")
+                .select(`
+                id,
+                sitter_id,
+                booking_date,
+                start_time,
+                end_time,
+                status,
+                hourly_rate_nis,
+                requires_admin_review,
                 profiles:sitter_id (
                   first_name
                 )
@@ -681,7 +749,11 @@ export default function ParentHistoryPage() {
                   let statusLabel = parentHistoryStatusLabel(
                     String(booking.status ?? ""),
                     session,
-                    booking.requires_admin_review === true
+                    booking.requires_admin_review === true,
+                    {
+                      paymentStatus: booking.payment_status,
+                      paidAt: booking.paid_at
+                    }
                   );
 
                   const cancellation = pickCancellationFields(
@@ -697,6 +769,24 @@ export default function ParentHistoryPage() {
                   if (cancellationLabel) {
                     statusLabel = cancellationLabel;
                   }
+
+                  const bookingStatus = String(booking.status ?? "").trim().toLowerCase();
+                  const isCompletedUnreviewed =
+                    bookingStatus === "completed" &&
+                    booking.requires_admin_review !== true &&
+                    !cancellationLabel;
+                  const paymentKind = isCompletedUnreviewed
+                    ? resolveBookingPaymentDisplayKind({
+                        paymentStatus: booking.payment_status,
+                        paidAt: booking.paid_at
+                      })
+                    : null;
+                  const paymentActionLabel = isCompletedUnreviewed
+                    ? parentCompletedShiftPaymentActionLabel({
+                        paymentStatus: booking.payment_status,
+                        paidAt: booking.paid_at
+                      })
+                    : null;
 
                   return {
                     id:
@@ -725,6 +815,9 @@ export default function ParentHistoryPage() {
 
                     status:
                       statusLabel,
+
+                    paymentKind,
+                    paymentActionLabel,
 
                     cancellation_label:
                       cancellationLabel,
@@ -1209,11 +1302,16 @@ export default function ParentHistoryPage() {
 
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        shift.paymentKind === "paid" ||
                         shift.status ===
                         "שולם"
                           ? "bg-emerald-50 text-emerald-700"
                           : shift.cancellation_label
                             ? "bg-rose-50 text-rose-700"
+                          : shift.paymentKind === "pending_checkout"
+                            ? "bg-rose-50 text-rose-800"
+                          : shift.paymentKind === "unpaid"
+                            ? "bg-amber-50 text-amber-800"
                           : shift.status ===
                               "ממתין לאישור"
                             ? "bg-blue-50 text-blue-700"
@@ -1292,6 +1390,14 @@ export default function ParentHistoryPage() {
                     <p className="mt-1 text-right text-[11px] tabular-nums text-slate-500">
                       בוטל ב־{shift.cancelled_at_label}
                     </p>
+                  ) : null}
+                  {shift.paymentActionLabel ? (
+                    <Link
+                      href={parentPaymentRecoveryHref(shift.id)}
+                      className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[#001F3F] px-4 py-2.5 text-sm font-bold text-white transition hover:brightness-110"
+                    >
+                      {shift.paymentActionLabel}
+                    </Link>
                   ) : null}
                 </div>
               )
