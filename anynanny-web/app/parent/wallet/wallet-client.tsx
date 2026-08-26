@@ -321,7 +321,7 @@ export default function ParentWalletClient() {
   };
 
   return (
-    <MainLayout>
+    <MainLayout showBrandHeader={false}>
       <div className="mx-auto w-full max-w-md space-y-5" dir="rtl">
         <div className="flex w-full items-center justify-between gap-3 px-1 pt-2" dir="ltr">
           <PageBackLink href="/parent/dashboard" />
