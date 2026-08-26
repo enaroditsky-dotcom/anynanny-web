@@ -1,24 +1,31 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { ArrowUpRight, ArrowDownLeft, Loader2, RefreshCw } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { PageBackLink } from "@/components/navigation/page-back-link";
 import { SitterPayoutWalletCards } from "@/components/sitter/SitterPayoutWalletCards";
 import { ActionToast } from "@/components/ui/action-toast";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
+  EMPTY_SITTER_EARNINGS_SUMMARY,
   fetchSitterWalletView,
+  type SitterEarningsSummary,
   type SitterWalletTransaction
 } from "@/lib/wallet/sitter-wallet";
+
+function formatNis(amount: number): string {
+  return `₪${amount.toFixed(2)}`;
+}
 
 export default function SitterWalletPage() {
   const { user, isLoading: authLoading } = useAuth();
   const supabase = getSupabaseBrowserClient();
 
-  const [balance, setBalance] = useState<number>(0);
+  const [earnings, setEarnings] = useState<SitterEarningsSummary>(EMPTY_SITTER_EARNINGS_SUMMARY);
   const [transactions, setTransactions] = useState<SitterWalletTransaction[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [payoutReloadToken, setPayoutReloadToken] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -27,11 +34,11 @@ export default function SitterWalletPage() {
     setLoadingData(true);
     try {
       const result = await fetchSitterWalletView(supabase, user.id);
-      setBalance(Number.isFinite(result.balance) ? result.balance : 0);
+      setEarnings(result.earningsSummary ?? EMPTY_SITTER_EARNINGS_SUMMARY);
       setTransactions(Array.isArray(result.transactions) ? result.transactions : []);
     } catch (err) {
       console.warn("[sitter-wallet] failed to load wallet view:", err);
-      setBalance(0);
+      setEarnings(EMPTY_SITTER_EARNINGS_SUMMARY);
       setTransactions([]);
     } finally {
       setLoadingData(false);
@@ -102,6 +109,9 @@ export default function SitterWalletPage() {
   }, [user?.id, fetchWalletData]);
 
   const isPageLoading = authLoading || loadingData;
+  const monthEarnings = isPageLoading ? 0 : earnings.monthEarnings;
+  const yearEarnings = isPageLoading ? 0 : earnings.yearEarnings;
+  const monthShiftCount = isPageLoading ? 0 : earnings.monthShiftCount;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-12">
@@ -125,15 +135,20 @@ export default function SitterWalletPage() {
         </header>
 
         <section className="relative overflow-hidden rounded-3xl bg-[#0B3C5D] p-6 text-white shadow-soft">
-          <p className="text-xs font-medium text-white/70">היתרה שלך הזמינה למשיכה</p>
-          <div className="mt-2 flex items-baseline gap-1">
-            <span className="text-4xl font-extrabold tracking-tight tabular-nums">
-              ₪{isPageLoading ? "0.00" : balance.toFixed(2)}
-            </span>
-          </div>
-          <p className="mt-3 text-[13px] leading-relaxed text-white/60">
-            הרווחים מתווספים אוטומטית לאחר אישור תשלום מאובטח ב־HYP. יתרה זמינה כוללת רק עסקאות שאושרו.
+          <p className="text-xs font-medium text-white/70">הכנסות החודש</p>
+          <p className="mt-2 min-w-0 truncate text-4xl font-extrabold tracking-tight tabular-nums">
+            {formatNis(monthEarnings)}
           </p>
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/15 pt-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-white/70">סה״כ מתחילת השנה</p>
+              <p className="mt-1 truncate text-lg font-bold tabular-nums">{formatNis(yearEarnings)}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-white/70">משמרות החודש</p>
+              <p className="mt-1 text-lg font-bold tabular-nums">{monthShiftCount}</p>
+            </div>
+          </div>
         </section>
 
         {user?.id ? (
@@ -141,65 +156,89 @@ export default function SitterWalletPage() {
         ) : null}
 
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
-          <h2 className="text-sm font-bold text-navy-header">הכנסות ותשלומים</h2>
-          <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
-            הכספים מעובדים באופן מאובטח דרך שער התשלומים המורשה HYP.
-          </p>
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((open) => !open)}
+            aria-expanded={historyOpen}
+            aria-controls="sitter-earnings-history"
+            className="flex w-full items-center justify-between gap-3 text-right"
+          >
+            <h2 className="text-sm font-bold text-navy-header">הכנסות ותשלומים</h2>
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${
+                historyOpen ? "rotate-180" : ""
+              }`}
+              aria-hidden
+            />
+          </button>
 
-          <div className="mt-3 space-y-2">
-            {isPageLoading ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-8 text-slate-400">
-                <Loader2 className="h-5 w-5 animate-spin text-navy-header" />
-                <p className="text-xs">שולפים תנועות ארנק...</p>
-              </div>
-            ) : transactions.length === 0 ? (
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 text-center">
-                <p className="text-xs font-bold text-navy-header">אין פעולות להצגה עדיין</p>
-                <p className="mt-1 text-[13px] text-slate-500">
-                  הרווחים ממשמרות שהושלמו ומשיכות כספים יופיעו כאן.
-                </p>
-              </div>
-            ) : (
-              transactions.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-100 bg-[#FDFBF6]/20 p-3"
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                        tx.type === "earnings" || tx.type === "bonus"
-                          ? "bg-emerald-50 text-emerald-600"
-                          : "bg-rose-50 text-rose-600"
-                      }`}
-                    >
-                      {tx.type === "earnings" || tx.type === "bonus" ? (
-                        <ArrowDownLeft className="h-4 w-4" />
-                      ) : (
-                        <ArrowUpRight className="h-4 w-4" />
-                      )}
-                    </div>
-                    <div className="min-w-0 text-right">
-                      <p className="truncate text-xs font-bold text-slate-800">{tx.description}</p>
-                      <p className="text-[12px] tabular-nums text-slate-400">
-                        {new Date(tx.created_at).toLocaleDateString("he-IL")}
-                        {tx.status === "pending" ? " · ממתין לאישור תשלום" : ""}
-                      </p>
-                    </div>
+          <div
+            id="sitter-earnings-history"
+            className={`grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out ${
+              historyOpen ? "mt-3 grid-rows-[1fr] opacity-100" : "mt-0 grid-rows-[0fr] opacity-0"
+            }`}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <p className="text-[12px] leading-relaxed text-slate-500">
+                הכספים מעובדים באופן מאובטח דרך שער התשלומים המורשה HYP.
+              </p>
+
+              <div className="mt-3 space-y-2">
+                {isPageLoading ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-8 text-slate-400">
+                    <Loader2 className="h-5 w-5 animate-spin text-navy-header" />
+                    <p className="text-xs">שולפים תנועות ארנק...</p>
                   </div>
-                  <span
-                    className={`text-xs font-bold tabular-nums ${
-                      tx.type === "earnings" || tx.type === "bonus"
-                        ? "text-emerald-600"
-                        : "text-slate-700"
-                    }`}
-                  >
-                    {tx.type === "earnings" || tx.type === "bonus" ? "+" : "-"}₪
-                    {Number(tx.amount).toFixed(2)}
-                  </span>
-                </div>
-              ))
-            )}
+                ) : transactions.length === 0 ? (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 text-center">
+                    <p className="text-xs font-bold text-navy-header">אין פעולות להצגה עדיין</p>
+                    <p className="mt-1 text-[13px] text-slate-500">
+                      הרווחים ממשמרות שהושלמו יופיעו כאן.
+                    </p>
+                  </div>
+                ) : (
+                  transactions.map((tx) => (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between rounded-xl border border-slate-100 bg-[#FDFBF6]/20 p-3"
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                            tx.type === "earnings" || tx.type === "bonus"
+                              ? "bg-emerald-50 text-emerald-600"
+                              : "bg-rose-50 text-rose-600"
+                          }`}
+                        >
+                          {tx.type === "earnings" || tx.type === "bonus" ? (
+                            <ArrowDownLeft className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpRight className="h-4 w-4" />
+                          )}
+                        </div>
+                        <div className="min-w-0 text-right">
+                          <p className="truncate text-xs font-bold text-slate-800">{tx.description}</p>
+                          <p className="text-[12px] tabular-nums text-slate-400">
+                            {new Date(tx.created_at).toLocaleDateString("he-IL")}
+                            {tx.status === "pending" ? " · ממתין לאישור תשלום" : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={`ms-2 shrink-0 text-xs font-bold tabular-nums ${
+                          tx.type === "earnings" || tx.type === "bonus"
+                            ? "text-emerald-600"
+                            : "text-slate-700"
+                        }`}
+                      >
+                        {tx.type === "earnings" || tx.type === "bonus" ? "+" : "-"}₪
+                        {Number(tx.amount).toFixed(2)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </section>
       </div>

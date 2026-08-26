@@ -15,6 +15,82 @@ export type SitterWalletTransaction = {
   status: SitterWalletTransactionStatus;
 };
 
+export type SitterEarningsLedgerRow = {
+  id?: string | null;
+  type: string;
+  amount: number;
+  status: string;
+  created_at: string;
+  booking_id?: string | null;
+};
+
+export type SitterEarningsSummary = {
+  monthEarnings: number;
+  yearEarnings: number;
+  monthShiftCount: number;
+};
+
+export const EMPTY_SITTER_EARNINGS_SUMMARY: SitterEarningsSummary = {
+  monthEarnings: 0,
+  yearEarnings: 0,
+  monthShiftCount: 0
+};
+
+function isSucceededIncomeType(type: string): boolean {
+  return type === "earnings" || type === "bonus";
+}
+
+/** Calendar-local earnings from succeeded shift payments (excludes pending/failed/payout). */
+export function summarizeSitterEarnings(
+  rows: SitterEarningsLedgerRow[],
+  asOf: Date = new Date()
+): SitterEarningsSummary {
+  const year = asOf.getFullYear();
+  const month = asOf.getMonth();
+  let monthEarnings = 0;
+  let yearEarnings = 0;
+  const monthShiftKeys = new Set<string>();
+
+  for (const row of rows) {
+    const type = String(row.type ?? "");
+    const status = String(row.status ?? "");
+    if (!isSucceededIncomeType(type) || status !== "succeeded") continue;
+
+    const amount = Number(row.amount);
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+
+    const created = new Date(row.created_at);
+    if (Number.isNaN(created.getTime()) || created.getFullYear() !== year) continue;
+
+    yearEarnings += amount;
+    if (created.getMonth() !== month) continue;
+
+    monthEarnings += amount;
+    if (type !== "earnings") continue;
+
+    const bookingId = typeof row.booking_id === "string" ? row.booking_id.trim() : "";
+    const rowId = typeof row.id === "string" ? row.id.trim() : "";
+    monthShiftKeys.add(bookingId ? `booking:${bookingId}` : rowId ? `id:${rowId}` : `anon:${monthShiftKeys.size}`);
+  }
+
+  return {
+    monthEarnings: Number(monthEarnings.toFixed(2)),
+    yearEarnings: Number(yearEarnings.toFixed(2)),
+    monthShiftCount: monthShiftKeys.size
+  };
+}
+
+function mapLedgerRow(row: Record<string, unknown>): SitterEarningsLedgerRow {
+  return {
+    id: row.id != null ? String(row.id) : null,
+    type: String(row.type ?? "earnings"),
+    amount: Number(row.amount) || 0,
+    status: String(row.status ?? "succeeded"),
+    created_at: String(row.created_at ?? ""),
+    booking_id: row.booking_id != null ? String(row.booking_id) : null
+  };
+}
+
 function isMissingRelationError(message: string | undefined): boolean {
   const msg = message ?? "";
   return (
@@ -65,27 +141,34 @@ export async function ensureSitterWalletRow(
   };
 }
 
+function emptyWalletView(error: string | null, missingSchema: boolean, balance = 0) {
+  return {
+    balance,
+    transactions: [] as SitterWalletTransaction[],
+    earningsSummary: { ...EMPTY_SITTER_EARNINGS_SUMMARY },
+    error,
+    missingSchema
+  };
+}
+
 export async function fetchSitterWalletView(
   supabase: SupabaseClient,
-  sitterId: string
+  sitterId: string,
+  asOf: Date = new Date()
 ): Promise<{
   balance: number;
   transactions: SitterWalletTransaction[];
+  earningsSummary: SitterEarningsSummary;
   error: string | null;
   missingSchema: boolean;
 }> {
   if (!sitterId.trim()) {
-    return { balance: 0, transactions: [], error: "Missing sitter id", missingSchema: false };
+    return emptyWalletView("Missing sitter id", false);
   }
 
   const ensured = await ensureSitterWalletRow(supabase);
   if (ensured.missingSchema) {
-    return {
-      balance: 0,
-      transactions: [],
-      error: ensured.error,
-      missingSchema: true
-    };
+    return emptyWalletView(ensured.error, true);
   }
 
   const { data: wallet, error: walletError } = await supabase
@@ -95,12 +178,11 @@ export async function fetchSitterWalletView(
     .maybeSingle();
 
   if (walletError) {
-    return {
-      balance: ensured.balance,
-      transactions: [],
-      error: walletError.message,
-      missingSchema: isMissingRelationError(walletError.message)
-    };
+    return emptyWalletView(
+      walletError.message,
+      isMissingRelationError(walletError.message),
+      ensured.balance
+    );
   }
 
   const balance =
@@ -117,10 +199,7 @@ export async function fetchSitterWalletView(
 
   if (txError) {
     return {
-      balance,
-      transactions: [],
-      error: txError.message,
-      missingSchema: isMissingRelationError(txError.message)
+      ...emptyWalletView(txError.message, isMissingRelationError(txError.message), balance)
     };
   }
 
@@ -141,7 +220,36 @@ export async function fetchSitterWalletView(
     };
   });
 
-  return { balance, transactions, error: null, missingSchema: false };
+  const yearStartIso = new Date(asOf.getFullYear(), 0, 1).toISOString();
+  const { data: earningsRows, error: earningsError } = await supabase
+    .from(SITTER_TRANSACTIONS_TABLE)
+    .select("id, type, amount, created_at, status, booking_id")
+    .eq("sitter_id", sitterId)
+    .in("type", ["earnings", "bonus"])
+    .eq("status", "succeeded")
+    .gte("created_at", yearStartIso);
+
+  let earningsSummary = EMPTY_SITTER_EARNINGS_SUMMARY;
+  if (earningsError) {
+    console.warn("[sitter-wallet] earnings summary query failed:", earningsError.message);
+    earningsSummary = summarizeSitterEarnings(
+      transactions.map((tx) => ({
+        id: tx.id,
+        type: tx.type,
+        amount: tx.amount,
+        status: tx.status,
+        created_at: tx.created_at
+      })),
+      asOf
+    );
+  } else {
+    earningsSummary = summarizeSitterEarnings(
+      (earningsRows ?? []).map((row) => mapLedgerRow(row as Record<string, unknown>)),
+      asOf
+    );
+  }
+
+  return { balance, transactions, earningsSummary, error: null, missingSchema: false };
 }
 
 /** Best-effort credit after payment finalize (DB trigger is primary; this is a safety net). */
