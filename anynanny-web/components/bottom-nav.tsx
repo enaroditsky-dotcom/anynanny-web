@@ -40,7 +40,7 @@ const parentSideItems: NavItem[] = [
   {
     href: "/parent/settings",
     label: "הגדרות",
-    match: (p) => p.startsWith("/parent/settings"),
+    match: (p) => p.startsWith("/parent/settings") || p.startsWith("/parent/faq"),
     Icon: Settings
   }
 ];
@@ -68,7 +68,7 @@ const sitterItems: NavItem[] = [
   {
     href: "/sitter/settings",
     label: "הגדרות",
-    match: (p) => p.startsWith("/sitter/settings"),
+    match: (p) => p.startsWith("/sitter/settings") || p.startsWith("/sitter/faq"),
     Icon: Settings
   }
 ];
