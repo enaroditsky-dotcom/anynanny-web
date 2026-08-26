@@ -260,9 +260,11 @@ export function SettingsFaqAccordion({
           <div key={item.id}>
             <button
               type="button"
+              id={`faq-question-${item.id}`}
               onClick={() => onToggle(open ? "" : item.id)}
               className="flex w-full items-center gap-3 px-4 py-3.5 text-right transition active:bg-[#001F3F]/[0.03]"
               aria-expanded={open}
+              aria-controls={`faq-answer-${item.id}`}
             >
               <span className="min-w-0 flex-1 break-words text-sm font-semibold leading-snug text-[#001F3F]">
                 {item.question}
@@ -273,7 +275,12 @@ export function SettingsFaqAccordion({
               />
             </button>
             {open ? (
-              <p className="break-words border-t border-[#001F3F]/8 px-4 py-3 text-right text-xs leading-relaxed text-slate-600">
+              <p
+                id={`faq-answer-${item.id}`}
+                role="region"
+                aria-labelledby={`faq-question-${item.id}`}
+                className="break-words border-t border-[#001F3F]/8 px-4 py-3 text-right text-sm leading-relaxed text-slate-600"
+              >
                 {item.answer}
               </p>
             ) : null}
