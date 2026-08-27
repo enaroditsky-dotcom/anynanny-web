@@ -18,6 +18,10 @@ import {
   PARENT_CALENDAR_VIEW_OPTIONS,
   type CalendarViewMode
 } from "@/lib/bookings/calendar-shift-filters";
+import {
+  calendarBookingDomId,
+  dateIsoInCalendarMonth
+} from "@/lib/bookings/focus-calendar-booking";
 import { PendingWithdrawButton } from "@/components/bookings/pending-withdraw-button";
 import { ScheduledShiftActions } from "@/components/bookings/scheduled-shift-actions";
 import { CancelledShiftAckBanner } from "@/components/bookings/cancelled-shift-ack-banner";
@@ -139,6 +143,42 @@ export function buildCalendarShiftsByDate(shifts: CalendarShift[]): Map<string, 
   return map;
 }
 
+function completedCalendarPaymentClass(shift: CalendarShift): string {
+  const kind = resolveBookingPaymentDisplayKind({
+    paymentStatus: shift.paymentStatus,
+    paidAt: shift.paidAt
+  });
+  if (kind === "paid") return "bg-emerald-50 text-emerald-800 border-emerald-100";
+  if (kind === "pending_checkout") return "bg-rose-50 text-rose-800 border-rose-100";
+  return "bg-amber-50 text-amber-800 border-amber-100";
+}
+
+function CalendarShiftStatusBadge({ shift }: { shift: CalendarShift }) {
+  if (shift.status === "completed") {
+    return (
+      <span
+        className={`shrink-0 rounded-full border px-2 py-0.5 text-center text-xs font-semibold ${completedCalendarPaymentClass(shift)}`}
+      >
+        <span className="block leading-tight whitespace-nowrap">הושלם</span>
+        <span className="mt-0.5 block text-[11px] font-semibold leading-tight whitespace-nowrap">
+          {bookingPaymentStatusLabel({
+            paymentStatus: shift.paymentStatus,
+            paidAt: shift.paidAt
+          })}
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
+    >
+      {bookingStatusLabel(shift.status)}
+    </span>
+  );
+}
+
 function bookingStatusLabel(status: BookingStatus): string {
   switch (status) {
     case "pending":
@@ -178,42 +218,6 @@ function statusBadgeClass(status: BookingStatus): string {
     default:
       return "bg-slate-100 text-slate-600 border-slate-200";
   }
-}
-
-function completedCalendarPaymentClass(shift: CalendarShift): string {
-  const kind = resolveBookingPaymentDisplayKind({
-    paymentStatus: shift.paymentStatus,
-    paidAt: shift.paidAt
-  });
-  if (kind === "paid") return "bg-emerald-50 text-emerald-800 border-emerald-100";
-  if (kind === "pending_checkout") return "bg-rose-50 text-rose-800 border-rose-100";
-  return "bg-amber-50 text-amber-800 border-amber-100";
-}
-
-function CalendarShiftStatusBadge({ shift }: { shift: CalendarShift }) {
-  if (shift.status === "completed") {
-    return (
-      <span
-        className={`shrink-0 rounded-full border px-2 py-0.5 text-center text-xs font-semibold ${completedCalendarPaymentClass(shift)}`}
-      >
-        <span className="block leading-tight whitespace-nowrap">הושלם</span>
-        <span className="mt-0.5 block text-[11px] font-semibold leading-tight whitespace-nowrap">
-          {bookingPaymentStatusLabel({
-            paymentStatus: shift.paymentStatus,
-            paidAt: shift.paidAt
-          })}
-        </span>
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${statusBadgeClass(shift.status)}`}
-    >
-      {bookingStatusLabel(shift.status)}
-    </span>
-  );
 }
 
 function shiftAccentClass(status: BookingStatus): string {
@@ -262,9 +266,27 @@ export type CalendarShiftActionContext = {
   onAcknowledgeCancellation?: (shift: CalendarShift) => void;
   onWithdrawPending?: (shift: CalendarShift) => void;
   onWithdrawPendingError?: (message: string) => void;
+  highlightedBookingId?: string | null;
 };
 
 type CalendarViewsContext = CalendarShiftActionContext;
+
+function useScrollToHighlightedBooking(shiftId: string, highlightedBookingId?: string | null) {
+  useEffect(() => {
+    if (!highlightedBookingId || highlightedBookingId !== shiftId) return;
+    const el = document.getElementById(calendarBookingDomId(shiftId));
+    if (!el) return;
+    try {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    } catch {
+      /* ignore environments without layout/scroll */
+    }
+  }, [shiftId, highlightedBookingId]);
+}
+
+function bookingHighlightClass(highlighted: boolean): string {
+  return highlighted ? " ring-2 ring-navy-header/40 ring-offset-2" : "";
+}
 
 function CalendarEmptyState({ message }: { message: string }) {
   return (
@@ -387,11 +409,14 @@ function ShiftCard({
   onApproveCancellation,
   onAcknowledgeCancellation,
   onWithdrawPending,
-  onWithdrawPendingError
+  onWithdrawPendingError,
+  highlightedBookingId
 }: CalendarViewsContext & {
   shift: CalendarShift;
   compact?: boolean;
 }) {
+  const highlighted = highlightedBookingId === shift.id;
+  useScrollToHighlightedBooking(shift.id, highlightedBookingId);
   const actionProps = {
     profileHref,
     profileLinkLabel,
@@ -408,7 +433,10 @@ function ShiftCard({
 
   return (
     <div
-      className={`rounded-2xl border border-slate-200/80 p-3 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
+      id={calendarBookingDomId(shift.id)}
+      data-booking-id={shift.id}
+      aria-current={highlighted ? "true" : undefined}
+      className={`rounded-2xl border border-slate-200/80 p-3 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4${bookingHighlightClass(highlighted)}`}
     >
       <div className="flex items-start justify-between gap-2">
         <CalendarShiftStatusBadge shift={shift} />
@@ -637,6 +665,7 @@ export function MonthGridView({
   currentYear,
   onMonthChange,
   onYearChange,
+  focusDateIso = null,
   ...actionContext
 }: CalendarViewsContext & {
   shifts: CalendarShift[];
@@ -644,18 +673,22 @@ export function MonthGridView({
   currentYear: number;
   onMonthChange: (month: number) => void;
   onYearChange: (year: number) => void;
+  focusDateIso?: string | null;
 }) {
   const firstDay = new Date(currentYear, currentMonth - 1, 1);
   const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
   const startOffset = firstDay.getDay();
-  const [selectedIso, setSelectedIso] = useState<string | null>(null);
+  const [selectedIso, setSelectedIso] = useState<string | null>(() =>
+    dateIsoInCalendarMonth(focusDateIso, currentMonth, currentYear)
+  );
 
   const shiftsByDate = useMemo(() => buildCalendarShiftsByDate(shifts), [shifts]);
   const monthHasShifts = shifts.length > 0;
 
   useEffect(() => {
-    setSelectedIso(null);
-  }, [currentMonth, currentYear]);
+    const focused = dateIsoInCalendarMonth(focusDateIso, currentMonth, currentYear);
+    setSelectedIso(focused);
+  }, [currentMonth, currentYear, focusDateIso]);
 
   const cells: Array<{ day: number | null; iso: string | null }> = [];
   for (let i = 0; i < startOffset; i++) cells.push({ day: null, iso: null });
@@ -819,13 +852,19 @@ function resolveShiftScheduleLabels(
 
 function AllShiftsListCard({
   shift,
+  highlightedBookingId,
   ...actionContext
 }: CalendarViewsContext & { shift: CalendarShift }) {
   const labels = resolveShiftScheduleLabels(shift);
+  const highlighted = highlightedBookingId === shift.id;
+  useScrollToHighlightedBooking(shift.id, highlightedBookingId);
 
   return (
     <li
-      className={`rounded-2xl border border-slate-200/80 p-4 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
+      id={calendarBookingDomId(shift.id)}
+      data-booking-id={shift.id}
+      aria-current={highlighted ? "true" : undefined}
+      className={`rounded-2xl border border-slate-200/80 p-4 text-right shadow-sm ${shiftAccentClass(shift.status)} border-r-4${bookingHighlightClass(highlighted)}`}
     >
       <div className="flex flex-row-reverse items-start justify-between gap-2">
         <CalendarShiftStatusBadge shift={shift} />

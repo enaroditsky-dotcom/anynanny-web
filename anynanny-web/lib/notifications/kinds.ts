@@ -1,3 +1,5 @@
+﻿import { calendarBookingHref } from "@/lib/bookings/focus-calendar-booking";
+
 export const CANONICAL_NOTIFICATION_KINDS = [
   "booking_request",
   "booking_approved",
@@ -13,20 +15,22 @@ export const CANONICAL_NOTIFICATION_KINDS = [
   "pending_booking_expired",
   "shift_end_reminder",
   "shift_cancelled_no_start",
-  "shift_confirmed"
+  "shift_confirmed",
 ] as const;
 
-export type CanonicalNotificationKind = (typeof CANONICAL_NOTIFICATION_KINDS)[number];
+export type CanonicalNotificationKind =
+  (typeof CANONICAL_NOTIFICATION_KINDS)[number];
 
 /** Documented V1 kinds that are intentionally not written in this phase. */
 export const DEFERRED_NOTIFICATION_KINDS = [
   "booking_cancellation_rejected",
   "confirm_start_required",
   "confirm_end_required",
-  "rating_required"
+  "rating_required",
 ] as const;
 
-export type DeferredNotificationKind = (typeof DEFERRED_NOTIFICATION_KINDS)[number];
+export type DeferredNotificationKind =
+  (typeof DEFERRED_NOTIFICATION_KINDS)[number];
 
 export type CanonicalNotificationPayload = {
   booking_id?: string | null;
@@ -57,7 +61,9 @@ export type CanonicalNotificationPayload = {
   gateway?: string | null;
 };
 
-export function isCanonicalNotificationKind(value: string): value is CanonicalNotificationKind {
+export function isCanonicalNotificationKind(
+  value: string
+): value is CanonicalNotificationKind {
   return (CANONICAL_NOTIFICATION_KINDS as readonly string[]).includes(value);
 }
 
@@ -73,38 +79,75 @@ export function notificationDedupeKey(
 ): string | null {
   if (kind === "chat_message") return ids.messageId?.trim() || null;
   if (kind === "broadcast_alert") return ids.broadcastId?.trim() || null;
-  if (kind === "payment_required") return ids.sessionId?.trim() || ids.bookingId?.trim() || null;
-  if (kind === "payment_received") return ids.bookingId?.trim() || ids.hypApprovalId?.trim() || null;
+
+  if (kind === "payment_required") {
+    return ids.sessionId?.trim() || ids.bookingId?.trim() || null;
+  }
+
+  if (kind === "payment_received") {
+    return ids.bookingId?.trim() || ids.hypApprovalId?.trim() || null;
+  }
+
   return ids.bookingId?.trim() || null;
 }
 
-/** Later Web Push click targets. Role chooses parent vs sitter prefix. */
 export function notificationHrefForKind(
   kind: CanonicalNotificationKind,
   role: "parent" | "sitter",
   payload: CanonicalNotificationPayload
 ): string {
   const bookingId = String(payload.booking_id ?? "").trim();
+
   if (kind === "chat_message" && bookingId) {
     return `/${role}/chat/${encodeURIComponent(bookingId)}`;
   }
+
   if (kind === "payment_received") return "/sitter/wallet";
   if (kind === "payment_required") return "/parent/dashboard";
   if (kind === "broadcast_alert") return "/sitter/dashboard";
+
   if (kind.startsWith("booking_cancellation")) {
-    return role === "parent" ? "/parent/calendar" : "/sitter/shifts";
+    return calendarBookingHref(
+      role === "parent" ? "/parent/calendar" : "/sitter/shifts",
+      bookingId
+    );
   }
+
   if (kind === "booking_request") return "/sitter/dashboard";
-  if (kind === "pending_no_response_reminder" || kind === "pending_booking_expired") {
-    return "/parent/dashboard";
+
+  if (
+    kind === "pending_no_response_reminder" ||
+    kind === "pending_booking_expired"
+  ) {
+    return bookingId
+      ? calendarBookingHref("/parent/calendar", bookingId)
+      : "/parent/dashboard";
   }
-  if (kind === "shift_end_reminder" || kind === "shift_cancelled_no_start") {
-    return role === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
+
+  if (
+    kind === "shift_end_reminder" ||
+    kind === "shift_cancelled_no_start"
+  ) {
+    return role === "parent"
+      ? "/parent/dashboard"
+      : "/sitter/dashboard";
   }
-  if (kind === "booking_withdrawn_by_parent") return "/sitter/dashboard";
-  if (kind === "shift_confirmed") return "/sitter/shifts";
-  return role === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
+
+  if (kind === "booking_withdrawn_by_parent") {
+    return "/sitter/dashboard";
+  }
+
+  if (kind === "shift_confirmed") {
+    return calendarBookingHref("/sitter/shifts", bookingId);
+  }
+
+  if (kind === "booking_approved" || kind === "booking_rejected") {
+    return bookingId
+      ? calendarBookingHref("/parent/calendar", bookingId)
+      : "/parent/dashboard";
+  }
+
+  return role === "parent"
+    ? "/parent/dashboard"
+    : "/sitter/dashboard";
 }
-
-
-

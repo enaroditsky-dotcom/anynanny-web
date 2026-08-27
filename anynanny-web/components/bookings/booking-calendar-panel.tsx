@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
   AllShiftsListView,
@@ -13,6 +13,7 @@ import {
   type CalendarShiftActionContext,
   type CalendarViewMode
 } from "@/components/bookings/booking-calendar-views";
+import { calendarStateForFocusBooking } from "@/lib/bookings/focus-calendar-booking";
 
 type BookingCalendarPanelProps = CalendarShiftActionContext & {
   shifts: CalendarShift[];
@@ -20,6 +21,7 @@ type BookingCalendarPanelProps = CalendarShiftActionContext & {
   viewModeSelectId?: string;
   className?: string;
   viewOptions?: { value: CalendarViewMode; label: string }[];
+  focusBookingId?: string | null;
 };
 
 export function BookingCalendarPanel({
@@ -38,12 +40,40 @@ export function BookingCalendarPanel({
   onWithdrawPending,
   onWithdrawPendingError,
   className = "",
-  viewOptions = CALENDAR_VIEW_OPTIONS
+  viewOptions = CALENDAR_VIEW_OPTIONS,
+  focusBookingId = null
 }: BookingCalendarPanelProps) {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("today");
   const initialPeriod = new Date();
   const [currentMonth, setCurrentMonth] = useState(initialPeriod.getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(initialPeriod.getFullYear());
+  const appliedFocusRef = useRef<string | null>(null);
+
+  const allowedViews = useMemo(
+    () => viewOptions.map((option) => option.value),
+    [viewOptions]
+  );
+
+  const focusState = useMemo(
+    () =>
+      calendarStateForFocusBooking(shifts, focusBookingId, {
+        viewOptions: allowedViews
+      }),
+    [shifts, focusBookingId, allowedViews]
+  );
+
+  useEffect(() => {
+    if (!focusBookingId) {
+      appliedFocusRef.current = null;
+      return;
+    }
+    if (!focusState) return;
+    if (appliedFocusRef.current === focusBookingId) return;
+    appliedFocusRef.current = focusBookingId;
+    setViewMode(focusState.viewMode);
+    setCurrentMonth(focusState.month);
+    setCurrentYear(focusState.year);
+  }, [focusBookingId, focusState]);
 
   const filteredShifts = useMemo(
     () =>
@@ -68,7 +98,8 @@ export function BookingCalendarPanel({
     onApproveCancellation,
     onAcknowledgeCancellation,
     onWithdrawPending,
-    onWithdrawPendingError
+    onWithdrawPendingError,
+    highlightedBookingId: focusState?.highlightedBookingId ?? null
   };
 
   return (
@@ -110,6 +141,7 @@ export function BookingCalendarPanel({
             currentYear={currentYear}
             onMonthChange={setCurrentMonth}
             onYearChange={setCurrentYear}
+            focusDateIso={focusState?.dateIso ?? null}
             {...viewProps}
           />
         ) : viewMode === "pending_sitter_approval" ? (
