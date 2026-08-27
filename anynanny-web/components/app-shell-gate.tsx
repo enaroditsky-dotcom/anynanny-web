@@ -5,11 +5,11 @@ import { memo } from "react";
 import { usePathname } from "next/navigation";
 
 import { AppShellHeader } from "@/components/app-shell-header";
+import { GlobalCoordinationNotifications } from "@/components/notifications/global-coordination-notifications";
 import { AppShellSessionHydration } from "@/components/app-shell-session-hydration";
 import { AppShellStableBoundary } from "@/components/app-shell-stable-boundary";
 import { BottomNav } from "@/components/bottom-nav";
 import { ParentActiveNowDock } from "@/components/parent/parent-active-now-dock";
-import { AccountSuspendedGate } from "@/components/safety/account-suspended-gate";
 import { PushPermissionBanner } from "@/components/push/push-permission-banner";
 import { PushRuntime } from "@/components/push/push-runtime";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
@@ -27,6 +27,7 @@ const CHROMELESS_PREFIXES = [
   "/register",
   "/terms",
   "/privacy",
+  "/account-deletion",
   "/sitter/onboarding"
 ];
 
@@ -109,7 +110,7 @@ export function AppShellGate({
         <PushRuntime />
 
         <RouteTransitionShell>
-          <AccountSuspendedGate>{children}</AccountSuspendedGate>
+          {children}
         </RouteTransitionShell>
       </SessionProvider>
     );
@@ -143,6 +144,7 @@ export function AppShellGate({
          */}
         <div className="flex min-h-dvh min-w-0 flex-col bg-[#FDFBF6]">
           <AppShellHeader />
+          <GlobalCoordinationNotifications />
 
           {/*
            * BottomNav remains mounted as a sibling of the page content.
@@ -164,7 +166,7 @@ export function AppShellGate({
               >
                 <RouteTransitionShell>
                   <PushPermissionBanner />
-                  <AccountSuspendedGate>{children}</AccountSuspendedGate>
+                  {children}
                 </RouteTransitionShell>
               </div>
             ) : (
@@ -187,7 +189,7 @@ export function AppShellGate({
               >
                 <RouteTransitionShell>
                   <PushPermissionBanner />
-                  <AccountSuspendedGate>{children}</AccountSuspendedGate>
+                  {children}
                 </RouteTransitionShell>
               </div>
             )}
