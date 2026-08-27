@@ -1,21 +1,20 @@
-﻿import { todayDateISO } from "@/lib/bookings/booking-date-utils";
+import { todayDateISO } from "@/lib/bookings/booking-date-utils";
+import { calendarBookingHref } from "@/lib/bookings/calendar-booking-href";
 import { normalizeBookingStatus } from "@/lib/bookings/booking-status-normalize";
 import {
   isPendingSitterApprovalCalendarShift,
   type CalendarViewMode
 } from "@/lib/bookings/calendar-shift-filters";
 
+export { calendarBookingHref };
+
 const DATE_ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-export function parseFocusBookingId(raw: string | null | undefined): string | null {
+export function parseFocusBookingId(
+  raw: string | null | undefined
+): string | null {
   const id = String(raw ?? "").trim();
   return id || null;
-}
-
-export function calendarBookingHref(pathname: string, bookingId?: string | null): string {
-  const id = String(bookingId ?? "").trim();
-  if (!id) return pathname;
-  return `${pathname}?bookingId=${encodeURIComponent(id)}`;
 }
 
 export function calendarBookingDomId(bookingId: string): string {
@@ -27,7 +26,11 @@ export function findCalendarShiftById<T extends { id: string }>(
   bookingId: string | null | undefined
 ): T | null {
   const id = parseFocusBookingId(bookingId);
-  if (!id) return null;
+
+  if (!id) {
+    return null;
+  }
+
   return shifts.find((shift) => shift.id === id) ?? null;
 }
 
@@ -38,8 +41,15 @@ export function dateIsoInCalendarMonth(
 ): string | null {
   const dateIso = String(iso ?? "").trim().slice(0, 10);
   const match = DATE_ISO_RE.exec(dateIso);
-  if (!match) return null;
-  if (Number(match[1]) !== year || Number(match[2]) !== month) return null;
+
+  if (!match) {
+    return null;
+  }
+
+  if (Number(match[1]) !== year || Number(match[2]) !== month) {
+    return null;
+  }
+
   return dateIso;
 }
 
@@ -51,7 +61,10 @@ export type CalendarFocusTarget = {
 };
 
 export function resolveCalendarFocusForShift(
-  shift: { bookingDate: string; status: string },
+  shift: {
+    bookingDate: string;
+    status: string;
+  },
   options: {
     viewOptions: readonly CalendarViewMode[];
     todayIso?: string;
@@ -60,29 +73,60 @@ export function resolveCalendarFocusForShift(
   const dateIso = String(shift.bookingDate ?? "").trim().slice(0, 10);
   const match = DATE_ISO_RE.exec(dateIso);
   const now = new Date();
+
   const year = match ? Number(match[1]) : now.getFullYear();
   const month = match ? Number(match[2]) : now.getMonth() + 1;
   const views = new Set(options.viewOptions);
   const parsedDateIso = match ? dateIso : "";
 
+  const normalizedStatus = normalizeBookingStatus({
+    name: shift.status
+  });
+
   if (
-    isPendingSitterApprovalCalendarShift(normalizeBookingStatus({ name: shift.status })) &&
+    normalizedStatus &&
+    isPendingSitterApprovalCalendarShift(normalizedStatus) &&
     views.has("pending_sitter_approval")
   ) {
-    return { viewMode: "pending_sitter_approval", month, year, dateIso: parsedDateIso };
+    return {
+      viewMode: "pending_sitter_approval",
+      month,
+      year,
+      dateIso: parsedDateIso
+    };
   }
 
   const todayIso = options.todayIso ?? todayDateISO();
-  if (parsedDateIso && parsedDateIso === todayIso && views.has("today")) {
-    return { viewMode: "today", month, year, dateIso: parsedDateIso };
+
+  if (
+    parsedDateIso &&
+    parsedDateIso === todayIso &&
+    views.has("today")
+  ) {
+    return {
+      viewMode: "today",
+      month,
+      year,
+      dateIso: parsedDateIso
+    };
   }
 
   if (parsedDateIso && views.has("month")) {
-    return { viewMode: "month", month, year, dateIso: parsedDateIso };
+    return {
+      viewMode: "month",
+      month,
+      year,
+      dateIso: parsedDateIso
+    };
   }
 
   if (views.has("all")) {
-    return { viewMode: "all", month, year, dateIso: parsedDateIso };
+    return {
+      viewMode: "all",
+      month,
+      year,
+      dateIso: parsedDateIso
+    };
   }
 
   return {
@@ -93,7 +137,13 @@ export function resolveCalendarFocusForShift(
   };
 }
 
-export function calendarStateForFocusBooking<T extends { id: string; bookingDate: string; status: string }>(
+export function calendarStateForFocusBooking<
+  T extends {
+    id: string;
+    bookingDate: string;
+    status: string;
+  }
+>(
   shifts: readonly T[],
   bookingId: string | null | undefined,
   options: {
@@ -102,11 +152,13 @@ export function calendarStateForFocusBooking<T extends { id: string; bookingDate
   }
 ): (CalendarFocusTarget & { highlightedBookingId: string }) | null {
   const shift = findCalendarShiftById(shifts, bookingId);
-  if (!shift) return null;
+
+  if (!shift) {
+    return null;
+  }
+
   return {
     ...resolveCalendarFocusForShift(shift, options),
     highlightedBookingId: shift.id
   };
 }
-
-

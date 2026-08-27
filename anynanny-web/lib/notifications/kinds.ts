@@ -1,4 +1,4 @@
-﻿import { calendarBookingHref } from "@/lib/bookings/focus-calendar-booking";
+﻿import { calendarBookingHref } from "@/lib/bookings/calendar-booking-href";
 
 export const CANONICAL_NOTIFICATION_KINDS = [
   "booking_request",
@@ -151,3 +151,4 @@ export function notificationHrefForKind(
     ? "/parent/dashboard"
     : "/sitter/dashboard";
 }
+
