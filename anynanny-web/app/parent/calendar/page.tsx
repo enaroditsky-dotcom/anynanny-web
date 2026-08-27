@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { BookingCalendarPanel } from "@/components/bookings/booking-calendar-panel";
 import { ShiftCancellationApproveModal } from "@/components/bookings/shift-cancellation-approve-modal";
@@ -25,7 +25,6 @@ import { PendingNoResponseReminderModal } from "@/components/bookings/pending-no
 import { useShiftCancellationFlow } from "@/lib/bookings/use-shift-cancellation-flow";
 import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { coerceBookingPaymentStatus } from "@/lib/bookings/payment-status-label";
-import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { normalizeBookingStatus } from "@/lib/bookings/booking-status-normalize";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import {
@@ -33,14 +32,18 @@ import {
   publicSitterDisplayName
 } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
+import { parseFocusBookingId } from "@/lib/bookings/focus-calendar-booking";
 
 const PARENT_CALENDAR_BASE_SELECT =
   "id, parent_id, sitter_id, booking_date, start_time, end_time, status, payment_status, paid_at";
 
 export default function ParentCalendarPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const focusBookingId = parseFocusBookingId(searchParams.get("bookingId"));
   const [ready, setReady] = useState(false);
   const [parentId, setParentId] = useState<string | null>(null);
   const [allShifts, setAllShifts] = useState<CalendarShift[]>([]);
@@ -67,7 +70,7 @@ export default function ParentCalendarPage() {
       if (error && isCancellationColumnMissing(error.message)) {
         const fallback = await supabase
           .from(BOOKINGS_TABLE)
-          .select("id, parent_id, sitter_id, booking_date, start_time, end_time, status, payment_status, paid_at")
+          .select(PARENT_CALENDAR_BASE_SELECT)
           .eq("parent_id", resolvedParentId)
           .in("status", [...PARENT_CALENDAR_LOAD_STATUSES, "cancelled"])
           .order("booking_date", { ascending: true })
@@ -79,8 +82,8 @@ export default function ParentCalendarPage() {
       if (
         error &&
         (
-          isPostgrestMissingColumnError(error.message, "payment_status") ||
-          isPostgrestMissingColumnError(error.message, "paid_at")
+          isPostgrestMissingColumnError(error.message, "paid_at") ||
+          isPostgrestMissingColumnError(error.message, "payment_status")
         )
       ) {
         const withoutPayment = await supabase
@@ -291,6 +294,7 @@ export default function ParentCalendarPage() {
         contactHref={contactHref}
         viewerRole="parent"
         viewerUserId={parentId}
+        focusBookingId={focusBookingId}
         onRequestCancellation={cancellation.openRequest}
         onApproveCancellation={cancellation.openApprove}
         onAcknowledgeCancellation={(shift) => {

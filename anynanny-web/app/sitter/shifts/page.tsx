@@ -1,10 +1,12 @@
-"use client";
+﻿"use client";
 
 import React, {
   useCallback,
   useEffect,
   useState
 } from "react";
+
+import { useSearchParams } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
 
@@ -24,7 +26,6 @@ import {
   CANCELLATION_COPY,
   cancellationHistoryLabel,
   formatCancellationDateTime,
-  formatStoredCancellationMessage,
   isCancellationColumnMissing,
   pickCancellationFields,
   withCancellationSelect
@@ -36,18 +37,20 @@ import {
   type BookingStatus
 } from "@/lib/bookings/constants";
 import {
-  isSitterPastHistoryBooking,
-  STUCK_SHIFT_REVIEW_LABEL
-} from "@/lib/bookings/stuck-shift-review";
-import {
   BOOKING_SHIFT_ENDED_LABEL,
   bookingPaymentStatusLabel,
+  coerceBookingPaymentStatus,
   resolveBookingPaymentDisplayKind,
   type BookingPaymentDisplayKind
 } from "@/lib/bookings/payment-status-label";
+import {
+  isSitterPastHistoryBooking,
+  STUCK_SHIFT_REVIEW_LABEL
+} from "@/lib/bookings/stuck-shift-review";
 
 import { resolveBookingWindowMs } from "@/lib/bookings/booking-date-utils";
 import { isActiveCalendarShiftForViewer } from "@/lib/bookings/calendar-shift-filters";
+import { parseFocusBookingId } from "@/lib/bookings/focus-calendar-booking";
 
 import {
   resolveShiftTimeWindow,
@@ -197,8 +200,8 @@ function isoDateFromMs(
 }
 
 /**
- * מתוכנן:
- * משמש Pending/Calendar בלבד.
+ * ׳׳×׳•׳›׳ ׳:
+ * ׳׳©׳׳© Pending/Calendar ׳‘׳׳‘׳“.
  */
 function resolveShiftScheduleLabels(
   booking: Pick<
@@ -308,7 +311,7 @@ function statusBadge(
   if (status === "pending") {
     return {
       label:
-        "ממתינה לאישור",
+        "׳׳׳×׳™׳ ׳” ׳׳׳™׳©׳•׳¨",
 
       className:
         "bg-rose-50 text-rose-700"
@@ -317,7 +320,7 @@ function statusBadge(
 
   if (status === "cancelled") {
     return {
-      label: "בוטלה",
+      label: "׳‘׳•׳˜׳׳”",
 
       className:
         "bg-rose-50 text-rose-700"
@@ -348,7 +351,7 @@ function statusBadge(
     status === "confirmed"
   ) {
     return {
-      label: "מאושרת",
+      label: "׳׳׳•׳©׳¨׳×",
 
       className:
         "bg-emerald-50 text-emerald-700"
@@ -356,7 +359,7 @@ function statusBadge(
   }
 
   return {
-    label: "עתידית",
+    label: "׳¢׳×׳™׳“׳™׳×",
 
     className:
       "bg-amber-50 text-amber-700"
@@ -527,6 +530,10 @@ async function loadParentDetailsByIds(
 }
 
 export default function SitterShiftsPage() {
+  const searchParams = useSearchParams();
+  const focusBookingId = parseFocusBookingId(
+    searchParams.get("bookingId")
+  );
   const {
     user,
     isLoading:
@@ -690,45 +697,6 @@ export default function SitterShiftsPage() {
 
           if (
             error &&
-            (
-              isPostgrestMissingColumnError(
-                error.message,
-                "payment_status"
-              ) ||
-              isPostgrestMissingColumnError(
-                error.message,
-                "paid_at"
-              )
-            )
-          ) {
-            const withoutPayment = [
-              "id",
-              "parent_id",
-              "sitter_id",
-              "booking_date",
-              "start_time",
-              "end_time",
-              "status",
-              "hourly_rate_nis",
-              "requires_admin_review"
-            ].join(", ");
-            let retryPayment = supabase
-              .from(BOOKINGS_TABLE)
-              .select(withoutPayment)
-              .eq("sitter_id", sitterId);
-            retryPayment =
-              viewType === "pending"
-                ? retryPayment.eq("status", "pending")
-                : retryPayment.in("status", ["completed", "cancelled"]);
-            const paymentFallback = await retryPayment.order("booking_date", {
-              ascending: viewType === "pending"
-            });
-            data = paymentFallback.data;
-            error = paymentFallback.error;
-          }
-
-          if (
-            error &&
             isPostgrestMissingColumnError(
               error.message,
               "requires_admin_review"
@@ -742,11 +710,46 @@ export default function SitterShiftsPage() {
               "start_time",
               "end_time",
               "status",
-              "hourly_rate_nis"
+              "hourly_rate_nis",
+              "payment_status",
+              "paid_at"
             ].join(", ");
             let retry = supabase
               .from(BOOKINGS_TABLE)
               .select(withoutReview)
+              .eq("sitter_id", sitterId);
+            retry =
+              viewType === "pending"
+                ? retry.eq("status", "pending")
+                : retry.in("status", ["completed", "cancelled"]);
+            const retryResult = await retry.order("booking_date", {
+              ascending: viewType === "pending"
+            });
+            data = retryResult.data;
+            error = retryResult.error;
+          }
+
+          if (
+            error &&
+            (
+              isPostgrestMissingColumnError(error.message, "payment_status") ||
+              isPostgrestMissingColumnError(error.message, "paid_at")
+            )
+          ) {
+            const withoutPayment = [
+              "id",
+              "parent_id",
+              "sitter_id",
+              "booking_date",
+              "start_time",
+              "end_time",
+              "status",
+              "hourly_rate_nis",
+              "requires_admin_review"
+            ].join(", ");
+            let retry = supabase
+              .from(BOOKINGS_TABLE)
+              .select(withoutPayment)
               .eq("sitter_id", sitterId);
             retry =
               viewType === "pending"
@@ -790,7 +793,9 @@ export default function SitterShiftsPage() {
               const byId = new Map(
                 bookingRows.map((row) => [row.id, row])
               );
-              for (const row of reviewResult.data as unknown as BookingRow[]) {
+              for (const rawRow of reviewResult.data) {
+                if (!rawRow || typeof rawRow !== "object") continue;
+                const row = rawRow as unknown as BookingRow;
                 if (isSitterPastHistoryBooking(row) && !byId.has(row.id)) {
                   byId.set(row.id, row);
                 }
@@ -826,10 +831,10 @@ export default function SitterShiftsPage() {
             [];
 
           /*
-           * רק History צריך Sessions.
+           * ׳¨׳§ History ׳¦׳¨׳™׳ Sessions.
            *
-           * Pending ממשיך לעבוד על
-           * השעות המתוכננות.
+           * Pending ׳׳׳©׳™׳ ׳׳¢׳‘׳•׳“ ׳¢׳
+           * ׳”׳©׳¢׳•׳× ׳”׳׳×׳•׳›׳ ׳ ׳•׳×.
            */
           if (
             viewType ===
@@ -896,7 +901,7 @@ export default function SitterShiftsPage() {
               (booking) => {
                 /*
                  * Pending:
-                 * שעות מתוכננות.
+                 * ׳©׳¢׳•׳× ׳׳×׳•׳›׳ ׳ ׳•׳×.
                  */
                 if (
                   viewType !==
@@ -913,7 +918,7 @@ export default function SitterShiftsPage() {
                       parentNameById.get(
                         booking.parent_id
                       ) ??
-                      "הורה AnyNanny",
+                      "׳”׳•׳¨׳” AnyNanny",
 
                     ...resolveShiftScheduleLabels(
                       booking
@@ -924,6 +929,12 @@ export default function SitterShiftsPage() {
 
                     requires_admin_review:
                       booking.requires_admin_review === true,
+
+                    payment_status:
+                      booking.payment_status ?? null,
+
+                    paid_at:
+                      booking.paid_at ?? null,
 
                     booking_date:
                       booking.booking_date,
@@ -1036,7 +1047,7 @@ export default function SitterShiftsPage() {
                     parentNameById.get(
                       booking.parent_id
                     ) ??
-                    "הורה AnyNanny",
+                    "׳”׳•׳¨׳” AnyNanny",
 
                   start_time_label:
                     startLabel,
@@ -1056,6 +1067,12 @@ export default function SitterShiftsPage() {
                   requires_admin_review:
                     booking.requires_admin_review === true,
 
+                  payment_status:
+                    booking.payment_status ?? null,
+
+                  paid_at:
+                    booking.paid_at ?? null,
+
                   booking_date:
                     booking.booking_date,
 
@@ -1072,12 +1089,6 @@ export default function SitterShiftsPage() {
 
                   total_amount_nis:
                     totalAmount,
-
-                  payment_status:
-                    booking.payment_status ?? null,
-
-                  paid_at:
-                    booking.paid_at ?? null,
 
                   ...(() => {
                     const cancellation = pickCancellationFields(
@@ -1201,8 +1212,8 @@ export default function SitterShiftsPage() {
           if (
             error &&
             (
-              isPostgrestMissingColumnError(error.message, "payment_status") ||
-              isPostgrestMissingColumnError(error.message, "paid_at")
+              isPostgrestMissingColumnError(error.message, "paid_at") ||
+              isPostgrestMissingColumnError(error.message, "payment_status")
             )
           ) {
             const withoutPayment = await supabase
@@ -1253,7 +1264,9 @@ export default function SitterShiftsPage() {
                   row as unknown as Record<string, unknown>
                 );
                 const paymentStatus =
-                  (row as { payment_status?: string | null }).payment_status;
+                  coerceBookingPaymentStatus(
+                    (row as { payment_status?: string | null }).payment_status
+                  );
                 const paidAtRaw = (row as { paid_at?: string | null }).paid_at;
                 return {
                 id: row.id,
@@ -1265,7 +1278,7 @@ export default function SitterShiftsPage() {
                   parentNameById.get(
                     row.parent_id
                   ) ??
-                  "הורה AnyNanny",
+                  "׳”׳•׳¨׳” AnyNanny",
 
                 partnerAddress:
                   parentAddressById.get(
@@ -1292,13 +1305,7 @@ export default function SitterShiftsPage() {
                     row
                   ),
 
-                paymentStatus:
-                  paymentStatus === "paid" ||
-                  paymentStatus === "pending_checkout" ||
-                  paymentStatus === "unpaid"
-                    ? paymentStatus
-                    : null,
-
+                paymentStatus,
                 paidAt:
                   paidAtRaw != null && String(paidAtRaw).trim() !== ""
                     ? String(paidAtRaw)
@@ -1350,8 +1357,8 @@ export default function SitterShiftsPage() {
   ]);
 
   /*
-   * History חייב להתעדכן גם כאשר
-   * ה-Session משתנה, לא רק Booking.
+   * History ׳—׳™׳™׳‘ ׳׳”׳×׳¢׳“׳›׳ ׳’׳ ׳›׳׳©׳¨
+   * ׳”-Session ׳׳©׳×׳ ׳”, ׳׳ ׳¨׳§ Booking.
    */
   useEffect(() => {
     const sitterId =
@@ -1485,7 +1492,7 @@ export default function SitterShiftsPage() {
 
       if (!supabase) {
         setActionError(
-          "Supabase לא זמין"
+          "Supabase ׳׳ ׳–׳׳™׳"
         );
 
         return;
@@ -1551,8 +1558,8 @@ export default function SitterShiftsPage() {
 
       setActionMessage(
         status === "approved"
-          ? "המשמרת אושרה — ההורה יקבל עדכון"
-          : "הבקשה נדחתה — ההורה יקבל עדכון"
+          ? "׳”׳׳©׳׳¨׳× ׳׳•׳©׳¨׳” ג€” ׳”׳”׳•׳¨׳” ׳™׳§׳‘׳ ׳¢׳“׳›׳•׳"
+          : "׳”׳‘׳§׳©׳” ׳ ׳“׳—׳×׳” ג€” ׳”׳”׳•׳¨׳” ׳™׳§׳‘׳ ׳¢׳“׳›׳•׳"
       );
 
       void fetchListShifts();
@@ -1586,7 +1593,6 @@ export default function SitterShiftsPage() {
     (shift: CalendarShift) => (
       <SitterParentProfilePreview
         bookingId={shift.id}
-        parentUserId={shift.partnerId}
         fallbackParentName={shift.partnerName}
         label={CANCELLATION_COPY.parentProfile}
         className="px-0 py-0 text-xs font-semibold text-navy-header underline hover:bg-transparent"
@@ -1597,8 +1603,8 @@ export default function SitterShiftsPage() {
 
   return (
     <SitterPageShell
-      title="לוח המשמרות שלי"
-      subtitle="בקשות ממתינות לאישור, יומן משמרות מאושרות והיסטוריית ביצוע בפועל."
+      title="׳׳•׳— ׳”׳׳©׳׳¨׳•׳× ׳©׳׳™"
+      subtitle="׳‘׳§׳©׳•׳× ׳׳׳×׳™׳ ׳•׳× ׳׳׳™׳©׳•׳¨, ׳™׳•׳׳ ׳׳©׳׳¨׳•׳× ׳׳׳•׳©׳¨׳•׳× ׳•׳”׳™׳¡׳˜׳•׳¨׳™׳™׳× ׳‘׳™׳¦׳•׳¢ ׳‘׳₪׳•׳¢׳."
     >
       <div
         className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col text-right"
@@ -1606,7 +1612,7 @@ export default function SitterShiftsPage() {
       >
         <div className="mb-4 shrink-0">
           <label className="mb-2 mr-1 block text-xs font-bold uppercase text-gray-400">
-            בחר סוג תצוגה
+            ׳‘׳—׳¨ ׳¡׳•׳’ ׳×׳¦׳•׳’׳”
           </label>
 
           <div className="relative">
@@ -1629,17 +1635,17 @@ export default function SitterShiftsPage() {
               className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white p-3.5 text-base font-semibold text-gray-700 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
               <option value="pending">
-                ⏳ ממתינות
-                לאישור
+                ג³ ׳׳׳×׳™׳ ׳•׳×
+                ׳׳׳™׳©׳•׳¨
               </option>
 
               <option value="calendar">
-                📅 יומן משמרות
+                נ“… ׳™׳•׳׳ ׳׳©׳׳¨׳•׳×
               </option>
 
               <option value="past">
-                ✅ משמרות
-                שבוצעו
+                ג… ׳׳©׳׳¨׳•׳×
+                ׳©׳‘׳•׳¦׳¢׳•
               </option>
             </select>
 
@@ -1698,6 +1704,7 @@ export default function SitterShiftsPage() {
               }
               viewerRole="sitter"
               viewerUserId={user?.id ?? null}
+              focusBookingId={focusBookingId}
               onRequestCancellation={
                 cancellation.openRequest
               }
@@ -1713,15 +1720,15 @@ export default function SitterShiftsPage() {
         ) : loading ||
           authLoading ? (
           <div className="py-10 text-center font-medium text-gray-400">
-            מושך נתונים חיים
-            מה-Database...
+            ׳׳•׳©׳ ׳ ׳×׳•׳ ׳™׳ ׳—׳™׳™׳
+            ׳׳”-Database...
           </div>
         ) : shifts.length ===
           0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-10 text-center text-gray-400">
-            אין משמרות
-            רשומות בקטגוריה
-            זו ב-Supabase.
+            ׳׳™׳ ׳׳©׳׳¨׳•׳×
+            ׳¨׳©׳•׳׳•׳× ׳‘׳§׳˜׳’׳•׳¨׳™׳”
+            ׳–׳• ׳‘-Supabase.
           </div>
         ) : (
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
@@ -1744,10 +1751,10 @@ export default function SitterShiftsPage() {
 
                 /*
                  * HISTORY:
-                 * תצוגה מקבילה ל-History
-                 * של ההורה:
+                 * ׳×׳¦׳•׳’׳” ׳׳§׳‘׳™׳׳” ׳-History
+                 * ׳©׳ ׳”׳”׳•׳¨׳”:
                  *
-                 * הורה | שעות בפועל | סה"כ
+                 * ׳”׳•׳¨׳” | ׳©׳¢׳•׳× ׳‘׳₪׳•׳¢׳ | ׳¡׳”"׳›
                  */
                 if (
                   viewType ===
@@ -1759,7 +1766,7 @@ export default function SitterShiftsPage() {
                       : shift.status === "cancelled"
                       ? cancellationHistoryLabel(
                           shift.cancellation_requested_role
-                        ) ?? "בוטלה"
+                        ) ?? "׳‘׳•׳˜׳׳”"
                       : null;
                   const cancelledAtLabel =
                     formatCancellationDateTime(shift.cancelled_at);
@@ -1807,7 +1814,7 @@ export default function SitterShiftsPage() {
                           <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-violet-500">
                             <UserRound className="h-3.5 w-3.5" />
 
-                            הורה
+                            ׳”׳•׳¨׳”
                           </div>
 
                           <div className="truncate text-[14px] font-extrabold text-slate-800">
@@ -1833,7 +1840,7 @@ export default function SitterShiftsPage() {
                           <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-blue-500">
                             <Clock3 className="h-3.5 w-3.5" />
 
-                            שעות
+                            ׳©׳¢׳•׳×
                           </div>
 
                           <div
@@ -1855,7 +1862,7 @@ export default function SitterShiftsPage() {
                               {
                                 shift.start_date_label
                               }{" "}
-                              →{" "}
+                              ג†’{" "}
                               {
                                 shift.end_date_label
                               }
@@ -1867,7 +1874,7 @@ export default function SitterShiftsPage() {
                           <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-emerald-600">
                             <WalletCards className="h-3.5 w-3.5" />
 
-                            סה״כ
+                            ׳¡׳”׳´׳›
                           </div>
 
                           <div className="whitespace-nowrap text-[15px] font-extrabold tabular-nums text-emerald-700">
@@ -1878,15 +1885,15 @@ export default function SitterShiftsPage() {
                         </div>
                       </div>
 
-                      {shift.status === "cancelled" && formatStoredCancellationMessage(shift.cancellation_message) ? (
+                      {shift.status === "cancelled" && shift.cancellation_message ? (
                         <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-right text-xs leading-relaxed text-rose-900">
                           <span className="font-semibold">{CANCELLATION_COPY.messageHistoryLabel}: </span>
-                          {formatStoredCancellationMessage(shift.cancellation_message)}
+                          {shift.cancellation_message}
                         </p>
                       ) : null}
                       {shift.status === "cancelled" && cancelledAtLabel ? (
                         <p className="mt-1 text-right text-[11px] tabular-nums text-slate-500">
-                          בוטל ב־{cancelledAtLabel}
+                          ׳‘׳•׳˜׳ ׳‘ײ¾{cancelledAtLabel}
                         </p>
                       ) : null}
                     </div>
@@ -1894,8 +1901,8 @@ export default function SitterShiftsPage() {
                 }
 
                 /*
-                 * Pending נשאר
-                 * כמו שהיה.
+                 * Pending ׳ ׳©׳׳¨
+                 * ׳›׳׳• ׳©׳”׳™׳”.
                  */
                 return (
                   <div
@@ -1928,7 +1935,7 @@ export default function SitterShiftsPage() {
                           </p>
                         ) : isPending ? (
                           <p className="text-xs font-medium text-slate-500">
-                            הכתובת המלאה תוצג לאחר אישור המשמרת.
+                            ׳”׳›׳×׳•׳‘׳× ׳”׳׳׳׳” ׳×׳•׳¦׳’ ׳׳׳—׳¨ ׳׳™׳©׳•׳¨ ׳”׳׳©׳׳¨׳×.
                           </p>
                         ) : null}
                       </div>
@@ -1945,13 +1952,13 @@ export default function SitterShiftsPage() {
                     <div className="grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-3 text-sm">
                       <div className="flex flex-col gap-2 text-right">
                         <p className="text-[13px] font-bold uppercase tracking-wide text-gray-500">
-                          תחילת המשמרת
+                          ׳×׳—׳™׳׳× ׳”׳׳©׳׳¨׳×
                         </p>
 
                         <div>
                           <span className="block text-xs font-medium text-gray-400">
-                            שעת תחילת
-                            המשמרת
+                            ׳©׳¢׳× ׳×׳—׳™׳׳×
+                            ׳”׳׳©׳׳¨׳×
                           </span>
 
                           <span className="mt-0.5 block text-lg font-bold tabular-nums text-gray-800">
@@ -1963,7 +1970,7 @@ export default function SitterShiftsPage() {
 
                         <div>
                           <span className="block text-xs font-medium text-gray-400">
-                            תאריך התחלה
+                            ׳×׳׳¨׳™׳ ׳”׳×׳—׳׳”
                           </span>
 
                           <span className="mt-0.5 block text-base font-bold text-gray-700">
@@ -1976,13 +1983,13 @@ export default function SitterShiftsPage() {
 
                       <div className="flex flex-col gap-2 border-r border-gray-200 pr-3 text-right">
                         <p className="text-[13px] font-bold uppercase tracking-wide text-gray-500">
-                          סיום המשמרת
+                          ׳¡׳™׳•׳ ׳”׳׳©׳׳¨׳×
                         </p>
 
                         <div>
                           <span className="block text-xs font-medium text-gray-400">
-                            שעת סיום
-                            המשמרת
+                            ׳©׳¢׳× ׳¡׳™׳•׳
+                            ׳”׳׳©׳׳¨׳×
                           </span>
 
                           <span className="mt-0.5 block text-lg font-bold tabular-nums text-gray-800">
@@ -1994,7 +2001,7 @@ export default function SitterShiftsPage() {
 
                         <div>
                           <span className="block text-xs font-medium text-gray-400">
-                            תאריך סיום
+                            ׳×׳׳¨׳™׳ ׳¡׳™׳•׳
                           </span>
 
                           <span className="mt-0.5 block text-base font-bold text-gray-700">
@@ -2010,9 +2017,8 @@ export default function SitterShiftsPage() {
                       <div className="space-y-2 pt-1">
                         <SitterParentProfilePreview
                           bookingId={shift.id}
-                          parentUserId={shift.parent_id}
                           fallbackParentName={shift.parent_name}
-                          label="צפייה בפרופיל ההורה"
+                          label="׳¦׳₪׳™׳™׳” ׳‘׳₪׳¨׳•׳₪׳™׳ ׳”׳”׳•׳¨׳”"
                           className="w-full justify-center rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm"
                         />
 
@@ -2033,8 +2039,8 @@ export default function SitterShiftsPage() {
                           >
                             {actingId ===
                             shift.id
-                              ? "מעבד…"
-                              : "אישור משמרת"}
+                              ? "׳׳¢׳‘׳“ג€¦"
+                              : "׳׳™׳©׳•׳¨ ׳׳©׳׳¨׳×"}
                           </button>
 
                           <button
@@ -2053,8 +2059,8 @@ export default function SitterShiftsPage() {
                           >
                             {actingId ===
                             shift.id
-                              ? "מעבד…"
-                              : "דחיית בקשה"}
+                              ? "׳׳¢׳‘׳“ג€¦"
+                              : "׳“׳—׳™׳™׳× ׳‘׳§׳©׳”"}
                           </button>
                         </div>
                       </div>
@@ -2069,7 +2075,7 @@ export default function SitterShiftsPage() {
       <ShiftCancellationRequestModal
         open={Boolean(cancellation.requestShift)}
         shift={cancellation.requestShift}
-        partnerName={cancellation.requestShift?.partnerName ?? "הורה"}
+        partnerName={cancellation.requestShift?.partnerName ?? "׳”׳•׳¨׳”"}
         busy={cancellation.busy}
         error={cancellation.error}
         onClose={cancellation.close}
@@ -2078,7 +2084,7 @@ export default function SitterShiftsPage() {
       <ShiftCancellationApproveModal
         open={Boolean(cancellation.approveShift)}
         shift={cancellation.approveShift}
-        partnerName={cancellation.approveShift?.partnerName ?? "הורה"}
+        partnerName={cancellation.approveShift?.partnerName ?? "׳”׳•׳¨׳”"}
         busy={cancellation.busy}
         error={cancellation.error}
         onClose={cancellation.close}
