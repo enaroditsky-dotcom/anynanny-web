@@ -12,7 +12,8 @@ export const CANONICAL_NOTIFICATION_KINDS = [
   "booking_withdrawn_by_parent",
   "pending_booking_expired",
   "shift_end_reminder",
-  "shift_cancelled_no_start"
+  "shift_cancelled_no_start",
+  "shift_confirmed"
 ] as const;
 
 export type CanonicalNotificationKind = (typeof CANONICAL_NOTIFICATION_KINDS)[number];
@@ -101,5 +102,9 @@ export function notificationHrefForKind(
     return role === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
   }
   if (kind === "booking_withdrawn_by_parent") return "/sitter/dashboard";
+  if (kind === "shift_confirmed") return "/sitter/shifts";
   return role === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
 }
+
+
+

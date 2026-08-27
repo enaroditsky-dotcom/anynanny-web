@@ -1,0 +1,138 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  applyCoordinationRealtimeChange,
+  COORDINATION_NOTIFICATION_KINDS,
+  coordinationBookingHref,
+  coordinationChatHref,
+  coordinationNotificationTitle,
+  coordinationScheduleLabel,
+  isCoordinationNotificationKind,
+  mergeCoordinationNotifications,
+  type CoordinationNotification
+} from "../lib/notifications/coordination";
+import { isCanonicalNotificationKind, notificationHrefForKind } from "../lib/notifications/kinds";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function read(relativePath: string): string {
+  return readFileSync(resolve(root, relativePath), "utf8");
+}
+
+const approved: CoordinationNotification = {
+  id: "n-approved",
+  kind: "booking_approved",
+  title: coordinationNotificationTitle("booking_approved"),
+  body: "הבייביסיטר אישר/ה את בקשת המשמרת",
+  payload: {
+    booking_id: "b-future",
+    booking_date: "2026-10-27",
+    start_time: "2026-10-27T18:00:00.000Z",
+    end_time: "2026-10-27T22:00:00.000Z"
+  },
+  created_at: "2026-08-27T11:00:00.000Z",
+  read_at: null
+};
+
+assert.equal(coordinationNotificationTitle("booking_approved"), "הבייביסיטר אישרה את המשמרת!");
+assert.equal(coordinationNotificationTitle("shift_confirmed"), "המשמרת אושרה בהצלחה");
+assert.equal(isCoordinationNotificationKind("booking_approved"), true);
+assert.equal(isCoordinationNotificationKind("chat_message"), false);
+assert.equal(isCoordinationNotificationKind("payment_received"), false);
+assert.equal(isCanonicalNotificationKind("shift_confirmed"), true);
+assert.equal(notificationHrefForKind("shift_confirmed", "sitter", { booking_id: "b1" }), "/sitter/shifts");
+assert.equal(coordinationBookingHref("booking_approved", "parent", { booking_id: "b1" }), "/parent/dashboard");
+assert.equal(coordinationChatHref("parent", { booking_id: "b1" }), "/parent/chat/b1");
+assert.equal(coordinationChatHref("sitter", {}), null);
+assert.ok(coordinationScheduleLabel(approved.payload)?.includes("27"));
+assert.equal(
+  coordinationScheduleLabel({ booking_id: "b1" }),
+  null
+);
+
+const mergedOnce = mergeCoordinationNotifications([], approved);
+const mergedTwice = mergeCoordinationNotifications(mergedOnce, approved);
+assert.equal(mergedOnce.length, 1);
+assert.equal(mergedTwice.length, 1);
+assert.equal(mergedTwice[0]?.id, "n-approved");
+
+const afterRead = mergeCoordinationNotifications(mergedTwice, { ...approved, read_at: "2026-08-27T11:01:00.000Z" });
+assert.equal(afterRead.length, 0);
+
+const afterInsert = applyCoordinationRealtimeChange([], {
+  eventType: "INSERT",
+  new: {
+    id: "n-approved",
+    kind: "booking_approved",
+    title: "המשמרת אושרה",
+    body: "",
+    payload: approved.payload,
+    created_at: approved.created_at,
+    read_at: null
+  }
+});
+assert.equal(afterInsert.length, 1);
+assert.equal(afterInsert[0]?.title, "הבייביסיטר אישרה את המשמרת!");
+
+const ignoredChat = applyCoordinationRealtimeChange(afterInsert, {
+  eventType: "INSERT",
+  new: { id: "n-chat", kind: "chat_message", title: "msg", body: "", payload: {}, created_at: "2026-08-27T12:00:00.000Z", read_at: null }
+});
+assert.equal(ignoredChat.length, 1);
+
+const afterAck = applyCoordinationRealtimeChange(afterInsert, {
+  eventType: "UPDATE",
+  new: { ...approved, title: approved.title, read_at: "2026-08-27T11:02:00.000Z" }
+});
+assert.equal(afterAck.length, 0);
+
+assert.ok(COORDINATION_NOTIFICATION_KINDS.includes("booking_request"));
+assert.ok(COORDINATION_NOTIFICATION_KINDS.includes("booking_approved"));
+assert.ok(COORDINATION_NOTIFICATION_KINDS.includes("shift_confirmed"));
+
+const coordination = read("lib/notifications/coordination.ts");
+assert.match(coordination, /is\("read_at", null\)/);
+assert.doesNotMatch(coordination, /\.eq\("booking_date"|\.gte\("booking_date"|\.lte\("booking_date"/);
+assert.doesNotMatch(coordination, /isFutureConfirmedScheduleBooking|shouldShowApprovedScheduleNotification/);
+
+const shell = read("components/app-shell-gate.tsx");
+assert.match(shell, /GlobalCoordinationNotifications/);
+assert.match(shell, /isChromelessAuthPath/);
+const chromelessReturn = shell.slice(shell.indexOf("if (chromeless)"), shell.indexOf("const mainLayout"));
+assert.doesNotMatch(chromelessReturn, /GlobalCoordinationNotifications/);
+
+const ui = read("components/notifications/global-coordination-notifications.tsx");
+assert.match(ui, /fetchUnreadCoordinationNotifications/);
+assert.match(ui, /event: "\*"/);
+assert.match(ui, /markNotificationsReadBestEffort/);
+assert.match(ui, /הבייביסיטר אישרה את המשמרת!|coordinationNotificationTitle|"booking_approved"/);
+assert.doesNotMatch(ui, /durationMs|setTimeout\(\(\) => .*acknowledge/);
+assert.doesNotMatch(ui, /pickParentDashboardBooking|isBookingDueForParentActiveShiftUi/);
+
+const lifecycle = read("lib/bookings/sitter-pending-bookings.ts");
+assert.match(lifecycle, /\.eq\("status", "pending"\)/);
+assert.doesNotMatch(lifecycle, /createInAppNotification|NOTIFICATIONS_TABLE/);
+
+const parentDash = read("components/parent/parent-dashboard-client.tsx");
+assert.match(parentDash, /הבייביסיטר אישרה את המשמרת!/);
+
+const sitterPending = read("components/sitter/sitter-pending-bookings.tsx");
+assert.match(sitterPending, /המשמרת אושרה בהצלחה/);
+
+const oldSql = read("supabase/migrations/20260820140000_canonical_notifications.sql");
+assert.doesNotMatch(oldSql, /create_canonical_notification\(\s*new\.sitter_id,\s*'booking_approved'/);
+
+const newSql = read("supabase/migrations/20260827140000_sitter_shift_confirmed_notification.sql");
+assert.match(newSql, /create or replace function public\.notify_booking_status_response/);
+assert.match(newSql, /create_canonical_notification\(\s*new\.parent_id,/);
+assert.match(newSql, /'shift_confirmed'/);
+assert.match(newSql, /new\.sitter_id/);
+assert.match(newSql, /המשמרת אושרה בהצלחה/);
+assert.doesNotMatch(newSql, /create_canonical_notification\(\s*new\.sitter_id,\s*'booking_approved'/);
+assert.doesNotMatch(newSql, /status\s*=\s*'pending_response'|intermediate/);
+
+const push = read("lib/push/payload.ts");
+assert.match(push, /shift_confirmed: "המשמרת אושרה בהצלחה"/);
+
+console.log("Global coordination notification checks passed.");
