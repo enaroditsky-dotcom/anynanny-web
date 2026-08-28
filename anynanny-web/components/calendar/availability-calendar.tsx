@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CalendarSlotView } from "@/lib/calendar/types";
+import { todayDateISO } from "@/lib/bookings/booking-date-utils";
+import { calendarDateButtonAria } from "@/lib/bookings/calendar-date-cell";
+import { CalendarDayNumber } from "@/components/calendar/calendar-day-number";
 
 type MonthSummary = Record<string, { available: number; busy: number }>;
 
@@ -40,7 +43,7 @@ export function AvailabilityCalendar({ sitterId, mode, parentName = "Parent" }: 
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => todayDateISO());
   const [monthSummary, setMonthSummary] = useState<MonthSummary>({});
   const [slots, setSlots] = useState<CalendarSlotView[]>([]);
   const [loadingDay, setLoadingDay] = useState(false);
@@ -287,20 +290,24 @@ export function AvailabilityCalendar({ sitterId, mode, parentName = "Parent" }: 
 
           const iso = formatDateISO(year, month, cell.day);
           const summary = monthSummary[iso];
-          const isSelected = selectedDate === iso;
-          const isToday =
-            today.getFullYear() === year && today.getMonth() + 1 === month && today.getDate() === cell.day;
+          const todayIso = todayDateISO();
 
           return (
             <button
               key={iso}
               type="button"
               onClick={() => selectDay(cell.day)}
-              className={`flex aspect-square flex-col items-center justify-center rounded-lg border text-sm font-medium transition ${
-                isSelected ? "border-navy-800 bg-navy-50 text-navy-900" : "border-slate-200 bg-white text-navy-800 hover:bg-slate-50"
-              }`}
+              {...calendarDateButtonAria({ iso, selectedIso: selectedDate, todayIso })}
+              className="flex aspect-square flex-col items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-medium text-navy-800 transition hover:bg-slate-50"
             >
-              <span className={isToday ? "font-bold text-navy-900" : ""}>{cell.day}</span>
+              <CalendarDayNumber
+                iso={iso}
+                selectedIso={selectedDate}
+                todayIso={todayIso}
+                className="h-8 w-8"
+              >
+                {cell.day}
+              </CalendarDayNumber>
               {summary ? (
                 <span className="mt-1 flex gap-1 text-[12px] font-normal">
                   {summary.available > 0 ? <span className="rounded bg-emerald-100 px-1 text-emerald-800">{summary.available}</span> : null}

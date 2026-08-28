@@ -13,6 +13,7 @@ import {
   findCalendarShiftById,
   parseFocusBookingId
 } from "../lib/bookings/focus-calendar-booking";
+import { defaultCalendarSelectedIso } from "../lib/bookings/calendar-date-cell";
 import { coordinationBookingHref } from "../lib/notifications/coordination";
 import { notificationHrefForKind } from "../lib/notifications/kinds";
 
@@ -106,6 +107,24 @@ assert.equal(todayFocus?.highlightedBookingId, "today-1");
 
 assert.equal(calendarBookingDomId("b1"), "calendar-booking-b1");
 
+assert.equal(
+  defaultCalendarSelectedIso({ month: 8, year: 2026, todayIso: "2026-08-28" }),
+  "2026-08-28"
+);
+assert.equal(
+  defaultCalendarSelectedIso({ month: 10, year: 2026, todayIso: "2026-08-28" }),
+  null
+);
+assert.equal(
+  defaultCalendarSelectedIso({
+    month: 10,
+    year: 2026,
+    todayIso: "2026-08-28",
+    focusDateIso: "2026-10-27"
+  }),
+  "2026-10-27"
+);
+
 const panel = read("components/bookings/booking-calendar-panel.tsx");
 assert.match(panel, /useState<CalendarViewMode>\("today"\)/);
 assert.match(panel, /focusBookingId/);
@@ -116,6 +135,9 @@ const views = read("components/bookings/booking-calendar-views.tsx");
 assert.match(views, /data-booking-id=\{shift\.id\}/);
 assert.match(views, /highlightedBookingId/);
 assert.match(views, /scrollIntoView/);
+assert.match(views, /defaultCalendarSelectedIso/);
+assert.match(views, /CalendarDayNumber/);
+assert.match(views, /focusDateIso/);
 assert.doesNotMatch(views, /function BookingDetailsModal/);
 
 const parentCalendar = read("app/parent/calendar/page.tsx");
