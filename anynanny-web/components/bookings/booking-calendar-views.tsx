@@ -22,6 +22,11 @@ import {
   calendarBookingDomId,
   dateIsoInCalendarMonth
 } from "@/lib/bookings/focus-calendar-booking";
+import {
+  calendarDateButtonAria,
+  defaultCalendarSelectedIso
+} from "@/lib/bookings/calendar-date-cell";
+import { CalendarDayNumber } from "@/components/calendar/calendar-day-number";
 import { PendingWithdrawButton } from "@/components/bookings/pending-withdraw-button";
 import { ScheduledShiftActions } from "@/components/bookings/scheduled-shift-actions";
 import { CancelledShiftAckBanner } from "@/components/bookings/cancelled-shift-ack-banner";
@@ -619,13 +624,16 @@ export function WeekGridView({
             key={day.iso}
             type="button"
             onClick={() => setSelectedIso(day.iso)}
-            className={`flex min-h-[3.25rem] flex-col items-center justify-center rounded-xl border p-1 transition-colors ${
-              selectedIso === day.iso
-                ? "border-navy-header/30 bg-[#FDFBF6] ring-1 ring-navy-header/15"
-                : "border-slate-100 bg-white hover:bg-slate-50"
-            }`}
+            {...calendarDateButtonAria({ iso: day.iso, selectedIso })}
+            className="flex min-h-[3.25rem] flex-col items-center justify-center rounded-xl border border-slate-100 bg-white p-1 transition-colors hover:bg-slate-50"
           >
-            <span className={`text-sm tabular-nums ${dateLabelClass(day.hasShifts)}`}>{day.dayNum}</span>
+            <CalendarDayNumber
+              iso={day.iso}
+              selectedIso={selectedIso}
+              className={`h-7 w-7 text-sm ${dateLabelClass(day.hasShifts)}`}
+            >
+              {day.dayNum}
+            </CalendarDayNumber>
             {day.hasShifts ? (
               <span className="mt-0.5 text-[10px] font-bold text-red-800">{day.shifts.length}</span>
             ) : (
@@ -679,7 +687,11 @@ export function MonthGridView({
   const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
   const startOffset = firstDay.getDay();
   const [selectedIso, setSelectedIso] = useState<string | null>(() =>
-    dateIsoInCalendarMonth(focusDateIso, currentMonth, currentYear)
+    defaultCalendarSelectedIso({
+      focusDateIso,
+      month: currentMonth,
+      year: currentYear
+    })
   );
 
   const shiftsByDate = useMemo(() => buildCalendarShiftsByDate(shifts), [shifts]);
@@ -687,7 +699,9 @@ export function MonthGridView({
 
   useEffect(() => {
     const focused = dateIsoInCalendarMonth(focusDateIso, currentMonth, currentYear);
-    setSelectedIso(focused);
+    if (focused) {
+      setSelectedIso(focused);
+    }
   }, [currentMonth, currentYear, focusDateIso]);
 
   const cells: Array<{ day: number | null; iso: string | null }> = [];
@@ -754,19 +768,21 @@ export function MonthGridView({
           }
           const dayShifts = shiftsByDate.get(cell.iso) ?? [];
           const hasShifts = dayShifts.length > 0;
-          const isSelected = selectedIso === cell.iso;
           return (
             <button
               key={cell.iso}
               type="button"
               onClick={() => setSelectedIso((prev) => (prev === cell.iso ? null : cell.iso))}
-              className={`min-h-[3.25rem] rounded-xl border p-1 text-center transition-colors ${
-                isSelected
-                  ? "border-navy-header/30 bg-[#FDFBF6] ring-1 ring-navy-header/15"
-                  : "border-slate-100 bg-white hover:bg-slate-50"
-              }`}
+              {...calendarDateButtonAria({ iso: cell.iso, selectedIso })}
+              className="flex min-h-[3.25rem] flex-col items-center justify-center rounded-xl border border-slate-100 bg-white p-1 text-center transition-colors hover:bg-slate-50"
             >
-              <p className={`text-sm tabular-nums ${dateLabelClass(hasShifts)}`}>{cell.day}</p>
+              <CalendarDayNumber
+                iso={cell.iso}
+                selectedIso={selectedIso}
+                className={`h-7 w-7 text-sm ${dateLabelClass(hasShifts)}`}
+              >
+                {cell.day}
+              </CalendarDayNumber>
               {hasShifts ? (
                 <p className="truncate text-[10px] font-bold text-red-800">{dayShifts.length} משמרות</p>
               ) : (

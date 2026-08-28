@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { X, Plus, Trash2 } from "lucide-react";
+import { todayDateISO } from "@/lib/bookings/booking-date-utils";
+import { calendarDateButtonAria } from "@/lib/bookings/calendar-date-cell";
+import { CalendarDayNumber } from "@/components/calendar/calendar-day-number";
 import { SLOTS_PER_DAY } from "@/lib/calendar/constants";
 import type { CalendarMode } from "@/lib/availability/constants";
 import {
@@ -117,14 +120,14 @@ export function SitterAvailabilityManager() {
   /** Open-slot counts per ISO date; missing key = unconfigured (defaults to full-day available). */
   const [dayOpenCounts, setDayOpenCounts] = useState<Record<string, number | "closed">>({});
 
-  const [activeDateISO, setActiveDateISO] = useState<string | null>(null);
+  const [activeDateISO, setActiveDateISO] = useState<string | null>(() => todayDateISO());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [dailyRanges, setTimeRanges] = useState<TimeRange[]>(FULL_DAY_RANGE);
   const [savingDay, setSavingDay] = useState(false);
   const [isFullyAvailable, setIsFullyAvailable] = useState(true);
   const [loadingDay, setLoadingDay] = useState(false);
 
-  const todayISO = formatDateISO(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  const todayISO = todayDateISO();
 
   useEffect(() => {
     void (async () => {
@@ -409,10 +412,10 @@ export function SitterAvailabilityManager() {
           }
 
           const iso = formatDateISO(year, month, cell.day);
-          const isToday = iso === todayISO;
           const state = dayVisualState(iso);
           const isClosed = state === "closed";
           const isPartial = state === "partial";
+          const statusFill = isClosed ? "closed" : isPartial ? "partial" : "none";
 
           return (
             <button
@@ -420,21 +423,20 @@ export function SitterAvailabilityManager() {
               type="button"
               onClick={() => void handleDayClick(iso)}
               aria-label={`${iso}${isClosed ? " — יום סגור" : isPartial ? " — שעות ספציפיות" : ""}`}
+              {...calendarDateButtonAria({ iso, selectedIso: activeDateISO, todayIso: todayISO })}
               className="flex aspect-square items-center justify-center bg-transparent transition active:scale-95"
             >
-              <span
-                className={`flex h-9 w-9 items-center justify-center text-base font-extrabold tabular-nums sm:h-10 sm:w-10 sm:text-lg ${
-                  isClosed
-                    ? "rounded-full bg-red-500 text-white"
-                    : isPartial
-                      ? "rounded-full bg-yellow-400 text-slate-900"
-                      : isToday
-                        ? "font-black text-[#001F3F]"
-                        : "text-slate-800"
+              <CalendarDayNumber
+                iso={iso}
+                selectedIso={activeDateISO}
+                todayIso={todayISO}
+                statusFill={statusFill}
+                className={`h-9 w-9 text-base font-extrabold sm:h-10 sm:w-10 sm:text-lg ${
+                  statusFill === "none" ? "text-slate-800" : ""
                 }`}
               >
                 {cell.day}
-              </span>
+              </CalendarDayNumber>
             </button>
           );
         })}
