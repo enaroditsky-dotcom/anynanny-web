@@ -10,7 +10,7 @@ import { SitterMandatoryRatingPanel } from "@/components/session/sitter-mandator
 import { ReleaseStuckShiftModal } from "@/components/parent/release-stuck-shift-modal";
 import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
-import { SitterBroadcastAlertModal } from "@/components/sitter/SitterBroadcastAlertModal"; 
+import { useSitterBroadcastPause } from "@/components/sitter/SitterBroadcastAlertHost";
 import { LogoutButton } from "@/components/account/logout-button";
 import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import { hasSitterCompletedOnboarding, SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
@@ -252,6 +252,8 @@ export default function SitterDashboardPage() {
     !sessionUiBlockedByBooking &&
     (isSitterBookingAwaitingApprovalStatus(todayBookingShiftGate?.status ?? null) ||
       isSitterBookingAwaitingApprovalStatus(todaysBooking?.status ?? null));
+
+  useSitterBroadcastPause(showSitterBookingApproval);
 
   useEffect(() => {
     if (todaysBooking && isSitterBookingAwaitingApprovalStatus(todaysBooking.status)) {
@@ -1382,9 +1384,6 @@ export default function SitterDashboardPage() {
               ) : null}
               <LogoutButton />
             </div>
-          ) : null}
-          {sitterId ? (
-            <SitterBroadcastAlertModal sitterId={sitterId} paused={showSitterBookingApproval} />
           ) : null}
           <CancellationAttentionModals attention={cancellationAttention} role="sitter" />
           <ReleaseStuckShiftModal
