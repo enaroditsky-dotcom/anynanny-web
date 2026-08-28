@@ -165,3 +165,41 @@ export function isBookingRelevantForLiveSync(
   if (isBookingDateToday(booking.booking_date)) return true;
   return isBookingLiveAcrossMidnight(booking);
 }
+
+const ISO_CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Normalize a booking/shift date to `YYYY-MM-DD`.
+ * Uses the stored calendar date prefix — does not convert through UTC.
+ */
+export function bookingCalendarDateISO(bookingDate: string | null | undefined): string {
+  const iso = String(bookingDate ?? "").trim().slice(0, 10);
+  return ISO_CALENDAR_DATE.test(iso) ? iso : "";
+}
+
+/** True when both bounds are valid calendar dates and from is after to. */
+export function isReversedCalendarDateRange(fromIso: string, toIso: string): boolean {
+  const from = bookingCalendarDateISO(fromIso);
+  const to = bookingCalendarDateISO(toIso);
+  return Boolean(from && to && from > to);
+}
+
+/**
+ * Inclusive local-calendar range on `booking_date`.
+ * Empty from/to means that bound is open.
+ */
+export function bookingDateMatchesInclusiveRange(
+  bookingDate: string | null | undefined,
+  fromIso: string,
+  toIso: string
+): boolean {
+  const from = bookingCalendarDateISO(fromIso);
+  const to = bookingCalendarDateISO(toIso);
+  if (!from && !to) return true;
+
+  const day = bookingCalendarDateISO(bookingDate);
+  if (!day) return false;
+  if (from && day < from) return false;
+  if (to && day > to) return false;
+  return true;
+}
