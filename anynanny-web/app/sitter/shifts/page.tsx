@@ -200,8 +200,8 @@ function isoDateFromMs(
 }
 
 /**
- * ׳׳×׳•׳›׳ ׳:
- * ׳׳©׳׳© Pending/Calendar ׳‘׳׳‘׳“.
+ * מתוכנן:
+ * משמש Pending/Calendar בלבד.
  */
 function resolveShiftScheduleLabels(
   booking: Pick<
@@ -311,7 +311,7 @@ function statusBadge(
   if (status === "pending") {
     return {
       label:
-        "׳׳׳×׳™׳ ׳” ׳׳׳™׳©׳•׳¨",
+        "ממתינה לאישור",
 
       className:
         "bg-rose-50 text-rose-700"
@@ -320,7 +320,7 @@ function statusBadge(
 
   if (status === "cancelled") {
     return {
-      label: "׳‘׳•׳˜׳׳”",
+      label: "בוטלה",
 
       className:
         "bg-rose-50 text-rose-700"
@@ -351,7 +351,7 @@ function statusBadge(
     status === "confirmed"
   ) {
     return {
-      label: "׳׳׳•׳©׳¨׳×",
+      label: "מאושרת",
 
       className:
         "bg-emerald-50 text-emerald-700"
@@ -359,7 +359,7 @@ function statusBadge(
   }
 
   return {
-    label: "׳¢׳×׳™׳“׳™׳×",
+    label: "עתידית",
 
     className:
       "bg-amber-50 text-amber-700"
@@ -831,10 +831,10 @@ export default function SitterShiftsPage() {
             [];
 
           /*
-           * ׳¨׳§ History ׳¦׳¨׳™׳ Sessions.
+           * רק History צריך Sessions.
            *
-           * Pending ׳׳׳©׳™׳ ׳׳¢׳‘׳•׳“ ׳¢׳
-           * ׳”׳©׳¢׳•׳× ׳”׳׳×׳•׳›׳ ׳ ׳•׳×.
+           * Pending ממשיך לעבוד על
+           * השעות המתוכננות.
            */
           if (
             viewType ===
@@ -901,7 +901,7 @@ export default function SitterShiftsPage() {
               (booking) => {
                 /*
                  * Pending:
-                 * ׳©׳¢׳•׳× ׳׳×׳•׳›׳ ׳ ׳•׳×.
+                 * שעות מתוכננות.
                  */
                 if (
                   viewType !==
@@ -918,7 +918,7 @@ export default function SitterShiftsPage() {
                       parentNameById.get(
                         booking.parent_id
                       ) ??
-                      "׳”׳•׳¨׳” AnyNanny",
+                      "הורה AnyNanny",
 
                     ...resolveShiftScheduleLabels(
                       booking
@@ -1047,7 +1047,7 @@ export default function SitterShiftsPage() {
                     parentNameById.get(
                       booking.parent_id
                     ) ??
-                    "׳”׳•׳¨׳” AnyNanny",
+                    "הורה AnyNanny",
 
                   start_time_label:
                     startLabel,
@@ -1278,7 +1278,7 @@ export default function SitterShiftsPage() {
                   parentNameById.get(
                     row.parent_id
                   ) ??
-                  "׳”׳•׳¨׳” AnyNanny",
+                  "הורה AnyNanny",
 
                 partnerAddress:
                   parentAddressById.get(
@@ -1357,8 +1357,8 @@ export default function SitterShiftsPage() {
   ]);
 
   /*
-   * History ׳—׳™׳™׳‘ ׳׳”׳×׳¢׳“׳›׳ ׳’׳ ׳›׳׳©׳¨
-   * ׳”-Session ׳׳©׳×׳ ׳”, ׳׳ ׳¨׳§ Booking.
+   * History חייב להתעדכן גם כאשר
+   * ה-Session משתנה, לא רק Booking.
    */
   useEffect(() => {
     const sitterId =
@@ -1492,7 +1492,7 @@ export default function SitterShiftsPage() {
 
       if (!supabase) {
         setActionError(
-          "Supabase ׳׳ ׳–׳׳™׳"
+          "Supabase לא זמין"
         );
 
         return;
@@ -1558,8 +1558,8 @@ export default function SitterShiftsPage() {
 
       setActionMessage(
         status === "approved"
-          ? "׳”׳׳©׳׳¨׳× ׳׳•׳©׳¨׳” ג€” ׳”׳”׳•׳¨׳” ׳™׳§׳‘׳ ׳¢׳“׳›׳•׳"
-          : "׳”׳‘׳§׳©׳” ׳ ׳“׳—׳×׳” ג€” ׳”׳”׳•׳¨׳” ׳™׳§׳‘׳ ׳¢׳“׳›׳•׳"
+          ? "המשמרת אושרה — ההורה יקבל עדכון"
+          : "הבקשה נדחתה — ההורה יקבל עדכון"
       );
 
       void fetchListShifts();
@@ -1603,8 +1603,8 @@ export default function SitterShiftsPage() {
 
   return (
     <SitterPageShell
-      title="׳׳•׳— ׳”׳׳©׳׳¨׳•׳× ׳©׳׳™"
-      subtitle="׳‘׳§׳©׳•׳× ׳׳׳×׳™׳ ׳•׳× ׳׳׳™׳©׳•׳¨, ׳™׳•׳׳ ׳׳©׳׳¨׳•׳× ׳׳׳•׳©׳¨׳•׳× ׳•׳”׳™׳¡׳˜׳•׳¨׳™׳™׳× ׳‘׳™׳¦׳•׳¢ ׳‘׳₪׳•׳¢׳."
+      title="לוח המשמרות שלי"
+      subtitle="בקשות ממתינות לאישור, יומן משמרות מאושרות והיסטוריית ביצוע בפועל."
     >
       <div
         className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col text-right"
@@ -1612,7 +1612,7 @@ export default function SitterShiftsPage() {
       >
         <div className="mb-4 shrink-0">
           <label className="mb-2 mr-1 block text-xs font-bold uppercase text-gray-400">
-            ׳‘׳—׳¨ ׳¡׳•׳’ ׳×׳¦׳•׳’׳”
+            בחר סוג תצוגה
           </label>
 
           <div className="relative">
@@ -1635,17 +1635,17 @@ export default function SitterShiftsPage() {
               className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white p-3.5 text-base font-semibold text-gray-700 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
               <option value="pending">
-                ג³ ׳׳׳×׳™׳ ׳•׳×
-                ׳׳׳™׳©׳•׳¨
+                ⏳ ממתינות
+                לאישור
               </option>
 
               <option value="calendar">
-                נ“… ׳™׳•׳׳ ׳׳©׳׳¨׳•׳×
+                📅 יומן משמרות
               </option>
 
               <option value="past">
-                ג… ׳׳©׳׳¨׳•׳×
-                ׳©׳‘׳•׳¦׳¢׳•
+                ✅ משמרות
+                שבוצעו
               </option>
             </select>
 
@@ -1720,15 +1720,15 @@ export default function SitterShiftsPage() {
         ) : loading ||
           authLoading ? (
           <div className="py-10 text-center font-medium text-gray-400">
-            ׳׳•׳©׳ ׳ ׳×׳•׳ ׳™׳ ׳—׳™׳™׳
-            ׳׳”-Database...
+            מושך נתונים חיים
+            מה-Database...
           </div>
         ) : shifts.length ===
           0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-10 text-center text-gray-400">
-            ׳׳™׳ ׳׳©׳׳¨׳•׳×
-            ׳¨׳©׳•׳׳•׳× ׳‘׳§׳˜׳’׳•׳¨׳™׳”
-            ׳–׳• ׳‘-Supabase.
+            אין משמרות
+            רשומות בקטגוריה
+            זו ב-Supabase.
           </div>
         ) : (
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
@@ -1751,10 +1751,10 @@ export default function SitterShiftsPage() {
 
                 /*
                  * HISTORY:
-                 * ׳×׳¦׳•׳’׳” ׳׳§׳‘׳™׳׳” ׳-History
-                 * ׳©׳ ׳”׳”׳•׳¨׳”:
+                 * תצוגה מקבילה ל-History
+                 * של ההורה:
                  *
-                 * ׳”׳•׳¨׳” | ׳©׳¢׳•׳× ׳‘׳₪׳•׳¢׳ | ׳¡׳”"׳›
+                 * הורה | שעות בפועל | סה"כ
                  */
                 if (
                   viewType ===
@@ -1766,7 +1766,7 @@ export default function SitterShiftsPage() {
                       : shift.status === "cancelled"
                       ? cancellationHistoryLabel(
                           shift.cancellation_requested_role
-                        ) ?? "׳‘׳•׳˜׳׳”"
+                        ) ?? "בוטלה"
                       : null;
                   const cancelledAtLabel =
                     formatCancellationDateTime(shift.cancelled_at);
@@ -1814,7 +1814,7 @@ export default function SitterShiftsPage() {
                           <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-violet-500">
                             <UserRound className="h-3.5 w-3.5" />
 
-                            ׳”׳•׳¨׳”
+                            הורה
                           </div>
 
                           <div className="truncate text-[14px] font-extrabold text-slate-800">
@@ -1840,7 +1840,7 @@ export default function SitterShiftsPage() {
                           <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-blue-500">
                             <Clock3 className="h-3.5 w-3.5" />
 
-                            ׳©׳¢׳•׳×
+                            שעות
                           </div>
 
                           <div
@@ -1862,7 +1862,7 @@ export default function SitterShiftsPage() {
                               {
                                 shift.start_date_label
                               }{" "}
-                              ג†’{" "}
+                              →{" "}
                               {
                                 shift.end_date_label
                               }
@@ -1874,7 +1874,7 @@ export default function SitterShiftsPage() {
                           <div className="mb-1 flex items-center gap-1 text-[12px] font-bold text-emerald-600">
                             <WalletCards className="h-3.5 w-3.5" />
 
-                            ׳¡׳”׳´׳›
+                            סה״כ
                           </div>
 
                           <div className="whitespace-nowrap text-[15px] font-extrabold tabular-nums text-emerald-700">
@@ -1893,7 +1893,7 @@ export default function SitterShiftsPage() {
                       ) : null}
                       {shift.status === "cancelled" && cancelledAtLabel ? (
                         <p className="mt-1 text-right text-[11px] tabular-nums text-slate-500">
-                          ׳‘׳•׳˜׳ ׳‘ײ¾{cancelledAtLabel}
+                          בוטל ב־{cancelledAtLabel}
                         </p>
                       ) : null}
                     </div>
@@ -1901,8 +1901,8 @@ export default function SitterShiftsPage() {
                 }
 
                 /*
-                 * Pending ׳ ׳©׳׳¨
-                 * ׳›׳׳• ׳©׳”׳™׳”.
+                 * Pending נשאר
+                 * כמו שהיה.
                  */
                 return (
                   <div
@@ -1935,7 +1935,7 @@ export default function SitterShiftsPage() {
                           </p>
                         ) : isPending ? (
                           <p className="text-xs font-medium text-slate-500">
-                            ׳”׳›׳×׳•׳‘׳× ׳”׳׳׳׳” ׳×׳•׳¦׳’ ׳׳׳—׳¨ ׳׳™׳©׳•׳¨ ׳”׳׳©׳׳¨׳×.
+                            הכתובת המלאה תוצג לאחר אישור המשמרת.
                           </p>
                         ) : null}
                       </div>
@@ -1952,13 +1952,13 @@ export default function SitterShiftsPage() {
                     <div className="grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-3 text-sm">
                       <div className="flex flex-col gap-2 text-right">
                         <p className="text-[13px] font-bold uppercase tracking-wide text-gray-500">
-                          ׳×׳—׳™׳׳× ׳”׳׳©׳׳¨׳×
+                          תחילת המשמרת
                         </p>
 
                         <div>
                           <span className="block text-xs font-medium text-gray-400">
-                            ׳©׳¢׳× ׳×׳—׳™׳׳×
-                            ׳”׳׳©׳׳¨׳×
+                            שעת תחילת
+                            המשמרת
                           </span>
 
                           <span className="mt-0.5 block text-lg font-bold tabular-nums text-gray-800">
@@ -1970,7 +1970,7 @@ export default function SitterShiftsPage() {
 
                         <div>
                           <span className="block text-xs font-medium text-gray-400">
-                            ׳×׳׳¨׳™׳ ׳”׳×׳—׳׳”
+                            תאריך התחלה
                           </span>
 
                           <span className="mt-0.5 block text-base font-bold text-gray-700">
@@ -1983,13 +1983,13 @@ export default function SitterShiftsPage() {
 
                       <div className="flex flex-col gap-2 border-r border-gray-200 pr-3 text-right">
                         <p className="text-[13px] font-bold uppercase tracking-wide text-gray-500">
-                          ׳¡׳™׳•׳ ׳”׳׳©׳׳¨׳×
+                          סיום המשמרת
                         </p>
 
                         <div>
                           <span className="block text-xs font-medium text-gray-400">
-                            ׳©׳¢׳× ׳¡׳™׳•׳
-                            ׳”׳׳©׳׳¨׳×
+                            שעת סיום
+                            המשמרת
                           </span>
 
                           <span className="mt-0.5 block text-lg font-bold tabular-nums text-gray-800">
@@ -2001,7 +2001,7 @@ export default function SitterShiftsPage() {
 
                         <div>
                           <span className="block text-xs font-medium text-gray-400">
-                            ׳×׳׳¨׳™׳ ׳¡׳™׳•׳
+                            תאריך סיום
                           </span>
 
                           <span className="mt-0.5 block text-base font-bold text-gray-700">
@@ -2018,7 +2018,7 @@ export default function SitterShiftsPage() {
                         <SitterParentProfilePreview
                           bookingId={shift.id}
                           fallbackParentName={shift.parent_name}
-                          label="׳¦׳₪׳™׳™׳” ׳‘׳₪׳¨׳•׳₪׳™׳ ׳”׳”׳•׳¨׳”"
+                          label="צפייה בפרופיל ההורה"
                           className="w-full justify-center rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm"
                         />
 
@@ -2039,8 +2039,8 @@ export default function SitterShiftsPage() {
                           >
                             {actingId ===
                             shift.id
-                              ? "׳׳¢׳‘׳“ג€¦"
-                              : "׳׳™׳©׳•׳¨ ׳׳©׳׳¨׳×"}
+                              ? "מעבד…"
+                              : "אישור משמרת"}
                           </button>
 
                           <button
@@ -2059,8 +2059,8 @@ export default function SitterShiftsPage() {
                           >
                             {actingId ===
                             shift.id
-                              ? "׳׳¢׳‘׳“ג€¦"
-                              : "׳“׳—׳™׳™׳× ׳‘׳§׳©׳”"}
+                              ? "מעבד…"
+                              : "דחיית בקשה"}
                           </button>
                         </div>
                       </div>
@@ -2075,7 +2075,7 @@ export default function SitterShiftsPage() {
       <ShiftCancellationRequestModal
         open={Boolean(cancellation.requestShift)}
         shift={cancellation.requestShift}
-        partnerName={cancellation.requestShift?.partnerName ?? "׳”׳•׳¨׳”"}
+        partnerName={cancellation.requestShift?.partnerName ?? "הורה"}
         busy={cancellation.busy}
         error={cancellation.error}
         onClose={cancellation.close}
@@ -2084,7 +2084,7 @@ export default function SitterShiftsPage() {
       <ShiftCancellationApproveModal
         open={Boolean(cancellation.approveShift)}
         shift={cancellation.approveShift}
-        partnerName={cancellation.approveShift?.partnerName ?? "׳”׳•׳¨׳”"}
+        partnerName={cancellation.approveShift?.partnerName ?? "הורה"}
         busy={cancellation.busy}
         error={cancellation.error}
         onClose={cancellation.close}
