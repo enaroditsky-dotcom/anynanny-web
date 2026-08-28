@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   removeRealtimeChannel,
@@ -823,7 +824,7 @@ export function SitterBroadcastAlertModal({
           ? "דולה"
           : "בייביסיטר";
 
-  return (
+  const overlay = (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
       dir="rtl"
@@ -885,4 +886,10 @@ export function SitterBroadcastAlertModal({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return overlay;
+  }
+
+  return createPortal(overlay, document.body);
 }
