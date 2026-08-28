@@ -133,14 +133,7 @@ export function forwardExplicitRecoveryCallback(): boolean {
   return true;
 }
 
-/** Site-URL fallback: only explicit `type=recovery` is password recovery. */
-export function shouldForwardRootAuthCallback(
-  pathname: string,
-  searchParams: { get(name: string): string | null; has(name: string): boolean }
-): boolean {
-  if (pathname !== "/") return false;
-  return (searchParams.get("type") || "").toLowerCase() === "recovery";
-}
+export { shouldForwardRootAuthCallback } from "@/lib/auth/root-auth-callback";
 
 export function forwardToResetPasswordNow(): void {
   if (typeof window === "undefined") return;
