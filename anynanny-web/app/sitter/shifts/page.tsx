@@ -3,6 +3,7 @@
 import React, {
   useCallback,
   useEffect,
+  useMemo,
   useState
 } from "react";
 
@@ -48,7 +49,11 @@ import {
   STUCK_SHIFT_REVIEW_LABEL
 } from "@/lib/bookings/stuck-shift-review";
 
-import { resolveBookingWindowMs } from "@/lib/bookings/booking-date-utils";
+import {
+  bookingDateMatchesInclusiveRange,
+  isReversedCalendarDateRange,
+  resolveBookingWindowMs
+} from "@/lib/bookings/booking-date-utils";
 import { isActiveCalendarShiftForViewer } from "@/lib/bookings/calendar-shift-filters";
 import { parseFocusBookingId } from "@/lib/bookings/focus-calendar-booking";
 
@@ -594,6 +599,9 @@ export default function SitterShiftsPage() {
     useState<
       string | null
     >(null);
+
+  const [pastFromDate, setPastFromDate] = useState("");
+  const [pastToDate, setPastToDate] = useState("");
 
   const fetchListShifts =
     useCallback(
@@ -1601,6 +1609,25 @@ export default function SitterShiftsPage() {
     []
   );
 
+  const pastRangeReversed = isReversedCalendarDateRange(pastFromDate, pastToDate);
+  const pastFilterActive = Boolean(pastFromDate || pastToDate);
+
+  const visibleShifts = useMemo(() => {
+    if (viewType !== "past" || pastRangeReversed || !pastFilterActive) {
+      return shifts;
+    }
+    return shifts.filter((shift) =>
+      bookingDateMatchesInclusiveRange(shift.booking_date, pastFromDate, pastToDate)
+    );
+  }, [viewType, shifts, pastRangeReversed, pastFilterActive, pastFromDate, pastToDate]);
+
+  const showPastNoMatch =
+    viewType === "past" &&
+    !pastRangeReversed &&
+    pastFilterActive &&
+    shifts.length > 0 &&
+    visibleShifts.length === 0;
+
   return (
     <SitterPageShell
       title="לוח המשמרות שלי"
@@ -1731,8 +1758,78 @@ export default function SitterShiftsPage() {
             זו ב-Supabase.
           </div>
         ) : (
+          <div className="flex min-h-0 flex-1 flex-col">
+            {viewType === "past" ? (
+              <div className="mb-3 shrink-0 rounded-2xl border border-slate-100 bg-white p-3">
+                <p className="mb-2 text-xs font-bold text-slate-600">סינון לפי תאריכים</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="min-w-0">
+                    <label
+                      htmlFor="sitter-past-from-date"
+                      className="mb-1 block text-[12px] font-semibold text-slate-500"
+                    >
+                      מתאריך
+                    </label>
+                    <input
+                      id="sitter-past-from-date"
+                      type="date"
+                      value={pastFromDate}
+                      onChange={(e) => setPastFromDate(e.target.value)}
+                      aria-invalid={pastRangeReversed}
+                      aria-describedby={pastRangeReversed ? "sitter-past-date-range-error" : undefined}
+                      className="min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-2 py-2 text-center text-sm text-navy-header"
+                      style={{ direction: "ltr" }}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <label
+                      htmlFor="sitter-past-to-date"
+                      className="mb-1 block text-[12px] font-semibold text-slate-500"
+                    >
+                      עד תאריך
+                    </label>
+                    <input
+                      id="sitter-past-to-date"
+                      type="date"
+                      value={pastToDate}
+                      onChange={(e) => setPastToDate(e.target.value)}
+                      aria-invalid={pastRangeReversed}
+                      aria-describedby={pastRangeReversed ? "sitter-past-date-range-error" : undefined}
+                      className="min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-2 py-2 text-center text-sm text-navy-header"
+                      style={{ direction: "ltr" }}
+                    />
+                  </div>
+                </div>
+                {pastRangeReversed ? (
+                  <p
+                    id="sitter-past-date-range-error"
+                    role="alert"
+                    className="mt-2 text-right text-[12px] font-semibold text-rose-700"
+                  >
+                    תאריך ההתחלה לא יכול להיות אחרי תאריך הסיום
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPastFromDate("");
+                    setPastToDate("");
+                  }}
+                  disabled={!pastFilterActive}
+                  aria-label="נקה סינון"
+                  className="mt-2 text-right text-[12px] font-bold text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-navy-header disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
+                >
+                  נקה סינון
+                </button>
+              </div>
+            ) : null}
+            {showPastNoMatch ? (
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-10 text-center text-sm font-semibold text-slate-500">
+                לא נמצאו משמרות בטווח התאריכים שנבחר
+              </div>
+            ) : (
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
-            {shifts.map(
+            {visibleShifts.map(
               (shift) => {
                 const badge =
                   statusBadge(
@@ -2068,6 +2165,8 @@ export default function SitterShiftsPage() {
                   </div>
                 );
               }
+            )}
+          </div>
             )}
           </div>
         )}
