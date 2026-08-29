@@ -22,6 +22,17 @@ import {
   isFutureScheduledBooking
 } from "@/lib/bookings/booking-shift-ui";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
+import { MissedShiftClarificationCard } from "@/components/bookings/missed-shift-clarification-card";
+import {
+  isMissedShiftClarificationStatus,
+  isMissedShiftLifecycleStatus
+} from "@/lib/bookings/missed-shift-lifecycle";
+import {
+  fetchMissedShiftLifecycleBookings,
+  pickActionableMissedShiftBooking,
+  reconcileUnstartedPastBookings,
+  type MissedShiftBookingView
+} from "@/lib/bookings/missed-shift-client";
 import { useParentPendingBookingCount } from "@/lib/bookings/use-parent-pending-booking-count";
 import { useCancellationAttention } from "@/lib/bookings/use-cancellation-attention";
 import { CancellationAttentionDot } from "@/components/bookings/cancellation-attention-dot";
@@ -132,7 +143,11 @@ const LIVE_BOOKING_FETCH_STATUSES = [
   "rejected",
   "sitter_started",
   "parent_started",
-  "sitter_ended"
+  "sitter_ended",
+  "awaiting_missed_shift_reason",
+  "did_not_occur",
+  "happened_unverified",
+  "missed_shift_disputed"
 ] as const;
 
 const TIMER_BOOKING_STATUSES = new Set(["parent_started"]);
@@ -304,8 +319,16 @@ function pickParentDashboardBooking(
     }
   }
 
+  const missedClarification = rows.find(
+    (b) => isMissedShiftClarificationStatus(b.status) && !bookingRequiresAdminReview(b)
+  );
+  if (missedClarification) return missedClarification;
+
   const dueLive = rows.filter(
-    (b) => isBookingDueForParentActiveShiftUi(b) && !bookingRequiresAdminReview(b)
+    (b) =>
+      isBookingDueForParentActiveShiftUi(b) &&
+      !bookingRequiresAdminReview(b) &&
+      !isMissedShiftLifecycleStatus(b.status)
   );
 
   for (const status of LIVE_BOOKING_STATUS_PRIORITY) {
@@ -400,6 +423,7 @@ function isConfirmableBooking(status: unknown): boolean {
 
 function isWaitingForSitterArrival(booking: BookingRow | null | undefined): boolean {
   if (!booking) return false;
+  if (isMissedShiftLifecycleStatus(booking.status)) return false;
   return (
     normalizeStatus(booking.status) === "approved" &&
     isBookingDueForParentActiveShiftUi(booking)
@@ -647,6 +671,7 @@ export function ParentDashboardClient({
   const [releaseStuckModalOpen, setReleaseStuckModalOpen] = useState(false);
   const [releaseStuckModalError, setReleaseStuckModalError] = useState<string | null>(null);
   const [stuckShiftReviewNotice, setStuckShiftReviewNotice] = useState(false);
+  const [missedShiftBooking, setMissedShiftBooking] = useState<MissedShiftBookingView | null>(null);
 
   const refreshLiveShiftState = useCallback(async (uid: string) => {
     if (refreshInFlightRef.current) {
@@ -662,6 +687,10 @@ export function ParentDashboardClient({
         refreshQueuedRef.current = false;
         const supabase = getSupabaseBrowserClient();
         if (!supabase) return;
+
+        await reconcileUnstartedPastBookings(supabase);
+        const missedRows = await fetchMissedShiftLifecycleBookings(supabase, uid, "parent");
+        setMissedShiftBooking(pickActionableMissedShiftBooking(missedRows));
 
         const localSessionId = activeSessionRef.current?.id
           ? String(activeSessionRef.current.id)
@@ -1768,8 +1797,17 @@ export function ParentDashboardClient({
       normalizeStatus(activeBooking?.status)
     );
   const dueForActiveShiftUi = Boolean(
-    hasHydrated && activeBooking && isBookingDueForParentActiveShiftUi(activeBooking)
+    hasHydrated &&
+      activeBooking &&
+      isBookingDueForParentActiveShiftUi(activeBooking) &&
+      !isMissedShiftLifecycleStatus(activeBooking.status)
   );
+  const clarificationBooking =
+    missedShiftBooking ??
+    (activeBooking && isMissedShiftLifecycleStatus(activeBooking.status)
+      ? (activeBooking as MissedShiftBookingView)
+      : null);
+  const showMissedShiftClarification = Boolean(hasHydrated && clarificationBooking);
   const scheduledBookingId = activeBooking?.id ? String(activeBooking.id) : null;
   const isStickyApprovedNotification = Boolean(
     scheduledBookingId && stickyApprovedNotificationId === scheduledBookingId
@@ -1843,12 +1881,8 @@ export function ParentDashboardClient({
     showLiveTimer ||
     awaitingEndApproval ||
     inSettlement ||
-    isRejectedBooking;
-  /**
-   * Stuck-shift recovery is only for a genuine in-flight shift/session.
-   * Do not show it for rejected/pending-only cards (e.g. cancelled Broadcast
-   * leftovers or a rejected Broadcast request) — those are not stuck shifts.
-   */
+    isRejectedBooking ||
+    showMissedShiftClarification;
   const showStuckShiftReleaseButton =
     Boolean(activeBooking?.id) &&
     !inSettlement &&
@@ -2041,7 +2075,9 @@ export function ParentDashboardClient({
             ? "המשמרת נקבעה — לחצו להרחבה"
             : isScheduledPending
               ? "בקשה עתידית ממתינה — לחצו להרחבה"
-              : isWaitingForSitterArrival(activeBooking)
+              : showMissedShiftClarification
+                ? "המשמרת לא התקיימה"
+                : isWaitingForSitterArrival(activeBooking)
                 ? "ממתינים להגעת הבייביסיטר"
                 : "סטטוס משמרת — לחצו להרחבה";
 
@@ -2049,7 +2085,9 @@ export function ParentDashboardClient({
     ? "rose"
     : awaitingEndApproval || (inSettlement && settlementStep === "payment")
       ? "rose"
-      : isScheduledPending || isWaitingForSitterArrival(activeBooking)
+      : showMissedShiftClarification
+        ? "rose"
+        : isScheduledPending || isWaitingForSitterArrival(activeBooking)
         ? "amber"
         : "emerald";
 
@@ -2226,7 +2264,16 @@ export function ParentDashboardClient({
                 </p>
               ) : null}
 
-              {isRejectedBooking ? (
+              {showMissedShiftClarification && clarificationBooking ? (
+                <MissedShiftClarificationCard
+                  booking={clarificationBooking}
+                  role="parent"
+                  onSubmitted={(next) => {
+                    setMissedShiftBooking(next);
+                    setActiveBooking(next);
+                  }}
+                />
+              ) : isRejectedBooking ? (
                 <div className="flex w-full flex-col items-start gap-2">
                   <div className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                     <p className="font-semibold text-rose-800">

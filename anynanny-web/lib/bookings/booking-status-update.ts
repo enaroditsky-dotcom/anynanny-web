@@ -8,7 +8,15 @@ export const BOOKING_SELECT_MINIMAL =
 const COMPLETED_BOOKING_STATUS: BookingStatus = "completed";
 
 function isTerminalBookingStatus(status: string): boolean {
-  return status === "completed" || status === "cancelled" || status === "rejected";
+  return (
+    status === "completed" ||
+    status === "cancelled" ||
+    status === "rejected" ||
+    status === "did_not_occur" ||
+    status === "happened_unverified" ||
+    status === "missed_shift_disputed" ||
+    status === "awaiting_missed_shift_reason"
+  );
 }
 
 /** Close an in-progress booking using only the constrained booking `status` enum. */

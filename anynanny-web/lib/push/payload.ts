@@ -28,6 +28,8 @@ const KIND_BODY: Record<string, string> = {
   booking_withdrawn_by_parent: "ההורה ביטל את בקשת המשמרת",
   pending_booking_expired: "הבייביסיטר לא הגיבה לפנייתך. הבקשה נסגרה.",
   shift_confirmed: "המשמרת אושרה בהצלחה",
+  shift_cancelled_no_start: "המשמרת בוטלה אוטומטית מכיוון שלא אושרה התחלת המשמרת.",
+  missed_shift_clarification: "המשמרת לא התקיימה. יש לבחור את הסיבה.",
   confirm_start_required: "נדרש אישור הגעה למשמרת",
   confirm_end_required: "נדרש אישור סיום משמרת",
   rating_required: "נדרש דירוג למשמרת"

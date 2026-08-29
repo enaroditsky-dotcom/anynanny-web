@@ -23,7 +23,14 @@ export const CHAT_ELIGIBLE_BOOKING_STATUSES: BookingStatus[] = [
 ];
 
 /** Cancelled/completed shifts keep their conversation if messages already exist. */
-export const CHAT_HISTORY_BOOKING_STATUSES: BookingStatus[] = ["cancelled", "completed"];
+export const CHAT_HISTORY_BOOKING_STATUSES: BookingStatus[] = [
+  "cancelled",
+  "completed",
+  "did_not_occur",
+  "happened_unverified",
+  "missed_shift_disputed",
+  "awaiting_missed_shift_reason"
+];
 
 export const CHAT_INBOX_BOOKING_STATUSES: BookingStatus[] = [
   ...CHAT_ELIGIBLE_BOOKING_STATUSES,

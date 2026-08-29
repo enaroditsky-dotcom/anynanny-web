@@ -1,11 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
+import { scheduledEndHasPassed } from "@/lib/bookings/booking-date-utils";
+import { isMissedShiftLifecycleStatus } from "@/lib/bookings/missed-shift-lifecycle";
 
 export async function sitterStartShift(
   supabase: SupabaseClient,
   bookingId: string
 ): Promise<{ row: BookingRow | null; error: string | null }> {
+  const { data: current } = await supabase
+    .from(BOOKINGS_TABLE)
+    .select(BOOKING_SELECT_MINIMAL)
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (current) {
+    const row = current as BookingRow;
+    if (isMissedShiftLifecycleStatus(row.status) || scheduledEndHasPassed(row)) {
+      return {
+        row: null,
+        error: "לא ניתן להתחיל משמרת שחלון הזמן שלה כבר הסתיים."
+      };
+    }
+  }
+
   const now = new Date().toISOString();
 
   const payloads: Record<string, unknown>[] = [

@@ -20,7 +20,11 @@ function coerceBookingStatus(raw: string): BookingStatus | undefined {
     "sitter_started",
     "parent_started",
     "sitter_ended",
-    "completed"
+    "completed",
+    "awaiting_missed_shift_reason",
+    "did_not_occur",
+    "happened_unverified",
+    "missed_shift_disputed"
   ];
   return (allowed as string[]).includes(mapped) ? (mapped as BookingStatus) : undefined;
 }

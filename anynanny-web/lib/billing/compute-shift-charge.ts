@@ -1,6 +1,7 @@
 import { PARENT_PLATFORM_FEE_MULTIPLIER } from "@/lib/sitter/public-search-card";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import { bookingRequiresAdminReview } from "@/lib/bookings/stuck-shift-review";
+import { isBookingBlockedFromPaymentByMissedShift } from "@/lib/bookings/missed-shift-lifecycle";
 import { SESSIONS_TABLE } from "@/lib/billing/session-types";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -222,6 +223,10 @@ export async function computeAuthoritativeShiftCharge(
 
   if (isBookingBlockedFromAuthoritativeCharge(booking)) {
     return { ok: false, error: "This booking is awaiting operator review.", status: 400 };
+  }
+
+  if (isBookingBlockedFromPaymentByMissedShift(booking.status)) {
+    return { ok: false, error: "This booking cannot be paid in its current state.", status: 400 };
   }
 
   if (!isPayableBookingStatus(booking.status)) {

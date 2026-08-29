@@ -86,7 +86,10 @@ assert.deepEqual(
     "pending_no_response_reminder",
     "booking_withdrawn_by_parent",
     "pending_booking_expired",
-    "shift_confirmed"
+    "shift_end_reminder",
+    "shift_cancelled_no_start",
+    "shift_confirmed",
+    "missed_shift_clarification"
   ]
 );
 assert.ok(DEFERRED_NOTIFICATION_KINDS.includes("confirm_start_required"));

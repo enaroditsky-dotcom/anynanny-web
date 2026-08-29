@@ -14,6 +14,8 @@ import {
   isFutureScheduledBooking
 } from "@/lib/bookings/booking-shift-ui";
 import { shouldShowApprovedScheduleNotification } from "@/lib/bookings/dismissed-approved-bookings";
+import { reconcileUnstartedPastBookings } from "@/lib/bookings/missed-shift-client";
+import { isMissedShiftLifecycleStatus } from "@/lib/bookings/missed-shift-lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -125,6 +127,8 @@ export default async function ParentDashboardPage() {
       initialPreferences.parentSerial = publicId;
     }
 
+    await reconcileUnstartedPastBookings(supabase);
+
     const bookingSelectAttempts = [
       "id, parent_id, sitter_id, status, booking_date, start_time, end_time, parent_notified_at, created_at, updated_at",
       "id, parent_id, sitter_id, status, booking_date, start_time, end_time, created_at, updated_at"
@@ -141,7 +145,11 @@ export default async function ParentDashboardPage() {
           "approved",
           "sitter_started",
           "parent_started",
-          "sitter_ended"
+          "sitter_ended",
+          "awaiting_missed_shift_reason",
+          "did_not_occur",
+          "happened_unverified",
+          "missed_shift_disputed"
         ])
         .order("updated_at", { ascending: false })
         .limit(8);
@@ -160,8 +168,9 @@ export default async function ParentDashboardPage() {
       break;
     }
 
-    // Prefer a due live shift; otherwise a one-time unacked approval card, else a pending request.
+    // Prefer missed-shift clarification, then a due live shift, then schedule cards.
     activeBooking =
+      rows.find((b) => isMissedShiftLifecycleStatus(b.status)) ??
       rows.find((b) => isBookingDueForParentActiveShiftUi(b)) ??
       rows.find((b) => shouldShowApprovedScheduleNotification(b)) ??
       rows.find(

@@ -16,6 +16,7 @@ export const CANONICAL_NOTIFICATION_KINDS = [
   "shift_end_reminder",
   "shift_cancelled_no_start",
   "shift_confirmed",
+  "missed_shift_clarification",
 ] as const;
 
 export type CanonicalNotificationKind =
@@ -126,7 +127,8 @@ export function notificationHrefForKind(
 
   if (
     kind === "shift_end_reminder" ||
-    kind === "shift_cancelled_no_start"
+    kind === "shift_cancelled_no_start" ||
+    kind === "missed_shift_clarification"
   ) {
     return role === "parent"
       ? "/parent/dashboard"
