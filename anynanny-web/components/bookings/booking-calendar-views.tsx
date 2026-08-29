@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Clock, FileSearch, MapPin } from "lucide-react";
 import type { BookingPaymentStatus, BookingStatus } from "@/lib/bookings/constants";
+import { missedShiftStatusLabel } from "@/lib/bookings/missed-shift-lifecycle";
 import {
   bookingPaymentStatusLabel,
   resolveBookingPaymentDisplayKind
@@ -185,6 +186,8 @@ function CalendarShiftStatusBadge({ shift }: { shift: CalendarShift }) {
 }
 
 function bookingStatusLabel(status: BookingStatus): string {
+  const missed = missedShiftStatusLabel(status);
+  if (missed) return missed;
   switch (status) {
     case "pending":
       return "ממתינה לאישור הבייביסיטר";
@@ -219,7 +222,12 @@ function statusBadgeClass(status: BookingStatus): string {
     case "completed":
       return "bg-slate-100 text-slate-700 border-slate-200";
     case "cancelled":
+    case "did_not_occur":
+    case "missed_shift_disputed":
+    case "awaiting_missed_shift_reason":
       return "bg-rose-50 text-rose-800 border-rose-100";
+    case "happened_unverified":
+      return "bg-amber-50 text-amber-800 border-amber-100";
     default:
       return "bg-slate-100 text-slate-600 border-slate-200";
   }

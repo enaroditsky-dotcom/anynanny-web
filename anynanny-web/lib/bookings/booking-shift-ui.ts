@@ -1,7 +1,8 @@
 import type { BookingRow, BookingStatus } from "@/lib/bookings/constants";
 import { bookingRequiresAdminReview } from "@/lib/bookings/stuck-shift-review";
-import { isBookingDateToday } from "@/lib/bookings/booking-date-utils";
+import { isBookingDateToday, scheduledEndHasPassed } from "@/lib/bookings/booking-date-utils";
 import { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
+import { isMissedShiftLifecycleStatus } from "@/lib/bookings/missed-shift-lifecycle";
 import {
   normalizeBookingStatus,
   type BookingStatusInput
@@ -13,7 +14,11 @@ export { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants
 export const BOOKING_TERMINAL_STATUSES: readonly BookingStatus[] = [
   "completed",
   "cancelled",
-  "rejected"
+  "rejected",
+  "did_not_occur",
+  "happened_unverified",
+  "missed_shift_disputed",
+  "awaiting_missed_shift_reason"
 ];
 
 /** Shift is in progress (timer / end-shift actions). */
@@ -88,6 +93,7 @@ export function isBookingEligibleForLiveShiftUi(
   booking: Pick<BookingRow, "status"> & { requires_admin_review?: boolean | null }
 ): boolean {
   if (bookingRequiresAdminReview(booking)) return false;
+  if (isMissedShiftLifecycleStatus(booking.status)) return false;
   if (isBookingTerminalStatus(booking.status)) return false;
 
   if (booking.status === "pending") {
@@ -122,7 +128,9 @@ export function isBookingDueForParentActiveShiftUi(
 ): boolean {
   if (bookingRequiresAdminReview(booking)) return false;
   const status = normalizeBookingStatus(booking.status);
-  if (!status || isBookingTerminalStatus(status)) return false;
+  if (!status || isBookingTerminalStatus(status) || isMissedShiftLifecycleStatus(status)) {
+    return false;
+  }
 
   if (
     status === "sitter_started" ||
@@ -133,6 +141,7 @@ export function isBookingDueForParentActiveShiftUi(
   }
 
   if (status === "pending" || status === "approved") {
+    if (scheduledEndHasPassed(booking, nowMs)) return false;
     const date = booking.booking_date ? String(booking.booking_date) : "";
     if (date && isBookingDateToday(date)) return true;
     // No reliable future date → only wake near scheduled start.
@@ -149,6 +158,7 @@ export function isFutureScheduledBooking(
 ): boolean {
   const status = normalizeBookingStatus(booking.status);
   if (status !== "pending" && status !== "approved") return false;
+  if (scheduledEndHasPassed(booking, nowMs)) return false;
   return !isBookingDueForParentActiveShiftUi(booking, nowMs);
 }
 

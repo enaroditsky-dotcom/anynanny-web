@@ -94,7 +94,7 @@ assert.equal(
     scheduledStart,
     bookingStatus: "approved"
   }),
-  true
+  false
 );
 assert.equal(
   shouldAutoCancelApprovedBookingWithoutStart({
@@ -103,7 +103,7 @@ assert.equal(
     bookingStatus: "sitter_started",
     ...sitterOnlyShake
   }),
-  true
+  false
 );
 assert.equal(
   shouldAutoCancelApprovedBookingWithoutStart({
@@ -325,5 +325,17 @@ assert.match(helper, /isCanonicalDoubleShakeStartCompleted/);
 assert.match(noStartHelper, /NO_START_CONFIRMATION_REASON = "no_start_confirmation"/);
 assert.doesNotMatch(helper, /setTimeout|setInterval/);
 assert.doesNotMatch(sql, /sitter_start_shake =|parent_start_shake =/);
+
+const disableNoStartSql = read("supabase/migrations/20260830130000_disable_no_start_auto_cancel.sql");
+const disableFn = disableNoStartSql.slice(
+  disableNoStartSql.indexOf("create or replace function public.cancel_approved_bookings_without_start")
+);
+assert.match(disableFn, /return 0;/);
+assert.doesNotMatch(disableFn, /status = 'cancelled'/);
+assert.doesNotMatch(disableFn, /cancellation_message = 'no_start_confirmation'/);
+assert.doesNotMatch(disableFn, /'shift_cancelled_no_start'/);
+assert.doesNotMatch(disableFn, /create_canonical_notification/);
+assert.doesNotMatch(noStartHelper, /input\.now\.getTime\(\) >= deadline/);
+assert.match(noStartHelper, /return false;/);
 
 console.log("shift end reminder + no-start cancellation checks passed.");

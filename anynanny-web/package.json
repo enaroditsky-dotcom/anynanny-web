@@ -29,7 +29,8 @@
     "test:parent-onboarding-ux": "npx --yes tsx scripts/test-parent-onboarding-ux.ts",
     "test:parent-public-id-display": "npx --yes tsx scripts/test-parent-public-id-display.ts",
     "test:ugc-safety": "npx --yes tsx scripts/test-ugc-safety-moderation.ts",
-    "test:release-stuck-shift-scope": "npx --yes tsx scripts/test-release-stuck-shift-scope.ts"
+    "test:release-stuck-shift-scope": "npx --yes tsx scripts/test-release-stuck-shift-scope.ts",
+    "test:missed-shift-lifecycle": "npx --yes tsx scripts/test-missed-shift-lifecycle.ts"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",

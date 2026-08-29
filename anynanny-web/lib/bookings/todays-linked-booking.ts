@@ -18,6 +18,7 @@ import {
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
+import { reconcileUnstartedPastBookings } from "@/lib/bookings/missed-shift-client";
 
 /** Statuses that keep parent/sitter linked for today's Double-Shake flow (incl. pending for preview window). */
 export const TODAYS_LINKED_BOOKING_STATUSES: BookingStatus[] = [
@@ -435,6 +436,8 @@ export async function fetchParentTodayBookingBundle(
   gate: TodayBookingShiftGate | null;
   error: string | null;
 }> {
+  await reconcileUnstartedPastBookings(supabase);
+
   const pendingResult = await fetchTodaysPendingBookingRequest(supabase, parentId, "parent");
   if (pendingResult.error) {
     return { booking: null, gate: null, error: pendingResult.error };
@@ -500,6 +503,7 @@ export async function fetchTodaysLinkedBooking(
   userId: string,
   role: "parent" | "sitter"
 ): Promise<{ booking: TodaysLinkedBookingView | null; error: string | null }> {
+  await reconcileUnstartedPastBookings(supabase);
   const { row, error } = await fetchLinkedBookingRow(supabase, userId, role);
 
   if (error) {

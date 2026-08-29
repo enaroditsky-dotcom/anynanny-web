@@ -58,6 +58,13 @@ import { useSitterPendingBookingCount } from "@/lib/bookings/use-sitter-pending-
 import { useCancellationAttention } from "@/lib/bookings/use-cancellation-attention";
 import { CancellationAttentionDot } from "@/components/bookings/cancellation-attention-dot";
 import { CancellationAttentionModals } from "@/components/bookings/cancellation-attention-modals";
+import { MissedShiftClarificationCard } from "@/components/bookings/missed-shift-clarification-card";
+import {
+  fetchMissedShiftLifecycleBookings,
+  pickActionableMissedShiftBooking,
+  type MissedShiftBookingView
+} from "@/lib/bookings/missed-shift-client";
+import { isMissedShiftLifecycleStatus } from "@/lib/bookings/missed-shift-lifecycle";
 import { useSession } from "@/context/SessionContext";
 
 const SITTER_ROLE = "sitter" as const;
@@ -169,6 +176,7 @@ export default function SitterDashboardPage() {
   const [sitterSerialLoaded, setSitterSerialLoaded] = useState(false);
   const [pendingApprovalBooking, setPendingApprovalBooking] = useState<TodaysLinkedBookingView | null>(null);
   const [stuckShiftReviewNotice, setStuckShiftReviewNotice] = useState(false);
+  const [missedShiftBooking, setMissedShiftBooking] = useState<MissedShiftBookingView | null>(null);
   const [releaseStuckModalOpen, setReleaseStuckModalOpen] = useState(false);
   const [releasingStuckShift, setReleasingStuckShift] = useState(false);
   const [releaseStuckModalError, setReleaseStuckModalError] = useState<string | null>(null);
@@ -315,6 +323,9 @@ export default function SitterDashboardPage() {
   }, [reloadTodaysBooking, lockShiftForToday]);
 
   const refreshForUser = useCallback(async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
+    const missedRows = await fetchMissedShiftLifecycleBookings(supabase, uid, "sitter");
+    setMissedShiftBooking(pickActionableMissedShiftBooking(missedRows));
+
     const [pendRes, actRes, completedRes] = await Promise.all([
       selectSitterSessionRows((select) =>
         supabase
@@ -1005,8 +1016,11 @@ export default function SitterDashboardPage() {
 
   const sitterInFlightActive = Boolean(pendingRow || activeShiftRow || endConfirmRow);
   const hasBookingAnchor = Boolean(todaysBooking?.id || todayBookingShiftGate?.id);
+  const showMissedShiftClarification = Boolean(missedShiftBooking);
   const sitterHasLiveBooking =
     Boolean(activeCircleBooking) &&
+    !showMissedShiftClarification &&
+    !isMissedShiftLifecycleStatus(activeCircleBooking?.status) &&
     !bookingRequiresAdminReview(activeCircleBooking) &&
     isSitterShiftCircleStatus(activeCircleBooking?.status) &&
     !isSitterBookingAwaitingApprovalStatus(todayBookingShiftGate?.status ?? null);
@@ -1063,7 +1077,8 @@ export default function SitterDashboardPage() {
     !showSitterAwaitingParentApproval &&
     !showSitterWaitingForPayment &&
     !sitterHasLiveBooking &&
-    !showSitterBookingApproval;
+    !showSitterBookingApproval &&
+    !showMissedShiftClarification;
 
   const showDoubleShakeShiftPanel =
     onboardingPending ||
@@ -1071,6 +1086,7 @@ export default function SitterDashboardPage() {
     showSitterAwaitingParentApproval ||
     showSitterCompletedClosure ||
     showSitterBookingApproval ||
+    showMissedShiftClarification ||
     (sitterHasLiveBooking && isCircleShiftWithinActivationWindow && !sessionUiBlockedByBooking);
 
   const sitterStatusPanelKey = pendingApprovalBooking?.id
@@ -1083,6 +1099,8 @@ export default function SitterDashboardPage() {
           ? `end:${endConfirmRow.id}`
           : completedSummaryRow?.id
             ? `done:${completedSummaryRow.id}:${sitterTerminalDbStatus}`
+            : missedShiftBooking?.id
+              ? `missed:${missedShiftBooking.id}:${String(missedShiftBooking.status)}`
             : showSitterBookingApproval
               ? "booking-approval"
               : null;
@@ -1106,7 +1124,9 @@ export default function SitterDashboardPage() {
             ? "ממתין לאישור התחלה — לחצו להרחבה"
             : activeShiftRow
               ? `משמרת פעילה · ${liveTimerText}`
-              : showSitterBookingApproval
+              : showMissedShiftClarification
+                ? "המשמרת לא התקיימה"
+                : showSitterBookingApproval
                 ? "בקשת משמרת ממתינה — לחצו להרחבה"
                 : "סטטוס משמרת — לחצו להרחבה";
 
@@ -1160,6 +1180,14 @@ export default function SitterDashboardPage() {
                 <DoubleShakeCircleButton label={endShiftBusy ? "מסיים משמרת…" : "סיום משמרת"} variant="salmon" busy={endShiftBusy} onClick={() => void confirmEndShift()} />
               </div>
             </>
+          ) : showMissedShiftClarification && missedShiftBooking ? (
+            <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 px-2 pt-4">
+              <MissedShiftClarificationCard
+                booking={missedShiftBooking}
+                role="sitter"
+                onSubmitted={(next) => setMissedShiftBooking(next)}
+              />
+            </div>
           ) : pendingRow && !sessionUiBlockedByBooking ? (
             <>
               <div className="w-full shrink-0 space-y-2 text-right">

@@ -12,7 +12,15 @@ export const IN_FLIGHT_BOOKING_STATUSES: readonly BookingStatus[] = [
   "sitter_ended"
 ];
 
-const TERMINAL_BOOKING_STATUSES = new Set<BookingStatus>(["completed", "cancelled", "rejected"]);
+const TERMINAL_BOOKING_STATUSES = new Set<BookingStatus>([
+  "completed",
+  "cancelled",
+  "rejected",
+  "did_not_occur",
+  "happened_unverified",
+  "missed_shift_disputed",
+  "awaiting_missed_shift_reason"
+]);
 
 /** Local calendar date as YYYY-MM-DD (matches Postgres `date` column). */
 export function todayDateISO(): string {
@@ -110,6 +118,27 @@ export function resolveBookingWindowMs(
   };
 }
 
+export function scheduledEndHasPassed(
+  input: Pick<BookingRow, "booking_date" | "start_time" | "end_time">,
+  nowMs = Date.now()
+): boolean {
+  if (!input.end_time) return false;
+  const window = resolveBookingWindowMs(input, nowMs);
+  if (window) return nowMs > window.endMs;
+  const endMs = new Date(input.end_time).getTime();
+  return Number.isFinite(endMs) && nowMs > endMs;
+}
+
+function isMissedShiftLifecycleStatusValue(status: BookingStatusInput): boolean {
+  const normalized = normalizeBookingStatus(status) ?? String(status ?? "").trim().toLowerCase();
+  return (
+    normalized === "awaiting_missed_shift_reason" ||
+    normalized === "did_not_occur" ||
+    normalized === "happened_unverified" ||
+    normalized === "missed_shift_disputed"
+  );
+}
+
 export function isNowWithinBookingWindow(
   input: Pick<BookingRow, "booking_date" | "start_time" | "end_time">,
   nowMs = Date.now()
@@ -136,10 +165,18 @@ export function isBookingLiveAcrossMidnight(
   booking: Pick<BookingRow, "booking_date" | "start_time" | "end_time" | "status">,
   nowMs = Date.now()
 ): boolean {
-  if (isTerminalBookingStatus(booking.status)) return false;
+  if (isTerminalBookingStatus(booking.status) || isMissedShiftLifecycleStatusValue(booking.status)) {
+    return false;
+  }
+  const status = normalizeBookingStatus(booking.status);
+  if (
+    (status === "approved" || status === "pending") &&
+    scheduledEndHasPassed(booking, nowMs)
+  ) {
+    return false;
+  }
   if (isBookingDateToday(String(booking.booking_date ?? ""))) return true;
 
-  const status = normalizeBookingStatus(booking.status);
   if (
     status === "parent_started" ||
     status === "sitter_started" ||

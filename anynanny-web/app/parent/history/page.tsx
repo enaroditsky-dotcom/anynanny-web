@@ -59,6 +59,7 @@ import {
   withCancellationSelect
 } from "@/lib/bookings/cancellation-request";
 import { STUCK_SHIFT_REVIEW_LABEL } from "@/lib/bookings/stuck-shift-review";
+import { missedShiftStatusLabel } from "@/lib/bookings/missed-shift-lifecycle";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import {
   BOOKING_PAYMENT_STATUS_LABELS,
@@ -105,6 +106,9 @@ function parentHistoryStatusLabel(
   payment?: { paymentStatus?: string | null; paidAt?: string | null }
 ): string {
   if (requiresAdminReview === true) return STUCK_SHIFT_REVIEW_LABEL;
+
+  const missedLabel = missedShiftStatusLabel(bookingStatus);
+  if (missedLabel) return missedLabel;
 
   const status = String(bookingStatus ?? "").trim().toLowerCase();
 
@@ -330,6 +334,10 @@ export default function ParentHistoryPage() {
 
         try {
           setLoadingData(true);
+          const { reconcileUnstartedPastBookings } = await import(
+            "@/lib/bookings/missed-shift-client"
+          );
+          await reconcileUnstartedPastBookings(supabase);
 
           /*
            * BOOKINGS

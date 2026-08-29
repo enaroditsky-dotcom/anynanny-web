@@ -1,5 +1,6 @@
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import { bookingRequiresAdminReview } from "@/lib/bookings/stuck-shift-review";
+import { isBookingBlockedFromMandatoryRating } from "@/lib/bookings/missed-shift-lifecycle";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -78,11 +79,15 @@ export async function submitSessionRating(
   if (linkedBookingId) {
     const { data: linkedBooking } = await supabase
       .from(BOOKINGS_TABLE)
-      .select("requires_admin_review")
+      .select("requires_admin_review, status")
       .eq("id", linkedBookingId)
       .maybeSingle();
-    if (bookingRequiresAdminReview(linkedBooking as { requires_admin_review?: boolean | null } | null)) {
+    const linked = linkedBooking as { requires_admin_review?: boolean | null; status?: string | null } | null;
+    if (bookingRequiresAdminReview(linked)) {
       return { ok: false, error: "לא ניתן לדרג משמרת שנמצאת בבדיקה." };
+    }
+    if (isBookingBlockedFromMandatoryRating(linked?.status)) {
+      return { ok: false, error: "לא ניתן לדרג משמרת שלא התקיימה כמשמרת שהושלמה." };
     }
   }
 

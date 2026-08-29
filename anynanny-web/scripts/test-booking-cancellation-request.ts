@@ -149,7 +149,11 @@ const sitterShifts = read("app/sitter/shifts/page.tsx");
 assert.match(sitterShifts, /CANCELLATION_COPY\.parentProfile/);
 assert.match(sitterShifts, /parentId=/);
 assert.match(sitterShifts, /viewerRole="sitter"/);
-assert.match(sitterShifts, /\["completed", "cancelled"\]/);
+assert.match(
+  sitterShifts,
+  /\[\s*"completed",\s*"cancelled",\s*"did_not_occur",\s*"happened_unverified",\s*"missed_shift_disputed",\s*"awaiting_missed_shift_reason"\s*\]/
+);
+assert.match(sitterShifts, /\.in\("status", \[\.\.\.SITTER_CALENDAR_CONFIRMED_STATUSES, "cancelled"\]\)/);
 assert.match(sitterShifts, /onAcknowledgeCancellation/);
 assert.match(sitterShifts, /CancellationAttentionModals/);
 

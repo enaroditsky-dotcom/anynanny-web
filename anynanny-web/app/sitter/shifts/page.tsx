@@ -48,6 +48,7 @@ import {
   isSitterPastHistoryBooking,
   STUCK_SHIFT_REVIEW_LABEL
 } from "@/lib/bookings/stuck-shift-review";
+import { missedShiftStatusLabel } from "@/lib/bookings/missed-shift-lifecycle";
 
 import {
   bookingDateMatchesInclusiveRange,
@@ -310,6 +311,17 @@ function statusBadge(
     return {
       label: STUCK_SHIFT_REVIEW_LABEL,
       className: "bg-amber-50 text-amber-800"
+    };
+  }
+
+  const missedLabel = missedShiftStatusLabel(status);
+  if (missedLabel) {
+    return {
+      label: missedLabel,
+      className:
+        status === "happened_unverified"
+          ? "bg-amber-50 text-amber-800"
+          : "bg-rose-50 text-rose-700"
     };
   }
 
@@ -668,7 +680,14 @@ export default function SitterShiftsPage() {
             query =
               query.in(
                 "status",
-                ["completed", "cancelled"]
+                [
+                  "completed",
+                  "cancelled",
+                  "did_not_occur",
+                  "happened_unverified",
+                  "missed_shift_disputed",
+                  "awaiting_missed_shift_reason"
+                ]
               );
           }
 
@@ -694,7 +713,14 @@ export default function SitterShiftsPage() {
             fallbackQuery =
               viewType === "pending"
                 ? fallbackQuery.eq("status", "pending")
-                : fallbackQuery.in("status", ["completed", "cancelled"]);
+                : fallbackQuery.in("status", [
+                    "completed",
+                    "cancelled",
+                    "did_not_occur",
+                    "happened_unverified",
+                    "missed_shift_disputed",
+                    "awaiting_missed_shift_reason"
+                  ]);
 
             const fallback = await fallbackQuery.order("booking_date", {
               ascending: viewType === "pending"
@@ -729,7 +755,14 @@ export default function SitterShiftsPage() {
             retry =
               viewType === "pending"
                 ? retry.eq("status", "pending")
-                : retry.in("status", ["completed", "cancelled"]);
+                : retry.in("status", [
+                    "completed",
+                    "cancelled",
+                    "did_not_occur",
+                    "happened_unverified",
+                    "missed_shift_disputed",
+                    "awaiting_missed_shift_reason"
+                  ]);
             const retryResult = await retry.order("booking_date", {
               ascending: viewType === "pending"
             });
@@ -762,7 +795,14 @@ export default function SitterShiftsPage() {
             retry =
               viewType === "pending"
                 ? retry.eq("status", "pending")
-                : retry.in("status", ["completed", "cancelled"]);
+                : retry.in("status", [
+                    "completed",
+                    "cancelled",
+                    "did_not_occur",
+                    "happened_unverified",
+                    "missed_shift_disputed",
+                    "awaiting_missed_shift_reason"
+                  ]);
             const retryResult = await retry.order("booking_date", {
               ascending: viewType === "pending"
             });

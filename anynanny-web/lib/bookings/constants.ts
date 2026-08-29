@@ -8,7 +8,11 @@ export type BookingStatus =
   | "sitter_started"
   | "parent_started"
   | "sitter_ended"
-  | "completed";
+  | "completed"
+  | "awaiting_missed_shift_reason"
+  | "did_not_occur"
+  | "happened_unverified"
+  | "missed_shift_disputed";
 
 export const SITTER_FORCE_END_ADMIN_NOTE =
   "Sitter utilized force-end override due to unresponsive parent." as const;

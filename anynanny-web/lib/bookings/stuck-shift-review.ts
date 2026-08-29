@@ -74,7 +74,16 @@ export function isSitterPastHistoryBooking(row: {
   requires_admin_review?: boolean | null;
 }): boolean {
   const status = String(row.status ?? "").trim().toLowerCase();
-  if (status === "completed" || status === "cancelled") return true;
+  if (
+    status === "completed" ||
+    status === "cancelled" ||
+    status === "did_not_occur" ||
+    status === "happened_unverified" ||
+    status === "missed_shift_disputed" ||
+    status === "awaiting_missed_shift_reason"
+  ) {
+    return true;
+  }
   if (!bookingRequiresAdminReview(row)) return false;
   return status !== "pending" && status !== "rejected";
 }
