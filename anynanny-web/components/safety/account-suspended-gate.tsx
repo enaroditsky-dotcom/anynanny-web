@@ -10,6 +10,7 @@ import { ANYNANNY_SUPPORT_EMAIL } from "@/lib/legal/contact";
 function isSuspensionAllowedPath(pathname: string): boolean {
   if (pathname === "/" || pathname === "/terms" || pathname === "/privacy") return true;
   if (pathname.startsWith("/terms/") || pathname.startsWith("/privacy/")) return true;
+  if (pathname === "/delete-account" || pathname.startsWith("/delete-account/")) return true;
   if (pathname.startsWith("/auth/") || pathname === "/login" || pathname === "/register") return true;
   if (pathname === "/parent/settings" || pathname.startsWith("/parent/settings/")) return true;
   if (pathname === "/sitter/settings" || pathname.startsWith("/sitter/settings/")) return true;
