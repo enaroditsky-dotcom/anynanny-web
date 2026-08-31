@@ -24,8 +24,8 @@ import {
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import { MissedShiftClarificationCard } from "@/components/bookings/missed-shift-clarification-card";
 import {
-  isMissedShiftClarificationStatus,
-  isMissedShiftLifecycleStatus
+  isMissedShiftLifecycleStatus,
+  missedShiftRequiresViewerAction
 } from "@/lib/bookings/missed-shift-lifecycle";
 import {
   fetchMissedShiftLifecycleBookings,
@@ -318,11 +318,6 @@ function pickParentDashboardBooking(
       return unpaidCompleted;
     }
   }
-
-  const missedClarification = rows.find(
-    (b) => isMissedShiftClarificationStatus(b.status) && !bookingRequiresAdminReview(b)
-  );
-  if (missedClarification) return missedClarification;
 
   const dueLive = rows.filter(
     (b) =>
@@ -672,6 +667,7 @@ export function ParentDashboardClient({
   const [releaseStuckModalError, setReleaseStuckModalError] = useState<string | null>(null);
   const [stuckShiftReviewNotice, setStuckShiftReviewNotice] = useState(false);
   const [missedShiftBooking, setMissedShiftBooking] = useState<MissedShiftBookingView | null>(null);
+  const dismissedMissedShiftIdsRef = useRef<Set<string>>(new Set());
 
   const refreshLiveShiftState = useCallback(async (uid: string) => {
     if (refreshInFlightRef.current) {
@@ -690,7 +686,13 @@ export function ParentDashboardClient({
 
         await reconcileUnstartedPastBookings(supabase);
         const missedRows = await fetchMissedShiftLifecycleBookings(supabase, uid, "parent");
-        setMissedShiftBooking(pickActionableMissedShiftBooking(missedRows));
+        setMissedShiftBooking(
+          pickActionableMissedShiftBooking(
+            missedRows,
+            "parent",
+            dismissedMissedShiftIdsRef.current
+          )
+        );
 
         const localSessionId = activeSessionRef.current?.id
           ? String(activeSessionRef.current.id)
@@ -1803,10 +1805,9 @@ export function ParentDashboardClient({
       !isMissedShiftLifecycleStatus(activeBooking.status)
   );
   const clarificationBooking =
-    missedShiftBooking ??
-    (activeBooking && isMissedShiftLifecycleStatus(activeBooking.status)
-      ? (activeBooking as MissedShiftBookingView)
-      : null);
+    missedShiftBooking && missedShiftRequiresViewerAction(missedShiftBooking, "parent")
+      ? missedShiftBooking
+      : null;
   const showMissedShiftClarification = Boolean(hasHydrated && clarificationBooking);
   const scheduledBookingId = activeBooking?.id ? String(activeBooking.id) : null;
   const isStickyApprovedNotification = Boolean(
@@ -1892,7 +1893,9 @@ export function ParentDashboardClient({
       awaitingEndApproval);
   const showScheduledCard = isScheduledConfirmed || isScheduledPending;
   const showShiftCard = showLiveShiftCard || showScheduledCard;
-  const statusCardKey = activeBooking?.id
+  const statusCardKey = clarificationBooking?.id
+    ? `missed:${String(clarificationBooking.id)}`
+    : activeBooking?.id
     ? `${String(activeBooking.id)}:${bookingStatus || "none"}`
     : inSettlement
       ? `settlement:${settlementStep ?? "open"}`
@@ -1995,6 +1998,10 @@ export function ParentDashboardClient({
   const shouldHideDashboardActions = isActiveShiftExpanded;
 
   const dismissStatusBanner = () => {
+    if (clarificationBooking?.id) {
+      dismissedMissedShiftIdsRef.current.add(String(clarificationBooking.id));
+      setMissedShiftBooking(null);
+    }
     if (scheduledBookingId && isScheduledConfirmed) {
       const uid = String(parentId ?? activeBooking?.parent_id ?? "").trim();
       const acknowledgedAt = new Date().toISOString();
@@ -2269,8 +2276,9 @@ export function ParentDashboardClient({
                   booking={clarificationBooking}
                   role="parent"
                   onSubmitted={(next) => {
-                    setMissedShiftBooking(next);
-                    setActiveBooking(next);
+                    dismissedMissedShiftIdsRef.current.add(String(next.id));
+                    setMissedShiftBooking(null);
+                    setActiveBooking((prev) => (prev?.id === next.id ? null : prev));
                   }}
                 />
               ) : isRejectedBooking ? (

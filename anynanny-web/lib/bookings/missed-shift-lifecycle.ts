@@ -148,6 +148,23 @@ export function isMissedShiftClarificationStatus(status: unknown): boolean {
   return normStatus(status) === MISSED_SHIFT_AWAITING_REASON_STATUS;
 }
 
+/**
+ * Dashboard alert is only for THIS viewer still needing to pick a reason.
+ * Saved parent/sitter reports (and any resolved terminal status) are not actionable.
+ */
+export function missedShiftRequiresViewerAction(
+  booking: {
+    status?: unknown;
+    parent_reason?: string | null;
+    sitter_reason?: string | null;
+  },
+  role: "parent" | "sitter"
+): boolean {
+  if (!isMissedShiftClarificationStatus(booking.status)) return false;
+  const own = role === "parent" ? booking.parent_reason : booking.sitter_reason;
+  return !String(own ?? "").trim();
+}
+
 export function isMissedShiftDidNotOccurStatus(status: unknown): boolean {
   return normStatus(status) === MISSED_SHIFT_DID_NOT_OCCUR_STATUS;
 }

@@ -26,13 +26,14 @@ import {
   MISSED_SHIFT_REASON_CODES,
   MISSED_SHIFT_REASON_LABELS,
   missedShiftOutcomeToStatus,
+  missedShiftRequiresViewerAction,
   missedShiftStatusLabel,
   RECONCILE_UNSTARTED_PAST_BOOKINGS_RPC,
   resolveMissedShiftOutcome,
   shouldEnterMissedShiftClarification,
   SUBMIT_MISSED_SHIFT_REASON_RPC
 } from "../lib/bookings/missed-shift-lifecycle";
-import { mapSubmitMissedShiftError as mapClientError } from "../lib/bookings/missed-shift-client";
+import { mapSubmitMissedShiftError as mapClientError, pickActionableMissedShiftBooking } from "../lib/bookings/missed-shift-client";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function read(relativePath: string): string {
@@ -126,6 +127,49 @@ assert.match(sitterDash, /fetchMissedShiftLifecycleBookings/);
 assert.doesNotMatch(
   sitterDash.slice(sitterDash.indexOf("showMissedShiftClarification")),
   /showMissedShiftClarification[\s\S]{0,80}sitterHasLiveBooking =[\s\S]{0,40}true/
+);
+assert.match(parentDash, /missedShiftRequiresViewerAction/);
+assert.match(parentDash, /setMissedShiftBooking\(null\)/);
+assert.match(sitterDash, /setMissedShiftBooking\(null\)/);
+assert.match(sitterDash, /pickActionableMissedShiftBooking\(missedRows, "sitter"/);
+assert.match(read("app/parent/dashboard/page.tsx"), /pickActionableMissedShiftBooking\(missedRows, "parent"\)/);
+
+const awaitingUnanswered = {
+  id: "m1",
+  status: "awaiting_missed_shift_reason" as const,
+  parent_reason: null,
+  sitter_reason: null
+};
+const awaitingParentDone = {
+  ...awaitingUnanswered,
+  parent_reason: "forgot_shift" as const
+};
+const resolvedMissed = {
+  id: "m2",
+  status: "did_not_occur" as const,
+  parent_reason: "forgot_shift" as const,
+  sitter_reason: "nanny_no_show" as const
+};
+assert.equal(missedShiftRequiresViewerAction(awaitingUnanswered, "parent"), true);
+assert.equal(missedShiftRequiresViewerAction(awaitingUnanswered, "sitter"), true);
+assert.equal(missedShiftRequiresViewerAction(awaitingParentDone, "parent"), false);
+assert.equal(missedShiftRequiresViewerAction(awaitingParentDone, "sitter"), true);
+assert.equal(missedShiftRequiresViewerAction(resolvedMissed, "parent"), false);
+assert.equal(missedShiftRequiresViewerAction(resolvedMissed, "sitter"), false);
+assert.equal(
+  pickActionableMissedShiftBooking(
+    [resolvedMissed, awaitingParentDone] as never,
+    "parent"
+  ),
+  null
+);
+assert.equal(
+  pickActionableMissedShiftBooking([awaitingParentDone] as never, "sitter")?.id,
+  "m1"
+);
+assert.equal(
+  pickActionableMissedShiftBooking([awaitingUnanswered] as never, "parent", new Set(["m1"])),
+  null
 );
 
 // I / J. Independent parent/sitter responses
