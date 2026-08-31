@@ -103,7 +103,7 @@ export function BookingCalendarPanel({
   };
 
   return (
-    <div className={`flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden ${className}`.trim()} dir="rtl">
+    <div className={`flex w-full min-w-0 flex-col ${className}`.trim()} dir="rtl">
       <div className="w-full min-w-0 shrink-0 space-y-2 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
         <label htmlFor={viewModeSelectId} className="block text-sm font-normal text-slate-600">
           בחר תצוגה
@@ -129,7 +129,7 @@ export function BookingCalendarPanel({
         </div>
       </div>
 
-      <div className="relative mt-4 min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div className="relative mt-4 min-w-0">
         {viewMode === "today" ? (
           <TodayGridView shifts={filteredShifts} {...viewProps} />
         ) : viewMode === "week" ? (

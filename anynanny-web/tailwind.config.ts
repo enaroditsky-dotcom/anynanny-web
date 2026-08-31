@@ -59,9 +59,14 @@ const config: Config = {
           "0%, 100%": { boxShadow: "0 0 0 0 rgba(220, 90, 90, 0.45)" },
           "50%": { boxShadow: "0 0 0 16px rgba(220, 90, 90, 0)" }
         },
+        /**
+         * Opacity-only. A resting `transform` (even identity) on the page
+         * wrapper creates a compositor layer that intercepts touch and
+         * blocks ancestor / document scrolling on iOS and mobile Chrome.
+         */
         "fade-route": {
-          "0%": { opacity: "0", transform: "translateY(8px) scale(0.988)" },
-          "100%": { opacity: "1", transform: "translateY(0) scale(1)" }
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" }
         }
       },
       animation: {

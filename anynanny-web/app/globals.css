@@ -10,9 +10,11 @@
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+  min-height: 100dvh;
 }
 
 body {
+  min-height: 100dvh;
   background: #f7f2ea;
   color: #165b73;
   font-family: var(--font-varela-round), "Varela Round", system-ui, "Segoe UI", Arial, sans-serif;

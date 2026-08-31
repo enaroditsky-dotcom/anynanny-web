@@ -1141,7 +1141,7 @@ export default function SitterDashboardPage() {
 
   if (showLoading) {
     return (
-      <main className="mx-auto flex h-full min-h-0 w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
+      <main className="mx-auto flex min-h-[12rem] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
         <p className="text-right text-sm text-slate-600 animate-pulse">בודק הרשאות גישה ומאמת פרופיל…</p>
       </main>
     );
@@ -1243,8 +1243,8 @@ export default function SitterDashboardPage() {
   );
 
   return (
-    <main className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6]" dir="rtl">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden py-2">
+    <main className="mx-auto flex w-full min-w-0 max-w-md flex-col bg-[#FDFBF6]" dir="rtl">
+      <div className="flex flex-col gap-3 py-2">
         <div className="shrink-0">
           <SitterDashboardHeader
             firstName={firstName}
@@ -1316,9 +1316,9 @@ export default function SitterDashboardPage() {
               <p className="min-w-0 flex-1 leading-snug">{banner}</p>
             </div>
           ) : null}
-          <div className={`relative flex min-h-0 flex-1 flex-col overflow-hidden ${onboardingPending ? "min-h-[16rem]" : ""}`}>
+          <div className={`relative flex flex-col ${onboardingPending ? "min-h-[16rem]" : ""}`}>
             <div
-              className={`flex min-h-0 flex-1 flex-col overflow-hidden ${onboardingPending ? "pointer-events-none select-none blur-[3px] opacity-50" : ""}`}
+              className={`flex flex-col ${onboardingPending ? "pointer-events-none select-none blur-[3px] opacity-50" : ""}`}
               aria-hidden={onboardingPending}
             >
               {onboardingPending ? (
@@ -1369,7 +1369,7 @@ export default function SitterDashboardPage() {
                 </section>
               ) : null}
               {showSitterStatusPanel ? (
-                <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+                <div className="px-1 pb-2">
                   <DashboardStatusCard
                     collapsedSummary={sitterStatusCollapsedSummary}
                     collapsed={statusPanelCollapsed}
@@ -1401,7 +1401,7 @@ export default function SitterDashboardPage() {
               ) : null}
             </div>
             {onboardingPending ? (
-              <div className="absolute inset-0 z-20 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
+              <div className="fixed inset-x-0 bottom-0 top-20 z-20 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
                 <div className="w-full max-w-sm my-auto">
                   <SitterOnboardingWizard onSaved={handleOnboardingSaved} />
                 </div>

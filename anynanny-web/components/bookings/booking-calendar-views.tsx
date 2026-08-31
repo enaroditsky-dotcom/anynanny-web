@@ -494,7 +494,7 @@ function CalendarShell({
 }) {
   return (
     <div
-      className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft ${className}`.trim()}
+      className={`relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft ${className}`.trim()}
     >
       <div className="shrink-0 border-b border-slate-100 px-4 py-3 text-right">
         {titleControl ?? (title ? <p className="text-base font-semibold text-navy-header">{title}</p> : null)}
@@ -534,7 +534,7 @@ export function TodayGridView({
       <div className="shrink-0 px-4 py-2 text-right">
         <p className={`text-lg font-semibold tabular-nums ${dateLabelClass(hasShifts)}`}>{formatIsraeliDate(today)}</p>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-slate-100">
+      <div className="border-t border-slate-100">
         <div className="relative flex" style={{ minHeight: `${timelineHeightRem}rem` }}>
           <div className="sticky right-0 z-[1] w-12 shrink-0 border-l border-slate-100 bg-slate-50/95">
             {hours.map((hour) => (
@@ -574,7 +574,7 @@ export function TodayGridView({
         </div>
       </div>
       {hasShifts ? (
-        <div className="min-h-0 shrink-0 space-y-2 overflow-y-auto overscroll-contain border-t border-slate-100 px-3 py-3">
+        <div className="space-y-2 border-t border-slate-100 px-3 py-3">
           {shifts.map((shift) => (
             <ShiftCard key={`card-${shift.id}`} shift={shift} {...actionContext} />
           ))}
@@ -650,7 +650,7 @@ export function WeekGridView({
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-slate-100 px-3 py-3">
+      <div className="border-t border-slate-100 px-3 py-3">
         <p className="mb-2 text-right text-sm">
           <span className={dateLabelClass(selectedShifts.length > 0)}>
             {selectedDay?.weekdayFull} · {formatIsraeliDate(selectedIso)}
@@ -800,7 +800,7 @@ export function MonthGridView({
           );
         })}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-slate-100 px-3 py-3">
+      <div className="border-t border-slate-100 px-3 py-3">
         {selectedIso ? (
           <>
             <p className="mb-2 text-right text-sm">
@@ -953,7 +953,7 @@ export function AllShiftsListView({
       title={title}
       subtitle={hasShifts ? `${shifts.length} משמרות` : emptyHint}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+      <div className="px-3 py-3">
         {!hasShifts ? (
           <CalendarEmptyState message={emptyHint} />
         ) : (

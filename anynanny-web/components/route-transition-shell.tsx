@@ -5,12 +5,9 @@ import type { ReactNode } from "react";
 
 /** Fade when navigating between parent/sitter/session dashboard shells (dev-friendly role switching). */
 export function RouteTransitionShell({
-  children,
-  fill = false
+  children
 }: {
   children: ReactNode;
-  /** Preserve the flex height chain so fixed-viewport screens can fill the shell without scrolling. */
-  fill?: boolean;
 }) {
   const pathname = usePathname();
   const animate =
@@ -20,9 +17,5 @@ export function RouteTransitionShell({
     return <>{children}</>;
   }
 
-  return (
-    <div className={`animate-fade-route min-w-0 ${fill ? "flex min-h-0 flex-1 flex-col" : ""}`}>
-      {children}
-    </div>
-  );
+  return <div className="animate-fade-route min-w-0">{children}</div>;
 }

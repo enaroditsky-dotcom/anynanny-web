@@ -38,9 +38,9 @@ export function MainLayout({
         </header>
       ) : null}
 
-      {/* Bottom padding clears fixed BottomNav + elevated AnyNanny Now FAB */}
+      {/* Breathing room only — app shell already clears the fixed BottomNav. */}
       <main
-        className={`px-4 ${showBrandHeader ? "py-3" : "pt-1"} pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))] ${mainClassName ?? ""}`.trim()}
+        className={`px-4 ${showBrandHeader ? "py-3" : "pt-1"} pb-4 ${mainClassName ?? ""}`.trim()}
       >
         {children}
       </main>
