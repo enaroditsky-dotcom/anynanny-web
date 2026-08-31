@@ -167,7 +167,7 @@ export function SitterShiftsPageContent() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex flex-col">
       <DoubleShakeShiftPanel className="mb-3 shrink-0">
         {shiftBanner ? (
           <p
@@ -199,7 +199,7 @@ export function SitterShiftsPageContent() {
         </DoubleShakeCircleSlot>
       </DoubleShakeShiftPanel>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pb-1 pe-0.5">
+      <div className="space-y-3 pb-1 pe-0.5">
         <SitterPendingBookings sitterId={sitterId} onResponded={handleBookingResponded} />
         <SitterConfirmedShifts sitterId={sitterId} refreshNonce={confirmedRefreshNonce} />
       </div>

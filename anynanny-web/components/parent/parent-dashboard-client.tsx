@@ -2103,7 +2103,7 @@ export function ParentDashboardClient({
   }, [statusCardKey]);
 
   return (
-    <main className="relative mx-auto w-full min-w-0 max-w-md space-y-4 pb-[calc(8rem+var(--anynanny-now-dock,0px))] overflow-y-auto min-h-screen" dir="rtl">
+    <main className="relative mx-auto w-full min-w-0 max-w-md space-y-4" dir="rtl">
       {rejectedDeclineNotice ? (
         <DeclineNoticeUnit
           notice={rejectedDeclineNotice}
@@ -2111,7 +2111,7 @@ export function ParentDashboardClient({
         />
       ) : null}
       {onboardingPending ? (
-        <div className="absolute inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
+        <div className="fixed inset-x-0 bottom-0 top-20 z-50 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
           <div className="w-full max-w-sm my-auto">
             <ParentOnboardingWizard onSaved={handleOnboardingSaved} />
           </div>

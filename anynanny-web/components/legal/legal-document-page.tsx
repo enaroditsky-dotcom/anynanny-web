@@ -36,18 +36,18 @@ function LegalDocumentPageInner({
 
   return (
     <main
-      className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-md flex-col bg-[#FDFBF6]"
+      className="mx-auto flex w-full min-w-0 max-w-md flex-col bg-[#FDFBF6]"
       dir="rtl"
       suppressHydrationWarning
     >
-      <header className="sticky top-0 z-10 shrink-0 space-y-2 border-b border-navy-header/10 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm">
+      <header className="sticky top-0 z-10 space-y-2 border-b border-navy-header/10 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm">
         <PageBackRow>
           <PageBackButton onClick={handleBack} />
         </PageBackRow>
         <p className="text-right text-sm font-bold text-navy-header">{title}</p>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 pb-10">{children}</div>
+      <div className="px-4 py-6 pb-10">{children}</div>
     </main>
   );
 }

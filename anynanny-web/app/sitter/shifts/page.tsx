@@ -1674,7 +1674,7 @@ export default function SitterShiftsPage() {
       subtitle="בקשות ממתינות לאישור, יומן משמרות מאושרות והיסטוריית ביצוע בפועל."
     >
       <div
-        className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col text-right"
+        className="mx-auto flex w-full max-w-md flex-col text-right"
         dir="rtl"
       >
         <div className="mb-4 shrink-0">
@@ -1752,7 +1752,7 @@ export default function SitterShiftsPage() {
 
         {viewType ===
         "calendar" ? (
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="min-w-0">
             <BookingCalendarPanel
               shifts={
                 calendarShifts
@@ -1868,7 +1868,7 @@ export default function SitterShiftsPage() {
                 לא נמצאו משמרות בטווח התאריכים שנבחר
               </div>
             ) : (
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
+          <div className="min-w-0 space-y-4">
             {visibleShifts.map(
               (shift) => {
                 const badge =

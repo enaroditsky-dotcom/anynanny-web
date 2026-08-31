@@ -261,14 +261,14 @@ export default function ParentCalendarPage() {
 
   if (!ready) {
     return (
-      <div className="flex h-full min-h-0 items-center justify-center">
+      <div className="flex min-h-[12rem] items-center justify-center">
         <p className="text-center text-sm font-normal text-slate-500">טוען...</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-md flex-col overflow-hidden pt-1" dir="rtl">
+    <div className="mx-auto flex w-full min-w-0 max-w-md flex-col pt-1" dir="rtl">
       <div className="shrink-0 space-y-4 pb-4">
         <PageBackRow>
           <PageBackLink href="/parent/dashboard" />

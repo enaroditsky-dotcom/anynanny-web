@@ -206,7 +206,7 @@ export default function SessionPage() {
 
   return (
     <main
-      className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden bg-[#FDFBF6] py-2"
+      className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-md flex-col bg-[#FDFBF6] py-2"
       dir="rtl"
     >
       <section className="flex min-h-0 flex-1 flex-col rounded-3xl bg-white px-4 py-5 shadow-soft sm:px-5">

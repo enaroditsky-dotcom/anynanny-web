@@ -31,20 +31,6 @@ const CHROMELESS_PREFIXES = [
   "/sitter/onboarding"
 ];
 
-/**
- * Routes that historically used a fixed viewport.
- *
- * We keep this list for compatibility/future route-specific behavior,
- * but we no longer disable vertical scrolling for these pages.
- */
-const FIXED_VIEWPORT_PREFIXES = [
-  "/parent/dashboard",
-  "/parent/calendar",
-  "/sitter/dashboard",
-  "/sitter/shifts",
-  "/session"
-];
-
 const MAIN_LAYOUT_PREFIXES = [
   "/parent/search",
   "/parent/wallet",
@@ -53,14 +39,6 @@ const MAIN_LAYOUT_PREFIXES = [
 
 export function isChromelessAuthPath(pathname: string): boolean {
   return CHROMELESS_PREFIXES.some(
-    (p) =>
-      pathname === p ||
-      pathname.startsWith(`${p}/`)
-  );
-}
-
-export function isFixedViewportPath(pathname: string): boolean {
-  return FIXED_VIEWPORT_PREFIXES.some(
     (p) =>
       pathname === p ||
       pathname.startsWith(`${p}/`)
@@ -76,11 +54,11 @@ export function isMainLayoutPath(pathname: string): boolean {
 }
 
 /**
- * Keeps page content safely above the fixed BottomNav,
- * including iPhone / mobile safe-area inset.
+ * Canonical bottom inset for page content: fixed BottomNav + elevated FAB
+ * + optional AnyNanny Now dock + iOS safe-area.
  */
 const SHELL_BOTTOM_NAV_PADDING =
-  "pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]";
+  "pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]";
 
 /**
  * Keep BottomNav identity stable across route/layout changes
@@ -118,16 +96,6 @@ export function AppShellGate({
 
   const mainLayout = isMainLayoutPath(pathname);
 
-  /**
-   * Keep the route classification available.
-   *
-   * Important:
-   * fixedViewport must NEVER mean overflow-hidden anymore.
-   * Every normal application page must remain vertically scrollable
-   * whenever its content exceeds the available mobile viewport.
-   */
-  const fixedViewport = isFixedViewportPath(pathname);
-
   return (
     <SessionProvider>
       <AppShellSessionHydration />
@@ -135,64 +103,29 @@ export function AppShellGate({
 
       <AppShellStableBoundary>
         {/*
-         * Dynamic viewport height is safer on mobile browsers whose
-         * address/tool bars expand and collapse.
-         *
-         * min-h-0 is important for nested flex children so their
-         * overflow-y-auto containers are actually allowed to shrink
-         * and scroll.
+         * Document-level vertical scrolling (native html/body).
+         * Do not put overflow-y-auto / overflow-hidden on this shell —
+         * nested scrollers plus overflow-hidden descendants trap iOS
+         * touch gestures so only the bottom padding/nav area scrolls.
          */}
         <div className="flex min-h-dvh min-w-0 flex-col bg-[#FDFBF6]">
           <AppShellHeader />
           <GlobalCoordinationNotifications />
 
-          {/*
-           * BottomNav remains mounted as a sibling of the page content.
-           * All page content gets bottom padding so its last controls
-           * are never hidden behind the fixed navigation.
-           */}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {mainLayout ? (
-              <div
-                className={[
-                  "min-h-0",
-                  "min-w-0",
-                  "flex-1",
-                  "overflow-x-hidden",
-                  "overflow-y-auto",
-                  "overscroll-y-contain",
-                  SHELL_BOTTOM_NAV_PADDING
-                ].join(" ")}
-              >
-                <RouteTransitionShell>
-                  <PushPermissionBanner />
-                  {children}
-                </RouteTransitionShell>
-              </div>
-            ) : (
-              <div
-                className={[
-                  "relative",
-                  "min-h-0",
-                  "min-w-0",
-                  "flex-1",
-                  "overflow-x-hidden",
-                  "overflow-y-auto",
-                  "overscroll-y-contain",
-                  "px-4",
-                  "pt-4",
-                  SHELL_BOTTOM_NAV_PADDING,
-                  fixedViewport
-                    ? "touch-pan-y"
-                    : ""
-                ].join(" ")}
-              >
-                <RouteTransitionShell>
-                  <PushPermissionBanner />
-                  {children}
-                </RouteTransitionShell>
-              </div>
-            )}
+          <div
+            className={[
+              "min-w-0",
+              "flex-1",
+              mainLayout ? "" : "px-4 pt-4",
+              SHELL_BOTTOM_NAV_PADDING
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <RouteTransitionShell>
+              <PushPermissionBanner />
+              {children}
+            </RouteTransitionShell>
           </div>
 
           <ParentActiveNowDock pathname={pathname} />
