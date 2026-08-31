@@ -1,9 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 import {
-  isMissedShiftClarificationStatus,
-  isMissedShiftLifecycleStatus,
   isMissedShiftReasonCode,
+  missedShiftRequiresViewerAction,
   MISSED_SHIFT_AWAITING_REASON_STATUS,
   MISSED_SHIFT_LIFECYCLE_STATUSES,
   MISSED_SHIFT_REPORTS_TABLE,
@@ -197,11 +196,15 @@ export async function fetchMissedShiftLifecycleBookings(
 }
 
 export function pickActionableMissedShiftBooking(
-  rows: MissedShiftBookingView[]
+  rows: MissedShiftBookingView[],
+  role: "parent" | "sitter",
+  dismissedIds?: ReadonlySet<string>
 ): MissedShiftBookingView | null {
   return (
-    rows.find((row) => isMissedShiftClarificationStatus(row.status)) ??
-    rows.find((row) => isMissedShiftLifecycleStatus(row.status)) ??
-    null
+    rows.find(
+      (row) =>
+        missedShiftRequiresViewerAction(row, role) &&
+        !dismissedIds?.has(String(row.id ?? "").trim())
+    ) ?? null
   );
 }

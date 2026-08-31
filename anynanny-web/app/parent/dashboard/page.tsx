@@ -14,8 +14,11 @@ import {
   isFutureScheduledBooking
 } from "@/lib/bookings/booking-shift-ui";
 import { shouldShowApprovedScheduleNotification } from "@/lib/bookings/dismissed-approved-bookings";
-import { reconcileUnstartedPastBookings } from "@/lib/bookings/missed-shift-client";
-import { isMissedShiftLifecycleStatus } from "@/lib/bookings/missed-shift-lifecycle";
+import {
+  fetchMissedShiftLifecycleBookings,
+  pickActionableMissedShiftBooking,
+  reconcileUnstartedPastBookings
+} from "@/lib/bookings/missed-shift-client";
 
 export const dynamic = "force-dynamic";
 
@@ -168,9 +171,12 @@ export default async function ParentDashboardPage() {
       break;
     }
 
-    // Prefer missed-shift clarification, then a due live shift, then schedule cards.
+    const missedRows = await fetchMissedShiftLifecycleBookings(supabase, parentId, "parent");
+    const actionableMissed = pickActionableMissedShiftBooking(missedRows, "parent");
+
+    // Prefer a missed-shift that still needs this parent's reason, then a due live shift.
     activeBooking =
-      rows.find((b) => isMissedShiftLifecycleStatus(b.status)) ??
+      actionableMissed ??
       rows.find((b) => isBookingDueForParentActiveShiftUi(b)) ??
       rows.find((b) => shouldShowApprovedScheduleNotification(b)) ??
       rows.find(

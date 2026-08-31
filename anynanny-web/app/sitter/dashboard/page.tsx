@@ -177,6 +177,7 @@ export default function SitterDashboardPage() {
   const [pendingApprovalBooking, setPendingApprovalBooking] = useState<TodaysLinkedBookingView | null>(null);
   const [stuckShiftReviewNotice, setStuckShiftReviewNotice] = useState(false);
   const [missedShiftBooking, setMissedShiftBooking] = useState<MissedShiftBookingView | null>(null);
+  const dismissedMissedShiftIdsRef = useRef<Set<string>>(new Set());
   const [releaseStuckModalOpen, setReleaseStuckModalOpen] = useState(false);
   const [releasingStuckShift, setReleasingStuckShift] = useState(false);
   const [releaseStuckModalError, setReleaseStuckModalError] = useState<string | null>(null);
@@ -324,7 +325,9 @@ export default function SitterDashboardPage() {
 
   const refreshForUser = useCallback(async (supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>, uid: string) => {
     const missedRows = await fetchMissedShiftLifecycleBookings(supabase, uid, "sitter");
-    setMissedShiftBooking(pickActionableMissedShiftBooking(missedRows));
+    setMissedShiftBooking(
+      pickActionableMissedShiftBooking(missedRows, "sitter", dismissedMissedShiftIdsRef.current)
+    );
 
     const [pendRes, actRes, completedRes] = await Promise.all([
       selectSitterSessionRows((select) =>
@@ -1100,7 +1103,7 @@ export default function SitterDashboardPage() {
           : completedSummaryRow?.id
             ? `done:${completedSummaryRow.id}:${sitterTerminalDbStatus}`
             : missedShiftBooking?.id
-              ? `missed:${missedShiftBooking.id}:${String(missedShiftBooking.status)}`
+              ? `missed:${missedShiftBooking.id}`
             : showSitterBookingApproval
               ? "booking-approval"
               : null;
@@ -1185,7 +1188,10 @@ export default function SitterDashboardPage() {
               <MissedShiftClarificationCard
                 booking={missedShiftBooking}
                 role="sitter"
-                onSubmitted={(next) => setMissedShiftBooking(next)}
+                onSubmitted={(next) => {
+                  dismissedMissedShiftIdsRef.current.add(String(next.id));
+                  setMissedShiftBooking(null);
+                }}
               />
             </div>
           ) : pendingRow && !sessionUiBlockedByBooking ? (
@@ -1369,6 +1375,10 @@ export default function SitterDashboardPage() {
                     collapsed={statusPanelCollapsed}
                     onToggleCollapse={() => setStatusPanelCollapsed((v) => !v)}
                     onDismiss={() => {
+                      if (missedShiftBooking?.id) {
+                        dismissedMissedShiftIdsRef.current.add(String(missedShiftBooking.id));
+                        setMissedShiftBooking(null);
+                      }
                       if (sitterStatusPanelKey) setStatusPanelDismissedKey(sitterStatusPanelKey);
                       setStatusPanelCollapsed(false);
                     }}
