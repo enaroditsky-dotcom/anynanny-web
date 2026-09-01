@@ -10,7 +10,9 @@ import {
   coordinationNotificationTitle,
   coordinationScheduleLabel,
   isCoordinationNotificationKind,
+  isGlobalOperationalNotificationKind,
   mergeCoordinationNotifications,
+  operationalCardActionLabel,
   type CoordinationNotification
 } from "../lib/notifications/coordination";
 import { isCanonicalNotificationKind, notificationHrefForKind } from "../lib/notifications/kinds";
@@ -40,9 +42,15 @@ assert.equal(coordinationNotificationTitle("shift_confirmed"), "המשמרת א�
 assert.equal(isCoordinationNotificationKind("booking_approved"), true);
 assert.equal(isCoordinationNotificationKind("chat_message"), false);
 assert.equal(isCoordinationNotificationKind("payment_received"), false);
+assert.equal(isGlobalOperationalNotificationKind("payment_received"), true);
+assert.equal(isGlobalOperationalNotificationKind("manual_payment_denied"), true);
+assert.equal(isGlobalOperationalNotificationKind("chat_message"), false);
+assert.equal(isGlobalOperationalNotificationKind("confirm_start_required"), false);
+assert.equal(operationalCardActionLabel("payment_received"), "לארנק");
+assert.equal(operationalCardActionLabel("manual_payment_reported"), "לפרטים");
 assert.equal(isCanonicalNotificationKind("shift_confirmed"), true);
-assert.equal(notificationHrefForKind("shift_confirmed", "sitter", { booking_id: "b1" }), "/sitter/shifts");
-assert.equal(coordinationBookingHref("booking_approved", "parent", { booking_id: "b1" }), "/parent/dashboard");
+assert.equal(notificationHrefForKind("shift_confirmed", "sitter", { booking_id: "b1" }), "/sitter/shifts?bookingId=b1");
+assert.equal(coordinationBookingHref("booking_approved", "parent", { booking_id: "b1" }), "/parent/calendar?bookingId=b1");
 assert.equal(coordinationChatHref("parent", { booking_id: "b1" }), "/parent/chat/b1");
 assert.equal(coordinationChatHref("sitter", {}), null);
 assert.ok(coordinationScheduleLabel(approved.payload)?.includes("27"));
@@ -81,6 +89,22 @@ const ignoredChat = applyCoordinationRealtimeChange(afterInsert, {
 });
 assert.equal(ignoredChat.length, 1);
 
+const paymentInsert = applyCoordinationRealtimeChange([], {
+  eventType: "INSERT",
+  new: {
+    id: "n-pay",
+    kind: "manual_payment_confirmed",
+    title: "קבלת התשלום אושרה",
+    body: "הנני אישרה שהתשלום התקבל.",
+    payload: { booking_id: "b1" },
+    created_at: "2026-09-01T12:00:00.000Z",
+    read_at: null
+  }
+});
+assert.equal(paymentInsert.length, 1);
+assert.equal(paymentInsert[0]?.kind, "manual_payment_confirmed");
+assert.equal(paymentInsert[0]?.title, "קבלת התשלום אושרה");
+
 const afterAck = applyCoordinationRealtimeChange(afterInsert, {
   eventType: "UPDATE",
   new: { ...approved, title: approved.title, read_at: "2026-08-27T11:02:00.000Z" }
@@ -106,9 +130,18 @@ const ui = read("components/notifications/global-coordination-notifications.tsx"
 assert.match(ui, /fetchUnreadCoordinationNotifications/);
 assert.match(ui, /event: "\*"/);
 assert.match(ui, /markNotificationsReadBestEffort/);
-assert.match(ui, /הבייביסיטר אישרה את המשמרת!|coordinationNotificationTitle|"booking_approved"/);
+assert.match(ui, /hideForSession/);
+assert.match(ui, /minimizeForSession/);
+assert.match(ui, /הסתר כרגע/);
+assert.match(ui, /isGlobalOperationalNotificationKind/);
+assert.match(ui, /pointer-events-none fixed inset-x-0 top-20 z-\[60\]/);
+assert.match(ui, /max-h-\[min\(38vh,18rem\)\]/);
+assert.match(ui, /h-11 w-11/);
+assert.doesNotMatch(ui, /backdrop|bg-black\//);
 assert.doesNotMatch(ui, /durationMs|setTimeout\(\(\) => .*acknowledge/);
 assert.doesNotMatch(ui, /pickParentDashboardBooking|isBookingDueForParentActiveShiftUi/);
+assert.doesNotMatch(ui, /SitterBroadcastAlertHost|confirm_start_required|rating_required/);
+assert.doesNotMatch(ui, /dismissed_at|minimized_at/);
 
 const lifecycle = read("lib/bookings/sitter-pending-bookings.ts");
 assert.match(lifecycle, /\.eq\("status", "pending"\)/);

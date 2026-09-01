@@ -27,6 +27,7 @@ assert.match(chat, /md:overflow-hidden/);
 assert.doesNotMatch(chat, /(?<!md:)h-\[400px\]/);
 assert.doesNotMatch(chat, /(?<!md:)overflow-hidden/);
 assert.match(chat, /setChatComposerActive\(true\)/);
+assert.match(chat, /setMountedChatConversation/);
 assert.match(chat, /visualViewport/);
 assert.match(chat, /behavior:\s*"auto"/);
 assert.match(chat, /scrolling\.scrollTop = scrolling\.scrollHeight/);

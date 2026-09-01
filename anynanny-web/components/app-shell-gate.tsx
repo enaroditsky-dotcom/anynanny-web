@@ -9,6 +9,7 @@ import { GlobalCoordinationNotifications } from "@/components/notifications/glob
 import { AppShellSessionHydration } from "@/components/app-shell-session-hydration";
 import { AppShellStableBoundary } from "@/components/app-shell-stable-boundary";
 import { BottomNav } from "@/components/bottom-nav";
+import { IncomingChatInboxProvider } from "@/features/chat/incoming-chat-inbox-provider";
 import { ParentActiveNowDock } from "@/components/parent/parent-active-now-dock";
 import { PushPermissionBanner } from "@/components/push/push-permission-banner";
 import { PushRuntime } from "@/components/push/push-runtime";
@@ -102,35 +103,37 @@ export function AppShellGate({
       <PushRuntime />
 
       <AppShellStableBoundary>
-        {/*
-         * Document-level vertical scrolling (native html/body).
-         * Do not put overflow-y-auto / overflow-hidden on this shell —
-         * nested scrollers plus overflow-hidden descendants trap iOS
-         * touch gestures so only the bottom padding/nav area scrolls.
-         */}
-        <div className="flex min-h-dvh min-w-0 flex-col bg-[#FDFBF6]">
-          <AppShellHeader />
-          <GlobalCoordinationNotifications />
+        <IncomingChatInboxProvider>
+          {/*
+           * Document-level vertical scrolling (native html/body).
+           * Do not put overflow-y-auto / overflow-hidden on this shell —
+           * nested scrollers plus overflow-hidden descendants trap iOS
+           * touch gestures so only the bottom padding/nav area scrolls.
+           */}
+          <div className="flex min-h-dvh min-w-0 flex-col bg-[#FDFBF6]">
+            <AppShellHeader />
+            <GlobalCoordinationNotifications />
 
-          <div
-            className={[
-              "min-w-0",
-              "flex-1",
-              mainLayout ? "" : "px-4 pt-4",
-              SHELL_BOTTOM_NAV_PADDING
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            <RouteTransitionShell>
-              <PushPermissionBanner />
-              {children}
-            </RouteTransitionShell>
+            <div
+              className={[
+                "min-w-0",
+                "flex-1",
+                mainLayout ? "" : "px-4 pt-4",
+                SHELL_BOTTOM_NAV_PADDING
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <RouteTransitionShell>
+                <PushPermissionBanner />
+                {children}
+              </RouteTransitionShell>
+            </div>
+
+            <ParentActiveNowDock pathname={pathname} />
+            <StableBottomNav />
           </div>
-
-          <ParentActiveNowDock pathname={pathname} />
-          <StableBottomNav />
-        </div>
+        </IncomingChatInboxProvider>
       </AppShellStableBoundary>
     </SessionProvider>
   );

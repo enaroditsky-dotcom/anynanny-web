@@ -8,7 +8,7 @@ import {
 } from "@/lib/notifications/kinds";
 import { readSupabaseErrorMessage } from "@/lib/supabase/postgrest-schema";
 
-/** In-app coordination events. Chat, broadcast, and payment stay on their existing surfaces. */
+/** Booking/cancellation coordination events. */
 export const COORDINATION_NOTIFICATION_KINDS = [
   "booking_request",
   "booking_approved",
@@ -21,11 +21,30 @@ export const COORDINATION_NOTIFICATION_KINDS = [
   "shift_confirmed"
 ] as const satisfies readonly CanonicalNotificationKind[];
 
+/** Written operational kinds shown on the same global card host. */
+export const OPERATIONAL_CARD_NOTIFICATION_KINDS = [
+  "manual_payment_reported",
+  "manual_payment_confirmed",
+  "manual_payment_denied",
+  "manual_payment_resolved_reported",
+  "payment_required",
+  "payment_received",
+  "shift_end_reminder",
+  "missed_shift_clarification"
+] as const satisfies readonly CanonicalNotificationKind[];
+
+export const GLOBAL_OPERATIONAL_NOTIFICATION_KINDS = [
+  ...COORDINATION_NOTIFICATION_KINDS,
+  ...OPERATIONAL_CARD_NOTIFICATION_KINDS
+] as const satisfies readonly CanonicalNotificationKind[];
+
 export type CoordinationNotificationKind = (typeof COORDINATION_NOTIFICATION_KINDS)[number];
+export type OperationalCardNotificationKind = (typeof OPERATIONAL_CARD_NOTIFICATION_KINDS)[number];
+export type GlobalOperationalNotificationKind = (typeof GLOBAL_OPERATIONAL_NOTIFICATION_KINDS)[number];
 
 export type CoordinationNotification = {
   id: string;
-  kind: CoordinationNotificationKind;
+  kind: GlobalOperationalNotificationKind;
   title: string;
   body: string;
   payload: CanonicalNotificationPayload;
@@ -34,6 +53,7 @@ export type CoordinationNotification = {
 };
 
 const COORDINATION_KIND_SET = new Set<string>(COORDINATION_NOTIFICATION_KINDS);
+const GLOBAL_OPERATIONAL_KIND_SET = new Set<string>(GLOBAL_OPERATIONAL_NOTIFICATION_KINDS);
 
 const COORDINATION_TITLE: Record<CoordinationNotificationKind, string> = {
   booking_request: "בקשת תיאום משמרת",
@@ -47,8 +67,29 @@ const COORDINATION_TITLE: Record<CoordinationNotificationKind, string> = {
   shift_confirmed: "המשמרת אושרה בהצלחה"
 };
 
+const OPERATIONAL_FALLBACK_TITLE: Record<OperationalCardNotificationKind, string> = {
+  manual_payment_reported: "ההורה דיווח שהתשלום בוצע",
+  manual_payment_confirmed: "קבלת התשלום אושרה",
+  manual_payment_denied: "התשלום לא אושר",
+  manual_payment_resolved_reported: "ההורה דיווח שהתשלום הוסדר",
+  payment_required: "נדרש תשלום",
+  payment_received: "תשלום התקבל",
+  shift_end_reminder: "המשמרת מסתיימת בעוד 30 דקות",
+  missed_shift_clarification: "המשמרת לא התקיימה"
+};
+
 export function isCoordinationNotificationKind(value: string): value is CoordinationNotificationKind {
   return COORDINATION_KIND_SET.has(value);
+}
+
+export function isOperationalCardNotificationKind(value: string): value is OperationalCardNotificationKind {
+  return (OPERATIONAL_CARD_NOTIFICATION_KINDS as readonly string[]).includes(value);
+}
+
+export function isGlobalOperationalNotificationKind(
+  value: string
+): value is GlobalOperationalNotificationKind {
+  return GLOBAL_OPERATIONAL_KIND_SET.has(value);
 }
 
 export function coordinationNotificationTitle(
@@ -58,8 +99,35 @@ export function coordinationNotificationTitle(
   return COORDINATION_TITLE[kind] || String(fallbackTitle ?? "").trim() || "עדכון תיאום משמרת";
 }
 
+export function globalOperationalNotificationTitle(
+  kind: GlobalOperationalNotificationKind,
+  fallbackTitle?: string | null
+): string {
+  if (isCoordinationNotificationKind(kind)) {
+    return coordinationNotificationTitle(kind, fallbackTitle);
+  }
+  const fromRow = String(fallbackTitle ?? "").trim();
+  if (fromRow) return fromRow;
+  if (isOperationalCardNotificationKind(kind)) return OPERATIONAL_FALLBACK_TITLE[kind];
+  return "עדכון";
+}
+
+export function operationalCardActionLabel(kind: GlobalOperationalNotificationKind): string {
+  if (kind === "payment_received") return "לארנק";
+  if (kind === "payment_required") return "לתשלום";
+  if (
+    kind === "manual_payment_reported" ||
+    kind === "manual_payment_confirmed" ||
+    kind === "manual_payment_denied" ||
+    kind === "manual_payment_resolved_reported"
+  ) {
+    return "לפרטים";
+  }
+  return "למשמרת";
+}
+
 export function coordinationBookingHref(
-  kind: CoordinationNotificationKind,
+  kind: GlobalOperationalNotificationKind,
   role: "parent" | "sitter",
   payload: CanonicalNotificationPayload
 ): string {
@@ -94,7 +162,7 @@ export function coordinationScheduleLabel(payload: CanonicalNotificationPayload)
 export function mapCoordinationNotificationRow(row: Record<string, unknown>): CoordinationNotification | null {
   const id = String(row.id ?? "").trim();
   const kindRaw = String(row.kind ?? "").trim();
-  if (!id || !isCoordinationNotificationKind(kindRaw)) return null;
+  if (!id || !isGlobalOperationalNotificationKind(kindRaw)) return null;
   const payload =
     row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
       ? (row.payload as CanonicalNotificationPayload)
@@ -103,7 +171,7 @@ export function mapCoordinationNotificationRow(row: Record<string, unknown>): Co
   return {
     id,
     kind: kindRaw,
-    title: coordinationNotificationTitle(kindRaw, row.title != null ? String(row.title) : null),
+    title: globalOperationalNotificationTitle(kindRaw, row.title != null ? String(row.title) : null),
     body: String(row.body ?? "").trim(),
     payload,
     created_at: String(row.created_at ?? ""),
@@ -163,7 +231,7 @@ export async function fetchUnreadCoordinationNotifications(
     .from(NOTIFICATIONS_TABLE)
     .select("id, kind, title, body, payload, created_at, read_at")
     .eq("user_id", uid)
-    .in("kind", [...COORDINATION_NOTIFICATION_KINDS])
+    .in("kind", [...GLOBAL_OPERATIONAL_NOTIFICATION_KINDS])
     .is("read_at", null)
     .order("created_at", { ascending: false });
 

@@ -10,8 +10,10 @@ export const MARK_BOOKING_MESSAGES_READ_RPC = "mark_booking_messages_read";
 export const CHAT_UNREAD_CHANGED_EVENT = "anynanny-chat-unread-changed";
 
 export type IncomingChatMessageRow = {
+  id?: string;
   sender_id?: string;
   booking_id?: string;
+  content?: string;
 };
 
 /** `/parent/chat/[bookingId]` or `/sitter/chat/[bookingId]` — not the inbox. */
@@ -31,6 +33,18 @@ export function sameBookingId(left: string | null | undefined, right: string | n
   const a = String(left ?? "").trim().toLowerCase();
   const b = String(right ?? "").trim().toLowerCase();
   return Boolean(a && b && a === b);
+}
+
+/** Dedicated /chat route or a mounted ChatInterface (including inline dashboard chat). */
+export function isViewingConversation(
+  pathname: string | null,
+  incomingBookingId: string | null | undefined,
+  mountedBookingId?: string | null
+): boolean {
+  const incoming = String(incomingBookingId ?? "").trim();
+  if (!incoming) return false;
+  if (sameBookingId(openConversationBookingId(pathname), incoming)) return true;
+  return sameBookingId(mountedBookingId ?? null, incoming);
 }
 
 export function notifyChatUnreadChanged(): void {
