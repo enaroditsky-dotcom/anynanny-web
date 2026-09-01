@@ -11,7 +11,7 @@ import {
 import { ParentSessionTimerCircle } from "@/components/session/parent-double-shake-idle-circle";
 import { ParentSessionRatingPanel } from "@/components/session/parent-session-rating-panel";
 import { DoubleShakeCircleButton } from "@/components/session/double-shake-circle-button";
-import { PaymentFactory } from "@/components/billing/PaymentFactory";
+import { ManualPaymentPanel } from "@/components/billing/ManualPaymentPanel";
 import { useSession } from "@/context/SessionContext";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 import { parentApproveSitterStart } from "@/lib/bookings/parent-approve-sitter-start";
@@ -79,20 +79,22 @@ import {
   resolveDisplayedStuckShiftTargets,
   type ReleaseStuckShiftReasonId
 } from "@/lib/bookings/release-displayed-stuck-shift";
-import type { CheckoutPaymentMethod } from "@/lib/billing/checkout-payment-method";
 import { parseHypReturnParams } from "@/lib/billing/hyp/parse-return-params";
 import {
   clearHypPendingCheckout,
-  readHypPendingCheckout,
-  saveHypPendingCheckout
+  readHypPendingCheckout
 } from "@/lib/billing/hyp/pending-checkout";
 import { finalizeHypCheckoutFromClient } from "@/lib/billing/hyp/finalize-client";
+import type { ManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
+import { PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE } from "@/lib/billing/manual-payment-lifecycle";
 import {
-  parentTotalFromSitterBaseNis,
-  usePaymentExecutor
-} from "@/lib/billing/use-payment-executor";
-import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
-import { readParentPreferredCheckoutMethod } from "@/lib/wallet/parent-preferred-checkout-method";
+  AWAITING_SITTER_CONFIRMATION_COPY,
+  AWAITING_SITTER_CONFIRMATION_HEADING,
+  AWAITING_SITTER_RATING_HEADING,
+  PAYMENT_DISPUTE_HEADING,
+  resolveParentManualSettlementStep,
+  type ManualPaymentDestinations
+} from "@/lib/billing/manual-payment-ui";
 import type { ParentBusySlot, ParentPreferences } from "@/lib/parent/types";
 import { fetchProfilePublicId, parentDashboardSerialLabel } from "@/lib/public/sequential-display-id";
 import { fetchRejectedSitterSnapshot } from "@/lib/sitter/fetch-rejected-sitter-snapshot";
@@ -171,13 +173,12 @@ const SESSION_ACTIVE_FETCH_STATUSES = ["pending", "active", "in_progress"] as co
 
 const POLL_MS = 5000;
 
-type SettlementStep = "payment" | "rating";
-
-type ParentCheckoutPaymentMethodUi =
-  | "credit_card"
-  | "bit"
-  | "apple_pay"
-  | "google_pay";
+type SettlementStep =
+  | "payment"
+  | "rating"
+  | "waiting_sitter"
+  | "dispute"
+  | "waiting_sitter_rating";
 
 const DISMISSED_SCHEDULED_STATUS_KEY = "anynanny_dismissed_scheduled_status_v1";
 
@@ -503,8 +504,6 @@ export function ParentDashboardClient({
   initialAvatarUrl?: string | null;
 }) {
   const { nowMs } = useSession();
-  const { executePayment, busy: paymentBusy, error: paymentError, clearError: clearPaymentError } =
-    usePaymentExecutor();
   const [prefs, setPrefs] = useState(initialPreferences);
   const [parentSerial, setParentSerial] = useState<string>(initialPreferences.parentSerial || "");
   const [parentAvatarUrl, setParentAvatarUrl] = useState<string | null>(
@@ -549,12 +548,15 @@ export function ParentDashboardClient({
   const [confirmPending, startConfirmTransition] = useTransition();
   const [confirmEndPending, startConfirmEndTransition] = useTransition();
   const [settlementStep, setSettlementStep] = useState<SettlementStep | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<ParentCheckoutPaymentMethodUi>(
-    "credit_card"
+  const [manualPaymentMethod, setManualPaymentMethod] = useState<ManualPaymentMethod | null>(
+    null
   );
-  const [savedPaymentMethods, setSavedPaymentMethods] = useState<ParentPaymentMethod[]>([]);
-  const [savedPaymentMethodsLoading, setSavedPaymentMethodsLoading] = useState(false);
-  const [selectedSavedMethodId, setSelectedSavedMethodId] = useState<string | null>(null);
+  const [manualPaymentDestinations, setManualPaymentDestinations] =
+    useState<ManualPaymentDestinations | null>(null);
+  const [manualPaymentDestinationsLoading, setManualPaymentDestinationsLoading] =
+    useState(false);
+  const [manualPaymentBusy, setManualPaymentBusy] = useState(false);
+  const manualPaymentInFlightRef = useRef(false);
   const [ratingBusy, setRatingBusy] = useState(false);
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [sitterAcceptedToast, setSitterAcceptedToast] = useState<string | null>(null);
@@ -699,8 +701,22 @@ export function ParentDashboardClient({
           : null;
 
         const recoverSettlementStepIfUnlocked = async (
-          session: SupabaseSessionRow | null | undefined
+          session: SupabaseSessionRow | null | undefined,
+          bookingForPayment?: BookingRow | null
         ) => {
+          const lifecycle = resolveParentManualSettlementStep({
+            paymentStatus: bookingForPayment?.payment_status,
+            paidAt: bookingForPayment?.paid_at
+          });
+          if (
+            lifecycle === "waiting_sitter" ||
+            lifecycle === "dispute" ||
+            lifecycle === "waiting_sitter_rating"
+          ) {
+            lockSettlement(lifecycle);
+            return;
+          }
+
           if (!session?.id) return;
           if (normalizeStatus(session.status) !== "payment_pending") return;
           if (settlementIsLocked()) return;
@@ -809,6 +825,17 @@ export function ParentDashboardClient({
         const bookingSitterId =
           booking?.sitter_id != null ? String(booking.sitter_id) : null;
         const bookingStatus = normalizeStatus(booking?.status);
+        const lifecycleStep = resolveParentManualSettlementStep({
+          paymentStatus: booking?.payment_status,
+          paidAt: booking?.paid_at
+        });
+        if (
+          lifecycleStep === "waiting_sitter" ||
+          lifecycleStep === "dispute" ||
+          lifecycleStep === "waiting_sitter_rating"
+        ) {
+          lockSettlement(lifecycleStep);
+        }
         const dueForActiveShift = Boolean(
           booking && isBookingDueForParentActiveShiftUi(booking)
         );
@@ -1043,7 +1070,7 @@ export function ParentDashboardClient({
           activeSessionRef.current = next;
           const st = normalizeStatus(next?.status);
           if (st === "payment_pending" && next?.id) {
-            await recoverSettlementStepIfUnlocked(next);
+            await recoverSettlementStepIfUnlocked(next, booking);
           } else if (st === "paid" && !settlementIsLocked()) {
             clearToIdleDashboard();
           } else if ((st === "sitter_completed" || liveClosureRequested) && !settlementIsLocked()) {
@@ -1094,7 +1121,7 @@ export function ParentDashboardClient({
           activeSessionRef.current = next;
           const st = normalizeStatus(next?.status);
           if (st === "payment_pending" && next?.id) {
-            await recoverSettlementStepIfUnlocked(next);
+            await recoverSettlementStepIfUnlocked(next, booking);
           } else if (st === "paid" && !settlementIsLocked()) {
             clearToIdleDashboard();
           } else if ((st === "sitter_completed" || liveClosureRequested || sessionRequestsEnd(next)) && !settlementIsLocked()) {
@@ -1542,73 +1569,66 @@ export function ParentDashboardClient({
     );
   }, [activeSession?.final_amount_nis, settlementElapsedSeconds, currentHourlyRate]);
 
-  const paymentSplit = useMemo(
-    () => parentTotalFromSitterBaseNis(sitterBaseNis),
-    [sitterBaseNis]
-  );
-
-  const handlePayShift = useCallback(async () => {
-    if (!activeBooking?.id || !activeSession?.id) {
-      setShiftError("חסרים פרטי משמרת לתשלום.");
+  const handleReportManualPayment = useCallback(async () => {
+    if (manualPaymentInFlightRef.current || manualPaymentBusy) return;
+    if (!activeBooking?.id || !manualPaymentMethod) {
+      setShiftError("בחרו אמצעי תשלום ולחצו על שילמתי.");
       return;
     }
-    clearPaymentError();
+    manualPaymentInFlightRef.current = true;
+    setManualPaymentBusy(true);
     setShiftError(null);
     try {
-      if (paymentMethod === "apple_pay" || paymentMethod === "google_pay") {
-        setShiftError(
-          "Apple Pay / Google Pay מוצגים ל-UI בלבד בשלב 1. הטמעת החיוב בפועל תתבצע ב-Phase 2."
-        );
-        return;
-      }
-
-      const backendPaymentMethod: CheckoutPaymentMethod =
-        paymentMethod === "bit" ? "bit" : "credit_card";
-
-      const result = await executePayment({
-        bookingId: String(activeBooking.id),
-        sessionId: String(activeSession.id),
-        sitterBaseNis,
-        paymentMethod: backendPaymentMethod,
-        paymentMethodId: selectedSavedMethodId,
-        elapsedSeconds: settlementElapsedSeconds
+      const res = await fetch("/api/parent/report-manual-payment", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: String(activeBooking.id),
+          paymentMethod: manualPaymentMethod
+        })
       });
-      if (!result.success) {
-        setShiftError(result.error);
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        paymentStatus?: string;
+        paymentMethod?: string;
+        noop?: boolean;
+      };
+      if (!res.ok) {
+        setShiftError(json.error ?? "לא ניתן לדווח שהתשלום בוצע.");
         return;
       }
-      if (result.paidImmediately) {
-        clearHypPendingCheckout();
-        setShiftError(null);
-        window.location.assign("/parent/dashboard?paid=1");
-        return;
+      const reportedAt = new Date().toISOString();
+      setActiveBooking((prev) =>
+        prev && String(prev.id) === String(activeBooking.id)
+          ? {
+              ...prev,
+              payment_status: "awaiting_sitter_confirmation",
+              payment_method: manualPaymentMethod,
+              payment_rail: "manual",
+              parent_reported_paid_at: prev.parent_reported_paid_at ?? reportedAt
+            }
+          : prev
+      );
+      if (activeBookingRef.current && String(activeBookingRef.current.id) === String(activeBooking.id)) {
+        activeBookingRef.current = {
+          ...activeBookingRef.current,
+          payment_status: "awaiting_sitter_confirmation",
+          payment_method: manualPaymentMethod,
+          payment_rail: "manual",
+          parent_reported_paid_at:
+            activeBookingRef.current.parent_reported_paid_at ?? reportedAt
+        };
       }
-      const checkoutUrl = String(result.checkoutUrl ?? "").trim();
-      if (!checkoutUrl) {
-        setShiftError("לא התקבל קישור לתשלום מ-HYP. נסו שוב.");
-        return;
-      }
-      // Persist booking/session before leaving so /parent/checkout/complete can recover them.
-      // Do NOT mark paid here — finalization requires a real successful HYP CCode on return.
-      saveHypPendingCheckout({
-        bookingId: String(activeBooking.id),
-        sessionId: String(activeSession.id)
-      });
-      window.location.assign(checkoutUrl);
+      lockSettlement("waiting_sitter");
     } catch (e) {
-      console.error("[handlePayShift]", e);
-      setShiftError("שגיאה בעיבוד התשלום. נסו שוב.");
+      console.error("[handleReportManualPayment]", e);
+      setShiftError("שגיאה בדיווח התשלום. נסו שוב.");
+    } finally {
+      manualPaymentInFlightRef.current = false;
+      setManualPaymentBusy(false);
     }
-  }, [
-    activeBooking?.id,
-    activeSession?.id,
-    clearPaymentError,
-    executePayment,
-    paymentMethod,
-    selectedSavedMethodId,
-    settlementElapsedSeconds,
-    sitterBaseNis
-  ]);
+  }, [activeBooking?.id, lockSettlement, manualPaymentBusy, manualPaymentMethod]);
 
   const handleSubmitParentRating = useCallback(
     async (rating: number, comment: string | null) => {
@@ -1640,49 +1660,68 @@ export function ParentDashboardClient({
 
   useEffect(() => {
     if (settlementStep !== "payment") return;
+    const bookingId = activeBooking?.id ? String(activeBooking.id) : "";
+    if (!bookingId) return;
     let cancelled = false;
-    setSavedPaymentMethodsLoading(true);
+    setManualPaymentDestinationsLoading(true);
     void (async () => {
       try {
-        const preferred = parentId ? readParentPreferredCheckoutMethod(parentId) : null;
-        if (!cancelled && preferred) {
-          setPaymentMethod(preferred);
-        }
-
-        const res = await fetch("/api/parent/payment-methods", {
-          method: "GET",
-          credentials: "same-origin",
-          cache: "no-store"
-        });
-        const json = (await res.json().catch(() => ({}))) as {
-          methods?: ParentPaymentMethod[];
+        const res = await fetch(
+          `/api/parent/manual-payment-destinations?bookingId=${encodeURIComponent(bookingId)}`,
+          {
+            method: "GET",
+            credentials: "same-origin",
+            cache: "no-store"
+          }
+        );
+        const json = (await res.json().catch(() => ({}))) as ManualPaymentDestinations & {
+          error?: string;
         };
         if (cancelled) return;
-        const methods = Array.isArray(json.methods) ? json.methods : [];
-        setSavedPaymentMethods(methods);
-        const defaultMethod = methods.find((m) => m.is_default) ?? methods[0] ?? null;
-        /*
-         * Hosted rails (Bit / Apple Pay / Google Pay) must not auto-select a saved
-         * card alongside them, or checkout will charge / open the card UI instead
-         * of the chosen wallet rail.
-         */
-        if (preferred === "bit" || preferred === "apple_pay" || preferred === "google_pay") {
-          setSelectedSavedMethodId(null);
-        } else {
-          setSelectedSavedMethodId(defaultMethod?.id ?? null);
-          if (!preferred && defaultMethod) setPaymentMethod("credit_card");
+        if (!res.ok) {
+          setManualPaymentDestinations({
+            bookingId,
+            cash: { available: true },
+            bit: { available: false },
+            paybox: { available: false }
+          });
+          if (json.error) setShiftError(json.error);
+          return;
         }
+        setManualPaymentDestinations({
+          bookingId: json.bookingId || bookingId,
+          cash: { available: true },
+          bit: json.bit ?? { available: false },
+          paybox: json.paybox ?? { available: false }
+        });
       } catch (error) {
-        console.warn("[parent-dashboard] saved payment methods:", error);
-        if (!cancelled) setSavedPaymentMethods([]);
+        console.warn("[parent-dashboard] manual payment destinations:", error);
+        if (!cancelled) {
+          setManualPaymentDestinations({
+            bookingId,
+            cash: { available: true },
+            bit: { available: false },
+            paybox: { available: false }
+          });
+        }
       } finally {
-        if (!cancelled) setSavedPaymentMethodsLoading(false);
+        if (!cancelled) setManualPaymentDestinationsLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [settlementStep, parentId]);
+  }, [settlementStep, activeBooking?.id]);
+
+  useEffect(() => {
+    if (!manualPaymentMethod || !manualPaymentDestinations) return;
+    if (manualPaymentMethod === "bit" && !manualPaymentDestinations.bit.available) {
+      setManualPaymentMethod(null);
+    }
+    if (manualPaymentMethod === "paybox" && !manualPaymentDestinations.paybox.available) {
+      setManualPaymentMethod(null);
+    }
+  }, [manualPaymentDestinations, manualPaymentMethod]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1794,6 +1833,9 @@ export function ParentDashboardClient({
   const inSettlement =
     (settlementStep === "rating" ||
       settlementStep === "payment" ||
+      settlementStep === "waiting_sitter" ||
+      settlementStep === "dispute" ||
+      settlementStep === "waiting_sitter_rating" ||
       isSettlementSession(activeSession)) &&
     !["pending", "approved", "rejected", "sitter_started", "parent_started"].includes(
       normalizeStatus(activeBooking?.status)
@@ -2071,9 +2113,15 @@ export function ParentDashboardClient({
   const statusCollapsedSummary = isRejectedBooking
     ? "הבקשה נדחתה — לחצו להרחבה"
     : inSettlement
-      ? settlementStep === "payment"
-        ? "תשלום ממתין — לחצו להרחבה"
-        : "דירוג ממתין — לחצו להרחבה"
+      ? settlementStep === "waiting_sitter"
+        ? "ממתין לאישור הנני — לחצו להרחבה"
+        : settlementStep === "dispute"
+          ? "בירור תשלום — לחצו להרחבה"
+          : settlementStep === "waiting_sitter_rating"
+            ? "ממתין לדירוג הנני — לחצו להרחבה"
+            : settlementStep === "payment"
+              ? "תשלום ממתין — לחצו להרחבה"
+              : "דירוג ממתין — לחצו להרחבה"
       : awaitingEndApproval
         ? "ממתין לאישור סיום משמרת"
         : showLiveTimer
@@ -2090,7 +2138,8 @@ export function ParentDashboardClient({
 
   const statusCardTone = isRejectedBooking
     ? "rose"
-    : awaitingEndApproval || (inSettlement && settlementStep === "payment")
+    : awaitingEndApproval ||
+        (inSettlement && (settlementStep === "payment" || settlementStep === "dispute"))
       ? "rose"
       : showMissedShiftClarification
         ? "rose"
@@ -2292,7 +2341,44 @@ export function ParentDashboardClient({
                     ) : null}
                   </div>
                 </div>
-              ) : inSettlement && settlementStep !== "payment" ? (
+              ) : inSettlement && settlementStep === "waiting_sitter" ? (
+                <div className="flex w-full flex-col items-center gap-2 text-center">
+                  <p className="text-sm font-bold text-emerald-900">
+                    {AWAITING_SITTER_CONFIRMATION_HEADING}
+                  </p>
+                  <p className="text-xs leading-relaxed text-emerald-800/85">
+                    {AWAITING_SITTER_CONFIRMATION_COPY}
+                  </p>
+                </div>
+              ) : inSettlement && settlementStep === "dispute" ? (
+                <div className="flex w-full flex-col items-center gap-2 text-center">
+                  <p className="text-sm font-bold text-rose-900">{PAYMENT_DISPUTE_HEADING}</p>
+                  <p className="text-xs leading-relaxed text-rose-800/85">
+                    {PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE}
+                  </p>
+                </div>
+              ) : inSettlement && settlementStep === "waiting_sitter_rating" ? (
+                <div className="flex w-full flex-col items-center gap-2 text-center">
+                  <p className="text-sm font-bold text-emerald-900">
+                    {AWAITING_SITTER_RATING_HEADING}
+                  </p>
+                </div>
+              ) : inSettlement && settlementStep === "payment" ? (
+                <div className="flex w-full flex-col items-stretch gap-3">
+                  <ManualPaymentPanel
+                    elapsedSeconds={settlementElapsedSeconds}
+                    sitterBaseNis={sitterBaseNis}
+                    destinations={manualPaymentDestinations}
+                    destinationsLoading={manualPaymentDestinationsLoading}
+                    selectedMethod={manualPaymentMethod}
+                    onSelectMethod={setManualPaymentMethod}
+                    busy={manualPaymentBusy}
+                    bookingReady={Boolean(activeBooking?.id)}
+                    errorMessage={shiftError}
+                    onReportPaid={() => void handleReportManualPayment()}
+                  />
+                </div>
+              ) : inSettlement ? (
                 <div className="flex w-full flex-col items-center gap-3">
                   <p className="text-sm font-bold text-emerald-900">דרגו את הבייביסיטר לפני התשלום</p>
                   <ParentSessionRatingPanel
@@ -2300,25 +2386,6 @@ export function ParentDashboardClient({
                     busy={ratingBusy}
                     errorMessage={ratingError}
                     onSubmitRating={handleSubmitParentRating}
-                  />
-                </div>
-              ) : inSettlement && settlementStep === "payment" ? (
-                <div className="flex w-full flex-col items-stretch gap-3">
-                  <PaymentFactory
-                    elapsedSeconds={settlementElapsedSeconds}
-                    sitterBaseNis={paymentSplit.sitterBaseNis}
-                    parentTotalNis={paymentSplit.totalNis}
-                    platformFeeNis={paymentSplit.platformFeeNis}
-                    selectedMethod={paymentMethod}
-                    onSelectMethod={setPaymentMethod}
-                    savedMethods={savedPaymentMethods}
-                    selectedSavedMethodId={selectedSavedMethodId}
-                    onSelectSavedMethod={setSelectedSavedMethodId}
-                    savedMethodsLoading={savedPaymentMethodsLoading}
-                    busy={paymentBusy}
-                    bookingReady={Boolean(activeBooking?.id && activeSession?.id)}
-                    errorMessage={paymentError ?? shiftError}
-                    onConfirm={() => void handlePayShift()}
                   />
                 </div>
               ) : awaitingEndApproval ? (

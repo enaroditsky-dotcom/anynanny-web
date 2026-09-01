@@ -67,6 +67,33 @@ export async function createInAppNotification(
   return { id: null, error: message };
 }
 
+export async function notifySitterManualPaymentReported(
+  supabase: SupabaseClient,
+  input: {
+    sitterId: string;
+    bookingId: string;
+    paymentMethod?: string | null;
+  }
+): Promise<void> {
+  const kind: CanonicalNotificationKind = "manual_payment_reported";
+  await createInAppNotification(supabase, {
+    userId: input.sitterId,
+    kind,
+    title: "ההורה דיווח שהתשלום בוצע",
+    body: "יש לאשר האם התשלום התקבל.",
+    payload: {
+      booking_id: input.bookingId,
+      sitter_id: input.sitterId,
+      status: "awaiting_sitter_confirmation",
+      gateway: "manual",
+      amount: null
+    },
+    dedupeKey: notificationDedupeKey(kind, {
+      bookingId: input.bookingId
+    })
+  });
+}
+
 export async function notifySitterPaymentReceived(
   supabase: SupabaseClient,
   input: {

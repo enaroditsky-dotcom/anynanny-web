@@ -292,7 +292,11 @@ function resolveShiftScheduleLabels(
 
 function paymentBadgeClass(kind: BookingPaymentDisplayKind): string {
   if (kind === "paid") return "bg-emerald-50 text-emerald-700";
-  if (kind === "pending_checkout") return "bg-rose-50 text-rose-800";
+  if (kind === "pending_checkout" || kind === "payment_dispute") {
+    return "bg-rose-50 text-rose-800";
+  }
+  if (kind === "awaiting_sitter_confirmation") return "bg-sky-50 text-sky-800";
+  if (kind === "awaiting_sitter_rating") return "bg-indigo-50 text-indigo-800";
   return "bg-amber-50 text-amber-800";
 }
 

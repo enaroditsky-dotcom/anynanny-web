@@ -17,6 +17,7 @@ export const CANONICAL_NOTIFICATION_KINDS = [
   "shift_cancelled_no_start",
   "shift_confirmed",
   "missed_shift_clarification",
+  "manual_payment_reported",
 ] as const;
 
 export type CanonicalNotificationKind =
@@ -105,6 +106,7 @@ export function notificationHrefForKind(
 
   if (kind === "payment_received") return "/sitter/wallet";
   if (kind === "payment_required") return "/parent/dashboard";
+  if (kind === "manual_payment_reported") return "/sitter/dashboard";
   if (kind === "broadcast_alert") return "/sitter/dashboard";
 
   if (kind.startsWith("booking_cancellation")) {

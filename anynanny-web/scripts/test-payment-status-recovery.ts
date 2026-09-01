@@ -41,18 +41,62 @@ assert.equal(
   "paid"
 );
 assert.equal(resolveBookingPaymentDisplayKind({ paymentStatus: "completed" }), "unpaid");
+assert.equal(
+  resolveBookingPaymentDisplayKind({ paymentStatus: "awaiting_sitter_confirmation" }),
+  "awaiting_sitter_confirmation"
+);
+assert.equal(
+  resolveBookingPaymentDisplayKind({
+    paymentStatus: "awaiting_sitter_confirmation",
+    paidAt: "2026-08-25T00:00:00Z"
+  }),
+  "awaiting_sitter_confirmation"
+);
+assert.equal(resolveBookingPaymentDisplayKind({ paymentStatus: "payment_dispute" }), "payment_dispute");
+assert.equal(
+  resolveBookingPaymentDisplayKind({ paymentStatus: "awaiting_sitter_rating" }),
+  "awaiting_sitter_rating"
+);
 assert.equal(isBookingPaymentPaid({ paymentStatus: "pending_checkout" }), false);
 assert.equal(isBookingPaymentPaid({ paymentStatus: "paid" }), true);
 assert.equal(isBookingPaymentPaid({ paidAt: " " }), false);
+assert.equal(isBookingPaymentPaid({ paymentStatus: "awaiting_sitter_confirmation" }), false);
+assert.equal(
+  isBookingPaymentPaid({
+    paymentStatus: "awaiting_sitter_confirmation",
+    paidAt: "2026-08-25T00:00:00Z"
+  }),
+  false
+);
+assert.equal(isBookingPaymentPaid({ paymentStatus: "payment_dispute" }), false);
+assert.equal(isBookingPaymentPaid({ paymentStatus: "awaiting_sitter_rating" }), false);
 
 assert.equal(bookingPaymentStatusLabel({ paymentStatus: "unpaid" }), "ממתינה לתשלום");
 assert.equal(bookingPaymentStatusLabel({ paymentStatus: "pending_checkout" }), "התשלום לא הושלם");
 assert.equal(bookingPaymentStatusLabel({ paymentStatus: "paid" }), "שולם");
+assert.equal(
+  bookingPaymentStatusLabel({ paymentStatus: "awaiting_sitter_confirmation" }),
+  "ממתין לאישור הנני"
+);
+assert.equal(bookingPaymentStatusLabel({ paymentStatus: "payment_dispute" }), "בירור תשלום");
+assert.equal(
+  bookingPaymentStatusLabel({ paymentStatus: "awaiting_sitter_rating" }),
+  "ממתין לדירוג הנני"
+);
 assert.equal(BOOKING_SHIFT_ENDED_LABEL, "הסתיימה");
 assert.equal(PARENT_COMPLETED_SHIFT_PAYMENT_ACTION.unpaid, "שלם עכשיו");
 assert.equal(PARENT_COMPLETED_SHIFT_PAYMENT_ACTION.pending_checkout, "נסה לשלם שוב");
 assert.equal(parentCompletedShiftPaymentActionLabel({ paymentStatus: "paid" }), null);
 assert.equal(parentCompletedShiftPaymentActionLabel({ paymentStatus: "unpaid" }), "שלם עכשיו");
+assert.equal(
+  parentCompletedShiftPaymentActionLabel({ paymentStatus: "awaiting_sitter_confirmation" }),
+  null
+);
+assert.equal(parentCompletedShiftPaymentActionLabel({ paymentStatus: "payment_dispute" }), null);
+assert.equal(
+  parentCompletedShiftPaymentActionLabel({ paymentStatus: "awaiting_sitter_rating" }),
+  null
+);
 
 const bookingId = "550e8400-e29b-41d4-a716-446655440000";
 assert.equal(parsePaymentBookingIdParam(bookingId), bookingId);

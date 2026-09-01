@@ -1,8 +1,14 @@
+import {
+  sitterMayRateParent,
+  SITTER_RATE_BEFORE_CONFIRMATION_MESSAGE
+} from "@/lib/billing/manual-payment-lifecycle";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
+import { coerceBookingPaymentStatus } from "@/lib/bookings/payment-status-label";
 import { bookingRequiresAdminReview } from "@/lib/bookings/stuck-shift-review";
 import { isBookingBlockedFromMandatoryRating } from "@/lib/bookings/missed-shift-lifecycle";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
+import { isSupabaseRpcUnavailableError } from "@/lib/supabase/postgrest-schema";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function isPlausibleUuidSessionId(value: string): boolean {
@@ -20,6 +26,18 @@ type SessionRatingRow = {
   status?: string | null;
   booking_id?: string | null;
 };
+
+async function markManualPaymentPaidIfReady(
+  supabase: SupabaseClient,
+  bookingId: string
+): Promise<void> {
+  const { error } = await supabase.rpc("mark_manual_payment_paid_after_sitter_rating", {
+    p_booking_id: bookingId
+  });
+  if (error && !isSupabaseRpcUnavailableError(error)) {
+    console.warn("[submitSessionRating] mark paid skipped:", error.message);
+  }
+}
 
 /** Persist a 1–5 star rating (+ optional comment) for a completed session. */
 export async function submitSessionRating(
@@ -76,19 +94,32 @@ export async function submitSessionRating(
 
   const linkedBookingId =
     sessionRow?.booking_id != null ? String(sessionRow.booking_id).trim() : "";
+  let linkedPaymentStatus: string | null = null;
   if (linkedBookingId) {
-    const { data: linkedBooking } = await supabase
+    let linkedQuery = await supabase
       .from(BOOKINGS_TABLE)
-      .select("requires_admin_review, status")
+      .select("requires_admin_review, status, payment_status")
       .eq("id", linkedBookingId)
       .maybeSingle();
-    const linked = linkedBooking as { requires_admin_review?: boolean | null; status?: string | null } | null;
+    if (linkedQuery.error && /payment_status|schema cache|column/i.test(String(linkedQuery.error.message ?? ""))) {
+      linkedQuery = await supabase
+        .from(BOOKINGS_TABLE)
+        .select("requires_admin_review, status")
+        .eq("id", linkedBookingId)
+        .maybeSingle();
+    }
+    const linked = linkedQuery.data as {
+      requires_admin_review?: boolean | null;
+      status?: string | null;
+      payment_status?: string | null;
+    } | null;
     if (bookingRequiresAdminReview(linked)) {
       return { ok: false, error: "לא ניתן לדרג משמרת שנמצאת בבדיקה." };
     }
     if (isBookingBlockedFromMandatoryRating(linked?.status)) {
       return { ok: false, error: "לא ניתן לדרג משמרת שלא התקיימה כמשמרת שהושלמה." };
     }
+    linkedPaymentStatus = coerceBookingPaymentStatus(linked?.payment_status);
   }
 
   if (!sessionRow) {
@@ -118,9 +149,10 @@ export async function submitSessionRating(
     if (!isSitter) {
       return { ok: false, error: "אין הרשאה לדרג משמרת זו." };
     }
-    // Sitter → Parent only after successful payment.
-    if (status !== "paid") {
-      return { ok: false, error: "ניתן לדרג את המשפחה רק לאחר שהתשלום הושלם." };
+    const mayRate =
+      sitterMayRateParent(linkedPaymentStatus) || status === "paid";
+    if (!mayRate) {
+      return { ok: false, error: SITTER_RATE_BEFORE_CONFIRMATION_MESSAGE };
     }
   }
 
@@ -143,12 +175,19 @@ export async function submitSessionRating(
 
   const { error: insErr } = await supabase.from(RATINGS_TABLE).insert(row);
 
+  const finishOk = async (): Promise<SubmitSessionRatingResult> => {
+    if (params.role === "sitter" && linkedBookingId) {
+      await markManualPaymentPaidIfReady(supabase, linkedBookingId);
+    }
+    return { ok: true };
+  };
+
   if (insErr) {
     // unique (session_id, from_user_id) — already rated; treat as success (idempotent).
     const code = String((insErr as { code?: string }).code ?? "");
     const msg = String(insErr.message ?? "");
     if (code === "23505" || /duplicate key|unique/i.test(msg)) {
-      return { ok: true };
+      return finishOk();
     }
     // Older DBs without published_at: retry without the column.
     if (/published_at|schema cache|column/i.test(msg)) {
@@ -163,14 +202,14 @@ export async function submitSessionRating(
         const retryCode = String((retryErr as { code?: string }).code ?? "");
         const retryMsg = String(retryErr.message ?? "");
         if (retryCode === "23505" || /duplicate key|unique/i.test(retryMsg)) {
-          return { ok: true };
+          return finishOk();
         }
         return { ok: false, error: retryErr.message || "שמירת הדירוג נכשלה." };
       }
-      return { ok: true };
+      return finishOk();
     }
     return { ok: false, error: insErr.message || "שמירת הדירוג נכשלה." };
   }
 
-  return { ok: true };
+  return finishOk();
 }
