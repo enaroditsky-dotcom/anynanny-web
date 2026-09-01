@@ -81,7 +81,7 @@ assert.equal(
 assert.equal(bookingPaymentStatusLabel({ paymentStatus: "payment_dispute" }), "בירור תשלום");
 assert.equal(
   bookingPaymentStatusLabel({ paymentStatus: "awaiting_sitter_rating" }),
-  "ממתין לדירוג הנני"
+  "ממתין לדירוג מבייביסיטר"
 );
 assert.equal(BOOKING_SHIFT_ENDED_LABEL, "הסתיימה");
 assert.equal(PARENT_COMPLETED_SHIFT_PAYMENT_ACTION.unpaid, "שלם עכשיו");

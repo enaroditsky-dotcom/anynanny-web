@@ -3,10 +3,13 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  applyOperationalEventPopupChange,
   GLOBAL_OPERATIONAL_NOTIFICATION_KINDS,
   OPERATIONAL_CARD_NOTIFICATION_KINDS,
+  OPERATIONAL_EVENT_POPUP_DURATION_MS,
   isGlobalOperationalNotificationKind,
-  operationalCardActionLabel
+  operationalCardActionLabel,
+  shouldPresentOperationalEventPopup
 } from "../lib/notifications/coordination";
 import {
   parseOperationalCardIdSet,
@@ -114,29 +117,89 @@ assert.doesNotMatch(session, /read_at|dismissed_at/);
 
 const ui = read("components/notifications/global-coordination-notifications.tsx");
 assert.match(ui, /isOperationalCardsSuppressedRoute/);
-assert.match(ui, /if \(suppressCards\) return null/);
-assert.doesNotMatch(ui, /if \(suppressCards\)[\s\S]{0,80}markNotificationsRead/);
-assert.doesNotMatch(ui, /if \(suppressCards\)[\s\S]{0,80}writeOperationalCardHiddenIds/);
-assert.match(ui, /hideForSession/);
-assert.match(ui, /minimizeForSession/);
+assert.match(ui, /isOperationalCardsSuppressedRoute\(pathname\)\) return null/);
+assert.doesNotMatch(ui, /fetchUnreadCoordinationNotifications/);
+assert.doesNotMatch(ui, /event: "\*"/);
+assert.match(ui, /event: "INSERT"/);
+assert.match(ui, /pathnameRef/);
+assert.match(ui, /applyOperationalEventPopupChange/);
+assert.match(ui, /OPERATIONAL_EVENT_POPUP_DURATION_MS/);
+assert.match(ui, /dismissPopup/);
 assert.match(ui, /openHref/);
 assert.match(ui, /markNotificationsReadBestEffort/);
-assert.match(ui, /writeOperationalCardHiddenIds/);
-assert.match(ui, /writeOperationalCardMinimizedIds/);
-const hideFn = ui.slice(ui.indexOf("const hideForSession"), ui.indexOf("const minimizeForSession"));
-assert.match(hideFn, /writeOperationalCardHiddenIds/);
-assert.doesNotMatch(hideFn, /markNotificationsRead/);
-const minimizeFn = ui.slice(ui.indexOf("const minimizeForSession"), ui.indexOf("const expandForSession"));
-assert.match(minimizeFn, /writeOperationalCardMinimizedIds/);
-assert.doesNotMatch(minimizeFn, /markNotificationsRead/);
-assert.match(ui, /עוד \{stack\.overflowCount\} התראות/);
+assert.doesNotMatch(ui, /minimizeForSession|hideForSession|writeOperationalCardHiddenIds|writeOperationalCardMinimizedIds/);
+assert.doesNotMatch(ui, /עוד \{stack\.overflowCount\} התראות/);
 assert.match(ui, /z-\[60\]/);
 assert.doesNotMatch(ui, /z-\[9999\]/);
 assert.doesNotMatch(ui, /fixed inset-0/);
 assert.doesNotMatch(ui, /subscribeToIncomingMessages/);
 assert.match(ui, /filter: `user_id=eq\.\$\{userId\}`/);
-assert.match(ui, /\[userId, isLoading, reload\]/);
-assert.doesNotMatch(ui, /\[userId, isLoading, reload, suppressCards\]/);
+assert.doesNotMatch(ui, /\[userId, isLoading, reload\]/);
+assert.doesNotMatch(ui, /if \(suppressCards\)[\s\S]{0,80}markNotificationsRead/);
+
+assert.equal(OPERATIONAL_EVENT_POPUP_DURATION_MS, 8000);
+assert.equal(
+  shouldPresentOperationalEventPopup({
+    eventType: "INSERT",
+    pathname: "/parent/profile",
+    kind: "manual_payment_confirmed"
+  }),
+  true
+);
+assert.equal(
+  shouldPresentOperationalEventPopup({
+    eventType: "INSERT",
+    pathname: "/parent/dashboard",
+    kind: "manual_payment_confirmed"
+  }),
+  false
+);
+assert.equal(
+  shouldPresentOperationalEventPopup({
+    eventType: "UPDATE",
+    pathname: "/parent/profile",
+    kind: "manual_payment_confirmed"
+  }),
+  false
+);
+assert.equal(
+  applyOperationalEventPopupChange(
+    [],
+    {
+      eventType: "INSERT",
+      new: {
+        id: "old-unread",
+        kind: "manual_payment_confirmed",
+        title: "קבלת התשלום אושרה",
+        body: "",
+        payload: {},
+        created_at: "2026-09-01T10:00:00.000Z",
+        read_at: null
+      }
+    },
+    "/parent/dashboard"
+  ).length,
+  0
+);
+assert.equal(
+  applyOperationalEventPopupChange(
+    [],
+    {
+      eventType: "INSERT",
+      new: {
+        id: "live-pay",
+        kind: "manual_payment_confirmed",
+        title: "קבלת התשלום אושרה",
+        body: "",
+        payload: {},
+        created_at: "2026-09-01T10:00:00.000Z",
+        read_at: null
+      }
+    },
+    "/parent/profile"
+  ).length,
+  1
+);
 
 const toast = read("components/notifications/global-chat-toast.tsx");
 assert.match(toast, /z-\[70\]/);

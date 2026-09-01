@@ -8,13 +8,21 @@ import {
 
 export const MARK_BOOKING_MESSAGES_READ_RPC = "mark_booking_messages_read";
 export const CHAT_UNREAD_CHANGED_EVENT = "anynanny-chat-unread-changed";
+export const CHAT_INCOMING_MESSAGE_EVENT = "anynanny-chat-incoming-message";
 
 export type IncomingChatMessageRow = {
   id?: string;
   sender_id?: string;
   booking_id?: string;
   content?: string;
+  created_at?: string;
 };
+
+/** Fan-out from the existing inbox INSERT — not a second subscription. */
+export function notifyIncomingChatMessage(row: IncomingChatMessageRow): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(CHAT_INCOMING_MESSAGE_EVENT, { detail: row }));
+}
 
 /** `/parent/chat/[bookingId]` or `/sitter/chat/[bookingId]` — not the inbox. */
 export function openConversationBookingId(pathname: string | null): string | null {

@@ -5,8 +5,10 @@ import { fileURLToPath } from "node:url";
 import {
   appendIncomingChatMessage,
   isChatMessageRow,
-  mergeFetchedChatMessages
+  mergeFetchedChatMessages,
+  normalizeChatMessageRow
 } from "../lib/chat/message-list";
+import { CHAT_INCOMING_MESSAGE_EVENT } from "../lib/chat/unread-messages";
 import type { MessageRow } from "../lib/chat/constants";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,6 +38,18 @@ assert.deepEqual(appendIncomingChatMessage([first], otherThread, "booking-a"), [
 assert.equal(isChatMessageRow({ id: "x" }), false);
 assert.equal(isChatMessageRow(first), true);
 
+const coerced = normalizeChatMessageRow({
+  id: first.id,
+  booking_id: first.booking_id,
+  sender_id: first.sender_id,
+  content: first.content,
+  created_at: new Date(first.created_at)
+});
+assert.equal(coerced?.id, first.id);
+assert.equal(coerced?.booking_id, first.booking_id);
+assert.match(String(coerced?.created_at ?? ""), /2026-09-01/);
+assert.equal(normalizeChatMessageRow({ id: "x" }), null);
+
 const merged = mergeFetchedChatMessages([first], [first, second]);
 assert.deepEqual(
   merged.map((m) => m.id),
@@ -54,12 +68,20 @@ assert.match(chat, /setMountedChatConversation/);
 assert.match(chat, /subscribePostgresChanges/);
 assert.match(chat, /event:\s*["']INSERT["']/);
 assert.match(chat, /booking_id=eq\.\$\{bookingId\}/);
+assert.match(chat, /CHAT_INCOMING_MESSAGE_EVENT/);
+assert.match(chat, /normalizeChatMessageRow/);
 assert.match(chat, /appendIncomingChatMessage/);
 assert.match(chat, /mergeFetchedChatMessages/);
 assert.match(chat, /removeRealtimeChannel/);
 assert.match(chat, /markBookingMessagesRead/);
+assert.match(chat, /chat-booking-\$\{bookingId\}/);
 assert.match(chat, /text-\[16px\]/);
 assert.doesNotMatch(chat, /router\.refresh|location\.reload/);
 assert.doesNotMatch(chat, /SUPABASE_SERVICE_ROLE|service_role/);
+assert.equal(CHAT_INCOMING_MESSAGE_EVENT, "anynanny-chat-incoming-message");
+
+const provider = read("features/chat/incoming-chat-inbox-provider.tsx");
+assert.match(provider, /notifyIncomingChatMessage\(row\)/);
+assert.equal(provider.split("subscribeToIncomingMessages").length - 1, 1);
 
 console.log("chat realtime helpers + ChatInterface contract ok");

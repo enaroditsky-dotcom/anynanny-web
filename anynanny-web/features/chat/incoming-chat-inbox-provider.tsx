@@ -32,6 +32,7 @@ import {
   hasUnreadIncomingMessages,
   isViewingConversation,
   markBookingMessagesRead,
+  notifyIncomingChatMessage,
   openConversationBookingId,
   type IncomingChatMessageRow
 } from "@/lib/chat/unread-messages";
@@ -166,6 +167,7 @@ export function IncomingChatInboxProvider({ children }: { children: ReactNode })
 
     const supabase = getSupabaseBrowserClient();
     const channel = chatService.subscribeToIncomingMessages(userId, (row: IncomingChatMessageRow) => {
+      notifyIncomingChatMessage(row);
       const incomingBookingId = typeof row.booking_id === "string" ? row.booking_id.trim() : "";
       const viewingRoute = openConversationBookingId(pathnameRef.current);
       const viewingMounted = getMountedChatConversation();

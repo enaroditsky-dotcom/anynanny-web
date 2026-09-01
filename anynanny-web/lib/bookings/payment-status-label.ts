@@ -22,7 +22,7 @@ export const BOOKING_PAYMENT_STATUS_LABELS = {
   pending_checkout: "התשלום לא הושלם",
   awaiting_sitter_confirmation: "ממתין לאישור הנני",
   payment_dispute: "בירור תשלום",
-  awaiting_sitter_rating: "ממתין לדירוג הנני",
+  awaiting_sitter_rating: "ממתין לדירוג מבייביסיטר",
   paid: "שולם"
 } as const;
 

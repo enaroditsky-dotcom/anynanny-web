@@ -26,7 +26,7 @@ export const AWAITING_SITTER_CONFIRMATION_HEADING = "ממתין לאישור ה�
 export const AWAITING_SITTER_CONFIRMATION_COPY =
   "דיווחנו לנני שהתשלום בוצע. לאחר אישור קבלת התשלום נמשיך לסגירת המשמרת.";
 
-export const AWAITING_SITTER_RATING_HEADING = "ממתין לדירוג הנני";
+export const AWAITING_SITTER_RATING_HEADING = "ממתין לדירוג מבייביסיטר";
 export const PAYMENT_DISPUTE_HEADING = "בירור תשלום";
 export const PAYMENT_DISPUTE_PARENT_HEADING = "בבירור תשלום";
 export const PARENT_PAYMENT_DISPUTE_SITTER_DENIED_MESSAGE =
