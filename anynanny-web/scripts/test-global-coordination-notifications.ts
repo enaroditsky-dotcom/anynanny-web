@@ -159,6 +159,8 @@ assert.doesNotMatch(chromelessReturn, /GlobalCoordinationNotifications/);
 const ui = read("components/notifications/global-coordination-notifications.tsx");
 assert.match(ui, /fetchUnreadCoordinationNotifications/);
 assert.match(ui, /event: "\*"/);
+assert.match(ui, /isOperationalCardsSuppressedRoute/);
+assert.match(ui, /if \(suppressCards\) return null/);
 assert.match(ui, /markNotificationsReadBestEffort/);
 assert.match(ui, /hideForSession/);
 assert.match(ui, /minimizeForSession/);
