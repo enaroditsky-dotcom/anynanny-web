@@ -36,6 +36,11 @@ import {
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  formatContactPhoneDisplay,
+  requestSaveOwnContactPhone,
+  validateContactPhoneInput
+} from "@/lib/profile/contact-phone";
 
 type FormState = {
   first_name: string;
@@ -63,12 +68,14 @@ type FormState = {
   working_cities: IsraelCity[];
   nanny_serial: string;
   avatar_url: string;
+  phone: string;
 };
 
 type EditKey =
   | "first_name"
   | "last_name"
   | "birth_date"
+  | "phone"
   | "id_number"
   | "address_full"
   | "years_experience"
@@ -198,7 +205,8 @@ function profileToForm(profile: SitterProfileRow | null): FormState {
     legal_no_criminal_declaration: Boolean(profile?.legal_no_criminal_declaration),
     working_cities: normalizeWorkingCities(profile?.working_cities),
     nanny_serial: profile?.nanny_serial ?? "",
-    avatar_url: String(profile?.avatar_url ?? "")
+    avatar_url: String(profile?.avatar_url ?? ""),
+    phone: String((profile as { phone?: string | null } | null)?.phone ?? "")
   };
 }
 
@@ -246,6 +254,7 @@ export function SitterPersonalArea({ userId }: Props) {
   const [editKey, setEditKey] = useState<EditKey | null>(null);
   const [draft, setDraft] = useState<FormState>(profileToForm(null));
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [authPhone, setAuthPhone] = useState("");
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -258,13 +267,22 @@ export function SitterPersonalArea({ userId }: Props) {
 
     try {
       const response = await fetch("/api/sitter/profile", { method: "GET", cache: "no-store" });
-      const json = (await response.json()) as { profile?: SitterProfileRow | null; error?: string };
+      const json = (await response.json()) as {
+        profile?: (SitterProfileRow & { phone?: string | null }) | null;
+        phone?: string | null;
+        authPhone?: string | null;
+        error?: string;
+      };
       if (!response.ok) {
         setError(json.error || "טעינת הפרופיל נכשלה.");
         setLoading(false);
         return;
       }
-      const loadedForm = profileToForm(json.profile ?? null);
+      const loadedForm = profileToForm({
+        ...(json.profile ?? {}),
+        phone: json.phone ?? json.profile?.phone ?? ""
+      } as SitterProfileRow & { phone?: string | null });
+      setAuthPhone(String(json.authPhone ?? "").trim());
       setForm(loadedForm);
       setDraft(loadedForm);
     } catch (err) {
@@ -287,6 +305,7 @@ export function SitterPersonalArea({ userId }: Props) {
         ...form,
         working_cities: [...form.working_cities],
         languages: [...form.languages],
+        phone: form.phone || authPhone,
         preferred_ages:
           key === "preferred_ages"
             ? formatPreferredAgesDisplay(form.preferred_ages) || formatPreferredAgesRange(1, 12)
@@ -294,7 +313,7 @@ export function SitterPersonalArea({ userId }: Props) {
       });
       setEditKey(key);
     },
-    [form]
+    [form, authPhone]
   );
 
   const closeEdit = useCallback(() => {
@@ -372,6 +391,27 @@ export function SitterPersonalArea({ userId }: Props) {
       }
     }
 
+    if (editKey === "phone") {
+      const phoneError = validateContactPhoneInput(draft.phone);
+      if (phoneError) {
+        setModalError(phoneError);
+        return;
+      }
+      setSaving(true);
+      setModalError(null);
+      const saved = await requestSaveOwnContactPhone(draft.phone);
+      setSaving(false);
+      if (!saved.ok) {
+        setModalError(saved.error);
+        return;
+      }
+      setForm((prev) => ({ ...prev, phone: saved.phone }));
+      setDraft((prev) => ({ ...prev, phone: saved.phone }));
+      setEditKey(null);
+      setSuccess("הפרטים עודכנו בהצלחה");
+      return;
+    }
+
     setSaving(true);
     setModalError(null);
 
@@ -389,7 +429,10 @@ export function SitterPersonalArea({ userId }: Props) {
         return;
       }
 
-      const updatedForm = profileToForm(json.profile ?? null);
+      const updatedForm = {
+        ...profileToForm(json.profile ?? null),
+        phone: form.phone
+      };
       setForm(updatedForm);
       setDraft(updatedForm);
       setEditKey(null);
@@ -438,6 +481,8 @@ export function SitterPersonalArea({ userId }: Props) {
         ? "שינוי שם משפחה"
         : editKey === "birth_date"
           ? "שינוי תאריך לידה"
+          : editKey === "phone"
+            ? "מספר טלפון"
           : editKey === "id_number"
             ? "שינוי תעודת זהות"
             : editKey === "address_full"
@@ -533,6 +578,13 @@ export function SitterPersonalArea({ userId }: Props) {
           label="תאריך לידה"
           value={formatDisplayDate(form.birth_date)}
           onEdit={() => openEdit("birth_date")}
+        />
+        <PersonalStaticRow
+          label="טלפון"
+          value={formatContactPhoneDisplay(form.phone || authPhone)}
+          onEdit={() => openEdit("phone")}
+          dir="ltr"
+          actionLabel={form.phone || authPhone ? "שינוי" : "הוספת מספר"}
         />
         <PersonalStaticRow
           label="תעודת זהות"
@@ -709,12 +761,13 @@ export function SitterPersonalArea({ userId }: Props) {
 
         {editKey === "first_name" ||
         editKey === "last_name" ||
+        editKey === "phone" ||
         editKey === "id_number" ||
         editKey === "address_full" ||
         editKey === "birth_country" ||
         editKey === "referee_phone_1" ||
         editKey === "referee_phone_2" ? (
-          <PersonalField label={modalTitle.replace("שינוי ", "")}>
+          <PersonalField label={editKey === "phone" ? "מספר טלפון" : modalTitle.replace("שינוי ", "")}>
             <input
               className={personalInputClassName}
               value={
@@ -722,6 +775,8 @@ export function SitterPersonalArea({ userId }: Props) {
                   ? draft.first_name
                   : editKey === "last_name"
                     ? draft.last_name
+                    : editKey === "phone"
+                      ? draft.phone
                     : editKey === "id_number"
                       ? draft.id_number
                       : editKey === "address_full"
@@ -739,12 +794,16 @@ export function SitterPersonalArea({ userId }: Props) {
                 }))
               }
               dir={
+                editKey === "phone" ||
                 editKey === "id_number" ||
                 editKey === "referee_phone_1" ||
                 editKey === "referee_phone_2"
                   ? "ltr"
                   : undefined
               }
+              inputMode={editKey === "phone" ? "tel" : undefined}
+              autoComplete={editKey === "phone" ? "tel" : undefined}
+              placeholder={editKey === "phone" ? "0501234567" : undefined}
               autoFocus
             />
           </PersonalField>

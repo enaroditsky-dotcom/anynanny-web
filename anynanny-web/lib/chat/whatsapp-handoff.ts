@@ -53,6 +53,10 @@ export function buildWhatsAppHandoffUrl(
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }
 
+export function hasUsableWhatsAppPhone(phone: string | null | undefined): boolean {
+  return Boolean(buildWhatsAppHandoffUrl(String(phone ?? "")));
+}
+
 /** If any known status is ineligible, that status wins so WhatsApp can hide immediately. */
 export function resolveWhatsAppHandoffStatus(
   ...statuses: Array<string | null | undefined>

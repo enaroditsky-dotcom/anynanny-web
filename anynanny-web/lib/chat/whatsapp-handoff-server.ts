@@ -3,6 +3,7 @@ import "server-only";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
 import {
   buildWhatsAppHandoffUrl,
+  hasUsableWhatsAppPhone,
   isWhatsAppHandoffStatus,
   parseWhatsAppBookingId
 } from "@/lib/chat/whatsapp-handoff";
@@ -12,6 +13,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type WhatsAppHandoffResult =
   | { ok: true; url: string }
+  | { ok: false; status: number; error: string; reason: string };
+
+export type WhatsAppHandoffAvailabilityResult =
+  | { ok: true; eligible: true; counterpartHasPhone: boolean }
   | { ok: false; status: number; error: string; reason: string };
 
 function tryGetServiceRoleClient(): SupabaseClient | null {
@@ -35,10 +40,13 @@ async function loadCounterpartPhone(
   return fromAuth || null;
 }
 
-export async function loadAuthorizedWhatsAppHandoffUrl(
+async function authorizeWhatsAppBooking(
   userClient: SupabaseClient,
   input: { actorId: string; bookingId: string }
-): Promise<WhatsAppHandoffResult> {
+): Promise<
+  | { ok: true; counterpartId: string }
+  | { ok: false; status: number; error: string; reason: string }
+> {
   const bookingId = parseWhatsAppBookingId(input.bookingId);
   const actorId = String(input.actorId ?? "").trim();
   if (!bookingId || !actorId) {
@@ -86,19 +94,49 @@ export async function loadAuthorizedWhatsAppHandoffUrl(
     return { ok: false, status: 404, error: "ההזמנה לא נמצאה.", reason: "missing_counterpart" };
   }
 
+  return { ok: true, counterpartId };
+}
+
+export async function loadAuthorizedWhatsAppAvailability(
+  userClient: SupabaseClient,
+  input: { actorId: string; bookingId: string }
+): Promise<WhatsAppHandoffAvailabilityResult> {
+  const authorized = await authorizeWhatsAppBooking(userClient, input);
+  if (!authorized.ok) return authorized;
+
   const admin = tryGetServiceRoleClient();
   if (!admin) {
     return { ok: false, status: 503, error: "לא ניתן לפתוח WhatsApp כרגע.", reason: "server" };
   }
 
-  const phone = await loadCounterpartPhone(admin, counterpartId);
+  const phone = await loadCounterpartPhone(admin, authorized.counterpartId);
+  return {
+    ok: true,
+    eligible: true,
+    counterpartHasPhone: hasUsableWhatsAppPhone(phone)
+  };
+}
+
+export async function loadAuthorizedWhatsAppHandoffUrl(
+  userClient: SupabaseClient,
+  input: { actorId: string; bookingId: string }
+): Promise<WhatsAppHandoffResult> {
+  const authorized = await authorizeWhatsAppBooking(userClient, input);
+  if (!authorized.ok) return authorized;
+
+  const admin = tryGetServiceRoleClient();
+  if (!admin) {
+    return { ok: false, status: 503, error: "לא ניתן לפתוח WhatsApp כרגע.", reason: "server" };
+  }
+
+  const phone = await loadCounterpartPhone(admin, authorized.counterpartId);
   if (!phone) {
-    return { ok: false, status: 422, error: "לא נמצא מספר טלפון למשתמש השני.", reason: "no_phone" };
+    return { ok: false, status: 422, error: "לא הוגדר מספר טלפון", reason: "no_phone" };
   }
 
   const url = buildWhatsAppHandoffUrl(phone);
   if (!url) {
-    return { ok: false, status: 422, error: "לא ניתן לפתוח WhatsApp עם המספר השמור.", reason: "bad_phone" };
+    return { ok: false, status: 422, error: "לא הוגדר מספר טלפון", reason: "bad_phone" };
   }
 
   return { ok: true, url };
