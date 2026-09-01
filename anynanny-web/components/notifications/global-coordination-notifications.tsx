@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
   CalendarCheck2,
@@ -33,6 +33,7 @@ import {
   writeOperationalCardHiddenIds,
   writeOperationalCardMinimizedIds
 } from "@/lib/notifications/operational-card-session";
+import { isOperationalCardsSuppressedRoute } from "@/lib/notifications/operational-card-routes";
 import {
   minimizedIdsAfterExpand,
   partitionOperationalCards
@@ -96,7 +97,9 @@ const ICON_BUTTON =
 
 export function GlobalCoordinationNotifications() {
   const { signedIn, user, isLoading, currentRole, effectiveRole } = useAuth();
+  const pathname = usePathname();
   const router = useRouter();
+  const suppressCards = isOperationalCardsSuppressedRoute(pathname);
   const [items, setItems] = useState<CoordinationNotification[]>([]);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const [minimizedIds, setMinimizedIds] = useState<Set<string>>(() => new Set());
@@ -225,6 +228,7 @@ export function GlobalCoordinationNotifications() {
     [items, hiddenIds, minimizedIds]
   );
 
+  if (suppressCards) return null;
   if (!userId || (stack.expanded.length === 0 && stack.collapsed.length === 0 && stack.overflowCount === 0)) {
     return null;
   }

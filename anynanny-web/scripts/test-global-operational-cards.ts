@@ -14,6 +14,7 @@ import {
   withOperationalCardId,
   withoutOperationalCardId
 } from "../lib/notifications/operational-card-session";
+import { isOperationalCardsSuppressedRoute } from "../lib/notifications/operational-card-routes";
 import {
   MAX_COLLAPSED_OPERATIONAL_CARDS,
   MAX_EXPANDED_OPERATIONAL_CARDS,
@@ -62,6 +63,16 @@ assert.equal(notificationHrefForKind("missed_shift_clarification", "parent", {})
 assert.equal(notificationHrefForKind("shift_end_reminder", "sitter", {}), "/sitter/dashboard");
 assert.equal(operationalCardActionLabel("booking_approved"), "למשמרת");
 
+assert.equal(isOperationalCardsSuppressedRoute("/parent/dashboard"), true);
+assert.equal(isOperationalCardsSuppressedRoute("/sitter/dashboard"), true);
+assert.equal(isOperationalCardsSuppressedRoute("/parent/dashboard/"), true);
+assert.equal(isOperationalCardsSuppressedRoute("/sitter/dashboard?tab=pay"), true);
+assert.equal(isOperationalCardsSuppressedRoute("/parent/profile"), false);
+assert.equal(isOperationalCardsSuppressedRoute("/sitter/profile"), false);
+assert.equal(isOperationalCardsSuppressedRoute("/parent/calendar"), false);
+assert.equal(isOperationalCardsSuppressedRoute("/parent/dashboard/extra"), false);
+assert.equal(isOperationalCardsSuppressedRoute("/sitter/shifts"), false);
+
 const items = [1, 2, 3, 4, 5, 6].map((n) => ({ id: `n${n}` }));
 const stacked = partitionOperationalCards(items, new Set(), new Set());
 assert.equal(MAX_EXPANDED_OPERATIONAL_CARDS, 2);
@@ -102,6 +113,10 @@ assert.doesNotMatch(session, /localStorage/);
 assert.doesNotMatch(session, /read_at|dismissed_at/);
 
 const ui = read("components/notifications/global-coordination-notifications.tsx");
+assert.match(ui, /isOperationalCardsSuppressedRoute/);
+assert.match(ui, /if \(suppressCards\) return null/);
+assert.doesNotMatch(ui, /if \(suppressCards\)[\s\S]{0,80}markNotificationsRead/);
+assert.doesNotMatch(ui, /if \(suppressCards\)[\s\S]{0,80}writeOperationalCardHiddenIds/);
 assert.match(ui, /hideForSession/);
 assert.match(ui, /minimizeForSession/);
 assert.match(ui, /openHref/);
@@ -119,11 +134,15 @@ assert.match(ui, /z-\[60\]/);
 assert.doesNotMatch(ui, /z-\[9999\]/);
 assert.doesNotMatch(ui, /fixed inset-0/);
 assert.doesNotMatch(ui, /subscribeToIncomingMessages/);
+assert.match(ui, /filter: `user_id=eq\.\$\{userId\}`/);
+assert.match(ui, /\[userId, isLoading, reload\]/);
+assert.doesNotMatch(ui, /\[userId, isLoading, reload, suppressCards\]/);
 
 const toast = read("components/notifications/global-chat-toast.tsx");
 assert.match(toast, /z-\[70\]/);
 assert.match(toast, /5\.5rem\+var\(--anynanny-now-dock/);
 assert.match(toast, /CHAT_COMPOSER_ACTIVE_EVENT/);
+assert.doesNotMatch(toast, /isOperationalCardsSuppressedRoute|\/parent\/dashboard/);
 
 const provider = read("features/chat/incoming-chat-inbox-provider.tsx");
 assert.equal(count(provider, "subscribeToIncomingMessages"), 1);
