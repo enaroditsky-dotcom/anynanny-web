@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, MessageCircle, UserRound, Settings, Zap } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { CHAT_COMPOSER_ACTIVE_EVENT } from "@/lib/chat/composer-chrome";
 import { useWalletNotification } from "@/features/wallet/hooks/useWalletNotification";
 import { useChatNotification } from "@/features/chat/hooks/useChatNotification";
 
@@ -180,27 +182,42 @@ function AnyNannyNowFab({ active }: { active: boolean }) {
   );
 }
 
+const BOTTOM_NAV_SURFACE =
+  "fixed bottom-0 left-0 right-0 z-50 w-full border-t border-slate-200/80 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_-12px_rgba(15,23,42,0.12)] backdrop-blur-sm";
+
 /** Fixed bottom navigation for authenticated parent/sitter routes. */
 export function BottomNav() {
   const pathname = usePathname();
   const { signedIn, currentRole, user } = useAuth();
   const role = currentRole === "sitter" ? "sitter" : "parent";
+  const [chatComposerActive, setChatComposerActive] = useState(false);
 
   const { hasWalletUpdate, clearWalletNotification } = useWalletNotification(user?.id, role);
   const { hasUnreadMessages } = useChatNotification(user?.id);
+
+  useEffect(() => {
+    const onComposer = (event: Event) => {
+      const detail = (event as CustomEvent<{ active?: boolean }>).detail;
+      setChatComposerActive(Boolean(detail?.active));
+    };
+    window.addEventListener(CHAT_COMPOSER_ACTIVE_EVENT, onComposer);
+    return () => window.removeEventListener(CHAT_COMPOSER_ACTIVE_EVENT, onComposer);
+  }, []);
 
   if (!signedIn) return null;
   if (!pathname.startsWith("/parent/") && !pathname.startsWith("/sitter/")) return null;
 
   const nowActive = pathname.startsWith("/parent/broadcast");
   const surprisesActive = pathname.startsWith("/sitter/surprises");
+  const navClassName = chatComposerActive ? `${BOTTOM_NAV_SURFACE} hidden` : BOTTOM_NAV_SURFACE;
 
   if (role === "parent") {
     const [leftA, leftB, rightA, rightB] = parentSideItems;
     return (
       <nav
         aria-label="ניווט ראשי"
-        className="fixed bottom-0 left-0 right-0 z-50 w-full border-t border-slate-200/80 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_-12px_rgba(15,23,42,0.12)] backdrop-blur-sm"
+        aria-hidden={chatComposerActive}
+        className={navClassName}
       >
         <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5">
           {[leftA, leftB].map((item) => (
@@ -233,7 +250,8 @@ export function BottomNav() {
   return (
     <nav
       aria-label="ניווט ראשי"
-      className="fixed bottom-0 left-0 right-0 z-50 w-full border-t border-slate-200/80 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_-12px_rgba(15,23,42,0.12)] backdrop-blur-sm"
+      aria-hidden={chatComposerActive}
+      className={navClassName}
     >
       <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5">
         {[leftA, leftB].map((item) => (

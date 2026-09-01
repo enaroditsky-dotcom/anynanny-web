@@ -1,19 +1,21 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { removeRealtimeChannel, subscribePostgresChanges } from '@/lib/supabase/subscribe-postgres-changes';
 import { fetchBookingChatLifecycle, fetchBookingMessages, sendBookingMessage } from '@/lib/chat/booking-messages';
 import { getChatLifecycle, type ChatLifecycle } from '@/lib/chat/chat-lifecycle';
+import {
+  isNearScrollBottom,
+  setChatComposerActive
+} from '@/lib/chat/composer-chrome';
+import { MESSAGES_TABLE, type MessageRow } from '@/lib/chat/constants';
+import {
+  appendIncomingChatMessage,
+  isChatMessageRow,
+  mergeFetchedChatMessages
+} from '@/lib/chat/message-list';
 import { markBookingMessagesRead, notifyChatUnreadChanged } from '@/lib/chat/unread-messages';
-
-interface MessageRow {
-  id: string;
-  booking_id: string;
-  sender_id: string;
-  content: string;
-  created_at: string;
-}
 
 export default function ChatInterface({ bookingId, userId }: { bookingId: string; userId: string }) {
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -21,38 +23,37 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
   const [sending, setSending] = useState(false);
   const [lifecycle, setLifecycle] = useState<ChatLifecycle | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLFormElement>(null);
+  const blurHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const stickToBottomRef = useRef(true);
 
-  // גלילה אוטומטית להודעה האחרונה
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(scrollToBottom, [messages]);
+  const markConversationRead = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !bookingId || !userId) return;
+    const { ok } = await markBookingMessagesRead(supabase, bookingId, userId);
+    if (ok) notifyChatUnreadChanged();
+  }, [bookingId, userId]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !bookingId || !userId) return;
     let cancelled = false;
 
-    const markConversationRead = async () => {
-      const { ok } = await markBookingMessagesRead(supabase, bookingId, userId);
-      if (cancelled || !ok) return;
-      notifyChatUnreadChanged();
-    };
+    setMessages([]);
+    setLifecycle(null);
 
-    void markConversationRead();
-
-    // 1. טעינה ראשונית של הודעות בצורה מאובטחת דרך הפונקציה המובנית שלך
-    const loadInitialMessages = async () => {
-      const { messages: fetched, error } = await fetchBookingMessages(supabase, bookingId);
+    void (async () => {
+      await markConversationRead();
       if (cancelled) return;
-      if (!error && fetched) {
-        setMessages(fetched as MessageRow[]);
-      }
-    };
-    void loadInitialMessages();
 
-    const loadLifecycle = async () => {
+      const { messages: fetched, error } = await fetchBookingMessages(supabase, bookingId);
+      if (cancelled || error || !fetched) return;
+      setMessages((prev) => mergeFetchedChatMessages(fetched, prev));
+    })();
+
+    void (async () => {
       const state = await fetchBookingChatLifecycle(supabase, bookingId);
       if (cancelled || state.error) return;
       setLifecycle(
@@ -67,31 +68,98 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
           Date.now()
         )
       );
-    };
-    void loadLifecycle();
+    })();
 
-    // 2. האזנה להודעות חדשות בזמן אמת דרך ערוץ הריל-טיים הרשמי
-    const channel = subscribePostgresChanges(supabase, `chat-${bookingId}`, {
-      event: 'INSERT',
-      table: 'messages',
-      filter: `booking_id=eq.${bookingId}`,
-      handler: (payload) => {
-        const incoming = payload.new as MessageRow;
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === incoming.id)) return prev;
-          return [...prev, incoming];
-        });
-        if (incoming.sender_id && incoming.sender_id !== userId) {
-          void markConversationRead();
+    const channel = subscribePostgresChanges(
+      supabase,
+      `chat-${bookingId}`,
+      {
+        event: 'INSERT',
+        table: MESSAGES_TABLE,
+        filter: `booking_id=eq.${bookingId}`,
+        handler: (payload) => {
+          if (!isChatMessageRow(payload.new)) return;
+          const incoming = payload.new;
+          setMessages((prev) => appendIncomingChatMessage(prev, incoming, bookingId));
+          if (incoming.sender_id !== userId) {
+            void markConversationRead();
+          }
+        }
+      },
+      (status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[ChatInterface] realtime:', status, err?.message);
         }
       }
-    });
+    );
 
     return () => {
       cancelled = true;
       removeRealtimeChannel(supabase, channel);
+      if (blurHideTimerRef.current) clearTimeout(blurHideTimerRef.current);
+      setChatComposerActive(false);
     };
-  }, [bookingId, userId]);
+  }, [bookingId, userId, markConversationRead]);
+
+  useEffect(() => {
+    if (lifecycle?.closed) {
+      if (blurHideTimerRef.current) clearTimeout(blurHideTimerRef.current);
+      setComposerFocused(false);
+      setChatComposerActive(false);
+    }
+  }, [lifecycle?.closed]);
+
+  const revealComposer = useCallback(() => {
+    composerRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+  }, []);
+
+  useEffect(() => {
+    if (!composerFocused) return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const onViewportResize = () => {
+      revealComposer();
+    };
+    viewport.addEventListener("resize", onViewportResize);
+    return () => {
+      viewport.removeEventListener("resize", onViewportResize);
+    };
+  }, [composerFocused, revealComposer]);
+
+  useEffect(() => {
+    const onWindowScroll = () => {
+      const list = messageListRef.current;
+      if (list && list.scrollHeight > list.clientHeight + 4) return;
+      const scrolling = (document.scrollingElement ?? document.documentElement) as HTMLElement;
+      stickToBottomRef.current = isNearScrollBottom(scrolling, 120);
+    };
+    window.addEventListener("scroll", onWindowScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onWindowScroll);
+  }, []);
+
+  useEffect(() => {
+    if (composerFocused) return;
+    if (!stickToBottomRef.current) return;
+
+    const list = messageListRef.current;
+    if (list && list.scrollHeight > list.clientHeight + 4) {
+      list.scrollTop = list.scrollHeight;
+      return;
+    }
+    const scrolling = (document.scrollingElement ?? document.documentElement) as HTMLElement;
+    scrolling.scrollTop = scrolling.scrollHeight;
+  }, [messages, composerFocused]);
+
+  const onMessageListScroll = () => {
+    const list = messageListRef.current;
+    if (!list) return;
+    if (list.scrollHeight <= list.clientHeight + 4) {
+      stickToBottomRef.current = true;
+      return;
+    }
+    stickToBottomRef.current = isNearScrollBottom(list);
+  };
 
   const sendMessageHandler = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,15 +171,12 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
     const currentText = newMessage.trim();
     setSending(true);
 
-    // שליחה דרך מתודת ה-Lib המאובטחת שלך
     const { message, error } = await sendBookingMessage(supabase, bookingId, userId, currentText);
 
     if (!error && message) {
       setNewMessage('');
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === message.id)) return prev;
-        return [...prev, message as MessageRow];
-      });
+      stickToBottomRef.current = true;
+      setMessages((prev) => appendIncomingChatMessage(prev, message, bookingId));
     } else if (error) {
       console.error("[ChatInterface] Failed to send message:", error);
     }
@@ -119,9 +184,15 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
   };
 
   return (
-    <div className="flex flex-col h-[400px] border rounded-lg bg-gray-50 overflow-hidden" dir="rtl">
-      {/* אזור ההודעות */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div
+      className="flex flex-col bg-gray-50 md:h-[400px] md:overflow-hidden md:rounded-lg md:border"
+      dir="rtl"
+    >
+      <div
+        ref={messageListRef}
+        onScroll={onMessageListScroll}
+        className="space-y-4 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto"
+      >
         {messages.map((m) => (
           <div 
             key={m.id} 
@@ -136,30 +207,56 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
             </div>
           </div>
         ))}
-        <div ref={messagesEndRef} />
+        <div
+          ref={messagesEndRef}
+          className="scroll-mb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]"
+        />
       </div>
 
-      {/* אזור הקלט / מצב קריאה בלבד */}
       {lifecycle?.closed ? (
-        <div className="border-t bg-slate-50 px-4 py-3 text-right">
+        <div className="border-t bg-slate-50 px-4 py-3 text-right scroll-mb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]">
           <p className="text-sm font-semibold text-slate-700">{lifecycle.closedHeadline}</p>
           {lifecycle.closedSupport ? (
             <p className="mt-1 text-xs leading-relaxed text-slate-500">{lifecycle.closedSupport}</p>
           ) : null}
         </div>
       ) : (
-      <form onSubmit={sendMessageHandler} className="p-3 bg-white border-t flex gap-2 items-center">
+      <form
+        ref={composerRef}
+        onSubmit={sendMessageHandler}
+        className="flex items-center gap-2 border-t bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:pb-3 scroll-mb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]"
+      >
         <input 
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
+          onFocus={() => {
+            if (blurHideTimerRef.current) {
+              clearTimeout(blurHideTimerRef.current);
+              blurHideTimerRef.current = null;
+            }
+            setComposerFocused(true);
+            setChatComposerActive(true);
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => revealComposer());
+            });
+          }}
+          onBlur={() => {
+            if (blurHideTimerRef.current) clearTimeout(blurHideTimerRef.current);
+            blurHideTimerRef.current = setTimeout(() => {
+              setComposerFocused(false);
+              setChatComposerActive(false);
+            }, 250);
+          }}
           disabled={sending}
-          className="flex-1 border border-slate-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 text-right"
+          enterKeyHint="send"
+          autoComplete="off"
+          className="min-h-11 flex-1 rounded-full border border-slate-200 px-4 py-2 text-[16px] leading-normal text-right focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50"
           placeholder="הקלד הודעה..."
         />
         <button 
           type="submit" 
           disabled={!newMessage.trim() || sending}
-          className="bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition active:scale-[0.98]"
+          className="min-h-11 rounded-full bg-blue-600 px-5 py-2 text-base font-bold text-white transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
         >
           {sending ? 'שולח...' : 'שלח'}
         </button>
