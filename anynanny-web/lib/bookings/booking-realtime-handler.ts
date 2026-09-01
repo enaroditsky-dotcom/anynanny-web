@@ -75,9 +75,17 @@ export function isSitterShiftCircleStatus(status: BookingStatusInput): boolean {
 }
 
 /**
- * WhatsApp handoff is allowed only while the shift relationship is actively ongoing.
- * Same statuses as parent tracking / sitter shift circle — not the 24h chat grace list.
+ * WhatsApp handoff is available from sitter approval until the shift completes.
+ * Not tied to the 24h in-app chat grace list.
  */
+const WHATSAPP_HANDOFF_STATUSES = new Set([
+  "approved",
+  "sitter_started",
+  "parent_started",
+  "sitter_ended"
+]);
+
 export function isWhatsAppHandoffStatus(status: BookingStatusInput | string): boolean {
-  return isParentBookingTrackingStatus(status as BookingStatusInput);
+  const normalized = normalizeBookingStatus(status as BookingStatusInput);
+  return Boolean(normalized && WHATSAPP_HANDOFF_STATUSES.has(normalized));
 }

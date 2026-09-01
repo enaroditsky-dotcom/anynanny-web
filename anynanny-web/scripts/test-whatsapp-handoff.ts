@@ -44,13 +44,21 @@ const ALL_STATUSES: BookingStatus[] = [
 
 const ELIGIBLE: BookingStatus[] = ["approved", "sitter_started", "parent_started", "sitter_ended"];
 
+assert.equal(isWhatsAppHandoffStatus("pending"), false);
+assert.equal(isWhatsAppHandoffStatus("approved"), true);
+assert.equal(isWhatsAppHandoffStatus("sitter_started"), true);
+assert.equal(isWhatsAppHandoffStatus("parent_started"), true);
+assert.equal(isWhatsAppHandoffStatus("sitter_ended"), true);
+assert.equal(isWhatsAppHandoffStatus("completed"), false);
+
 for (const status of ALL_STATUSES) {
   const expected = ELIGIBLE.includes(status);
   assert.equal(isWhatsAppHandoffStatus(status), expected, status);
-  assert.equal(isWhatsAppHandoffStatus(status), isParentBookingTrackingStatus(status), status);
-  assert.equal(isWhatsAppHandoffStatus(status), isSitterShiftCircleStatus(status), status);
   assert.equal(isWhatsAppFromModule(status), expected, status);
 }
+
+assert.equal(isParentBookingTrackingStatus("approved"), true);
+assert.equal(isSitterShiftCircleStatus("approved"), true);
 
 assert.equal(isWhatsAppHandoffStatus("confirmed"), true);
 assert.equal(isWhatsAppHandoffStatus("active"), true);
@@ -158,7 +166,15 @@ assert.doesNotMatch(helpers, /CHAT_GRACE_PERIOD|CHAT_ACTIVE_WRITABLE/);
 
 const statusHelpers = read("lib/bookings/booking-realtime-handler.ts");
 assert.match(statusHelpers, /export function isWhatsAppHandoffStatus/);
-assert.match(statusHelpers, /return isParentBookingTrackingStatus\(status as BookingStatusInput\)/);
+assert.match(statusHelpers, /WHATSAPP_HANDOFF_STATUSES/);
+assert.match(statusHelpers, /"approved"/);
+assert.match(statusHelpers, /"sitter_started"/);
+assert.match(statusHelpers, /"parent_started"/);
+assert.match(statusHelpers, /"sitter_ended"/);
+assert.doesNotMatch(
+  statusHelpers.slice(statusHelpers.indexOf("WHATSAPP_HANDOFF_STATUSES")),
+  /"pending"|"rejected"|"cancelled"|"completed"|"awaiting_missed_shift_reason"/
+);
 assert.match(statusHelpers, /booking-status-normalize/);
 assert.doesNotMatch(statusHelpers, /use-shift-activation-status/);
 
