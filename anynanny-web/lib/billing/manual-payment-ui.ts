@@ -28,12 +28,60 @@ export const AWAITING_SITTER_CONFIRMATION_COPY =
 
 export const AWAITING_SITTER_RATING_HEADING = "ממתין לדירוג הנני";
 export const PAYMENT_DISPUTE_HEADING = "בירור תשלום";
+export const PAYMENT_DISPUTE_PARENT_HEADING = "בבירור תשלום";
+export const PARENT_PAYMENT_DISPUTE_SITTER_DENIED_MESSAGE =
+  "הנני דיווחה שהתשלום טרם התקבל." as const;
+export const PARENT_RESOLVE_PAYMENT_DISPUTE_BUTTON = "הסדרתי את התשלום" as const;
 
 export const MANUAL_PAYMENT_REPORTED_NOTIFICATION = {
   kind: "manual_payment_reported",
   title: "ההורה דיווח שהתשלום בוצע",
   body: "יש לאשר האם התשלום התקבל."
 } as const;
+
+export const SITTER_MANUAL_PAYMENT_PROMPT =
+  "ההורה דיווח שהתשלום בוצע. האם קיבלת את התשלום?" as const;
+export const SITTER_CONFIRM_RECEIVED_BUTTON = "כן, קיבלתי" as const;
+export const SITTER_DENY_RECEIVED_BUTTON = "לא קיבלתי" as const;
+export const SITTER_AWAITING_RATING_LABEL = "ממתין לדירוג" as const;
+
+export const MANUAL_PAYMENT_CONFIRMED_NOTIFICATION = {
+  kind: "manual_payment_confirmed",
+  title: "קבלת התשלום אושרה",
+  body: "הנני אישרה שהתשלום התקבל."
+} as const;
+
+export const MANUAL_PAYMENT_DENIED_NOTIFICATION = {
+  kind: "manual_payment_denied",
+  title: "התשלום לא אושר",
+  body: "הנני דיווחה שהתשלום טרם התקבל. יש להסדיר את התשלום לפני הזמנה חדשה."
+} as const;
+
+export const MANUAL_PAYMENT_RESOLVED_REPORTED_NOTIFICATION = {
+  kind: "manual_payment_resolved_reported",
+  title: "ההורה דיווח שהתשלום הוסדר",
+  body: "יש לאשר האם התשלום התקבל."
+} as const;
+
+export const SITTER_MANUAL_ACTIONABLE_STATUSES = [
+  "awaiting_sitter_confirmation",
+  "awaiting_sitter_rating",
+  "payment_dispute"
+] as const;
+
+export type SitterManualPaymentStep = "confirm" | "rate" | "dispute" | "paid" | "waiting_parent";
+
+export function resolveSitterManualPaymentStep(
+  paymentStatus: string | null | undefined
+): SitterManualPaymentStep | null {
+  const status = coerceBookingPaymentStatus(paymentStatus);
+  if (status === "awaiting_sitter_confirmation") return "confirm";
+  if (status === "awaiting_sitter_rating") return "rate";
+  if (status === "payment_dispute") return "dispute";
+  if (status === "paid") return "paid";
+  if (status === "unpaid" || status === "pending_checkout") return "waiting_parent";
+  return null;
+}
 
 /** Destinations are only readable while the booking is still eligible for parent payment. */
 export const PARENT_MANUAL_DESTINATION_ELIGIBLE_STATUSES = [
@@ -113,6 +161,49 @@ export function parentMayReadManualPaymentDestinations(input: {
     return { ok: false, reason: "parent_rating_required" };
   }
   return { ok: true };
+}
+
+/**
+ * Parent may resolve a payment_dispute only for their own manual-rail booking,
+ * reusing the stored cash|bit|paybox method. Idempotent if already awaiting confirmation.
+ */
+export function parentMayResolveManualPaymentDispute(input: {
+  actorId: string;
+  bookingParentId: string;
+  paymentStatus?: string | null;
+  paymentRail?: string | null;
+  paymentMethod?: string | null;
+}):
+  | { ok: true; paymentMethod: ManualPaymentMethod | null; noop: boolean }
+  | { ok: false; reason: string } {
+  const actorId = String(input.actorId ?? "").trim();
+  const parentId = String(input.bookingParentId ?? "").trim();
+  if (!actorId || !parentId || actorId !== parentId) {
+    return { ok: false, reason: "not_owner" };
+  }
+
+  const rail = String(input.paymentRail ?? "").trim().toLowerCase();
+  if (rail === "processor") {
+    return { ok: false, reason: "processor_rail" };
+  }
+
+  const status = coerceBookingPaymentStatus(input.paymentStatus) ?? "unpaid";
+  if (status === "awaiting_sitter_confirmation") {
+    return {
+      ok: true,
+      paymentMethod: parseSelectedManualPaymentMethod(input.paymentMethod),
+      noop: true
+    };
+  }
+  if (status !== "payment_dispute") {
+    return { ok: false, reason: "invalid_from_status" };
+  }
+
+  const method = parseSelectedManualPaymentMethod(input.paymentMethod);
+  if (!method) {
+    return { ok: false, reason: "invalid_method" };
+  }
+  return { ok: true, paymentMethod: method, noop: false };
 }
 
 /** Post-rating payment lifecycle panels driven by booking.payment_status. */

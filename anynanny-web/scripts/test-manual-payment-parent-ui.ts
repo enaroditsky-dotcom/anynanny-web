@@ -15,6 +15,7 @@ import {
   MANUAL_PAYMENT_REPORTED_NOTIFICATION,
   parentMayReadManualPaymentDestinations,
   PAYMENT_DISPUTE_HEADING,
+  PARENT_RESOLVE_PAYMENT_DISPUTE_BUTTON,
   resolveParentManualSettlementStep
 } from "../lib/billing/manual-payment-ui";
 import {
@@ -22,7 +23,6 @@ import {
   isBookingPaymentPaid,
   parentCompletedShiftPaymentActionLabel
 } from "../lib/bookings/payment-status-label";
-import { PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE } from "../lib/billing/manual-payment-lifecycle";
 import {
   isCanonicalNotificationKind,
   notificationHrefForKind
@@ -181,16 +181,13 @@ assert.equal(
 );
 assert.equal(parentCompletedShiftPaymentActionLabel({ paymentStatus: "payment_dispute" }), null);
 
-// Dispute UI is status-only (no הסדרתי, no unpaid form)
+// Dispute UI: status + הסדרתי (Phase 1d). No שלם עכשיו.
 assert.equal(resolveParentManualSettlementStep({ paymentStatus: "payment_dispute" }), "dispute");
-assert.match(dashboard, /PAYMENT_DISPUTE_HEADING/);
 assert.equal(PAYMENT_DISPUTE_HEADING, "בירור תשלום");
-assert.match(dashboard, /PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE/);
-assert.equal(
-  PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE,
-  "קיים תשלום שטרם אושר. יש להסדיר אותו לפני הזמנה חדשה."
-);
-assert.doesNotMatch(dashboard, /הסדרתי את התשלום/);
+assert.equal(PARENT_RESOLVE_PAYMENT_DISPUTE_BUTTON, "הסדרתי את התשלום");
+assert.match(dashboard, /PARENT_RESOLVE_PAYMENT_DISPUTE_BUTTON/);
+assert.match(dashboard, /PAYMENT_DISPUTE_PARENT_HEADING/);
+assert.doesNotMatch(dashboard, /PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE/);
 
 // Notification
 assert.equal(MANUAL_PAYMENT_REPORTED_NOTIFICATION.kind, "manual_payment_reported");

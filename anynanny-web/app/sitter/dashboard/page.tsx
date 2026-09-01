@@ -7,6 +7,7 @@ import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-car
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name";
 import { SitterMandatoryRatingPanel } from "@/components/session/sitter-mandatory-rating-panel";
+import { SitterManualPaymentConfirmPanel } from "@/components/session/sitter-manual-payment-confirm-panel";
 import { ReleaseStuckShiftModal } from "@/components/parent/release-stuck-shift-modal";
 import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
@@ -36,6 +37,17 @@ import { doesBookingBlockSessionShiftUi, SHIFT_ACTIVATION_LEAD_MS } from "@/lib/
 import { isSitterBookingAwaitingApprovalStatus, isSitterShiftCircleStatus } from "@/lib/bookings/booking-realtime-handler";
 import { bookingLiveSyncKey } from "@/lib/bookings/booking-live-key";
 import { fetchTodayBookingShiftGate, fetchTodaysPendingBookingRequest, fetchStuckShiftReviewLinks, type TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
+import { fetchSessionForBooking } from "@/lib/session/sessions-query";
+import {
+  PAYMENT_DISPUTE_HEADING,
+  SITTER_AWAITING_RATING_LABEL,
+  resolveSitterManualPaymentStep
+} from "@/lib/billing/manual-payment-ui";
+import { coerceBookingPaymentStatus } from "@/lib/bookings/payment-status-label";
+import {
+  fetchSitterActionableManualPayment,
+  type SitterActionableManualPayment
+} from "@/lib/billing/sitter-manual-payment";
 import { bookingRequiresAdminReview, hasConfirmedDoubleShakeStart, sessionLinkedToReviewBooking, STUCK_SHIFT_REVIEW_LABEL, STUCK_SHIFT_REVIEW_SUPPORT } from "@/lib/bookings/stuck-shift-review";
 import {
   RELEASE_STUCK_SHIFT_COPY,
@@ -161,6 +173,11 @@ export default function SitterDashboardPage() {
 
   const [sitterClosureBusy, setSitterClosureBusy] = useState(false);
   const [sitterClosureError, setSitterClosureError] = useState<string | null>(null);
+  const [settlementPayment, setSettlementPayment] = useState<SitterActionableManualPayment | null>(
+    null
+  );
+  const [manualPaymentBusy, setManualPaymentBusy] = useState(false);
+  const manualPaymentInFlightRef = useRef(false);
   const [loading, setLoading] = useState(() => !sitterBootstrapComplete);
   const [banner, setBanner] = useState<string | null>(null);
   const [bookingRealtimeToast, setBookingRealtimeToast] = useState<string | null>(null);
@@ -388,11 +405,17 @@ export default function SitterDashboardPage() {
     }
 
     const gate = await fetchTodayBookingShiftGate(supabase, uid, "sitter");
+    const actionablePayment = await fetchSitterActionableManualPayment(supabase, uid);
+    setSettlementPayment(actionablePayment);
     const bookingBlocksUi = doesBookingBlockSessionShiftUi(gate);
-    const hasBookingRow = Boolean(gate?.id);
-    const gateStatus = normalizeBookingStatus(gate?.status) ?? "";
+    const hasBookingRow = Boolean(gate?.id) || Boolean(actionablePayment?.bookingId);
+    const gateStatus =
+      normalizeBookingStatus(gate?.status) ??
+      normalizeBookingStatus(actionablePayment?.bookingStatus) ??
+      "";
 
     if (!hasBookingRow) {
+      setSettlementPayment(null);
       setPendingRow(null);
       setEndConfirmRow(null);
       setActiveShiftRow(null);
@@ -496,6 +519,24 @@ export default function SitterDashboardPage() {
         completedShow = null;
       }
     }
+
+    const paymentStep = resolveSitterManualPaymentStep(actionablePayment?.paymentStatus);
+    if (
+      actionablePayment &&
+      (paymentStep === "confirm" || paymentStep === "rate" || paymentStep === "dispute")
+    ) {
+      const linked = await fetchSessionForBooking(supabase, {
+        parentId: actionablePayment.parentId,
+        bookingId: actionablePayment.bookingId,
+        statuses: [...SITTER_TERMINAL_SESSION_STATUSES],
+        orderBy: "created_at",
+        ascending: false
+      });
+      if (linked.row) {
+        completedShow = linked.row;
+      }
+    }
+
     setCompletedSummaryRow(completedShow);
   }, [
     applyCircleBooking,
@@ -735,7 +776,8 @@ export default function SitterDashboardPage() {
         endConfirmRow ||
         pendingApprovalBooking ||
         terminalStatus === "sitter_completed" ||
-        terminalStatus === "payment_pending"
+        terminalStatus === "payment_pending" ||
+        Boolean(settlementPayment)
     );
 
     const tick = () => {
@@ -766,6 +808,7 @@ export default function SitterDashboardPage() {
     endConfirmRow,
     pendingApprovalBooking,
     completedSummaryRow,
+    settlementPayment,
     todaysBookingHook,
     reloadTodaysBooking,
     refreshForUser
@@ -803,6 +846,56 @@ export default function SitterDashboardPage() {
     await refreshForUser(supabase, sitterIdTemp);
     router.refresh();
   }, [completedSummaryRow, sitterId, refreshForUser, router, applyCircleBooking, setCompletedSummaryRow, setPendingRow, setActiveShiftRow, setEndConfirmRow, suppressCompletedSummaryIdRef]);
+
+  const handleSitterManualPaymentAction = useCallback(
+    async (action: "confirm" | "deny") => {
+      const bookingId = settlementPayment?.bookingId;
+      if (!bookingId || manualPaymentInFlightRef.current || manualPaymentBusy) return;
+      manualPaymentInFlightRef.current = true;
+      setManualPaymentBusy(true);
+      setSitterClosureError(null);
+      try {
+        const path =
+          action === "confirm"
+            ? "/api/sitter/confirm-manual-payment"
+            : "/api/sitter/deny-manual-payment";
+        const res = await fetch(path, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId })
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          paymentStatus?: string;
+        };
+        if (!res.ok) {
+          setSitterClosureError(json.error ?? "לא ניתן לעדכן את סטטוס התשלום.");
+          return;
+        }
+        const nextStatus = coerceBookingPaymentStatus(json.paymentStatus);
+        setSettlementPayment((prev) =>
+          prev && prev.bookingId === bookingId && nextStatus
+            ? {
+                ...prev,
+                paymentStatus: nextStatus
+              }
+            : prev
+        );
+        const supabase = getSupabaseBrowserClient();
+        if (supabase && sitterId) {
+          await refreshForUser(supabase, sitterId);
+        }
+      } catch (e) {
+        console.error("[handleSitterManualPaymentAction]", e);
+        setSitterClosureError("שגיאה בעדכון התשלום. נסו שוב.");
+      } finally {
+        manualPaymentInFlightRef.current = false;
+        setManualPaymentBusy(false);
+      }
+    },
+    [manualPaymentBusy, refreshForUser, settlementPayment?.bookingId, sitterId]
+  );
 
   const clearSitterShiftUi = useCallback(() => {
     applyCircleBooking(null);
@@ -1018,7 +1111,6 @@ export default function SitterDashboardPage() {
   }, [sitterId, router]);
 
   const sitterInFlightActive = Boolean(pendingRow || activeShiftRow || endConfirmRow);
-  const hasBookingAnchor = Boolean(todaysBooking?.id || todayBookingShiftGate?.id);
   const showMissedShiftClarification = Boolean(missedShiftBooking);
   const sitterHasLiveBooking =
     Boolean(activeCircleBooking) &&
@@ -1037,26 +1129,42 @@ export default function SitterDashboardPage() {
   }, [activeCircleBooking?.id, activeCircleBooking?.start_time, activeCircleBooking?.end_time, activeCircleBooking?.status, nowMs]);
 
   const sitterTerminalDbStatus = sitterSessionStatusKey(completedSummaryRow);
-  const gateAllowsSettlement = bookingAllowsSettlementClosureUi(
-    todayBookingShiftGate?.status ?? todaysBooking?.status
+  const paymentStep = resolveSitterManualPaymentStep(settlementPayment?.paymentStatus);
+  const showManualConfirm = paymentStep === "confirm";
+  const showManualRate = paymentStep === "rate";
+  const showManualDispute = paymentStep === "dispute";
+  const showManualSettlement = showManualConfirm || showManualRate || showManualDispute;
+  const gateAllowsSettlement =
+    bookingAllowsSettlementClosureUi(
+      todayBookingShiftGate?.status ?? todaysBooking?.status
+    ) || bookingAllowsSettlementClosureUi(settlementPayment?.bookingStatus);
+  const hasBookingAnchor = Boolean(
+    todaysBooking?.id || todayBookingShiftGate?.id || settlementPayment?.bookingId
   );
   const showSitterAwaitingParentApproval =
     hasBookingAnchor &&
     gateAllowsSettlement &&
     sitterTerminalDbStatus === "sitter_completed" &&
     !sitterInFlightActive &&
-    !sessionUiBlockedByBooking;
+    !sessionUiBlockedByBooking &&
+    !showManualSettlement;
   const showSitterWaitingForPayment =
     hasBookingAnchor &&
     gateAllowsSettlement &&
     sitterTerminalDbStatus === "payment_pending" &&
     !sitterInFlightActive &&
-    !sessionUiBlockedByBooking;
+    !sessionUiBlockedByBooking &&
+    !showManualSettlement;
   const isSessionPaidAndReadyForRating =
-    hasBookingAnchor && gateAllowsSettlement && sitterTerminalDbStatus === "paid";
+    hasBookingAnchor &&
+    gateAllowsSettlement &&
+    sitterTerminalDbStatus === "paid" &&
+    !showManualSettlement;
   const showSitterCompletedClosure =
-    (isSessionPaidAndReadyForRating || showSitterWaitingForPayment) &&
-    Boolean(completedSummaryRow) &&
+    (isSessionPaidAndReadyForRating ||
+      showSitterWaitingForPayment ||
+      showManualSettlement) &&
+    (Boolean(completedSummaryRow) || showManualDispute) &&
     !sitterInFlightActive &&
     !showSitterAwaitingParentApproval;
   const sitterInSettlement =
@@ -1079,6 +1187,7 @@ export default function SitterDashboardPage() {
     !showSitterCompletedClosure &&
     !showSitterAwaitingParentApproval &&
     !showSitterWaitingForPayment &&
+    !showManualSettlement &&
     !sitterHasLiveBooking &&
     !showSitterBookingApproval &&
     !showMissedShiftClarification;
@@ -1088,11 +1197,15 @@ export default function SitterDashboardPage() {
     sitterInFlightActive ||
     showSitterAwaitingParentApproval ||
     showSitterCompletedClosure ||
+    showManualSettlement ||
     showSitterBookingApproval ||
     showMissedShiftClarification ||
     (sitterHasLiveBooking && isCircleShiftWithinActivationWindow && !sessionUiBlockedByBooking);
 
-  const sitterStatusPanelKey = pendingApprovalBooking?.id
+  const sitterStatusPanelKey =
+    showManualSettlement && settlementPayment?.bookingId
+      ? `manual:${settlementPayment.bookingId}:${paymentStep}`
+    : pendingApprovalBooking?.id
     ? `approve:${pendingApprovalBooking.id}:${String(pendingApprovalBooking.status ?? "")}`
     : activeShiftRow?.id
       ? `active:${activeShiftRow.id}`
@@ -1115,7 +1228,13 @@ export default function SitterDashboardPage() {
   // Expanded Active Shift panel: free vertical space by hiding shortcuts / external actions.
   const isActiveShiftExpanded = showSitterStatusPanel && !statusPanelCollapsed;
   const shouldHideDashboardActions = isActiveShiftExpanded;
-  const sitterStatusCollapsedSummary = showSitterAwaitingParentApproval
+  const sitterStatusCollapsedSummary = showManualConfirm
+    ? "ההורה דיווח על תשלום — לחצו להרחבה"
+    : showManualRate
+      ? "ממתין לדירוג — לחצו להרחבה"
+      : showManualDispute
+        ? "בירור תשלום — לחצו להרחבה"
+    : showSitterAwaitingParentApproval
     ? "ממתין לאישור הורה — לחצו להרחבה"
     : showSitterWaitingForPayment
       ? "ממתינים לתשלום — לחצו להרחבה"
@@ -1149,7 +1268,42 @@ export default function SitterDashboardPage() {
 
   const sessionSection = (
     <>
-      {showSitterAwaitingParentApproval && completedSummaryRow ? (
+      {showManualConfirm ? (
+            <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-4">
+              <SitterManualPaymentConfirmPanel
+                amountNis={
+                  completedSummaryRow?.final_amount_nis ??
+                  settlementPayment?.chargedAmountNis ??
+                  null
+                }
+                paymentMethod={settlementPayment?.paymentMethod}
+                busy={manualPaymentBusy}
+                errorMessage={sitterClosureError}
+                onConfirm={() => void handleSitterManualPaymentAction("confirm")}
+                onDeny={() => void handleSitterManualPaymentAction("deny")}
+              />
+            </div>
+          ) : showManualDispute ? (
+            <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-2 px-4 pt-4 text-center">
+              <p className="text-base font-bold text-rose-900">{PAYMENT_DISPUTE_HEADING}</p>
+              <p className="max-w-[18rem] text-sm leading-snug text-rose-800/85">
+                דיווחנו להורה שהתשלום טרם התקבל. יש להסדיר את התשלום לפני הזמנה חדשה.
+              </p>
+            </div>
+          ) : showManualRate && completedSummaryRow ? (
+            <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 pt-4">
+              <div className="w-full space-y-4">
+                <p className="text-center text-sm font-bold text-[#001F3F]">
+                  {SITTER_AWAITING_RATING_LABEL}
+                </p>
+                <SitterMandatoryRatingPanel
+                  busy={sitterClosureBusy}
+                  errorMessage={sitterClosureError}
+                  onComplete={handleSitterMandatoryRatingComplete}
+                />
+              </div>
+            </div>
+          ) : showSitterAwaitingParentApproval && completedSummaryRow ? (
             <div className="mt-auto flex w-full flex-1 flex-col items-center justify-center gap-4 px-4 pt-4 text-center">
               <p className="text-base font-bold text-[#001F3F]">ממתין לאישור הורה</p>
               <p className="max-w-[18rem] text-sm leading-snug text-slate-600">סיימת את המשמרת — ההורה צריך לאשר את הסיום כדי להמשיך לתשלום.</p>

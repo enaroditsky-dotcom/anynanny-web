@@ -94,6 +94,85 @@ export async function notifySitterManualPaymentReported(
   });
 }
 
+export async function notifySitterManualPaymentResolvedReported(
+  supabase: SupabaseClient,
+  input: {
+    sitterId: string;
+    bookingId: string;
+    paymentMethod?: string | null;
+    resolvedAt?: string | null;
+  }
+): Promise<void> {
+  const kind: CanonicalNotificationKind = "manual_payment_resolved_reported";
+  await createInAppNotification(supabase, {
+    userId: input.sitterId,
+    kind,
+    title: "ההורה דיווח שהתשלום הוסדר",
+    body: "יש לאשר האם התשלום התקבל.",
+    payload: {
+      booking_id: input.bookingId,
+      sitter_id: input.sitterId,
+      status: "awaiting_sitter_confirmation",
+      gateway: "manual",
+      amount: null
+    },
+    dedupeKey: notificationDedupeKey(kind, {
+      bookingId: input.bookingId,
+      resolvedAt: input.resolvedAt
+    })
+  });
+}
+
+export async function notifyParentManualPaymentConfirmed(
+  supabase: SupabaseClient,
+  input: {
+    parentId: string;
+    bookingId: string;
+  }
+): Promise<void> {
+  const kind: CanonicalNotificationKind = "manual_payment_confirmed";
+  await createInAppNotification(supabase, {
+    userId: input.parentId,
+    kind,
+    title: "קבלת התשלום אושרה",
+    body: "הנני אישרה שהתשלום התקבל.",
+    payload: {
+      booking_id: input.bookingId,
+      parent_id: input.parentId,
+      status: "awaiting_sitter_rating",
+      gateway: "manual"
+    },
+    dedupeKey: notificationDedupeKey(kind, {
+      bookingId: input.bookingId
+    })
+  });
+}
+
+export async function notifyParentManualPaymentDenied(
+  supabase: SupabaseClient,
+  input: {
+    parentId: string;
+    bookingId: string;
+  }
+): Promise<void> {
+  const kind: CanonicalNotificationKind = "manual_payment_denied";
+  await createInAppNotification(supabase, {
+    userId: input.parentId,
+    kind,
+    title: "התשלום לא אושר",
+    body: "הנני דיווחה שהתשלום טרם התקבל. יש להסדיר את התשלום לפני הזמנה חדשה.",
+    payload: {
+      booking_id: input.bookingId,
+      parent_id: input.parentId,
+      status: "payment_dispute",
+      gateway: "manual"
+    },
+    dedupeKey: notificationDedupeKey(kind, {
+      bookingId: input.bookingId
+    })
+  });
+}
+
 export async function notifySitterPaymentReceived(
   supabase: SupabaseClient,
   input: {
