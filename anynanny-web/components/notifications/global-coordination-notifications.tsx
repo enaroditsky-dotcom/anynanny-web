@@ -75,11 +75,9 @@ function IconForKind({ kind }: { kind: CoordinationNotification["kind"] }) {
     return <CalendarX2 className={className} aria-hidden />;
   }
   if (
-    kind === "manual_payment_reported" ||
     kind === "manual_payment_confirmed" ||
     kind === "manual_payment_denied" ||
     kind === "manual_payment_resolved_reported" ||
-    kind === "payment_required" ||
     kind === "payment_received"
   ) {
     return <Wallet className={className} aria-hidden />;

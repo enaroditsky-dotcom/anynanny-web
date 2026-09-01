@@ -23,11 +23,9 @@ export const COORDINATION_NOTIFICATION_KINDS = [
 
 /** Written operational kinds shown on the same global card host. */
 export const OPERATIONAL_CARD_NOTIFICATION_KINDS = [
-  "manual_payment_reported",
   "manual_payment_confirmed",
   "manual_payment_denied",
   "manual_payment_resolved_reported",
-  "payment_required",
   "payment_received",
   "shift_end_reminder",
   "missed_shift_clarification"
@@ -68,11 +66,9 @@ const COORDINATION_TITLE: Record<CoordinationNotificationKind, string> = {
 };
 
 const OPERATIONAL_FALLBACK_TITLE: Record<OperationalCardNotificationKind, string> = {
-  manual_payment_reported: "ההורה דיווח שהתשלום בוצע",
   manual_payment_confirmed: "קבלת התשלום אושרה",
   manual_payment_denied: "התשלום לא אושר",
   manual_payment_resolved_reported: "ההורה דיווח שהתשלום הוסדר",
-  payment_required: "נדרש תשלום",
   payment_received: "תשלום התקבל",
   shift_end_reminder: "המשמרת מסתיימת בעוד 30 דקות",
   missed_shift_clarification: "המשמרת לא התקיימה"
@@ -114,9 +110,7 @@ export function globalOperationalNotificationTitle(
 
 export function operationalCardActionLabel(kind: GlobalOperationalNotificationKind): string {
   if (kind === "payment_received") return "לארנק";
-  if (kind === "payment_required") return "לתשלום";
   if (
-    kind === "manual_payment_reported" ||
     kind === "manual_payment_confirmed" ||
     kind === "manual_payment_denied" ||
     kind === "manual_payment_resolved_reported"

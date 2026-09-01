@@ -34,16 +34,16 @@ function count(haystack: string, needle: string): number {
 assert.deepEqual(
   [...OPERATIONAL_CARD_NOTIFICATION_KINDS],
   [
-    "manual_payment_reported",
     "manual_payment_confirmed",
     "manual_payment_denied",
     "manual_payment_resolved_reported",
-    "payment_required",
     "payment_received",
     "shift_end_reminder",
     "missed_shift_clarification"
   ]
 );
+assert.equal(isGlobalOperationalNotificationKind("payment_required"), false);
+assert.equal(isGlobalOperationalNotificationKind("manual_payment_reported"), false);
 
 for (const kind of OPERATIONAL_CARD_NOTIFICATION_KINDS) {
   assert.equal(isGlobalOperationalNotificationKind(kind), true);
@@ -138,5 +138,12 @@ assert.match(broadcastHost, /SitterBroadcastAlertHost/);
 const coordination = read("lib/notifications/coordination.ts");
 assert.match(coordination, /GLOBAL_OPERATIONAL_NOTIFICATION_KINDS/);
 assert.doesNotMatch(coordination, /confirm_start_required|confirm_end_required|rating_required/);
+assert.match(coordination, /"manual_payment_confirmed"/);
+assert.doesNotMatch(
+  coordination.slice(coordination.indexOf("export const OPERATIONAL_CARD_NOTIFICATION_KINDS"), coordination.indexOf("export const GLOBAL_OPERATIONAL_NOTIFICATION_KINDS")),
+  /payment_required|manual_payment_reported/
+);
+
+assert.doesNotMatch(ui, /ממתין לדירוג|awaiting_sitter_rating|payment_required|manual_payment_reported/);
 
 console.log("global operational notification cards ok");
