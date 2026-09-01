@@ -58,7 +58,7 @@ export function ParentLinkedShiftCard({ booking }: Props) {
       </div>
       {chatOpen && user?.id ? (
         <div className="mt-3 overflow-hidden rounded-xl border border-[#001F3F]/10 bg-white">
-          <ChatInterface bookingId={booking.id} userId={user.id} />
+          <ChatInterface bookingId={booking.id} userId={user.id} bookingStatus={booking.status} />
         </div>
       ) : null}
     </div>

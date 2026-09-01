@@ -3,7 +3,7 @@ import type { BookingRow } from "@/lib/bookings/constants";
 import {
   normalizeBookingStatus,
   type BookingStatusInput
-} from "@/lib/bookings/use-shift-activation-status";
+} from "@/lib/bookings/booking-status-normalize";
 
 /** Read the booking row from any postgres_changes payload (`INSERT` | `UPDATE` | `DELETE`). */
 export function readBookingRowFromRealtimeChange(
@@ -72,4 +72,12 @@ export function isSitterShiftCircleStatus(status: BookingStatusInput): boolean {
     normalized === "parent_started" ||
     normalized === "sitter_ended"
   );
+}
+
+/**
+ * WhatsApp handoff is allowed only while the shift relationship is actively ongoing.
+ * Same statuses as parent tracking / sitter shift circle — not the 24h chat grace list.
+ */
+export function isWhatsAppHandoffStatus(status: BookingStatusInput | string): boolean {
+  return isParentBookingTrackingStatus(status as BookingStatusInput);
 }

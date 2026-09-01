@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState, useRef } from 'react';
+import { WhatsAppHandoffAction } from '@/components/chat/whatsapp-handoff-action';
+import { BOOKINGS_TABLE } from '@/lib/bookings/constants';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { removeRealtimeChannel, subscribePostgresChanges } from '@/lib/supabase/subscribe-postgres-changes';
 import { fetchBookingChatLifecycle, fetchBookingMessages, sendBookingMessage } from '@/lib/chat/booking-messages';
@@ -16,12 +18,23 @@ import {
   mergeFetchedChatMessages
 } from '@/lib/chat/message-list';
 import { markBookingMessagesRead, notifyChatUnreadChanged } from '@/lib/chat/unread-messages';
+import { resolveWhatsAppHandoffStatus } from '@/lib/chat/whatsapp-handoff';
 
-export default function ChatInterface({ bookingId, userId }: { bookingId: string; userId: string }) {
+export default function ChatInterface({
+  bookingId,
+  userId,
+  bookingStatus: bookingStatusProp
+}: {
+  bookingId: string;
+  userId: string;
+  bookingStatus?: string | null;
+}) {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [lifecycle, setLifecycle] = useState<ChatLifecycle | null>(null);
+  const [fetchedStatus, setFetchedStatus] = useState<string | null>(null);
+  const handoffStatus = resolveWhatsAppHandoffStatus(bookingStatusProp, fetchedStatus);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
@@ -43,6 +56,7 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
 
     setMessages([]);
     setLifecycle(null);
+    setFetchedStatus(null);
 
     void (async () => {
       await markConversationRead();
@@ -56,6 +70,7 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
     void (async () => {
       const state = await fetchBookingChatLifecycle(supabase, bookingId);
       if (cancelled || state.error) return;
+      if (state.status) setFetchedStatus(state.status);
       setLifecycle(
         getChatLifecycle(
           {
@@ -73,19 +88,32 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
     const channel = subscribePostgresChanges(
       supabase,
       `chat-${bookingId}`,
-      {
-        event: 'INSERT',
-        table: MESSAGES_TABLE,
-        filter: `booking_id=eq.${bookingId}`,
-        handler: (payload) => {
-          if (!isChatMessageRow(payload.new)) return;
-          const incoming = payload.new;
-          setMessages((prev) => appendIncomingChatMessage(prev, incoming, bookingId));
-          if (incoming.sender_id !== userId) {
-            void markConversationRead();
+      [
+        {
+          event: 'INSERT',
+          table: MESSAGES_TABLE,
+          filter: `booking_id=eq.${bookingId}`,
+          handler: (payload) => {
+            if (!isChatMessageRow(payload.new)) return;
+            const incoming = payload.new;
+            setMessages((prev) => appendIncomingChatMessage(prev, incoming, bookingId));
+            if (incoming.sender_id !== userId) {
+              void markConversationRead();
+            }
+          }
+        },
+        {
+          event: 'UPDATE',
+          table: BOOKINGS_TABLE,
+          filter: `id=eq.${bookingId}`,
+          handler: (payload) => {
+            const next = payload.new as { id?: unknown; status?: unknown } | null;
+            if (!next || String(next.id ?? "") !== bookingId) return;
+            const nextStatus = typeof next.status === "string" ? next.status.trim() : "";
+            if (nextStatus) setFetchedStatus(nextStatus);
           }
         }
-      },
+      ],
       (status, err) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.warn('[ChatInterface] realtime:', status, err?.message);
@@ -188,6 +216,21 @@ export default function ChatInterface({ bookingId, userId }: { bookingId: string
       className="flex flex-col bg-gray-50 md:h-[400px] md:overflow-hidden md:rounded-lg md:border"
       dir="rtl"
     >
+      <WhatsAppHandoffAction
+        bookingId={bookingId}
+        bookingStatus={handoffStatus}
+        onIneligible={() => {
+          void (async () => {
+            const client = getSupabaseBrowserClient();
+            if (!client) {
+              setFetchedStatus("completed");
+              return;
+            }
+            const state = await fetchBookingChatLifecycle(client, bookingId);
+            setFetchedStatus(state.status ?? "completed");
+          })();
+        }}
+      />
       <div
         ref={messageListRef}
         onScroll={onMessageListScroll}
