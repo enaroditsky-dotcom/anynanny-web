@@ -90,13 +90,15 @@ export function PersonalStaticRow({
   value,
   emptyLabel = "לא הוגדר",
   onEdit,
-  dir
+  dir,
+  actionLabel
 }: {
   label: string;
   value?: unknown;
   emptyLabel?: string;
   onEdit: () => void;
   dir?: "ltr" | "rtl";
+  actionLabel?: string;
 }) {
   const trimmed = toDisplayString(value);
   const isEmpty = !trimmed;
@@ -112,7 +114,7 @@ export function PersonalStaticRow({
           {isEmpty ? emptyLabel : trimmed}
         </p>
       </div>
-      <PersonalChangeLink onClick={onEdit} />
+      <PersonalChangeLink onClick={onEdit} label={actionLabel ?? "שינוי"} />
     </div>
   );
 }

@@ -69,7 +69,17 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase.from(PROFILES_TABLE).select("role, avatar_url").eq("id", user.id).maybeSingle();
+    let profile: { role?: string; avatar_url?: string | null; phone?: string | null } | null = null;
+    for (const select of ["role, avatar_url, phone", "role, avatar_url"] as const) {
+      const result = await supabase.from(PROFILES_TABLE).select(select).eq("id", user.id).maybeSingle();
+      if (!result.error) {
+        profile = (result.data as { role?: string; avatar_url?: string | null; phone?: string | null } | null) ?? null;
+        break;
+      }
+      if (!isPostgrestSchemaDriftError(result.error.message)) {
+        return NextResponse.json({ error: result.error.message }, { status: 400 });
+      }
+    }
     if (!userIsSitter(profile, user)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -85,10 +95,15 @@ export async function GET() {
 
     const mergedProfile = {
       ...(data || {}),
-      avatar_url: profile?.avatar_url ?? (data as { avatar_url?: string | null }).avatar_url ?? null
+      avatar_url: profile?.avatar_url ?? (data as { avatar_url?: string | null }).avatar_url ?? null,
+      phone: String((profile as { phone?: string | null } | null)?.phone ?? "").trim() || null
     };
 
-    return NextResponse.json({ profile: mergedProfile as SitterProfileRow | null });
+    return NextResponse.json({
+      profile: mergedProfile as SitterProfileRow | null,
+      phone: String((profile as { phone?: string | null } | null)?.phone ?? "").trim() || null,
+      authPhone: String(user.phone ?? "").trim() || null
+    });
   } catch (err) {
     console.error("[api/sitter/profile GET] exception:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

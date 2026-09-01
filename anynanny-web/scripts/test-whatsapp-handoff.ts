@@ -115,9 +115,12 @@ assert.doesNotMatch(chat, /lifecycle\?\.writable.*WhatsApp|WhatsApp.*lifecycle\?
 const action = read("components/chat/whatsapp-handoff-action.tsx");
 assert.match(action, /מעבר ל-WhatsApp/);
 assert.match(action, /לשיחה, תמונות, וידאו והודעות קוליות/);
+assert.match(action, /לא הוגדר מספר טלפון/);
+assert.match(action, /counterpartHasPhone/);
 assert.match(action, /\/api\/chat\/whatsapp/);
 assert.match(action, /isWhatsAppHandoffStatus/);
 assert.match(action, /wa\.me|openWhatsAppHandoffUrl/);
+assert.match(action, /disabled=\{loading \|\| missingPhone \|\| checking\}/);
 assert.doesNotMatch(action, /sitterPhone|payout_bit_phone|referee_phone/);
 assert.equal(WHATSAPP_HANDOFF_LABEL, "מעבר ל-WhatsApp");
 assert.equal(WHATSAPP_HANDOFF_HINT, "לשיחה, תמונות, וידאו והודעות קוליות");
@@ -125,9 +128,12 @@ assert.equal(WHATSAPP_HANDOFF_HINT, "לשיחה, תמונות, וידאו והו
 const route = read("app/api/chat/whatsapp/route.ts");
 assert.match(route, /auth\.getUser\(\)/);
 assert.match(route, /loadAuthorizedWhatsAppHandoffUrl/);
+assert.match(route, /loadAuthorizedWhatsAppAvailability/);
+assert.match(route, /export async function GET/);
+assert.match(route, /counterpartHasPhone/);
 assert.match(route, /user\.id/);
 assert.doesNotMatch(route, /sitterPhone/);
-assert.doesNotMatch(route, /phone:\s/);
+assert.doesNotMatch(route, /phone:\s*result/);
 
 const server = read("lib/chat/whatsapp-handoff-server.ts");
 assert.match(server, /server-only/);
@@ -139,6 +145,9 @@ assert.match(server, /getSupabaseServiceRoleClient/);
 assert.match(server, /select\("phone"\)/);
 assert.match(server, /auth\.admin\.getUserById/);
 assert.match(server, /buildWhatsAppHandoffUrl/);
+assert.match(server, /loadAuthorizedWhatsAppAvailability/);
+assert.match(server, /counterpartHasPhone/);
+assert.match(server, /hasUsableWhatsAppPhone/);
 assert.doesNotMatch(server, /payout_bit_phone|payout_paybox_phone|referee_phone/);
 assert.doesNotMatch(server, /CHAT_GRACE_PERIOD|CHAT_ACTIVE_WRITABLE/);
 

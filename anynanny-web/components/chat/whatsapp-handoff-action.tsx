@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { isWhatsAppHandoffStatus } from "@/lib/chat/whatsapp-handoff";
 
@@ -18,12 +18,56 @@ function openWhatsAppHandoffUrl(url: string) {
 }
 
 export function WhatsAppHandoffAction({ bookingId, bookingStatus, onIneligible }: Props) {
+  const eligible = isWhatsAppHandoffStatus(bookingStatus);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [counterpartHasPhone, setCounterpartHasPhone] = useState<boolean | null>(null);
+  const onIneligibleRef = useRef(onIneligible);
+  onIneligibleRef.current = onIneligible;
 
-  if (!isWhatsAppHandoffStatus(bookingStatus)) return null;
+  useEffect(() => {
+    if (!eligible || !bookingId) {
+      setCounterpartHasPhone(null);
+      return;
+    }
+
+    let cancelled = false;
+    setCounterpartHasPhone(null);
+    void (async () => {
+      try {
+        const response = await fetch(`/api/chat/whatsapp?bookingId=${encodeURIComponent(bookingId)}`, {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store"
+        });
+        const data = (await response.json()) as {
+          counterpartHasPhone?: boolean;
+          reason?: string;
+        };
+        if (cancelled) return;
+        if (response.status === 409 || data.reason === "not_eligible") {
+          onIneligibleRef.current?.();
+          return;
+        }
+        if (!response.ok) return;
+        setCounterpartHasPhone(Boolean(data.counterpartHasPhone));
+      } catch {
+        if (!cancelled) return;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingId, eligible]);
+
+  if (!eligible) return null;
+
+  const missingPhone = counterpartHasPhone === false;
+  const checking = counterpartHasPhone === null;
 
   const openHandoff = async () => {
+    if (missingPhone || checking) return;
     setLoading(true);
     setError("");
     try {
@@ -36,6 +80,11 @@ export function WhatsAppHandoffAction({ bookingId, bookingStatus, onIneligible }
       const data = (await response.json()) as { url?: string; error?: string; reason?: string };
       if (response.status === 409 || data.reason === "not_eligible") {
         onIneligible?.();
+        setLoading(false);
+        return;
+      }
+      if (data.reason === "no_phone" || data.reason === "bad_phone") {
+        setCounterpartHasPhone(false);
         setLoading(false);
         return;
       }
@@ -57,13 +106,17 @@ export function WhatsAppHandoffAction({ bookingId, bookingStatus, onIneligible }
         <button
           type="button"
           onClick={() => void openHandoff()}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 underline decoration-emerald-800/30 hover:text-emerald-900 disabled:opacity-60"
+          disabled={loading || missingPhone || checking}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 underline decoration-emerald-800/30 hover:text-emerald-900 disabled:no-underline disabled:opacity-60"
         >
           <MessageCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
           {loading ? "פותח…" : "מעבר ל-WhatsApp"}
         </button>
-        <p className="mt-0.5 text-[11px] leading-snug text-slate-500">לשיחה, תמונות, וידאו והודעות קוליות</p>
+        {missingPhone ? (
+          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">לא הוגדר מספר טלפון</p>
+        ) : (
+          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">לשיחה, תמונות, וידאו והודעות קוליות</p>
+        )}
         {error ? <p className="mt-0.5 text-[11px] text-rose-700">{error}</p> : null}
       </div>
     </div>

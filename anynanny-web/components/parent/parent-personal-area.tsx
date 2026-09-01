@@ -39,6 +39,11 @@ import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { formatParentProfileAddress } from "@/lib/bookings/todays-linked-booking";
 import { removeOwnAvatar, uploadOwnAvatar } from "@/lib/profile/avatar-storage";
+import {
+  formatContactPhoneDisplay,
+  requestSaveOwnContactPhone,
+  validateContactPhoneInput
+} from "@/lib/profile/contact-phone";
 
 type EditKey =
   | "first_name"
@@ -75,6 +80,7 @@ export function ParentPersonalArea() {
   const [draftEvents, setDraftEvents] = useState<ParentSpecialEvent[]>([]);
   const [draftAvatarUrl, setDraftAvatarUrl] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [authPhone, setAuthPhone] = useState("");
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -123,10 +129,7 @@ export function ParentPersonalArea() {
     }
 
     const parsed = parseParentProfileRow(profileRow, user.id);
-    if (!parsed.phone && typeof user.phone === "string" && user.phone.trim()) {
-      parsed.phone = user.phone.trim();
-    }
-
+    setAuthPhone(typeof user.phone === "string" ? user.phone.trim() : "");
     const { publicId: displayId } = await fetchProfilePublicId(supabase, user.id, "parent");
     setPublicId(displayId);
     setForm(parsed);
@@ -147,7 +150,7 @@ export function ParentPersonalArea() {
       if (key === "first_name") setDraftText(form.first_name);
       else if (key === "last_name") setDraftText(form.last_name);
       else if (key === "birth_date") setDraftText(form.birth_date);
-      else if (key === "phone") setDraftText(form.phone);
+      else if (key === "phone") setDraftText(form.phone || authPhone);
       else if (key === "address") setDraftAddress({ ...form.address });
       else if (key === "spouse") {
         setDraftHasSpouse(Boolean(form.spouse));
@@ -155,13 +158,13 @@ export function ParentPersonalArea() {
         setDraftWeddingDate(form.wedding_date);
       } else if (key === "children") {
         setDraftChildren(form.children.map((child) => ({ ...child })));
-      }       else if (key === "special_events") {
+      } else if (key === "special_events") {
         setDraftEvents(form.special_events.map((event) => ({ ...event })));
       } else if (key === "avatar") {
         setDraftAvatarUrl(form.avatar_url);
       }
     },
-    [form]
+    [form, authPhone]
   );
 
   const closeEdit = useCallback(() => {
@@ -316,7 +319,25 @@ export function ParentPersonalArea() {
     if (editKey === "first_name") next = { ...next, first_name: draftText.trim() };
     else if (editKey === "last_name") next = { ...next, last_name: draftText.trim() };
     else if (editKey === "birth_date") next = { ...next, birth_date: draftText };
-    else if (editKey === "phone") next = { ...next, phone: draftText.trim() };
+    else if (editKey === "phone") {
+      const phoneError = validateContactPhoneInput(draftText);
+      if (phoneError) {
+        setModalError(phoneError);
+        return;
+      }
+      setSaving(true);
+      setModalError(null);
+      const saved = await requestSaveOwnContactPhone(draftText);
+      setSaving(false);
+      if (!saved.ok) {
+        setModalError(saved.error);
+        return;
+      }
+      setForm({ ...next, phone: saved.phone });
+      setEditKey(null);
+      setSuccess("הפרטים עודכנו בהצלחה");
+      return;
+    }
     else if (editKey === "address") {
       if (!draftAddress.city.trim() || !draftAddress.street.trim() || !draftAddress.houseNumber.trim()) {
         setModalError("יש למלא עיר, רחוב ומספר בית.");
@@ -408,7 +429,7 @@ export function ParentPersonalArea() {
         : editKey === "birth_date"
           ? "שינוי תאריך לידה"
           : editKey === "phone"
-            ? "שינוי טלפון"
+            ? "מספר טלפון"
             : editKey === "address"
               ? "שינוי כתובת"
               : editKey === "spouse"
@@ -492,9 +513,10 @@ export function ParentPersonalArea() {
         />
         <PersonalStaticRow
           label="טלפון"
-          value={form.phone}
+          value={formatContactPhoneDisplay(form.phone || authPhone)}
           onEdit={() => openEdit("phone")}
           dir="ltr"
+          actionLabel={form.phone || authPhone ? "שינוי" : "הוספת מספר"}
         />
       </PersonalAreaSection>
 
@@ -608,12 +630,15 @@ export function ParentPersonalArea() {
         ) : null}
 
         {editKey === "first_name" || editKey === "last_name" || editKey === "phone" ? (
-          <PersonalField label={modalTitle.replace("שינוי ", "")}>
+          <PersonalField label={editKey === "phone" ? "מספר טלפון" : modalTitle.replace("שינוי ", "")}>
             <input
               className={personalInputClassName}
               value={draftText}
               onChange={(e) => setDraftText(e.target.value)}
               dir={editKey === "phone" ? "ltr" : undefined}
+              inputMode={editKey === "phone" ? "tel" : undefined}
+              autoComplete={editKey === "phone" ? "tel" : undefined}
+              placeholder={editKey === "phone" ? "0501234567" : undefined}
               autoFocus
             />
           </PersonalField>
