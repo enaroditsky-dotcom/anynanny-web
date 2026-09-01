@@ -1,4 +1,5 @@
-import { BOOKINGS_TABLE, type BookingPaymentStatus } from "@/lib/bookings/constants";
+import { BOOKINGS_TABLE, type BookingPaymentStatus, type BookingStatus } from "@/lib/bookings/constants";
+import { normalizeBookingStatus } from "@/lib/bookings/booking-status-normalize";
 import { coerceBookingPaymentStatus } from "@/lib/bookings/payment-status-label";
 import { SITTER_MANUAL_ACTIONABLE_STATUSES } from "@/lib/billing/manual-payment-ui";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
@@ -8,11 +9,24 @@ export type SitterActionableManualPayment = {
   bookingId: string;
   parentId: string;
   sitterId: string;
-  bookingStatus: string | null;
+  bookingStatus: BookingStatus | null;
   paymentStatus: BookingPaymentStatus;
   paymentMethod: string | null;
   chargedAmountNis: number | null;
 };
+
+function bookingStatusFromQuery(value: unknown): BookingStatus | null {
+  if (typeof value === "string") {
+    return normalizeBookingStatus({ name: value }) ?? null;
+  }
+  if (value != null && typeof value === "object") {
+    const name = Reflect.get(value, "name");
+    if (typeof name === "string") {
+      return normalizeBookingStatus({ name }) ?? null;
+    }
+  }
+  return null;
+}
 
 function mapRow(row: Record<string, unknown>): SitterActionableManualPayment | null {
   const bookingId = String(row.id ?? "").trim();
@@ -28,7 +42,7 @@ function mapRow(row: Record<string, unknown>): SitterActionableManualPayment | n
     bookingId,
     parentId,
     sitterId,
-    bookingStatus: row.status != null ? String(row.status) : null,
+    bookingStatus: bookingStatusFromQuery(row.status),
     paymentStatus,
     paymentMethod: row.payment_method != null ? String(row.payment_method) : null,
     chargedAmountNis:
