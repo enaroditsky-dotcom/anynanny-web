@@ -6,7 +6,7 @@ import {
   CHAT_ELIGIBLE_BOOKING_STATUSES,
   shouldIncludeBookingInChatInbox
 } from "../lib/chat/booking-messages";
-import { openConversationBookingId, sameBookingId } from "../lib/chat/unread-messages";
+import { isViewingConversation, openConversationBookingId, sameBookingId } from "../lib/chat/unread-messages";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -28,6 +28,9 @@ assert.equal(openConversationBookingId("/sitter/messages"), null);
 assert.equal(openConversationBookingId("/parent/chat/abc-123"), "abc-123");
 assert.equal(openConversationBookingId("/sitter/chat/abc-123"), "abc-123");
 assert.equal(sameBookingId("ABC-123", "abc-123"), true);
+assert.equal(isViewingConversation("/parent/chat/abc-123", "abc-123", null), true);
+assert.equal(isViewingConversation("/parent/dashboard", "abc-123", "abc-123"), true);
+assert.equal(isViewingConversation("/parent/dashboard", "abc-123", null), false);
 
 const inbox = read("lib/chat/booking-messages.ts");
 assert.match(inbox, /CHAT_INBOX_BOOKING_STATUSES/);
@@ -41,8 +44,12 @@ assert.doesNotMatch(sitterMessages, /mark_booking_messages_read|markBookingMessa
 
 const hook = read("features/chat/hooks/useChatNotification.ts");
 assert.doesNotMatch(hook, /sessionStorage|localStorage|anynanny_chat_unread/);
-assert.match(hook, /markBookingMessagesRead/);
-assert.match(hook, /openConversationBookingId/);
+assert.doesNotMatch(hook, /subscribeToIncomingMessages/);
+
+const provider = read("features/chat/incoming-chat-inbox-provider.tsx");
+assert.match(provider, /markBookingMessagesRead/);
+assert.match(provider, /openConversationBookingId/);
+assert.match(provider, /subscribeToIncomingMessages/);
 
 const nav = read("components/bottom-nav.tsx");
 assert.doesNotMatch(nav, /clearChatNotification|sessionStorage/);

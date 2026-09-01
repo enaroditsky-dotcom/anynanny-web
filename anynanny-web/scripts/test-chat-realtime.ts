@@ -50,6 +50,7 @@ assert.doesNotMatch(sql, /create policy/i);
 assert.doesNotMatch(sql, /service_role/);
 
 const chat = read("components/chat/ChatInterface.tsx");
+assert.match(chat, /setMountedChatConversation/);
 assert.match(chat, /subscribePostgresChanges/);
 assert.match(chat, /event:\s*["']INSERT["']/);
 assert.match(chat, /booking_id=eq\.\$\{bookingId\}/);

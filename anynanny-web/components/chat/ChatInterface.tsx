@@ -8,8 +8,10 @@ import { removeRealtimeChannel, subscribePostgresChanges } from '@/lib/supabase/
 import { fetchBookingChatLifecycle, fetchBookingMessages, sendBookingMessage } from '@/lib/chat/booking-messages';
 import { getChatLifecycle, type ChatLifecycle } from '@/lib/chat/chat-lifecycle';
 import {
+  getMountedChatConversation,
   isNearScrollBottom,
-  setChatComposerActive
+  setChatComposerActive,
+  setMountedChatConversation
 } from '@/lib/chat/composer-chrome';
 import { MESSAGES_TABLE, type MessageRow } from '@/lib/chat/constants';
 import {
@@ -17,7 +19,7 @@ import {
   isChatMessageRow,
   mergeFetchedChatMessages
 } from '@/lib/chat/message-list';
-import { markBookingMessagesRead, notifyChatUnreadChanged } from '@/lib/chat/unread-messages';
+import { markBookingMessagesRead, notifyChatUnreadChanged, sameBookingId } from '@/lib/chat/unread-messages';
 import { resolveWhatsAppHandoffStatus } from '@/lib/chat/whatsapp-handoff';
 
 export default function ChatInterface({
@@ -41,6 +43,15 @@ export default function ChatInterface({
   const blurHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const stickToBottomRef = useRef(true);
+
+  useEffect(() => {
+    setMountedChatConversation(bookingId);
+    return () => {
+      if (sameBookingId(getMountedChatConversation(), bookingId)) {
+        setMountedChatConversation(null);
+      }
+    };
+  }, [bookingId]);
 
   const markConversationRead = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
