@@ -86,12 +86,13 @@ import {
 } from "@/lib/billing/hyp/pending-checkout";
 import { finalizeHypCheckoutFromClient } from "@/lib/billing/hyp/finalize-client";
 import type { ManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
-import { PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE } from "@/lib/billing/manual-payment-lifecycle";
 import {
   AWAITING_SITTER_CONFIRMATION_COPY,
   AWAITING_SITTER_CONFIRMATION_HEADING,
   AWAITING_SITTER_RATING_HEADING,
-  PAYMENT_DISPUTE_HEADING,
+  PARENT_PAYMENT_DISPUTE_SITTER_DENIED_MESSAGE,
+  PARENT_RESOLVE_PAYMENT_DISPUTE_BUTTON,
+  PAYMENT_DISPUTE_PARENT_HEADING,
   resolveParentManualSettlementStep,
   type ManualPaymentDestinations
 } from "@/lib/billing/manual-payment-ui";
@@ -129,7 +130,7 @@ import {
 } from "@/lib/supabase/subscribe-postgres-changes";
 import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
 import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
-import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, User, X } from "lucide-react";
+import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, User, X, Loader2 } from "lucide-react";
 import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 const BOOKING_LIVE_SELECT =
@@ -1630,6 +1631,62 @@ export function ParentDashboardClient({
     }
   }, [activeBooking?.id, lockSettlement, manualPaymentBusy, manualPaymentMethod]);
 
+  const handleResolveManualPaymentDispute = useCallback(async () => {
+    if (manualPaymentInFlightRef.current || manualPaymentBusy) return;
+    if (!activeBooking?.id) {
+      setShiftError("לא ניתן להסדיר את התשלום כרגע.");
+      return;
+    }
+    manualPaymentInFlightRef.current = true;
+    setManualPaymentBusy(true);
+    setShiftError(null);
+    try {
+      const res = await fetch("/api/parent/resolve-manual-payment-dispute", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: String(activeBooking.id)
+        })
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        paymentStatus?: string;
+        paymentMethod?: string;
+        noop?: boolean;
+      };
+      if (!res.ok) {
+        setShiftError(json.error ?? "לא ניתן להסדיר את התשלום. נסו שוב.");
+        return;
+      }
+      const resolvedAt = new Date().toISOString();
+      setActiveBooking((prev) =>
+        prev && String(prev.id) === String(activeBooking.id)
+          ? {
+              ...prev,
+              payment_status: "awaiting_sitter_confirmation",
+              parent_resolved_reported_at: prev.parent_resolved_reported_at ?? resolvedAt
+            }
+          : prev
+      );
+      if (activeBookingRef.current && String(activeBookingRef.current.id) === String(activeBooking.id)) {
+        activeBookingRef.current = {
+          ...activeBookingRef.current,
+          payment_status: "awaiting_sitter_confirmation",
+          parent_resolved_reported_at:
+            activeBookingRef.current.parent_resolved_reported_at ?? resolvedAt
+        };
+      }
+      lockSettlement("waiting_sitter");
+    } catch (e) {
+      console.error("[handleResolveManualPaymentDispute]", e);
+      setShiftError("שגיאה בהסדרת התשלום. נסו שוב.");
+    } finally {
+      manualPaymentInFlightRef.current = false;
+      setManualPaymentBusy(false);
+    }
+  }, [activeBooking?.id, lockSettlement, manualPaymentBusy]);
+
   const handleSubmitParentRating = useCallback(
     async (rating: number, comment: string | null) => {
       if (!activeSession?.id) return;
@@ -2116,7 +2173,7 @@ export function ParentDashboardClient({
       ? settlementStep === "waiting_sitter"
         ? "ממתין לאישור הנני — לחצו להרחבה"
         : settlementStep === "dispute"
-          ? "בירור תשלום — לחצו להרחבה"
+          ? "בבירור תשלום — לחצו להרחבה"
           : settlementStep === "waiting_sitter_rating"
             ? "ממתין לדירוג הנני — לחצו להרחבה"
             : settlementStep === "payment"
@@ -2351,11 +2408,25 @@ export function ParentDashboardClient({
                   </p>
                 </div>
               ) : inSettlement && settlementStep === "dispute" ? (
-                <div className="flex w-full flex-col items-center gap-2 text-center">
-                  <p className="text-sm font-bold text-rose-900">{PAYMENT_DISPUTE_HEADING}</p>
+                <div className="flex w-full flex-col items-center gap-3 text-center">
+                  <p className="text-sm font-bold text-rose-900">{PAYMENT_DISPUTE_PARENT_HEADING}</p>
                   <p className="text-xs leading-relaxed text-rose-800/85">
-                    {PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE}
+                    {PARENT_PAYMENT_DISPUTE_SITTER_DENIED_MESSAGE}
                   </p>
+                  {shiftError ? (
+                    <p className="text-xs font-medium text-rose-700">{shiftError}</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={manualPaymentBusy}
+                    onClick={() => void handleResolveManualPaymentDispute()}
+                    className="inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-md shadow-emerald-700/20 ring-1 ring-emerald-400/40 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {manualPaymentBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : null}
+                    {PARENT_RESOLVE_PAYMENT_DISPUTE_BUTTON}
+                  </button>
                 </div>
               ) : inSettlement && settlementStep === "waiting_sitter_rating" ? (
                 <div className="flex w-full flex-col items-center gap-2 text-center">

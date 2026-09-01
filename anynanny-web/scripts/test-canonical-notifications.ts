@@ -90,7 +90,10 @@ assert.deepEqual(
     "shift_cancelled_no_start",
     "shift_confirmed",
     "missed_shift_clarification",
-    "manual_payment_reported"
+    "manual_payment_reported",
+    "manual_payment_confirmed",
+    "manual_payment_denied",
+    "manual_payment_resolved_reported"
   ]
 );
 assert.ok(DEFERRED_NOTIFICATION_KINDS.includes("confirm_start_required"));
@@ -111,6 +114,30 @@ assert.equal(notificationHrefForKind("booking_withdrawn_by_parent", "sitter", { 
 assert.equal(notificationDedupeKey("manual_payment_reported", { bookingId: "b1" }), "b1");
 assert.equal(
   notificationHrefForKind("manual_payment_reported", "sitter", { booking_id: "b1" }),
+  "/sitter/dashboard"
+);
+assert.equal(notificationDedupeKey("manual_payment_confirmed", { bookingId: "b1" }), "b1");
+assert.equal(
+  notificationHrefForKind("manual_payment_confirmed", "parent", { booking_id: "b1" }),
+  "/parent/dashboard"
+);
+assert.equal(
+  notificationHrefForKind("manual_payment_denied", "parent", { booking_id: "b1" }),
+  "/parent/dashboard"
+);
+assert.equal(
+  notificationDedupeKey("manual_payment_resolved_reported", { bookingId: "b1" }),
+  "b1"
+);
+assert.equal(
+  notificationDedupeKey("manual_payment_resolved_reported", {
+    bookingId: "b1",
+    resolvedAt: "2026-09-01T00:00:00.000Z"
+  }),
+  "b1:2026-09-01T00:00:00.000Z"
+);
+assert.equal(
+  notificationHrefForKind("manual_payment_resolved_reported", "sitter", { booking_id: "b1" }),
   "/sitter/dashboard"
 );
 
@@ -176,7 +203,13 @@ assert.match(sql, /bookings_notify_payment_received/);
 assert.match(sql, /payment_status/);
 assert.match(createNotif, /payment_received/);
 assert.match(createNotif, /notifySitterManualPaymentReported/);
+assert.match(createNotif, /notifyParentManualPaymentConfirmed/);
+assert.match(createNotif, /notifyParentManualPaymentDenied/);
 assert.match(createNotif, /manual_payment_reported/);
+assert.match(createNotif, /manual_payment_confirmed/);
+assert.match(createNotif, /manual_payment_denied/);
+assert.match(createNotif, /notifySitterManualPaymentResolvedReported/);
+assert.match(createNotif, /manual_payment_resolved_reported/);
 assert.match(createNotif, /dedupeKey/);
 assert.match(finalize, /notifySitterPaymentReceived/);
 assert.match(finalize, /async function notifySitterOnce/);

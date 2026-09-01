@@ -18,6 +18,9 @@ export const CANONICAL_NOTIFICATION_KINDS = [
   "shift_confirmed",
   "missed_shift_clarification",
   "manual_payment_reported",
+  "manual_payment_confirmed",
+  "manual_payment_denied",
+  "manual_payment_resolved_reported",
 ] as const;
 
 export type CanonicalNotificationKind =
@@ -77,6 +80,7 @@ export function notificationDedupeKey(
     broadcastId?: string | null;
     sessionId?: string | null;
     hypApprovalId?: string | null;
+    resolvedAt?: string | null;
   }
 ): string | null {
   if (kind === "chat_message") return ids.messageId?.trim() || null;
@@ -88,6 +92,13 @@ export function notificationDedupeKey(
 
   if (kind === "payment_received") {
     return ids.bookingId?.trim() || ids.hypApprovalId?.trim() || null;
+  }
+
+  if (kind === "manual_payment_resolved_reported") {
+    const bookingId = ids.bookingId?.trim();
+    if (!bookingId) return null;
+    const stamp = ids.resolvedAt?.trim();
+    return stamp ? `${bookingId}:${stamp}` : bookingId;
   }
 
   return ids.bookingId?.trim() || null;
@@ -106,7 +117,15 @@ export function notificationHrefForKind(
 
   if (kind === "payment_received") return "/sitter/wallet";
   if (kind === "payment_required") return "/parent/dashboard";
-  if (kind === "manual_payment_reported") return "/sitter/dashboard";
+  if (
+    kind === "manual_payment_reported" ||
+    kind === "manual_payment_resolved_reported"
+  ) {
+    return "/sitter/dashboard";
+  }
+  if (kind === "manual_payment_confirmed" || kind === "manual_payment_denied") {
+    return "/parent/dashboard";
+  }
   if (kind === "broadcast_alert") return "/sitter/dashboard";
 
   if (kind.startsWith("booking_cancellation")) {

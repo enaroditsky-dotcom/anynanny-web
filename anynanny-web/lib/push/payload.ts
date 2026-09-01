@@ -31,6 +31,9 @@ const KIND_BODY: Record<string, string> = {
   shift_cancelled_no_start: "המשמרת בוטלה אוטומטית מכיוון שלא אושרה התחלת המשמרת.",
   missed_shift_clarification: "המשמרת לא התקיימה. יש לבחור את הסיבה.",
   manual_payment_reported: "יש לאשר האם התשלום התקבל.",
+  manual_payment_confirmed: "הנני אישרה שהתשלום התקבל.",
+  manual_payment_denied: "הנני דיווחה שהתשלום טרם התקבל. יש להסדיר את התשלום לפני הזמנה חדשה.",
+  manual_payment_resolved_reported: "יש לאשר האם התשלום התקבל.",
   confirm_start_required: "נדרש אישור הגעה למשמרת",
   confirm_end_required: "נדרש אישור סיום משמרת",
   rating_required: "נדרש דירוג למשמרת"
