@@ -718,6 +718,11 @@ export function ParentDashboardClient({
             return;
           }
 
+          if (lifecycle === "idle_paid") {
+            clearToIdleDashboard();
+            return;
+          }
+
           if (!session?.id) return;
           if (normalizeStatus(session.status) !== "payment_pending") return;
           if (settlementIsLocked()) return;
@@ -836,6 +841,9 @@ export function ParentDashboardClient({
           lifecycleStep === "waiting_sitter_rating"
         ) {
           lockSettlement(lifecycleStep);
+        } else if (lifecycleStep === "idle_paid") {
+          clearToIdleDashboard();
+          continue;
         }
         const dueForActiveShift = Boolean(
           booking && isBookingDueForParentActiveShiftUi(booking)
@@ -2175,7 +2183,7 @@ export function ParentDashboardClient({
         : settlementStep === "dispute"
           ? "בבירור תשלום — לחצו להרחבה"
           : settlementStep === "waiting_sitter_rating"
-            ? "ממתין לדירוג הנני — לחצו להרחבה"
+            ? "ממתין לדירוג מבייביסיטר — לחצו להרחבה"
             : settlementStep === "payment"
               ? "תשלום ממתין — לחצו להרחבה"
               : "דירוג ממתין — לחצו להרחבה"

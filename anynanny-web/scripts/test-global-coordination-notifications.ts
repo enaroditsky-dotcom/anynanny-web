@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   applyCoordinationRealtimeChange,
+  applyOperationalEventPopupChange,
   COORDINATION_NOTIFICATION_KINDS,
   coordinationBookingHref,
   coordinationChatHref,
@@ -13,6 +14,7 @@ import {
   isGlobalOperationalNotificationKind,
   mergeCoordinationNotifications,
   operationalCardActionLabel,
+  shouldPresentOperationalEventPopup,
   type CoordinationNotification
 } from "../lib/notifications/coordination";
 import { isCanonicalNotificationKind, notificationHrefForKind } from "../lib/notifications/kinds";
@@ -157,24 +159,39 @@ const chromelessReturn = shell.slice(shell.indexOf("if (chromeless)"), shell.ind
 assert.doesNotMatch(chromelessReturn, /GlobalCoordinationNotifications/);
 
 const ui = read("components/notifications/global-coordination-notifications.tsx");
-assert.match(ui, /fetchUnreadCoordinationNotifications/);
-assert.match(ui, /event: "\*"/);
+assert.doesNotMatch(ui, /fetchUnreadCoordinationNotifications/);
+assert.match(ui, /event: "INSERT"/);
+assert.match(ui, /applyOperationalEventPopupChange/);
 assert.match(ui, /isOperationalCardsSuppressedRoute/);
-assert.match(ui, /if \(suppressCards\) return null/);
+assert.match(ui, /isOperationalCardsSuppressedRoute\(pathname\)\) return null/);
 assert.match(ui, /markNotificationsReadBestEffort/);
-assert.match(ui, /hideForSession/);
-assert.match(ui, /minimizeForSession/);
-assert.match(ui, /הסתר כרגע/);
+assert.match(ui, /dismissPopup/);
+assert.doesNotMatch(ui, /hideForSession|minimizeForSession|הסתר כרגע/);
 assert.match(ui, /isGlobalOperationalNotificationKind/);
 assert.match(ui, /pointer-events-none fixed inset-x-0 top-20 z-\[60\]/);
 assert.match(ui, /max-h-\[min\(38vh,18rem\)\]/);
 assert.match(ui, /h-11 w-11/);
 assert.doesNotMatch(ui, /backdrop|bg-black\//);
-assert.doesNotMatch(ui, /durationMs|setTimeout\(\(\) => .*acknowledge/);
 assert.doesNotMatch(ui, /pickParentDashboardBooking|isBookingDueForParentActiveShiftUi/);
 assert.doesNotMatch(ui, /SitterBroadcastAlertHost|confirm_start_required|rating_required/);
 assert.doesNotMatch(ui, /ממתין לדירוג|awaiting_sitter_rating/);
 assert.doesNotMatch(ui, /dismissed_at|minimized_at/);
+assert.equal(
+  shouldPresentOperationalEventPopup({
+    eventType: "INSERT",
+    pathname: "/sitter/profile",
+    kind: "booking_approved"
+  }),
+  true
+);
+assert.equal(
+  applyOperationalEventPopupChange(
+    afterInsert,
+    { eventType: "UPDATE", new: { ...approved, title: approved.title, read_at: "2026-08-27T11:02:00.000Z" } },
+    "/parent/profile"
+  ).length,
+  1
+);
 
 const lifecycle = read("lib/bookings/sitter-pending-bookings.ts");
 assert.match(lifecycle, /\.eq\("status", "pending"\)/);

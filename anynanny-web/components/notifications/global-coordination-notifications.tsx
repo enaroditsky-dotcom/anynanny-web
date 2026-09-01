@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
   CalendarCheck2,
   CalendarX2,
-  ChevronDown,
-  ChevronUp,
   Clock3,
   MessageCircle,
   Wallet,
@@ -16,28 +14,17 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
 import {
-  applyCoordinationRealtimeChange,
+  applyOperationalEventPopupChange,
   coordinationBookingHref,
   coordinationChatHref,
   coordinationScheduleLabel,
-  fetchUnreadCoordinationNotifications,
   isCoordinationNotificationKind,
   isGlobalOperationalNotificationKind,
   operationalCardActionLabel,
+  OPERATIONAL_EVENT_POPUP_DURATION_MS,
   type CoordinationNotification
 } from "@/lib/notifications/coordination";
-import {
-  readOperationalCardHiddenIds,
-  readOperationalCardMinimizedIds,
-  withOperationalCardId,
-  writeOperationalCardHiddenIds,
-  writeOperationalCardMinimizedIds
-} from "@/lib/notifications/operational-card-session";
 import { isOperationalCardsSuppressedRoute } from "@/lib/notifications/operational-card-routes";
-import {
-  minimizedIdsAfterExpand,
-  partitionOperationalCards
-} from "@/lib/notifications/operational-card-stack";
 import { markNotificationsReadBestEffort } from "@/lib/notifications/read-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
@@ -99,44 +86,53 @@ export function GlobalCoordinationNotifications() {
   const { signedIn, user, isLoading, currentRole, effectiveRole } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  const suppressCards = isOperationalCardsSuppressedRoute(pathname);
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+  const dismissTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [items, setItems] = useState<CoordinationNotification[]>([]);
-  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
-  const [minimizedIds, setMinimizedIds] = useState<Set<string>>(() => new Set());
 
   const userId = signedIn && user?.id ? user.id : null;
   const role: "parent" | "sitter" =
     effectiveRole === "sitter" || effectiveRole === "parent" ? effectiveRole : currentRole;
 
+  const clearDismissTimer = useCallback((id: string) => {
+    const timer = dismissTimersRef.current.get(id);
+    if (timer) clearTimeout(timer);
+    dismissTimersRef.current.delete(id);
+  }, []);
+
+  const dismissPopup = useCallback(
+    (id: string) => {
+      clearDismissTimer(id);
+      setItems((prev) => prev.filter((row) => row.id !== id));
+    },
+    [clearDismissTimer]
+  );
+
+  const scheduleDismiss = useCallback(
+    (id: string) => {
+      if (dismissTimersRef.current.has(id)) return;
+      const timer = setTimeout(() => {
+        dismissTimersRef.current.delete(id);
+        setItems((prev) => prev.filter((row) => row.id !== id));
+      }, OPERATIONAL_EVENT_POPUP_DURATION_MS);
+      dismissTimersRef.current.set(id, timer);
+    },
+    []
+  );
+
   useEffect(() => {
-    if (!userId) {
-      setHiddenIds(new Set());
-      setMinimizedIds(new Set());
-      return;
-    }
-    setHiddenIds(readOperationalCardHiddenIds(userId));
-    setMinimizedIds(readOperationalCardMinimizedIds(userId));
+    setItems([]);
+    for (const timer of dismissTimersRef.current.values()) clearTimeout(timer);
+    dismissTimersRef.current.clear();
   }, [userId]);
 
-  const reload = useCallback(async () => {
-    if (!userId) {
-      setItems([]);
-      return;
-    }
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    const result = await fetchUnreadCoordinationNotifications(supabase, userId);
-    if (result.error) {
-      console.warn("[coordination-notifications]", result.error);
-      return;
-    }
-    setItems(result.notifications);
-  }, [userId]);
-
   useEffect(() => {
-    if (isLoading) return;
-    void reload();
-  }, [isLoading, reload]);
+    if (!isOperationalCardsSuppressedRoute(pathname)) return;
+    setItems([]);
+    for (const timer of dismissTimersRef.current.values()) clearTimeout(timer);
+    dismissTimersRef.current.clear();
+  }, [pathname]);
 
   useEffect(() => {
     if (!userId || isLoading) return;
@@ -147,20 +143,21 @@ export function GlobalCoordinationNotifications() {
       supabase,
       `coordination-notifications-${userId}`,
       {
-        event: "*",
+        event: "INSERT",
         table: NOTIFICATIONS_TABLE,
         filter: `user_id=eq.${userId}`,
         handler: (payload) => {
           const kind = String((payload.new as { kind?: unknown } | null)?.kind ?? "");
-          if (kind && !isGlobalOperationalNotificationKind(kind) && payload.eventType !== "DELETE") {
-            return;
-          }
-          setItems((prev) => applyCoordinationRealtimeChange(prev, payload));
-        }
-      },
-      (status) => {
-        if (status === "SUBSCRIBED") {
-          void reload();
+          if (kind && !isGlobalOperationalNotificationKind(kind)) return;
+          setItems((prev) => {
+            const next = applyOperationalEventPopupChange(prev, payload, pathnameRef.current);
+            for (const row of next) {
+              if (!prev.some((existing) => existing.id === row.id)) {
+                scheduleDismiss(row.id);
+              }
+            }
+            return next;
+          });
         }
       }
     );
@@ -168,48 +165,12 @@ export function GlobalCoordinationNotifications() {
     return () => {
       removeRealtimeChannel(supabase, channel);
     };
-  }, [userId, isLoading, reload]);
-
-  const hideForSession = useCallback(
-    (item: CoordinationNotification) => {
-      if (!userId) return;
-      setHiddenIds((prev) => {
-        const next = withOperationalCardId(prev, item.id);
-        writeOperationalCardHiddenIds(userId, next);
-        return next;
-      });
-    },
-    [userId]
-  );
-
-  const minimizeForSession = useCallback(
-    (item: CoordinationNotification) => {
-      if (!userId) return;
-      setMinimizedIds((prev) => {
-        const next = withOperationalCardId(prev, item.id);
-        writeOperationalCardMinimizedIds(userId, next);
-        return next;
-      });
-    },
-    [userId]
-  );
-
-  const expandForSession = useCallback(
-    (item: CoordinationNotification) => {
-      if (!userId) return;
-      setMinimizedIds((prev) => {
-        const next = minimizedIdsAfterExpand(items, hiddenIds, prev, item.id);
-        writeOperationalCardMinimizedIds(userId, next);
-        return next;
-      });
-    },
-    [userId, items, hiddenIds]
-  );
+  }, [userId, isLoading, scheduleDismiss]);
 
   const openHref = useCallback(
     async (item: CoordinationNotification, href: string) => {
       if (!userId) return;
-      setItems((prev) => prev.filter((row) => row.id !== item.id));
+      dismissPopup(item.id);
       const supabase = getSupabaseBrowserClient();
       if (supabase) {
         await markNotificationsReadBestEffort(supabase, userId, {
@@ -220,18 +181,11 @@ export function GlobalCoordinationNotifications() {
       }
       router.push(href);
     },
-    [userId, router]
+    [userId, router, dismissPopup]
   );
 
-  const stack = useMemo(
-    () => partitionOperationalCards(items, hiddenIds, minimizedIds),
-    [items, hiddenIds, minimizedIds]
-  );
-
-  if (suppressCards) return null;
-  if (!userId || (stack.expanded.length === 0 && stack.collapsed.length === 0 && stack.overflowCount === 0)) {
-    return null;
-  }
+  if (isOperationalCardsSuppressedRoute(pathname)) return null;
+  if (!userId || items.length === 0) return null;
 
   return (
     <div
@@ -240,7 +194,7 @@ export function GlobalCoordinationNotifications() {
       aria-live="polite"
     >
       <div className="pointer-events-none mx-auto flex max-h-[min(38vh,18rem)] w-full max-w-md flex-col gap-2 overflow-y-auto overscroll-y-contain sm:mx-0 sm:ms-4 sm:me-auto">
-        {stack.expanded.map((item) => {
+        {items.map((item) => {
           const tone = toneForKind(item.kind);
           const schedule = coordinationScheduleLabel(item.payload);
           const bookingHref = coordinationBookingHref(item.kind, role, item.payload);
@@ -255,24 +209,14 @@ export function GlobalCoordinationNotifications() {
               className={`pointer-events-auto rounded-2xl border p-3 text-right shadow-md ${TONE_CLASS[tone]}`}
             >
               <div className="flex flex-row-reverse items-start gap-1">
-                <div className="flex shrink-0 flex-col">
-                  <button
-                    type="button"
-                    aria-label="הסתר כרגע"
-                    className={ICON_BUTTON}
-                    onClick={() => hideForSession(item)}
-                  >
-                    <X className="h-4 w-4" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="מזער"
-                    className={ICON_BUTTON}
-                    onClick={() => minimizeForSession(item)}
-                  >
-                    <ChevronUp className="h-4 w-4" aria-hidden />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  aria-label="סגור"
+                  className={ICON_BUTTON}
+                  onClick={() => dismissPopup(item.id)}
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
                 <div className="flex min-w-0 flex-1 flex-row-reverse items-start gap-2">
                   <IconForKind kind={item.kind} />
                   <div className="min-w-0 flex-1">
@@ -308,49 +252,6 @@ export function GlobalCoordinationNotifications() {
             </article>
           );
         })}
-
-        {stack.collapsed.map((item) => {
-          const tone = toneForKind(item.kind);
-          return (
-            <article
-              key={item.id}
-              role="status"
-              className={`pointer-events-auto rounded-xl border px-2 py-1 text-right shadow-sm ${TONE_CLASS[tone]}`}
-            >
-              <div className="flex flex-row-reverse items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="הסתר כרגע"
-                  className={ICON_BUTTON}
-                  onClick={() => hideForSession(item)}
-                >
-                  <X className="h-4 w-4" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  aria-label="הצג"
-                  className={ICON_BUTTON}
-                  onClick={() => expandForSession(item)}
-                >
-                  <ChevronDown className="h-4 w-4" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  className="flex min-w-0 flex-1 items-center justify-end py-1 text-right"
-                  onClick={() => expandForSession(item)}
-                >
-                  <span className="truncate text-[12px] font-bold leading-snug">{item.title}</span>
-                </button>
-              </div>
-            </article>
-          );
-        })}
-
-        {stack.overflowCount > 0 ? (
-          <p className="pointer-events-none px-1 text-center text-[11px] font-semibold text-slate-500">
-            עוד {stack.overflowCount} התראות
-          </p>
-        ) : null}
       </div>
     </div>
   );

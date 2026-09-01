@@ -131,6 +131,7 @@ assert.equal(getMountedChatConversation(), null);
 
 const provider = read("features/chat/incoming-chat-inbox-provider.tsx");
 assert.equal(count(provider, "subscribeToIncomingMessages"), 1);
+assert.match(provider, /notifyIncomingChatMessage/);
 assert.match(provider, /IncomingChatInboxProvider/);
 assert.match(provider, /GlobalChatToast/);
 assert.match(provider, /shouldShowIncomingChatToast/);

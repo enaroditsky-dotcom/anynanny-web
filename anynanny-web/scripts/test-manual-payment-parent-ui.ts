@@ -8,6 +8,7 @@ import {
 import {
   AWAITING_SITTER_CONFIRMATION_COPY,
   AWAITING_SITTER_CONFIRMATION_HEADING,
+  AWAITING_SITTER_RATING_HEADING,
   eligibleManualPaymentMethods,
   MANUAL_PAYMENT_CASH_COPY,
   MANUAL_PAYMENT_HEADING,
@@ -177,8 +178,14 @@ assert.equal(
 assert.equal(bookingPaymentStatusLabel({ paymentStatus: "payment_dispute" }), "בירור תשלום");
 assert.equal(
   bookingPaymentStatusLabel({ paymentStatus: "awaiting_sitter_rating" }),
-  "ממתין לדירוג הנני"
+  "ממתין לדירוג מבייביסיטר"
 );
+assert.equal(AWAITING_SITTER_RATING_HEADING, "ממתין לדירוג מבייביסיטר");
+assert.match(dashboard, /ממתין לדירוג מבייביסיטר/);
+assert.doesNotMatch(dashboard, /ממתין לדירוג הנני/);
+assert.match(dashboard, /lifecycleStep === "idle_paid"/);
+assert.match(dashboard, /clearToIdleDashboard\(\)/);
+assert.equal(resolveParentManualSettlementStep({ paymentStatus: "paid" }), "idle_paid");
 assert.equal(parentCompletedShiftPaymentActionLabel({ paymentStatus: "payment_dispute" }), null);
 
 // Dispute UI: status + הסדרתי (Phase 1d). No שלם עכשיו.

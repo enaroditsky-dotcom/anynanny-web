@@ -16,10 +16,15 @@ import {
 import { MESSAGES_TABLE, type MessageRow } from '@/lib/chat/constants';
 import {
   appendIncomingChatMessage,
-  isChatMessageRow,
+  normalizeChatMessageRow,
   mergeFetchedChatMessages
 } from '@/lib/chat/message-list';
-import { markBookingMessagesRead, notifyChatUnreadChanged, sameBookingId } from '@/lib/chat/unread-messages';
+import {
+  CHAT_INCOMING_MESSAGE_EVENT,
+  markBookingMessagesRead,
+  notifyChatUnreadChanged,
+  sameBookingId
+} from '@/lib/chat/unread-messages';
 import { resolveWhatsAppHandoffStatus } from '@/lib/chat/whatsapp-handoff';
 
 export default function ChatInterface({
@@ -96,45 +101,70 @@ export default function ChatInterface({
       );
     })();
 
-    const channel = subscribePostgresChanges(
+    const applyIncomingRow = (value: unknown) => {
+      const incoming = normalizeChatMessageRow(value);
+      if (!incoming) return;
+      setMessages((prev) => appendIncomingChatMessage(prev, incoming, bookingId));
+      if (incoming.sender_id !== userId) {
+        void markConversationRead();
+      }
+    };
+
+    const onInboxIncoming = (event: Event) => {
+      applyIncomingRow((event as CustomEvent<unknown>).detail);
+    };
+    window.addEventListener(CHAT_INCOMING_MESSAGE_EVENT, onInboxIncoming);
+
+    const logChatRealtime = (channelName: string, status: string, err?: Error) => {
+      if (process.env.NODE_ENV === "production") return;
+      if (status === "SUBSCRIBED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        console.info(`[ChatInterface] ${channelName}`, status, err?.message ?? "");
+      }
+    };
+
+    const messagesChannel = subscribePostgresChanges(
       supabase,
-      `chat-${bookingId}`,
-      [
-        {
-          event: 'INSERT',
-          table: MESSAGES_TABLE,
-          filter: `booking_id=eq.${bookingId}`,
-          handler: (payload) => {
-            if (!isChatMessageRow(payload.new)) return;
-            const incoming = payload.new;
-            setMessages((prev) => appendIncomingChatMessage(prev, incoming, bookingId));
-            if (incoming.sender_id !== userId) {
-              void markConversationRead();
-            }
-          }
-        },
-        {
-          event: 'UPDATE',
-          table: BOOKINGS_TABLE,
-          filter: `id=eq.${bookingId}`,
-          handler: (payload) => {
-            const next = payload.new as { id?: unknown; status?: unknown } | null;
-            if (!next || String(next.id ?? "") !== bookingId) return;
-            const nextStatus = typeof next.status === "string" ? next.status.trim() : "";
-            if (nextStatus) setFetchedStatus(nextStatus);
-          }
+      `chat-messages-${bookingId}`,
+      {
+        event: "INSERT",
+        table: MESSAGES_TABLE,
+        filter: `booking_id=eq.${bookingId}`,
+        handler: (payload) => {
+          applyIncomingRow(payload.new);
         }
-      ],
+      },
       (status, err) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[ChatInterface] realtime:', status, err?.message);
+        logChatRealtime("messages", status, err);
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[ChatInterface] messages realtime:", status, err?.message);
         }
+      }
+    );
+
+    const bookingsChannel = subscribePostgresChanges(
+      supabase,
+      `chat-booking-${bookingId}`,
+      {
+        event: "UPDATE",
+        table: BOOKINGS_TABLE,
+        filter: `id=eq.${bookingId}`,
+        handler: (payload) => {
+          const next = payload.new as { id?: unknown; status?: unknown } | null;
+          if (!next || String(next.id ?? "") !== bookingId) return;
+          const nextStatus = typeof next.status === "string" ? next.status.trim() : "";
+          if (nextStatus) setFetchedStatus(nextStatus);
+        }
+      },
+      (status, err) => {
+        logChatRealtime("bookings", status, err);
       }
     );
 
     return () => {
       cancelled = true;
-      removeRealtimeChannel(supabase, channel);
+      window.removeEventListener(CHAT_INCOMING_MESSAGE_EVENT, onInboxIncoming);
+      removeRealtimeChannel(supabase, messagesChannel);
+      removeRealtimeChannel(supabase, bookingsChannel);
       if (blurHideTimerRef.current) clearTimeout(blurHideTimerRef.current);
       setChatComposerActive(false);
     };

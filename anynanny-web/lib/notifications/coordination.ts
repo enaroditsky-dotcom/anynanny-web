@@ -6,6 +6,7 @@ import {
   type CanonicalNotificationKind,
   type CanonicalNotificationPayload
 } from "@/lib/notifications/kinds";
+import { isOperationalCardsSuppressedRoute } from "@/lib/notifications/operational-card-routes";
 import { readSupabaseErrorMessage } from "@/lib/supabase/postgrest-schema";
 
 /** Booking/cancellation coordination events. */
@@ -212,6 +213,48 @@ export function applyCoordinationRealtimeChange(
   const mapped = payload.new ? mapCoordinationNotificationRow(payload.new) : null;
   if (!mapped) return current;
   return mergeCoordinationNotifications(current, mapped);
+}
+
+export const OPERATIONAL_EVENT_POPUP_DURATION_MS = 8000;
+export const MAX_LIVE_OPERATIONAL_EVENT_POPUPS = 2;
+
+/** Event-time popups only — never from historical unread rows or read_at. */
+export function shouldPresentOperationalEventPopup(args: {
+  eventType?: string;
+  pathname: string | null;
+  kind?: string | null;
+}): boolean {
+  if (String(args.eventType ?? "").toUpperCase() !== "INSERT") return false;
+  if (isOperationalCardsSuppressedRoute(args.pathname)) return false;
+  return isGlobalOperationalNotificationKind(String(args.kind ?? ""));
+}
+
+export function applyOperationalEventPopupChange(
+  current: CoordinationNotification[],
+  payload: {
+    eventType?: string;
+    new?: Record<string, unknown> | null;
+    old?: Record<string, unknown> | null;
+  },
+  pathname: string | null
+): CoordinationNotification[] {
+  const event = String(payload.eventType ?? "").toUpperCase();
+  if (event === "DELETE") {
+    const id = String(payload.old?.id ?? payload.new?.id ?? "").trim();
+    if (!id) return current;
+    return current.filter((row) => row.id !== id);
+  }
+
+  if (event !== "INSERT") return current;
+
+  const kind = String(payload.new?.kind ?? "");
+  if (!shouldPresentOperationalEventPopup({ eventType: event, pathname, kind })) {
+    return current;
+  }
+
+  const mapped = payload.new ? mapCoordinationNotificationRow(payload.new) : null;
+  if (!mapped) return current;
+  return mergeCoordinationNotifications(current, mapped).slice(0, MAX_LIVE_OPERATIONAL_EVENT_POPUPS);
 }
 
 export async function fetchUnreadCoordinationNotifications(

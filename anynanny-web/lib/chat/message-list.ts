@@ -1,17 +1,38 @@
 import { sameBookingId } from "@/lib/chat/unread-messages";
 import type { MessageRow } from "@/lib/chat/constants";
 
-export function isChatMessageRow(value: unknown): value is MessageRow {
-  if (!value || typeof value !== "object") return false;
+function coerceChatTimestamp(value: unknown): string {
+  if (typeof value === "string" && value.trim()) return value;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const fromNumber = new Date(value);
+    if (!Number.isNaN(fromNumber.getTime())) return fromNumber.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+/** Coerce realtime/SELECT payloads so uuid/timestamp types still append. */
+export function normalizeChatMessageRow(value: unknown): MessageRow | null {
+  if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
-  return (
-    typeof row.id === "string" &&
-    row.id.trim().length > 0 &&
-    typeof row.booking_id === "string" &&
-    typeof row.sender_id === "string" &&
-    typeof row.content === "string" &&
-    typeof row.created_at === "string"
-  );
+  const id = String(row.id ?? "").trim();
+  const booking_id = String(row.booking_id ?? "").trim();
+  const sender_id = String(row.sender_id ?? "").trim();
+  if (!id || !booking_id || !sender_id) return null;
+  const content = typeof row.content === "string" ? row.content : String(row.content ?? "");
+  const read_at = row.read_at == null || row.read_at === "" ? null : String(row.read_at);
+  return {
+    id,
+    booking_id,
+    sender_id,
+    content,
+    created_at: coerceChatTimestamp(row.created_at),
+    read_at
+  };
+}
+
+export function isChatMessageRow(value: unknown): value is MessageRow {
+  return normalizeChatMessageRow(value) != null;
 }
 
 /** Append a realtime/optimistic message without duplicating canonical ids. */
