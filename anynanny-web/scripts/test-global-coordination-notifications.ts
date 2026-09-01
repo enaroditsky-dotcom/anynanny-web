@@ -47,7 +47,9 @@ assert.equal(isGlobalOperationalNotificationKind("manual_payment_denied"), true)
 assert.equal(isGlobalOperationalNotificationKind("chat_message"), false);
 assert.equal(isGlobalOperationalNotificationKind("confirm_start_required"), false);
 assert.equal(operationalCardActionLabel("payment_received"), "לארנק");
-assert.equal(operationalCardActionLabel("manual_payment_reported"), "לפרטים");
+assert.equal(operationalCardActionLabel("manual_payment_confirmed"), "לפרטים");
+assert.equal(isGlobalOperationalNotificationKind("payment_required"), false);
+assert.equal(isGlobalOperationalNotificationKind("manual_payment_reported"), false);
 assert.equal(isCanonicalNotificationKind("shift_confirmed"), true);
 assert.equal(notificationHrefForKind("shift_confirmed", "sitter", { booking_id: "b1" }), "/sitter/shifts?bookingId=b1");
 assert.equal(coordinationBookingHref("booking_approved", "parent", { booking_id: "b1" }), "/parent/calendar?bookingId=b1");
@@ -105,6 +107,34 @@ assert.equal(paymentInsert.length, 1);
 assert.equal(paymentInsert[0]?.kind, "manual_payment_confirmed");
 assert.equal(paymentInsert[0]?.title, "קבלת התשלום אושרה");
 
+const ignoredPaymentRequired = applyCoordinationRealtimeChange(paymentInsert, {
+  eventType: "INSERT",
+  new: {
+    id: "n-pay-req",
+    kind: "payment_required",
+    title: "נדרש תשלום",
+    body: "",
+    payload: {},
+    created_at: "2026-09-01T12:01:00.000Z",
+    read_at: null
+  }
+});
+assert.equal(ignoredPaymentRequired.length, 1);
+
+const ignoredReported = applyCoordinationRealtimeChange(paymentInsert, {
+  eventType: "INSERT",
+  new: {
+    id: "n-reported",
+    kind: "manual_payment_reported",
+    title: "ההורה דיווח שהתשלום בוצע",
+    body: "",
+    payload: {},
+    created_at: "2026-09-01T12:02:00.000Z",
+    read_at: null
+  }
+});
+assert.equal(ignoredReported.length, 1);
+
 const afterAck = applyCoordinationRealtimeChange(afterInsert, {
   eventType: "UPDATE",
   new: { ...approved, title: approved.title, read_at: "2026-08-27T11:02:00.000Z" }
@@ -141,6 +171,7 @@ assert.doesNotMatch(ui, /backdrop|bg-black\//);
 assert.doesNotMatch(ui, /durationMs|setTimeout\(\(\) => .*acknowledge/);
 assert.doesNotMatch(ui, /pickParentDashboardBooking|isBookingDueForParentActiveShiftUi/);
 assert.doesNotMatch(ui, /SitterBroadcastAlertHost|confirm_start_required|rating_required/);
+assert.doesNotMatch(ui, /ממתין לדירוג|awaiting_sitter_rating/);
 assert.doesNotMatch(ui, /dismissed_at|minimized_at/);
 
 const lifecycle = read("lib/bookings/sitter-pending-bookings.ts");
