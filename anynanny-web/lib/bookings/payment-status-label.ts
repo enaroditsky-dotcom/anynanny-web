@@ -2,7 +2,13 @@ import type { BookingPaymentStatus } from "@/lib/bookings/constants";
 
 /** Presentation-only mapping of stored booking payment fields. Never infers paid from shift completion. */
 
-export type BookingPaymentDisplayKind = "unpaid" | "pending_checkout" | "paid";
+export type BookingPaymentDisplayKind =
+  | "unpaid"
+  | "pending_checkout"
+  | "awaiting_sitter_confirmation"
+  | "payment_dispute"
+  | "awaiting_sitter_rating"
+  | "paid";
 
 export type BookingPaymentDisplayInput = {
   paymentStatus?: string | null;
@@ -14,6 +20,9 @@ export const BOOKING_SHIFT_ENDED_LABEL = "הסתיימה";
 export const BOOKING_PAYMENT_STATUS_LABELS = {
   unpaid: "ממתינה לתשלום",
   pending_checkout: "התשלום לא הושלם",
+  awaiting_sitter_confirmation: "ממתין לאישור הנני",
+  payment_dispute: "בירור תשלום",
+  awaiting_sitter_rating: "ממתין לדירוג הנני",
   paid: "שולם"
 } as const;
 
@@ -24,12 +33,26 @@ export const PARENT_COMPLETED_SHIFT_PAYMENT_ACTION = {
 
 export const PARENT_PAYMENT_BOOKING_QUERY_PARAM = "paymentBookingId";
 
+const BOOKING_PAYMENT_STATUSES = new Set<BookingPaymentStatus>([
+  "unpaid",
+  "pending_checkout",
+  "paid",
+  "awaiting_sitter_confirmation",
+  "payment_dispute",
+  "awaiting_sitter_rating"
+]);
+
+const INTERMEDIATE_MANUAL_PAYMENT_STATUSES = new Set<BookingPaymentStatus>([
+  "awaiting_sitter_confirmation",
+  "payment_dispute",
+  "awaiting_sitter_rating"
+]);
+
 export function coerceBookingPaymentStatus(value: unknown): BookingPaymentStatus | null {
   const status = String(value ?? "").trim().toLowerCase();
-  if (status === "paid" || status === "pending_checkout" || status === "unpaid") {
-    return status;
-  }
-  return null;
+  return BOOKING_PAYMENT_STATUSES.has(status as BookingPaymentStatus)
+    ? (status as BookingPaymentStatus)
+    : null;
 }
 
 export function parsePaymentBookingIdParam(raw: string | null | undefined): string | null {
@@ -46,22 +69,29 @@ export function parentPaymentRecoveryHref(bookingId: string): string {
 }
 
 export function isBookingPaymentPaid(input: BookingPaymentDisplayInput): boolean {
-  if (coerceBookingPaymentStatus(input.paymentStatus) === "paid") return true;
+  const status = coerceBookingPaymentStatus(input.paymentStatus);
+  if (status === "paid") return true;
+  if (status === "pending_checkout" || (status && INTERMEDIATE_MANUAL_PAYMENT_STATUSES.has(status))) {
+    return false;
+  }
   const paidAt = input.paidAt;
   return paidAt != null && String(paidAt).trim() !== "";
 }
 
 /**
- * Paid only from payment_status === "paid" or a non-empty paid_at.
+ * Paid only from payment_status === "paid" or a non-empty paid_at on unpaid/unknown.
+ * Intermediate manual statuses never fall back to unpaid or paid.
  * Missing / unknown payment_status is unpaid — never "paid" from completed.
  */
 export function resolveBookingPaymentDisplayKind(
   input: BookingPaymentDisplayInput
 ): BookingPaymentDisplayKind {
+  const status = coerceBookingPaymentStatus(input.paymentStatus);
+  if (status === "awaiting_sitter_confirmation") return "awaiting_sitter_confirmation";
+  if (status === "payment_dispute") return "payment_dispute";
+  if (status === "awaiting_sitter_rating") return "awaiting_sitter_rating";
+  if (status === "pending_checkout") return "pending_checkout";
   if (isBookingPaymentPaid(input)) return "paid";
-  if (coerceBookingPaymentStatus(input.paymentStatus) === "pending_checkout") {
-    return "pending_checkout";
-  }
   return "unpaid";
 }
 
@@ -73,6 +103,7 @@ export function parentCompletedShiftPaymentActionLabel(
   input: BookingPaymentDisplayInput
 ): string | null {
   const kind = resolveBookingPaymentDisplayKind(input);
-  if (kind === "paid") return null;
-  return PARENT_COMPLETED_SHIFT_PAYMENT_ACTION[kind];
+  if (kind === "unpaid") return PARENT_COMPLETED_SHIFT_PAYMENT_ACTION.unpaid;
+  if (kind === "pending_checkout") return PARENT_COMPLETED_SHIFT_PAYMENT_ACTION.pending_checkout;
+  return null;
 }

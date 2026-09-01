@@ -23,7 +23,10 @@ export const SITTER_FORCE_END_SUCCESS_MESSAGE =
 export type BookingPaymentStatus =
   | "unpaid"
   | "pending_checkout"
-  | "paid";
+  | "paid"
+  | "awaiting_sitter_confirmation"
+  | "payment_dispute"
+  | "awaiting_sitter_rating";
 
 export type BookingSource = "direct" | "broadcast_now";
 
@@ -61,6 +64,12 @@ export type BookingRow = {
 
   payment_status?: BookingPaymentStatus;
   paid_at?: string | null;
+  payment_method?: string | null;
+  payment_rail?: "manual" | "processor" | null;
+  parent_reported_paid_at?: string | null;
+  sitter_confirmed_received_at?: string | null;
+  payment_dispute_at?: string | null;
+  parent_resolved_reported_at?: string | null;
   hyp_trans_id?: string | null;
   charged_amount_nis?: number | null;
   stripe_checkout_session_id?: string | null;

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE } from "@/lib/billing/manual-payment-lifecycle";
 import { assertMarketplacePairAllowed } from "@/lib/safety/enforcement";
 
 export type PendingBookingView = BookingRow & {
@@ -97,6 +98,13 @@ export async function updateBookingStatus(
       if (!pairCheck.ok) {
         return { row: null, error: pairCheck.error };
       }
+      const { data: hasDispute, error: disputeErr } = await supabase.rpc(
+        "parent_has_unresolved_payment_dispute",
+        { p_parent_id: parentId }
+      );
+      if (!disputeErr && hasDispute === true) {
+        return { row: null, error: PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE };
+      }
     }
   }
 
@@ -120,6 +128,9 @@ export async function updateBookingStatus(
 
   if (error) {
     const message = error.message ?? "";
+    if (message.includes("קיים תשלום שטרם אושר")) {
+      return { row: null, error: PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE };
+    }
     if (/pending booking has expired/i.test(message)) {
       return { row: null, error: "הבקשה פגה ולא ניתן לאשר אותה." };
     }

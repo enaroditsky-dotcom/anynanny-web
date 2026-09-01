@@ -13,6 +13,7 @@ import {
   resolveShiftTimeWindow,
   sitterHasOverlappingActiveShift
 } from "@/lib/bookings/sitter-shift-overlap";
+import { PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE } from "@/lib/billing/manual-payment-lifecycle";
 import { assertMarketplacePairAllowed } from "@/lib/safety/enforcement";
 
 export { validateShiftWindow } from "@/lib/shift-requests/create-shift-request";
@@ -95,6 +96,17 @@ export async function createBooking(
     return { booking: null, error: pairCheck.error };
   }
 
+  const { data: hasDispute, error: disputeErr } = await supabase.rpc(
+    "parent_has_unresolved_payment_dispute",
+    { p_parent_id: parentIdTrimmed }
+  );
+  if (!disputeErr && hasDispute === true) {
+    return {
+      booking: null,
+      error: PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE
+    };
+  }
+
   const proposed = resolveShiftTimeWindow({
     booking_date: input.bookingDate,
     start_time: input.startIso,
@@ -168,6 +180,13 @@ export async function createBooking(
   if (error) {
     const message = error.message ?? "";
     const lower = message.toLowerCase();
+
+    if (message.includes("קיים תשלום שטרם אושר")) {
+      return {
+        booking: null,
+        error: PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE
+      };
+    }
 
     if (
       lower.includes("row-level security") ||
