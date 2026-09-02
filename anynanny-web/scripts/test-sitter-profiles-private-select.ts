@@ -202,6 +202,11 @@ for (const relativePath of OWN_ROW_APP_FILES) {
   assert.match(source, tableSelect, `${relativePath} should keep own-row sitter_profiles access`);
 }
 
+const sitterProfileApi = read("app/api/sitter/profile/route.ts");
+assert.match(sitterProfileApi, /fetchOwnSitterProfileRow/);
+assert.doesNotMatch(sitterProfileApi, /\.select\(["']\*["']\)/);
+assert.doesNotMatch(sitterProfileApi, /payout_bit_phone|payout_paybox_phone/);
+
 // 9–10. Public RPCs still exist and require completed onboarding.
 assert.match(publicProfileSql, /create or replace function public\.get_sitter_profile_public\(target_id uuid\)/);
 assert.match(publicProfileSql, /sp\.onboarding_completed_at is not null/);

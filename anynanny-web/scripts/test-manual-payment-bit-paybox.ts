@@ -140,6 +140,23 @@ assert.doesNotMatch(
   /const PUBLIC_SELECT_COLS =\s*"payout_preferred_method, payout_bit_phone/
 );
 
+const sitterProfileApi = read("app/api/sitter/profile/route.ts");
+const sitterProfileLib = read("lib/sitter/sitter-profile.ts");
+assert.match(sitterProfileApi, /fetchOwnSitterProfileRow/);
+assert.match(sitterProfileApi, /sitterProfileOwnSelectClause/);
+assert.doesNotMatch(sitterProfileApi, /\.select\(["']\*["']\)/);
+assert.match(sitterProfileLib, /SITTER_PROFILE_OWN_SELECT_COLUMNS/);
+assert.match(sitterProfileLib, /fetchOwnSitterProfileRow/);
+assert.doesNotMatch(
+  sitterProfileLib.slice(
+    sitterProfileLib.indexOf("SITTER_PROFILE_OWN_SELECT_COLUMNS"),
+    sitterProfileLib.indexOf("export function isSitterProfilePrivatePayoutColumn")
+  ),
+  /payout_bit_phone|payout_paybox_phone/
+);
+assert.match(personal, /\/api\/sitter\/profile/);
+assert.match(personal, /SitterManualReceivingDestinationsSection/);
+
 // 5–7. Method-specific report + sitter prompt
 assert.equal(parentReportedPaidByMethodCopy("cash"), "ההורה דיווח ששילם במזומן");
 assert.equal(parentReportedPaidByMethodCopy("bit"), "ההורה דיווח ששילם ב-Bit");

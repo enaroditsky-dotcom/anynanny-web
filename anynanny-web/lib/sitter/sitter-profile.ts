@@ -2,7 +2,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeWorkingCities, type IsraelCity } from "@/lib/geo/israel-cities";
-import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
+import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 
 export const SITTER_PROFILES_TABLE = "sitter_profiles" as const;
 
@@ -97,6 +97,74 @@ export const SITTER_PROFILE_PUT_COLUMNS = [
 ] as const;
 
 export type SitterProfilePutColumn = (typeof SITTER_PROFILE_PUT_COLUMNS)[number];
+
+/** Direct client/PostgREST SELECT of these columns is denied after payout-phone hardening. */
+export const SITTER_PROFILE_PRIVATE_PAYOUT_COLUMNS = [
+  "payout_bit_phone",
+  "payout_paybox_phone"
+] as const;
+
+/**
+ * Own-row Personal Area / profile API SELECT list.
+ * Explicit columns only — never `*` (which includes private payout phones and
+ * fails with "permission denied for table sitter_profiles").
+ */
+export const SITTER_PROFILE_OWN_SELECT_COLUMNS = [
+  "id",
+  "user_id",
+  "nanny_serial",
+  "avatar_url",
+  ...SITTER_PROFILE_PUT_COLUMNS,
+  "legal_no_criminal_declaration",
+  "avg_rating",
+  "rating_count"
+] as const;
+
+export function isSitterProfilePrivatePayoutColumn(column: string): boolean {
+  return (SITTER_PROFILE_PRIVATE_PAYOUT_COLUMNS as readonly string[]).includes(column);
+}
+
+export function sitterProfileOwnSelectClause(columns: readonly string[] = SITTER_PROFILE_OWN_SELECT_COLUMNS): string {
+  return columns.filter((column) => !isSitterProfilePrivatePayoutColumn(column)).join(", ");
+}
+
+/** Load the authenticated sitter's own profile without requesting private payout phones. */
+export async function fetchOwnSitterProfileRow(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ data: SitterProfileRow | null; error: string | null }> {
+  const table = getSitterProfilesTable();
+  const fk = SITTER_PROFILES_USER_COLUMN;
+  let columns: string[] = SITTER_PROFILE_OWN_SELECT_COLUMNS.filter(
+    (column) => !isSitterProfilePrivatePayoutColumn(column)
+  );
+
+  for (let attempt = 0; attempt < 16; attempt++) {
+    if (columns.length === 0) {
+      return { data: null, error: "טעינת הפרופיל נכשלה." };
+    }
+
+    const { data, error } = await supabase
+      .from(table)
+      .select(sitterProfileOwnSelectClause(columns))
+      .eq(fk, userId)
+      .maybeSingle();
+
+    if (!error) {
+      return { data: (data as SitterProfileRow | null) ?? null, error: null };
+    }
+
+    const missing = extractMissingSitterProfileColumn(error.message);
+    if (missing && columns.includes(missing) && isPostgrestSchemaDriftError(error.message)) {
+      columns = columns.filter((column) => column !== missing);
+      continue;
+    }
+
+    return { data: null, error: error.message };
+  }
+
+  return { data: null, error: "טעינת הפרופיל נכשלה." };
+}
 
 export const SITTER_LANGUAGE_OPTIONS = [
   "עברית",
