@@ -101,7 +101,8 @@ export type SitterProfilePutColumn = (typeof SITTER_PROFILE_PUT_COLUMNS)[number]
 /** Direct client/PostgREST SELECT of these columns is denied after payout-phone hardening. */
 export const SITTER_PROFILE_PRIVATE_PAYOUT_COLUMNS = [
   "payout_bit_phone",
-  "payout_paybox_phone"
+  "payout_paybox_phone",
+  "payout_paybox_link"
 ] as const;
 
 /**

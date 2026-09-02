@@ -112,7 +112,9 @@ assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConf
 ]);
 assert.match(destinationsServer, /parent_manual_payment_destinations/);
 assert.match(destinationsServer, /isValidIsraeliMobile\(bitPhone\)/);
-assert.match(destinationsServer, /isValidIsraeliMobile\(payboxPhone\)/);
+assert.match(destinationsServer, /isValidIsraeliMobile\(phone\)/);
+assert.match(destinationsServer, /parseAuthorizedPayboxPaymentLink/);
+assert.match(destinationsServer, /paybox_link/);
 assert.match(reportRoute, /methodHasAuthorizedDestination/);
 
 // 6. Refresh after report still shows awaiting confirmation
@@ -159,9 +161,9 @@ assert.match(destinationsRoute, /bookingId/);
 assert.doesNotMatch(destinationsRoute, /sitterId/);
 assert.match(destinationsServer, /parentMayReadManualPaymentDestinations/);
 assert.match(destinationsServer, /\.eq\("parent_id", actorId\)/);
-assert.doesNotMatch(publicProfile, /payout_bit_phone|payout_paybox_phone/);
-assert.doesNotMatch(publicSearch, /payout_bit_phone|payout_paybox_phone/);
-assert.doesNotMatch(publicApi, /payout_bit_phone|payout_paybox_phone/);
+assert.doesNotMatch(publicProfile, /payout_bit_phone|payout_paybox_phone|payout_paybox_link/);
+assert.doesNotMatch(publicSearch, /payout_bit_phone|payout_paybox_phone|payout_paybox_link/);
+assert.doesNotMatch(publicApi, /payout_bit_phone|payout_paybox_phone|payout_paybox_link/);
 
 // 9. Existing HYP paid still שולם
 assert.equal(bookingPaymentStatusLabel({ paymentStatus: "paid" }), "שולם");

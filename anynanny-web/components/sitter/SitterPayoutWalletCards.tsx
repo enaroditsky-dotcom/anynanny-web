@@ -10,6 +10,10 @@ import {
 } from "@/components/wallet/wallet-method-brand";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
+  AUTH_MODAL_CENTER_WRAP,
+  AUTH_MODAL_OVERLAY_SCROLL
+} from "@/lib/ui/auth-modal-overlay";
+import {
   EMPTY_SITTER_PAYOUT_METHODS,
   fetchSitterPayoutMethods,
   formatIsraeliMobileDisplay,
@@ -129,16 +133,18 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
 
       {menuOpen ? (
         <div
-          className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/45 p-3 sm:items-center"
+          className={`fixed inset-0 z-[80] ${AUTH_MODAL_OVERLAY_SCROLL} bg-slate-900/45`}
           dir="rtl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sitter-payout-methods-title"
+          onClick={closeMenu}
         >
-          <button
-            type="button"
-            className="absolute inset-0 cursor-default"
-            aria-label="סגור"
-            onClick={closeMenu}
-          />
-          <div className="relative z-[1] w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
+          <div className={AUTH_MODAL_CENTER_WRAP}>
+          <div
+            className="my-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
               {viewing ? (
                 <button
@@ -159,7 +165,7 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
                   <X className="h-4 w-4" />
                 </button>
               )}
-              <h3 className="text-sm font-bold text-navy-header">
+              <h3 id="sitter-payout-methods-title" className="text-sm font-bold text-navy-header">
                 {viewing ? methodTitle(viewing) : "אמצעי קבלת התשלום"}
               </h3>
               <span className="w-8" />
@@ -197,6 +203,7 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
                 </p>
               </>
             )}
+          </div>
           </div>
         </div>
       ) : null}
@@ -502,11 +509,18 @@ function PayoutEditSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/45 p-3 sm:items-center"
+      className={`fixed inset-0 z-[80] ${AUTH_MODAL_OVERLAY_SCROLL} bg-slate-900/45`}
       dir="rtl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sitter-payout-edit-title"
+      onClick={onClose}
     >
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="סגור" onClick={onClose} />
-      <div className="relative z-[1] w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
+      <div className={AUTH_MODAL_CENTER_WRAP}>
+      <div
+        className="my-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <button
             type="button"
@@ -517,7 +531,7 @@ function PayoutEditSheet({
           >
             <X className="h-4 w-4" />
           </button>
-          <h3 className="text-sm font-bold text-navy-header">{title}</h3>
+          <h3 id="sitter-payout-edit-title" className="text-sm font-bold text-navy-header">{title}</h3>
           <span className="w-8" />
         </div>
 
@@ -705,6 +719,7 @@ function PayoutEditSheet({
             {kind === "card" && registerWithHyp ? "שמירה והמשך ל־HYP" : "שמירת פרטים"}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );
