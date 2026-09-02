@@ -23,7 +23,10 @@ import {
   resolveFlowRole,
   resolvePreOnboardingPath,
   shouldForcePreOnboarding,
-  welcomeHref
+  signupPathForRole,
+  welcomeHref,
+  welcomeReplayHref,
+  welcomeSignupHref
 } from "../lib/charter/routing";
 import {
   CURRENT_CHARTER_VERSION,
@@ -56,20 +59,38 @@ const acceptRoute = read("app/api/charter/accept/route.ts");
 const migration = read("supabase/migrations/20260902190000_user_charter_acceptances.sql");
 const parentOnboardingPage = read("app/parent/onboarding/page.tsx");
 const sitterOnboardingPage = read("app/sitter/onboarding/page.tsx");
+const landing = read("app/page.tsx");
+const parentPersonal = read("components/parent/parent-personal-area.tsx");
+const sitterPersonal = read("components/sitter/sitter-personal-area.tsx");
+const replayCard = read("components/welcome/welcome-replay-card.tsx");
 
-// 1–2. Signup destinations: Welcome → role Charter → existing onboarding
+// 1–2. Sign Up → role → Welcome → existing signup/auth
 assert.equal(welcomeHref("parent"), "/welcome?role=parent");
 assert.equal(welcomeHref("sitter"), "/welcome?role=sitter");
-assert.equal(nextPathAfterWelcome("parent"), "/charter?role=parent");
-assert.equal(nextPathAfterWelcome("sitter"), "/charter?role=sitter");
+assert.equal(signupPathForRole("parent"), "/register?role=parent");
+assert.equal(signupPathForRole("sitter"), "/register?role=sitter&track=babysitter");
+assert.equal(nextPathAfterWelcome("parent"), "/register?role=parent");
+assert.equal(nextPathAfterWelcome("sitter"), "/register?role=sitter&track=babysitter");
+assert.equal(
+  nextPathAfterWelcome("parent", "/register?role=parent&track=babysitter"),
+  "/register?role=parent&track=babysitter"
+);
+assert.equal(nextPathAfterWelcome("parent", "https://evil.example"), "/register?role=parent");
+assert.equal(welcomeSignupHref("parent").startsWith("/welcome?role=parent"), true);
+assert.match(welcomeSignupHref("parent"), /next=%2Fregister%3Frole%3Dparent/);
+assert.match(landing, /welcomeSignupHref\(profileRole/);
+assert.match(landing, /action === "register"/);
+assert.match(landing, /router\.push\(`\/login\?\$\{qs\.toString\(\)\}`\)/);
 assert.equal(nextPathAfterCharterAcceptance("parent"), "/parent/onboarding");
 assert.equal(nextPathAfterCharterAcceptance("sitter"), "/sitter/onboarding");
 assert.equal(onboardingPathForRole("parent"), "/parent/onboarding");
 assert.equal(onboardingPathForRole("sitter"), "/sitter/onboarding");
 assert.match(postAuth, /destinationBeforeRoleOnboarding|pathBeforeRoleOnboarding/);
 assert.match(postAuth, /hasAcceptedCurrentCharter/);
-assert.match(postAuth, /welcomeHref\("parent"\)/);
-assert.match(postAuth, /welcomeHref\("sitter"\)/);
+assert.match(postAuth, /charterHref\("parent"\)/);
+assert.match(postAuth, /charterHref\("sitter"\)/);
+assert.doesNotMatch(postAuth, /welcomeHref\("parent"\)/);
+assert.doesNotMatch(postAuth, /welcomeHref\("sitter"\)/);
 
 // 3–4. Role isolation
 assert.equal(parentCharter.title, "אמנת ההורה של AnyNanny");
@@ -161,15 +182,31 @@ assert.equal(
   resolvePreOnboardingPath({ role: "parent", onboardingComplete: true, charterAccepted: false }),
   "/parent/onboarding"
 );
+assert.equal(
+  resolvePreOnboardingPath({ role: "parent", onboardingComplete: false, charterAccepted: false }),
+  "/charter?role=parent"
+);
 assert.match(welcomeFlow, /onboardingComplete/);
 assert.match(welcomeFlow, /\/parent\/dashboard/);
 assert.match(charterFlow, /onboardingComplete/);
 
-// 13–15. Personal Area welcome access / replay does not restart onboarding
+// 3–4. Initial Welcome is pre-auth and must not send signup users to login
+assert.match(welcomeFlow, /markSignupWelcomePlayed/);
+assert.match(welcomeFlow, /hasPlayedSignupWelcome/);
+assert.match(welcomeFlow, /nextPathAfterWelcome\(role, nextParam\)/);
+assert.doesNotMatch(welcomeFlow, /continueToCharter/);
+assert.doesNotMatch(welcomeFlow, /handleMandatoryComplete[\s\S]{0,500}\/auth\/login/);
+
+// 13–15 + Personal Area replay card
 assert.match(community, /ברוכים הבאים ל-AnyNanny/);
-assert.match(community, /welcomeHref\(role, "replay"\)/);
 assert.match(parentSettings, /CommunityResourcesSection/);
 assert.match(sitterSettings, /CommunityResourcesSection/);
+assert.match(parentPersonal, /WelcomeReplayCard role="parent"/);
+assert.match(sitterPersonal, /WelcomeReplayCard role="sitter"/);
+assert.match(replayCard, /ברוכים הבאים ל-AnyNanny/);
+assert.match(replayCard, /צפו שוב בסרטון ההיכרות של AnyNanny/);
+assert.match(replayCard, /welcomeReplayHref/);
+assert.doesNotMatch(replayCard, /\/api\/charter\/accept|onboarding/);
 assert.match(welcomeFlow, /mode === "replay"/);
 assert.match(welcomeFlow, /חזרה לאזור האישי/);
 assert.doesNotMatch(welcomeFlow, /onMandatoryComplete.*replay/);
@@ -178,6 +215,10 @@ assert.equal(
   false
 );
 assert.equal(welcomeHref("parent", "replay"), "/welcome?role=parent&mode=replay");
+assert.equal(
+  welcomeReplayHref("parent", "/parent/profile"),
+  "/welcome?role=parent&mode=replay&from=%2Fparent%2Fprofile"
+);
 
 // 16–17. Full charter later is read-only
 assert.match(community, /charterFullHref\(role, settingsPath\)/);

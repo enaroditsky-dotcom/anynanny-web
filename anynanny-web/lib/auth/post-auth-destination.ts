@@ -7,7 +7,7 @@ import {
   SECOND_ROLE_PATH
 } from "@/lib/auth/product-profiles";
 import { hasAcceptedCurrentCharter } from "@/lib/charter/acceptance";
-import { resolvePreOnboardingPath, welcomeHref } from "@/lib/charter/routing";
+import { charterHref, resolvePreOnboardingPath } from "@/lib/charter/routing";
 import {
   hasSitterCompletedOnboarding,
   SITTER_PROFILES_TABLE,
@@ -127,7 +127,7 @@ export async function getSitterOnboardingGateRedirect(
   if (!complete) {
     const charterAccepted = await hasAcceptedCurrentCharter(supabase, userId, "sitter");
     if (!charterAccepted) {
-      return welcomeHref("sitter");
+      return charterHref("sitter");
     }
     if (isSitterOnboardingPath(path)) return null;
     return SITTER_ONBOARDING_PATH;
@@ -158,7 +158,7 @@ export async function getParentOnboardingGateRedirect(
   if (!complete) {
     const charterAccepted = await hasAcceptedCurrentCharter(supabase, userId, "parent");
     if (!charterAccepted) {
-      return welcomeHref("parent");
+      return charterHref("parent");
     }
     if (isParentOnboardingRoute(path)) return null;
     return PARENT_ONBOARDING_PATH;

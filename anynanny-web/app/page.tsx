@@ -8,6 +8,7 @@ import {
   getSitterOnboardingGateRedirect
 } from "@/lib/auth/post-auth-destination";
 import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
+import { welcomeSignupHref } from "@/lib/charter/routing";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
 import {
@@ -150,7 +151,12 @@ function HomeInner() {
       track: "babysitter"
     });
 
-    router.push(`/${action}?${qs.toString()}`);
+    if (action === "register") {
+      router.push(welcomeSignupHref(profileRole, `/register?${qs.toString()}`));
+      return;
+    }
+
+    router.push(`/login?${qs.toString()}`);
   };
 
   if (hasRecoveryCallback) {

@@ -25,10 +25,44 @@ export function isPreOnboardingPath(pathname: string): boolean {
   return isWelcomePath(pathname) || isCharterPath(pathname);
 }
 
+export function signupPathForRole(role: ProfileRole): string {
+  const params = new URLSearchParams({ role });
+  if (role === "sitter") params.set("track", "babysitter");
+  return `/register?${params.toString()}`;
+}
+
+/** Safe post-Welcome signup destination. Only register / sign-up paths. */
+export function sanitizeSignupNext(nextParam: string | null | undefined): string | null {
+  if (!nextParam || nextParam.includes("..") || nextParam.startsWith("//")) return null;
+  if (!nextParam.startsWith("/")) return null;
+  const path = nextParam.split("?")[0] || nextParam;
+  if (path === "/register" || path.startsWith("/register/")) return nextParam;
+  if (path === "/auth/sign-up" || path.startsWith("/auth/sign-up/")) return nextParam;
+  return null;
+}
+
 export function welcomeHref(role: ProfileRole, mode: WelcomeViewMode = "mandatory"): string {
   const params = new URLSearchParams({ role });
   if (mode === "replay") params.set("mode", "replay");
   return `${WELCOME_PATH}?${params.toString()}`;
+}
+
+export function welcomeSignupHref(role: ProfileRole, nextPath?: string): string {
+  const params = new URLSearchParams({ role });
+  params.set("next", nextPath ?? signupPathForRole(role));
+  return `${WELCOME_PATH}?${params.toString()}`;
+}
+
+export function welcomeReplayHref(role: ProfileRole, from?: string): string {
+  const params = new URLSearchParams({ role, mode: "replay" });
+  if (from && from.startsWith("/") && !from.startsWith("//")) {
+    params.set("from", from);
+  }
+  return `${WELCOME_PATH}?${params.toString()}`;
+}
+
+export function personalAreaPathForRole(role: ProfileRole): string {
+  return role === "parent" ? "/parent/profile" : "/sitter/profile";
 }
 
 export function charterHref(role: ProfileRole, mode: CharterViewMode = "accept"): string {
@@ -49,8 +83,8 @@ export function onboardingPathForRole(role: ProfileRole): string {
   return role === "parent" ? PARENT_ONBOARDING_PATH : SITTER_ONBOARDING_PATH;
 }
 
-export function nextPathAfterWelcome(role: ProfileRole): string {
-  return charterHref(role, "accept");
+export function nextPathAfterWelcome(role: ProfileRole, nextParam?: string | null): string {
+  return sanitizeSignupNext(nextParam) ?? signupPathForRole(role);
 }
 
 export function nextPathAfterCharterAcceptance(role: ProfileRole): string {
@@ -58,8 +92,8 @@ export function nextPathAfterCharterAcceptance(role: ProfileRole): string {
 }
 
 /**
- * Existing active users (onboarding already complete) must never be forced
- * through Welcome + Charter. New signup/onboarding without acceptance must.
+ * After auth, incomplete onboarding without Charter acceptance goes to Charter.
+ * Existing completed users must never be forced through Welcome or Charter.
  */
 export function shouldForcePreOnboarding(input: {
   onboardingComplete: boolean;
@@ -74,7 +108,7 @@ export function resolvePreOnboardingPath(input: {
   charterAccepted: boolean;
 }): string {
   if (shouldForcePreOnboarding(input)) {
-    return welcomeHref(input.role, "mandatory");
+    return charterHref(input.role, "accept");
   }
   return onboardingPathForRole(input.role);
 }
