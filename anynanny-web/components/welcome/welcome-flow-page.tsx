@@ -3,96 +3,100 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { WelcomeVideoPlayer } from "@/components/welcome/welcome-video-player";
-import { hasAcceptedCurrentCharter } from "@/lib/charter/acceptance";
+import { loadProductProfileOwnership } from "@/lib/auth/product-profiles";
 import {
-  nextPathAfterCharterAcceptance,
   nextPathAfterWelcome,
   parseWelcomeMode,
+  personalAreaPathForRole,
   resolveFlowRole,
+  sanitizeSignupNext,
   welcomeHref
 } from "@/lib/charter/routing";
 import { isCharterType } from "@/lib/charter/versions";
-import { loadProductProfileOwnership } from "@/lib/auth/product-profiles";
 import type { ProfileRole } from "@/lib/supabase/profiles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { hasPlayedWelcomeVideo, markWelcomeVideoPlayed } from "@/lib/welcome/session";
+import { hasPlayedSignupWelcome, markSignupWelcomePlayed } from "@/lib/welcome/session";
 
 function WelcomeFlowInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mode = parseWelcomeMode(searchParams.get("mode"));
   const queryRole = searchParams.get("role");
+  const nextParam = searchParams.get("next");
+  const fromParam = searchParams.get("from");
   const [role, setRole] = useState<ProfileRole | null>(isCharterType(queryRole) ? queryRole : null);
   const [ready, setReady] = useState(false);
 
   const replayReturnPath = useMemo(() => {
-    if (role === "sitter") return "/sitter/settings";
-    return "/parent/settings";
-  }, [role]);
+    if (fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//")) {
+      return fromParam;
+    }
+    return personalAreaPathForRole(role ?? "parent");
+  }, [fromParam, role]);
 
-  const continueToCharter = useCallback(
-    (userId: string, nextRole: ProfileRole) => {
-      markWelcomeVideoPlayed(userId);
-      router.replace(nextPathAfterWelcome(nextRole));
-    },
-    [router]
-  );
+  const signupDestination = useMemo(() => {
+    const resolved = resolveFlowRole(queryRole, null);
+    if (!resolved) return "/register";
+    return nextPathAfterWelcome(resolved, nextParam);
+  }, [nextParam, queryRole]);
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
-      const supabase = getSupabaseBrowserClient();
-      if (!supabase) {
-        router.replace("/auth/login");
-        return;
-      }
-
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) {
-        const login = new URL("/auth/login", "http://local");
-        login.searchParams.set("next", welcomeHref(isCharterType(queryRole) ? queryRole : "parent", mode));
-        if (isCharterType(queryRole)) login.searchParams.set("role", queryRole);
-        router.replace(`${login.pathname}${login.search}`);
-        return;
-      }
-
-      const ownership = await loadProductProfileOwnership(supabase, user.id);
-      const nextRole = resolveFlowRole(queryRole, ownership?.role ?? null);
-      if (!nextRole) {
-        router.replace("/auth/role-selection");
-        return;
-      }
+      const nextRole = resolveFlowRole(queryRole, null);
 
       if (mode === "replay") {
+        const supabase = getSupabaseBrowserClient();
+        if (!supabase) {
+          router.replace("/auth/login");
+          return;
+        }
+        const {
+          data: { user }
+        } = await supabase.auth.getUser();
+        if (!user) {
+          const replayRole = nextRole ?? "parent";
+          const login = new URL("/auth/login", "http://local");
+          login.searchParams.set("next", welcomeHref(replayRole, "replay"));
+          login.searchParams.set("role", replayRole);
+          router.replace(`${login.pathname}${login.search}`);
+          return;
+        }
+        const replayRole = nextRole ?? "parent";
         if (!cancelled) {
-          setRole(nextRole);
+          setRole(replayRole);
           setReady(true);
         }
         return;
       }
 
-      const onboardingComplete =
-        nextRole === "parent"
-          ? Boolean(ownership?.parentOnboardingComplete)
-          : Boolean(ownership?.sitterOnboardingComplete);
-
-      if (onboardingComplete) {
-        router.replace(nextRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
+      if (!nextRole) {
+        router.replace("/");
         return;
       }
 
-      const accepted = await hasAcceptedCurrentCharter(supabase, user.id, nextRole);
-      if (accepted) {
-        router.replace(nextPathAfterCharterAcceptance(nextRole));
+      if (hasPlayedSignupWelcome(nextRole)) {
+        router.replace(nextPathAfterWelcome(nextRole, nextParam));
         return;
       }
 
-      if (hasPlayedWelcomeVideo(user.id)) {
-        router.replace(nextPathAfterWelcome(nextRole));
-        return;
+      const supabase = getSupabaseBrowserClient();
+      if (supabase && !sanitizeSignupNext(nextParam)) {
+        const {
+          data: { user }
+        } = await supabase.auth.getUser();
+        if (user) {
+          const ownership = await loadProductProfileOwnership(supabase, user.id);
+          const onboardingComplete =
+            nextRole === "parent"
+              ? Boolean(ownership?.parentOnboardingComplete)
+              : Boolean(ownership?.sitterOnboardingComplete);
+          if (onboardingComplete) {
+            router.replace(nextRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
+            return;
+          }
+        }
       }
 
       if (!cancelled) {
@@ -104,25 +108,16 @@ function WelcomeFlowInner() {
     return () => {
       cancelled = true;
     };
-  }, [mode, queryRole, router]);
+  }, [mode, nextParam, queryRole, router]);
 
   const handleMandatoryComplete = useCallback(() => {
-    void (async () => {
-      const supabase = getSupabaseBrowserClient();
-      if (!supabase || !role) {
-        if (role) router.replace(nextPathAfterWelcome(role));
-        return;
-      }
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace(nextPathAfterWelcome(role));
-        return;
-      }
-      continueToCharter(user.id, role);
-    })();
-  }, [continueToCharter, role, router]);
+    if (!role) {
+      router.replace(signupDestination);
+      return;
+    }
+    markSignupWelcomePlayed(role);
+    router.replace(nextPathAfterWelcome(role, nextParam));
+  }, [nextParam, role, router, signupDestination]);
 
   if (!ready || !role) {
     return (

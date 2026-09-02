@@ -31,9 +31,7 @@ const CHROMELESS_PREFIXES = [
   "/delete-account",
   "/welcome",
   "/charter",
-  "/sitter/onboarding",
-  "/welcome",
-  "/charter"
+  "/sitter/onboarding"
 ];
 
 const MAIN_LAYOUT_PREFIXES = [
