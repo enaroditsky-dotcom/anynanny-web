@@ -4,7 +4,21 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExpertRegistrationFields } from "@/components/sitter/expert-registration-fields";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
-import type { IsraelCity } from "@/lib/geo/israel-cities";
+import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
+import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
+import {
+  OnboardingActions,
+  OnboardingCard,
+  OnboardingPageShell
+} from "@/components/onboarding/onboarding-shell";
+import {
+  OnboardingChips,
+  OnboardingChoiceRow,
+  OnboardingDateInput,
+  OnboardingSelect,
+  OnboardingTextInput,
+  OnboardingYesNo
+} from "@/components/onboarding/onboarding-fields";
 import {
   coalesceSignupNames,
   hasCompleteSignupNames,
@@ -12,6 +26,34 @@ import {
   readSignupNamesFromDevice,
   saveSignupNamesToDevice
 } from "@/lib/auth/signup-names";
+import { clearSecondRoleInProgress } from "@/lib/auth/product-profiles";
+import { isIsraelCity, type IsraelCity } from "@/lib/geo/israel-cities";
+import {
+  formatDesiredHoursLabel,
+  SITTER_ADDITIONAL_SERVICE_OPTIONS,
+  SITTER_AGE_GROUP_OPTIONS,
+  SITTER_CURRENT_STATUS_OPTIONS,
+  SITTER_DESIRED_HOURS_MAX,
+  SITTER_DESIRED_HOURS_MIN,
+  SITTER_EXPERIENCE_BAND_OPTIONS,
+  SITTER_INCOME_RANGE_OPTIONS,
+  SITTER_MAX_CHILDREN_OPTIONS,
+  SITTER_TASK_OPTIONS,
+  SITTER_TRAVEL_DISTANCE_OPTIONS,
+  SITTER_WORK_TYPE_OPTIONS
+} from "@/lib/onboarding/sitter-options";
+import {
+  buildSitterOnboardingCorePayload,
+  buildSitterOnboardingExtendedPayload,
+  buildSitterProfilePhonePatch,
+  emptySitterOnboardingDraft,
+  sitterPreferredWorkAreaFromDraft,
+  validateSitterOnboardingRequiredFields,
+  validateSitterOnboardingStep,
+  type SitterOnboardingDraft
+} from "@/lib/onboarding/sitter-questionnaire";
+import { updateRowStrippingUnknownColumns } from "@/lib/onboarding/persist";
+import { ONBOARDING_NAME_MAX_LENGTH, ONBOARDING_STEP_COUNT } from "@/lib/onboarding/shared";
 import {
   emptyExpertProfileDraft,
   expertDraftToProfilePatch,
@@ -25,17 +67,15 @@ import {
 import {
   ensureSitterProfileRowForUser,
   hasSitterCompletedOnboarding,
+  normalizeSitterLanguages,
+  SITTER_LANGUAGE_OPTIONS,
   SITTER_PROFILES_TABLE,
   SITTER_PROFILES_USER_COLUMN,
   SITTER_WORKING_CITIES_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import { updateSitterWorkingCities } from "@/lib/sitter/sitter-working-cities";
-import { PROFILES_TABLE } from "@/lib/supabase/profiles";
-import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
-import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
-import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
-import { clearSecondRoleInProgress } from "@/lib/auth/product-profiles";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 type Props = {
   onSaved?: () => void | Promise<void>;
@@ -49,41 +89,41 @@ function readIsExpertTrack(): boolean {
   }
 }
 
+const HOURS_OPTIONS = Array.from(
+  { length: SITTER_DESIRED_HOURS_MAX - SITTER_DESIRED_HOURS_MIN + 1 },
+  (_, index) => {
+    const value = String(index + SITTER_DESIRED_HOURS_MIN);
+    return { value, label: formatDesiredHoursLabel(index + SITTER_DESIRED_HOURS_MIN) };
+  }
+);
+
 export function SitterOnboardingWizard({ onSaved }: Props) {
   const router = useRouter();
   const [isExpert, setIsExpert] = useState(false);
   const [step, setStep] = useState(1);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [namesLoading, setNamesLoading] = useState(true);
-  const [birthDate, setBirthDate] = useState("");
-  const [militaryService, setMilitaryService] = useState("כן");
-  const [yearsExperience, setYearsExperience] = useState("");
-  const [hourlyRateNis, setHourlyRateNis] = useState("");
-  const [hasCar, setHasCar] = useState(false);
-  const [expertDraft, setExpertDraft] = useState<ExpertProfileDraft>(() => emptyExpertProfileDraft());
-  const [workingCities, setWorkingCities] = useState<IsraelCity[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<SitterOnboardingDraft>(emptySitterOnboardingDraft);
+  const [expertDraft, setExpertDraft] = useState<ExpertProfileDraft>(() => emptyExpertProfileDraft());
   const [verifyFormOpen, setVerifyFormOpen] = useState(false);
+
+  const updateDraft = (patch: Partial<SitterOnboardingDraft>) => {
+    setDraft((prev) => ({ ...prev, ...patch }));
+  };
 
   useEffect(() => {
     setIsExpert(readIsExpertTrack());
     void (async () => {
       const auth = await resolveBrowserAuth();
-      if (!auth.ok) {
-        setNamesLoading(false);
-        return;
-      }
+      if (!auth.ok) return;
 
       const {
         data: { user }
       } = await auth.supabase.auth.getUser();
-
       const metaTrack = user?.user_metadata?.service_track;
       const metaTypes = normalizeExpertServiceTypes(user?.user_metadata?.service_types);
       const expertFromMeta =
-        metaTrack === "expert" || metaTypes.some((t) => isExpertOnlyServiceKind(t));
+        metaTrack === "expert" || metaTypes.some((type) => isExpertOnlyServiceKind(type));
       if (expertFromMeta) {
         setIsExpert(true);
         try {
@@ -97,15 +137,11 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
         auth.supabase
           .from(SITTER_PROFILES_TABLE)
           .select(
-            "first_name, last_name, birth_date, bio, certifications, service_types, service_locations, pricing_model, hourly_rate_nis, package_price_nis"
+            "first_name, last_name, birth_date, bio, certifications, service_types, service_locations, pricing_model, hourly_rate_nis, package_price_nis, working_cities, languages, home_city"
           )
           .eq(SITTER_PROFILES_USER_COLUMN, auth.userId)
           .maybeSingle(),
-        auth.supabase
-          .from(PROFILES_TABLE)
-          .select("first_name, last_name")
-          .eq("id", auth.userId)
-          .maybeSingle()
+        auth.supabase.from(PROFILES_TABLE).select("first_name, last_name, phone").eq("id", auth.userId).maybeSingle()
       ]);
 
       const resolved = coalesceSignupNames(
@@ -114,9 +150,6 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
         namesFromUserMetadata(user?.user_metadata as Record<string, unknown> | undefined),
         readSignupNamesFromDevice()
       );
-
-      if (resolved.first_name) setFirstName(resolved.first_name);
-      if (resolved.last_name) setLastName(resolved.last_name);
       if (hasCompleteSignupNames(resolved)) {
         saveSignupNamesToDevice(resolved);
         if (sitterRow) {
@@ -126,78 +159,70 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
           });
         }
       }
-      setNamesLoading(false);
 
-      if (!sitterRow) {
-        if (expertFromMeta) {
-          const metaPrimary = metaTypes.find((t) => isExpertOnlyServiceKind(t));
-          const meta = user?.user_metadata ?? {};
-          setExpertDraft({
-            serviceType: metaPrimary ?? "lactation_consultant",
-            serviceLocations: normalizeServiceLocations(meta.service_locations),
-            pricingModel: normalizePricingModel(meta.pricing_model),
-            hourlyRateNis: meta.hourly_rate_nis != null ? String(meta.hourly_rate_nis) : "",
-            packagePriceNis: meta.package_price_nis != null ? String(meta.package_price_nis) : "",
-            bio: typeof meta.bio === "string" ? meta.bio : "",
-            certifications: typeof meta.certifications === "string" ? meta.certifications : ""
-          });
-        }
-        return;
-      }
+      updateDraft({
+        firstName: resolved.first_name,
+        lastName: resolved.last_name,
+        birthDate: sitterRow?.birth_date ? String(sitterRow.birth_date).slice(0, 10) : "",
+        homeCity: typeof sitterRow?.home_city === "string" && isIsraelCity(sitterRow.home_city) ? sitterRow.home_city : "",
+        preferredWorkArea: Array.isArray(sitterRow?.working_cities)
+          ? (sitterRow.working_cities.filter((city: unknown): city is IsraelCity => isIsraelCity(String(city))) as IsraelCity[])
+          : [],
+        phone: typeof profileRow?.phone === "string" ? profileRow.phone : "",
+        languages: normalizeSitterLanguages(sitterRow?.languages),
+        hourlyRateNis: sitterRow?.hourly_rate_nis != null ? String(sitterRow.hourly_rate_nis) : ""
+      });
 
-      if (sitterRow.birth_date) setBirthDate(String(sitterRow.birth_date).slice(0, 10));
-
-      const types = normalizeExpertServiceTypes(sitterRow.service_types);
-      const primary = types.find((t) => isExpertOnlyServiceKind(t));
-      if (primary) {
+      const types = normalizeExpertServiceTypes(sitterRow?.service_types);
+      const primary = types.find((type) => isExpertOnlyServiceKind(type));
+      if (primary || expertFromMeta) {
         setIsExpert(true);
+        const source = sitterRow ?? user?.user_metadata ?? {};
         setExpertDraft({
-          serviceType: primary,
-          serviceLocations: normalizeServiceLocations(sitterRow.service_locations),
-          pricingModel: normalizePricingModel(sitterRow.pricing_model),
-          hourlyRateNis: sitterRow.hourly_rate_nis != null ? String(sitterRow.hourly_rate_nis) : "",
+          serviceType: primary ?? metaTypes.find((type) => isExpertOnlyServiceKind(type)) ?? "lactation_consultant",
+          serviceLocations: normalizeServiceLocations(
+            (source as { service_locations?: unknown }).service_locations
+          ),
+          pricingModel: normalizePricingModel((source as { pricing_model?: unknown }).pricing_model),
+          hourlyRateNis:
+            (source as { hourly_rate_nis?: unknown }).hourly_rate_nis != null
+              ? String((source as { hourly_rate_nis?: unknown }).hourly_rate_nis)
+              : "",
           packagePriceNis:
-            sitterRow.package_price_nis != null ? String(sitterRow.package_price_nis) : "",
-          bio: typeof sitterRow.bio === "string" ? sitterRow.bio : "",
+            (source as { package_price_nis?: unknown }).package_price_nis != null
+              ? String((source as { package_price_nis?: unknown }).package_price_nis)
+              : "",
+          bio: typeof (source as { bio?: unknown }).bio === "string" ? String((source as { bio?: unknown }).bio) : "",
           certifications:
-            typeof sitterRow.certifications === "string" ? sitterRow.certifications : ""
-        });
-      } else if (expertFromMeta) {
-        const metaPrimary = metaTypes.find((t) => isExpertOnlyServiceKind(t));
-        const meta = user?.user_metadata ?? {};
-        setExpertDraft({
-          serviceType: metaPrimary ?? "lactation_consultant",
-          serviceLocations: normalizeServiceLocations(meta.service_locations),
-          pricingModel: normalizePricingModel(meta.pricing_model),
-          hourlyRateNis: meta.hourly_rate_nis != null ? String(meta.hourly_rate_nis) : "",
-          packagePriceNis: meta.package_price_nis != null ? String(meta.package_price_nis) : "",
-          bio: typeof meta.bio === "string" ? meta.bio : "",
-          certifications: typeof meta.certifications === "string" ? meta.certifications : ""
+            typeof (source as { certifications?: unknown }).certifications === "string"
+              ? String((source as { certifications?: unknown }).certifications)
+              : ""
         });
       }
     })();
   }, []);
 
+  const goNext = () => {
+    const current = step as 1 | 2 | 3;
+    if (current === 2 && isExpert) {
+      const expertError = validateExpertProfileDraft(expertDraft);
+      if (expertError) {
+        setError(expertError);
+        return;
+      }
+    } else {
+      const stepError = validateSitterOnboardingStep(current, draft, isExpert);
+      if (stepError) {
+        setError(stepError);
+        return;
+      }
+    }
+    setError(null);
+    setStep((prev) => Math.min(ONBOARDING_STEP_COUNT, prev + 1));
+  };
+
   const handleFinish = async () => {
     if (busy) return;
-    if (workingCities.length === 0) {
-      setError("יש לבחור לפחות עיר אחת שבה את עובדת.");
-      return;
-    }
-
-    if (!firstName.trim() || !lastName.trim()) {
-      setError("חסרים שם פרטי או שם משפחה מההרשמה. חזרו להשלים אותם או פנו לתמיכה.");
-      setStep(1);
-      return;
-    }
-
-    const dobError = getAccountDobEligibilityError("sitter", birthDate);
-    if (dobError) {
-      setError(dobError);
-      setStep(1);
-      return;
-    }
-
     if (isExpert) {
       const expertError = validateExpertProfileDraft(expertDraft);
       if (expertError) {
@@ -206,69 +231,63 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
         return;
       }
     }
+    const requiredError = validateSitterOnboardingRequiredFields(draft, isExpert);
+    if (requiredError) {
+      setError(requiredError);
+      setStep(1);
+      return;
+    }
 
     setBusy(true);
     setError(null);
-
     try {
       const auth = await resolveBrowserAuth();
       if (!auth.ok) {
         setError("יש להתחבר מחדש כדי לסיים את השאלון.");
+        setBusy(false);
         return;
       }
 
       const ensure = await ensureSitterProfileRowForUser(auth.supabase, auth.userId, {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
+        first_name: draft.firstName.trim(),
+        last_name: draft.lastName.trim(),
         service_types: isExpert ? [expertDraft.serviceType] : ["babysitter"]
       });
       if (ensure.error) {
         setError(ensure.error);
+        setBusy(false);
         return;
       }
 
+      const workingCities = sitterPreferredWorkAreaFromDraft(draft);
       const citiesResult = await updateSitterWorkingCities(auth.userId, workingCities);
       if (!citiesResult.ok) {
-        setError(citiesResult.error || "שמירת אזורי העבודה נכשלה.");
+        setError(citiesResult.error || "שמירת אזור העבודה המועדף נכשלה.");
+        setBusy(false);
         return;
       }
 
       const completedAt = new Date().toISOString();
-      const years = Number(yearsExperience);
-      const rate = Number(hourlyRateNis);
-
       const patch: Record<string, unknown> = {
+        ...buildSitterOnboardingCorePayload(draft),
+        ...buildSitterOnboardingExtendedPayload(draft),
         onboarding_completed_at: completedAt,
         updated_at: completedAt,
         [SITTER_WORKING_CITIES_COLUMN]: citiesResult.cities,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        birth_date: birthDate || null
+        service_types: isExpert ? [expertDraft.serviceType] : ["babysitter"]
       };
-
       if (isExpert) {
         Object.assign(patch, expertDraftToProfilePatch(expertDraft));
-      } else {
-        patch.military_service = militaryService === "כן";
-        patch.has_car = hasCar;
-        patch.service_types = ["babysitter"];
-        if (Number.isFinite(years) && years >= 0) {
-          patch.years_experience = Math.floor(years);
-        }
-        if (Number.isFinite(rate) && rate >= 0) {
-          patch.hourly_rate_nis = Math.round(rate);
-          patch.pricing_model = "hourly";
-        }
       }
 
-      const { data, error: updateError } = await auth.supabase
-        .from(SITTER_PROFILES_TABLE)
-        .update(patch)
-        .eq(SITTER_PROFILES_USER_COLUMN, auth.userId)
-        .select(`onboarding_completed_at, ${SITTER_WORKING_CITIES_COLUMN}`)
-        .maybeSingle();
-
-      if (updateError) {
+      const saved = await updateRowStrippingUnknownColumns(
+        auth.supabase,
+        SITTER_PROFILES_TABLE,
+        SITTER_PROFILES_USER_COLUMN,
+        auth.userId,
+        patch
+      );
+      if (saved.error) {
         const { data: retryData, error: retryError } = await auth.supabase
           .from(SITTER_PROFILES_TABLE)
           .update({
@@ -279,14 +298,16 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
           .eq(SITTER_PROFILES_USER_COLUMN, auth.userId)
           .select("onboarding_completed_at")
           .maybeSingle();
-
         if (retryError || !hasSitterCompletedOnboarding(retryData ?? {})) {
-          setError(retryError?.message || updateError.message || "שמירת סיום השאלון נכשלה.");
+          setError(retryError?.message || saved.error || "שמירת סיום השאלון נכשלה.");
+          setBusy(false);
           return;
         }
-      } else if (!hasSitterCompletedOnboarding(data ?? {})) {
-        setError("הסטטוס לא נשמר. נסו שוב.");
-        return;
+      }
+
+      const phonePatch = buildSitterProfilePhonePatch(draft.phone);
+      if (Object.keys(phonePatch).length > 0) {
+        await updateRowStrippingUnknownColumns(auth.supabase, PROFILES_TABLE, "id", auth.userId, phonePatch);
       }
 
       await onSaved?.();
@@ -300,230 +321,308 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
     }
   };
 
-  const goToStep3 = () => {
-    if (isExpert) {
-      const expertError = validateExpertProfileDraft(expertDraft);
-      if (expertError) {
-        setError(expertError);
-        return;
-      }
-    }
-    setError(null);
-    setStep(3);
-  };
-
-  const goToStep2 = () => {
-    if (!firstName.trim() || !lastName.trim()) {
-      setError("השם מההרשמה לא נמצא. התחברו מחדש או פנו לתמיכה.");
-      return;
-    }
-    const dobError = getAccountDobEligibilityError("sitter", birthDate);
-    if (dobError) {
-      setError(dobError);
-      return;
-    }
-    setError(null);
-    setStep(2);
-  };
+  const homeCity = isIsraelCity(draft.homeCity) ? [draft.homeCity] : [];
 
   return (
-    <div
-      className="mx-auto my-auto max-h-[85vh] max-w-sm overflow-y-auto rounded-[2rem] border-2 border-[#C5A059] bg-[#FDFBF6] p-6 text-center shadow-2xl"
-      dir="rtl"
-    >
-      <h2 className="mb-2 text-2xl font-bold text-[#001F3F]">ברוכה הבאה ל-AnyNanny</h2>
-      <p className="mb-4 text-sm leading-relaxed text-slate-600">
-        {isExpert
-          ? "בואי נבנה פרופיל מקצועי שיבליט את ההתמחות שלך להורים!"
-          : "בואי נכיר טוב יותר ונבנה פרופיל בולט ואטרקטיבי שיגרום להורים לבחור בך בקלות!"}
-      </p>
-
-      {error ? (
-        <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-          {error}
-        </p>
-      ) : null}
-
-      {step === 1 && (
-        <div className="space-y-4 text-right">
-          {namesLoading ? (
-            <p className="text-center text-sm text-slate-500">טוען את פרטי ההרשמה…</p>
-          ) : firstName.trim() && lastName.trim() ? (
-            <div className="rounded-2xl border border-[#C5A059]/25 bg-white/80 px-4 py-3 text-right">
-              <p className="text-[13px] font-semibold text-slate-500">שלום</p>
-              <p className="mt-1 text-base font-bold text-[#001F3F]">
-                {firstName} {lastName}
+    <OnboardingPageShell>
+      <OnboardingCard
+        title="השאלון של AnyNanny"
+        description={
+          step === 3
+            ? "עוד כמה שאלות שיעזרו לנו להתאים עבורך את AnyNanny. אפשר לדלג על שאלות שאינן רלוונטיות."
+            : isExpert
+              ? "נשלים את הפרופיל המקצועי ואת אזור העבודה המועדף."
+              : "נשלים כמה פרטים חיוניים כדי שההורים יוכלו למצוא אותך."
+        }
+        step={step}
+        error={error}
+      >
+        {step === 1 ? (
+          <div className="space-y-4">
+            <OnboardingTextInput
+              id="sitter-first-name"
+              label="שם פרטי"
+              required
+              value={draft.firstName}
+              onChange={(firstName) => updateDraft({ firstName })}
+              autoComplete="given-name"
+              maxLength={ONBOARDING_NAME_MAX_LENGTH}
+            />
+            <OnboardingTextInput
+              id="sitter-last-name"
+              label="שם משפחה"
+              required
+              value={draft.lastName}
+              onChange={(lastName) => updateDraft({ lastName })}
+              autoComplete="family-name"
+              maxLength={ONBOARDING_NAME_MAX_LENGTH}
+            />
+            <OnboardingDateInput
+              id="sitter-birth-date"
+              label="תאריך לידה"
+              required
+              value={draft.birthDate}
+              onChange={(birthDate) => updateDraft({ birthDate })}
+              disallowFuture
+            />
+            <div className="space-y-1.5 text-right">
+              <p className="text-sm font-semibold text-[#001F3F]">
+                עיר / אזור מגורים
+                <span className="ms-1 text-teal-700" aria-hidden>
+                  *
+                </span>
+                <span className="sr-only"> (שדה חובה)</span>
               </p>
-              <p className="mt-1 text-[13px] text-slate-500">השם נשמר מההרשמה ואין צורך להקליד שוב</p>
+              <IsraelCitiesMultiSelect
+                value={homeCity}
+                onChange={(cities) => updateDraft({ homeCity: cities.slice(-1)[0] ?? "" })}
+                disabled={busy}
+                label="בחרי עיר מגורים"
+              />
             </div>
-          ) : (
-            <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              לא נמצא שם מההרשמה. התחברו מחדש עם אותו חשבון או פנו לתמיכה.
-            </p>
-          )}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">תאריך לידה *</label>
-            <input
-              type="date"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              className="w-full rounded-2xl border-2 border-[#C5A059]/30 bg-white p-3.5 text-slate-700"
+            <div className="space-y-1.5 text-right">
+              <p className="text-sm font-semibold text-[#001F3F]">
+                אזור עבודה מועדף
+                <span className="ms-1 text-teal-700" aria-hidden>
+                  *
+                </span>
+                <span className="sr-only"> (שדה חובה)</span>
+              </p>
+              <IsraelCitiesMultiSelect
+                value={draft.preferredWorkArea}
+                onChange={(preferredWorkArea) => updateDraft({ preferredWorkArea })}
+                disabled={busy}
+                label="בחרי ערים שבהן תרצי לעבוד"
+              />
+            </div>
+            <OnboardingTextInput
+              id="sitter-phone"
+              label="מספר טלפון"
+              value={draft.phone}
+              onChange={(phone) => updateDraft({ phone })}
+              autoComplete="tel"
+              inputMode="tel"
+            />
+            <OnboardingChips
+              legend="שפות"
+              required
+              options={SITTER_LANGUAGE_OPTIONS.map((value) => ({ value, label: value }))}
+              value={draft.languages}
+              onChange={(languages) => updateDraft({ languages })}
+            />
+            <OnboardingActions showBack={false} onContinue={goNext} />
+          </div>
+        ) : null}
+
+        {step === 2 ? (
+          <div className="space-y-4">
+            {isExpert ? (
+              <ExpertRegistrationFields value={expertDraft} onChange={setExpertDraft} compact />
+            ) : (
+              <>
+                <OnboardingSelect
+                  id="years-experience"
+                  label="שנות ניסיון בבייביסיטר"
+                  required
+                  value={draft.yearsExperienceBand}
+                  onChange={(yearsExperienceBand) =>
+                    updateDraft({ yearsExperienceBand: yearsExperienceBand as SitterOnboardingDraft["yearsExperienceBand"] })
+                  }
+                  options={SITTER_EXPERIENCE_BAND_OPTIONS}
+                />
+                <OnboardingChips
+                  legend="עם אילו גילאים יש לך ניסיון?"
+                  required
+                  options={SITTER_AGE_GROUP_OPTIONS}
+                  value={draft.experienceAgeGroups}
+                  onChange={(experienceAgeGroups) => updateDraft({ experienceAgeGroups })}
+                />
+                <OnboardingTextInput
+                  id="hourly-rate"
+                  label="מחיר לשעה"
+                  required
+                  value={draft.hourlyRateNis}
+                  onChange={(hourlyRateNis) => updateDraft({ hourlyRateNis })}
+                  inputMode="decimal"
+                />
+                <OnboardingYesNo
+                  name="license"
+                  legend="האם יש לך רישיון נהיגה?"
+                  value={draft.hasDriversLicense}
+                  onChange={(hasDriversLicense) => updateDraft({ hasDriversLicense })}
+                />
+                <OnboardingYesNo
+                  name="car"
+                  legend="האם יש לך רכב זמין?"
+                  value={draft.hasCar}
+                  onChange={(hasCar) => updateDraft({ hasCar })}
+                />
+                <OnboardingYesNo
+                  name="smoking"
+                  legend="האם את מעשנת?"
+                  value={draft.isSmoker}
+                  onChange={(isSmoker) => updateDraft({ isSmoker })}
+                />
+                <OnboardingYesNo
+                  name="baby"
+                  legend="האם יש לך ניסיון בטיפול בתינוקות?"
+                  value={draft.hasBabyExperience}
+                  onChange={(hasBabyExperience) => updateDraft({ hasBabyExperience })}
+                />
+                <OnboardingYesNo
+                  name="multiple"
+                  legend="האם יש לך ניסיון בשמירה על כמה ילדים במקביל?"
+                  value={draft.hasMultipleChildrenExperience}
+                  onChange={(hasMultipleChildrenExperience) => updateDraft({ hasMultipleChildrenExperience })}
+                />
+              </>
+            )}
+            <OnboardingActions onBack={() => setStep(1)} onContinue={goNext} />
+          </div>
+        ) : null}
+
+        {step === 3 ? (
+          <div className="space-y-4">
+            <OnboardingSelect
+              id="current-status"
+              label="מה המסגרת העיקרית שלך כיום?"
+              value={draft.currentStatus}
+              onChange={(currentStatus) =>
+                updateDraft({ currentStatus: currentStatus as SitterOnboardingDraft["currentStatus"] })
+              }
+              options={SITTER_CURRENT_STATUS_OPTIONS}
+            />
+            <OnboardingSelect
+              id="desired-hours"
+              label="כמה שעות בשבוע היית רוצה לעבוד דרך AnyNanny?"
+              value={draft.desiredHoursPerWeek}
+              onChange={(desiredHoursPerWeek) => updateDraft({ desiredHoursPerWeek })}
+              options={HOURS_OPTIONS}
+            />
+            <OnboardingSelect
+              id="income-range"
+              label="כמה היית רוצה להרוויח בחודש מבייביסיטר דרך AnyNanny?"
+              value={draft.desiredMonthlyIncomeRange}
+              onChange={(desiredMonthlyIncomeRange) =>
+                updateDraft({
+                  desiredMonthlyIncomeRange: desiredMonthlyIncomeRange as SitterOnboardingDraft["desiredMonthlyIncomeRange"]
+                })
+              }
+              options={SITTER_INCOME_RANGE_OPTIONS}
+            />
+            <OnboardingChips
+              legend="איזה סוג עבודה את מחפשת דרך AnyNanny?"
+              options={SITTER_WORK_TYPE_OPTIONS}
+              value={draft.workTypePreferences}
+              onChange={(workTypePreferences) => updateDraft({ workTypePreferences })}
+            />
+            <OnboardingSelect
+              id="travel-distance"
+              label="כמה רחוק את מוכנה להגיע למשמרת?"
+              value={draft.travelDistance}
+              onChange={(travelDistance) =>
+                updateDraft({ travelDistance: travelDistance as SitterOnboardingDraft["travelDistance"] })
+              }
+              options={SITTER_TRAVEL_DISTANCE_OPTIONS}
+            />
+            <OnboardingYesNo
+              name="short-notice"
+              legend="האם תרצי לקבל הצעות למשמרות בהתראה קצרה?"
+              value={draft.acceptsShortNoticeShifts}
+              onChange={(acceptsShortNoticeShifts) => updateDraft({ acceptsShortNoticeShifts })}
+            />
+            <OnboardingChips
+              legend="באילו סוגי שירותים נוספים היית מעוניינת לעבוד בעתיד?"
+              options={SITTER_ADDITIONAL_SERVICE_OPTIONS}
+              value={draft.additionalServiceInterests}
+              onChange={(additionalServiceInterests) => updateDraft({ additionalServiceInterests })}
+            />
+            <OnboardingChips
+              legend="עם אילו גילאים הכי מתאים לך לעבוד?"
+              options={SITTER_AGE_GROUP_OPTIONS}
+              value={draft.preferredChildAgeGroups}
+              onChange={(preferredChildAgeGroups) => updateDraft({ preferredChildAgeGroups })}
+            />
+            <OnboardingChoiceRow
+              legend="על כמה ילדים את מוכנה לשמור במקביל?"
+              value={draft.maxChildren}
+              onChange={(maxChildren) => updateDraft({ maxChildren })}
+              options={SITTER_MAX_CHILDREN_OPTIONS.map((value) => ({
+                value,
+                label: value === 5 ? "5+" : String(value)
+              }))}
+            />
+            <OnboardingYesNo
+              name="special-needs"
+              legend="האם יש לך ניסיון עם ילדים עם צרכים מיוחדים?"
+              value={draft.hasSpecialNeedsExperience}
+              onChange={(hasSpecialNeedsExperience) => updateDraft({ hasSpecialNeedsExperience })}
+            />
+            {draft.hasSpecialNeedsExperience ? (
+              <OnboardingTextInput
+                id="special-needs-details"
+                label="פירוט קצר"
+                value={draft.specialNeedsExperienceDetails}
+                onChange={(specialNeedsExperienceDetails) => updateDraft({ specialNeedsExperienceDetails })}
+              />
+            ) : null}
+            <OnboardingChips
+              legend="אילו משימות מתאימות לך במסגרת שמרטפות?"
+              options={SITTER_TASK_OPTIONS}
+              value={draft.taskCapabilities}
+              onChange={(taskCapabilities) => updateDraft({ taskCapabilities })}
+            />
+            <OnboardingYesNo
+              name="first-aid"
+              legend="האם יש לך הכשרת עזרה ראשונה?"
+              value={draft.hasFirstAidTraining}
+              onChange={(hasFirstAidTraining) => updateDraft({ hasFirstAidTraining })}
+            />
+            <OnboardingYesNo
+              name="childcare-training"
+              legend="האם עברת הכשרה רלוונטית לטיפול בילדים?"
+              value={draft.hasChildcareTraining}
+              onChange={(hasChildcareTraining) => updateDraft({ hasChildcareTraining })}
+            />
+            {draft.hasChildcareTraining ? (
+              <OnboardingTextInput
+                id="training-details"
+                label="פירוט ההכשרה"
+                value={draft.childcareTrainingDetails}
+                onChange={(childcareTrainingDetails) => updateDraft({ childcareTrainingDetails })}
+              />
+            ) : null}
+            <OnboardingActions onBack={() => setStep(2)} onContinue={goNext} />
+          </div>
+        ) : null}
+
+        {step === 4 ? (
+          <div className="space-y-4">
+            <IdentityOnboardingCard
+              busy={busy}
+              onVerifyNow={() => setVerifyFormOpen(true)}
+              onSkipLater={() => void handleFinish()}
+            />
+            <OnboardingActions
+              onBack={() => setStep(3)}
+              onContinue={() => void handleFinish()}
+              continueLabel="סיום"
+              busy={busy}
             />
           </div>
-          <button
-            type="button"
-            onClick={goToStep2}
-            disabled={namesLoading || !firstName.trim() || !lastName.trim()}
-            className="mt-2 w-full rounded-2xl bg-[#001F3F] py-3.5 font-bold text-white transition hover:bg-blue-900 disabled:opacity-60"
-          >
-            הבא
-          </button>
-        </div>
-      )}
+        ) : null}
 
-      {step === 2 && (
-        <div className="space-y-3 text-right">
-          {isExpert ? (
-            <ExpertRegistrationFields value={expertDraft} onChange={setExpertDraft} compact />
-          ) : (
-            <>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">
-                  שנות ניסיון בטיפול בילדים
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={yearsExperience}
-                  onChange={(e) => setYearsExperience(e.target.value)}
-                  className="w-full rounded-2xl border-2 border-[#C5A059]/30 bg-white p-3.5"
-                  placeholder="מספר שנים"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">תעריף שעתי (₪)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={hourlyRateNis}
-                  onChange={(e) => setHourlyRateNis(e.target.value)}
-                  className="w-full rounded-2xl border-2 border-[#C5A059]/30 bg-white p-3.5"
-                  placeholder="לדוגמה: 50"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">
-                  שירות צבאי / שירות לאומי
-                </label>
-                <select
-                  value={militaryService}
-                  onChange={(e) => setMilitaryService(e.target.value)}
-                  className="w-full rounded-2xl border-2 border-[#C5A059]/30 bg-white p-3.5 text-slate-700"
-                >
-                  <option value="כן">כן</option>
-                  <option value="לא">לא</option>
-                </select>
-              </div>
-              <div className="flex cursor-pointer items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="hasCarCheck"
-                  checked={hasCar}
-                  onChange={(e) => setHasCar(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <label htmlFor="hasCarCheck" className="cursor-pointer text-sm text-slate-700">
-                  יש לי רכב / הגעה עצמאית
-                </label>
-              </div>
-            </>
-          )}
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="flex-1 rounded-2xl border-2 border-[#001F3F]/20 py-3.5 font-bold text-[#001F3F] transition hover:bg-white/60"
-            >
-              חזרה
-            </button>
-            <button
-              type="button"
-              onClick={goToStep3}
-              className="flex-[1.4] rounded-2xl bg-[#001F3F] py-3.5 font-bold text-white transition hover:bg-blue-900"
-            >
-              הבא
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 3 && (
-        <div className="space-y-4 text-right">
-          <p className="text-center font-medium text-navy-800">
-            {isExpert ? "באילו אזורים את מעניקה שירות?" : "באילו ערים את עובדת?"}
-          </p>
-
-          <div className="max-h-[35vh] overflow-y-auto pr-1">
-            <IsraelCitiesMultiSelect
-              value={workingCities}
-              onChange={setWorkingCities}
-              disabled={busy}
-              label="בחרי ערים מכל הארץ"
-            />
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setStep(2)}
-              className="flex-1 rounded-2xl border-2 border-[#001F3F]/20 py-3.5 font-bold text-[#001F3F] transition hover:bg-white/60 disabled:opacity-60"
-            >
-              חזרה
-            </button>
-            <button
-              type="button"
-              disabled={busy || workingCities.length === 0}
-              onClick={() => {
-                setError(null);
-                setStep(4);
-              }}
-              className="flex-[1.4] rounded-2xl bg-[#001F3F] py-3.5 font-bold text-white transition hover:bg-blue-900 disabled:opacity-60"
-            >
-              הבא
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 4 && (
-        <div className="space-y-4">
-          <IdentityOnboardingCard
-            busy={busy}
-            onVerifyNow={() => setVerifyFormOpen(true)}
-            onSkipLater={() => void handleFinish()}
-          />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setStep(3)}
-            className="w-full rounded-2xl border-2 border-[#001F3F]/20 py-3 font-bold text-[#001F3F] transition hover:bg-white/60 disabled:opacity-60"
-          >
-            חזרה
-          </button>
-        </div>
-      )}
-
-      <IdentityVerificationForm
-        open={verifyFormOpen}
-        role="sitter"
-        nextPath="/sitter/profile"
-        onClose={() => setVerifyFormOpen(false)}
-        onSaved={async () => {
-          setVerifyFormOpen(false);
-          await handleFinish();
-        }}
-      />
-    </div>
+        <IdentityVerificationForm
+          open={verifyFormOpen}
+          role="sitter"
+          nextPath="/sitter/profile"
+          onClose={() => setVerifyFormOpen(false)}
+          onSaved={async () => {
+            setVerifyFormOpen(false);
+            await handleFinish();
+          }}
+        />
+      </OnboardingCard>
+    </OnboardingPageShell>
   );
 }
