@@ -74,8 +74,9 @@ assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: true, payboxConfi
 assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConfigured: false }), [
   "cash"
 ]);
-assert.match(panel, /eligibleManualPaymentMethods/);
-assert.match(panel, /bitConfigured: destinations\?\.bit.available === true/);
+assert.match(panel, /availableManualPaymentMethods/);
+assert.match(panel, /sanitizeManualPaymentDestinations/);
+assert.match(panel, /canReportManualPayment/);
 assert.match(panel, /manualPaymentDestinationInstruction/);
 assert.match(parentDash, /\/api\/parent\/manual-payment-destinations/);
 

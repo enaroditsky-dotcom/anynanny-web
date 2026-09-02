@@ -8,7 +8,6 @@ import {
   Loader2,
   RefreshCw,
   ChevronLeft,
-  CheckCircle2,
   X
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
@@ -21,42 +20,24 @@ import {
   WalletMethodVisualCard
 } from "@/components/wallet/wallet-method-brand";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  AUTH_MODAL_CENTER_WRAP,
+  AUTH_MODAL_OVERLAY_SCROLL
+} from "@/lib/ui/auth-modal-overlay";
+import { PARENT_WALLET_SELECTABLE_METHODS } from "@/lib/billing/payment-method-availability";
 import { fetchParentWalletView } from "@/lib/wallet/parent-wallet";
 import type { BillingTransaction } from "@/lib/wallet/billing-transactions";
 import type { ParentPaymentMethod } from "@/lib/wallet/parent-payment-methods";
-import {
-  readParentPreferredCheckoutMethod,
-  writeParentPreferredCheckoutMethod,
-  type ParentPreferredCheckoutMethod
-} from "@/lib/wallet/parent-preferred-checkout-method";
 
-type PaymentOptionId =
-  | "credit_card"
-  | "bit"
-  | "apple_pay"
-  | "google_pay";
+type PaymentOptionId = (typeof PARENT_WALLET_SELECTABLE_METHODS)[number];
 
 const PAYMENT_OPTIONS: Array<{
   id: PaymentOptionId;
   label: string;
-}> = [
-  { id: "credit_card", label: "כרטיס אשראי" },
-  { id: "bit", label: "Bit" },
-  { id: "apple_pay", label: "Apple Pay" },
-  { id: "google_pay", label: "Google Pay" }
-];
+}> = [{ id: "credit_card", label: "כרטיס אשראי" }];
 
-function walletRailExplanation(id: PaymentOptionId): string {
-  if (id === "bit") {
-    return "Bit ישמש כאמצעי המועדף בתשלום משמרת. לא נפתח שער תשלום עכשיו — החיוב ב־HYP יתבצע רק כשתאשרו תשלום בפועל בדשבורד.";
-  }
-  if (id === "apple_pay") {
-    return "Apple Pay ישמש כאמצעי המועדף בתשלום משמרת. תשלום מאובטח ב־HYP יתבצע רק בגרסה הבאה.";
-  }
-  if (id === "google_pay") {
-    return "Google Pay ישמש כאמצעי המועדף בתשלום משמרת. תשלום מאובטח ב־HYP יתבצע רק בגרסה הבאה.";
-  }
-  return "שמירת כרטיס מאפשרת חיוב מהיר במשמרות הבאות דרך HYP.";
+function walletRailExplanation(): string {
+  return "שמירת כרטיס בארנק AnyNanny דרך HYP. תשלום משמרת מתבצע לפי אמצעי הקבלה שהבייביסיטר הגדירה — לא מכאן.";
 }
 
 export default function ParentWalletClient() {
@@ -69,18 +50,7 @@ export default function ParentWalletClient() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [methodsMenuOpen, setMethodsMenuOpen] = useState(false);
   const [viewingMethod, setViewingMethod] = useState<PaymentOptionId | null>(null);
-  const [preferredMethod, setPreferredMethod] = useState<ParentPreferredCheckoutMethod | null>(
-    null
-  );
   const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!user?.id) {
-      setPreferredMethod(null);
-      return;
-    }
-    setPreferredMethod(readParentPreferredCheckoutMethod(user.id));
-  }, [user?.id]);
 
   const fetchPaymentMethods = useCallback(async () => {
     try {
@@ -240,21 +210,6 @@ export default function ParentWalletClient() {
     }
   };
 
-  const handleSelectPreferred = (method: PaymentOptionId) => {
-    if (!user?.id) return;
-    writeParentPreferredCheckoutMethod(user.id, method);
-    setPreferredMethod(method);
-    setToast(
-      method === "bit"
-        ? "Bit הוגדר כאמצעי המועדף לתשלום משמרת"
-        : method === "apple_pay"
-          ? "Apple Pay הוגדר כאמצעי המועדף לתשלום משמרת"
-          : method === "google_pay"
-            ? "Google Pay הוגדר כאמצעי המועדף לתשלום משמרת"
-            : "כרטיס אשראי הוגדר כאמצעי המועדף"
-    );
-  };
-
   useEffect(() => {
     if (!methodsMenuOpen) {
       setViewingMethod(null);
@@ -294,22 +249,17 @@ export default function ParentWalletClient() {
 
   const isConfigured = (id: PaymentOptionId): boolean => {
     if (id === "credit_card") return paymentMethods.length > 0;
-    return preferredMethod === id;
+    return false;
   };
 
   const optionStatus = (id: PaymentOptionId): string => {
     if (id === "credit_card") {
       if (isPageLoading) return "טוען…";
       if (defaultCard) {
-        const preferredMark =
-          preferredMethod === "credit_card" || preferredMethod == null ? " · מועדף" : "";
-        return `${defaultCard.brandLabel} •••• ${defaultCard.last4}${preferredMark}`;
+        return `${defaultCard.brandLabel} •••• ${defaultCard.last4}`;
       }
-      return EMPTY_METHOD_HINT;
+      return "כרטיס לא הוגדר";
     }
-    if (preferredMethod === id) return "מועדף לתשלום משמרת";
-    if (id === "bit") return "בחרו להגדיר כמועדף — ללא חיוב עכשיו";
-    if (id === "apple_pay" || id === "google_pay") return "בחרו להגדיר כמועדף — ללא חיוב עכשיו";
     return EMPTY_METHOD_HINT;
   };
 
@@ -442,20 +392,22 @@ export default function ParentWalletClient() {
 
       {methodsMenuOpen ? (
         <div
-          className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/45 p-3 sm:items-center"
+          className={`fixed inset-0 z-[80] ${AUTH_MODAL_OVERLAY_SCROLL} bg-slate-900/45`}
           dir="rtl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="parent-wallet-methods-title"
+          onClick={() => {
+            if (actionLoading !== null) return;
+            if (viewingMethod) setViewingMethod(null);
+            else setMethodsMenuOpen(false);
+          }}
         >
-          <button
-            type="button"
-            className="absolute inset-0 cursor-default"
-            aria-label="סגור"
-            onClick={() => {
-              if (actionLoading !== null) return;
-              if (viewingMethod) setViewingMethod(null);
-              else setMethodsMenuOpen(false);
-            }}
-          />
-          <div className="relative z-[1] w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
+          <div className={AUTH_MODAL_CENTER_WRAP}>
+          <div
+            className="my-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
               {viewingMethod ? (
                 <button
@@ -478,7 +430,7 @@ export default function ParentWalletClient() {
                   <X className="h-4 w-4" />
                 </button>
               )}
-              <h3 className="text-sm font-bold text-navy-header">
+              <h3 id="parent-wallet-methods-title" className="text-sm font-bold text-navy-header">
                 {viewingMethod ? optionLabel(viewingMethod) : "אמצעי תשלום שלי"}
               </h3>
               <span className="w-8" />
@@ -495,7 +447,7 @@ export default function ParentWalletClient() {
                 />
 
                 <p className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right text-[13px] leading-relaxed text-slate-600">
-                  {walletRailExplanation(viewingMethod)}
+                  {walletRailExplanation()}
                 </p>
 
                 {viewingMethod === "credit_card" ? (
@@ -521,20 +473,6 @@ export default function ParentWalletClient() {
                     ))}
                   </div>
                 ) : null}
-
-                {preferredMethod === viewingMethod ? (
-                  <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600">
-                    <CheckCircle2 className="h-4 w-4" /> אמצעי מועדף לתשלום משמרת
-                  </p>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleSelectPreferred(viewingMethod)}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0B3C5D] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110"
-                  >
-                    הגדר כמועדף
-                  </button>
-                )}
 
                 {viewingMethod === "credit_card" ? (
                   <button
@@ -566,25 +504,22 @@ export default function ParentWalletClient() {
                         updating={updating}
                         updateDisabled={actionLoading !== null}
                         cardTitle={option.label}
-                        updateLabel={option.id === "credit_card" ? "עדכון" : "בחירה"}
+                        updateLabel={ready ? "עדכון" : "הוספה"}
                         onOpen={() => openMethodDetails(option.id)}
                         onUpdate={() => {
-                          if (option.id === "credit_card") {
-                            if (ready) openMethodDetails(option.id);
-                            else void handleRegisterCreditCard();
-                            return;
-                          }
-                          openMethodDetails(option.id);
+                          if (ready) openMethodDetails(option.id);
+                          else void handleRegisterCreditCard();
                         }}
                       />
                     );
                   })}
                 </div>
                 <p className="border-t border-slate-100 px-4 py-3 text-center text-[13px] text-slate-500">
-                  Bit, Apple Pay ו־Google Pay נבחרים כאן כמועדפים בלבד. החיוב ב־HYP מתבצע רק בתשלום משמרת.
+                  כרטיס שמור הוא הגדרת ארנק בלבד. תשלום משמרת מוצג בדשבורד לפי אמצעי הקבלה של הבייביסיטר.
                 </p>
               </>
             )}
+          </div>
           </div>
         </div>
       ) : null}

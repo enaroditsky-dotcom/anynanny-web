@@ -116,6 +116,8 @@ assert.match(destinationsServer, /isValidIsraeliMobile\(phone\)/);
 assert.match(destinationsServer, /parseAuthorizedPayboxPaymentLink/);
 assert.match(destinationsServer, /paybox_link/);
 assert.match(reportRoute, /methodHasAuthorizedDestination/);
+assert.match(dashboard, /canReportManualPayment/);
+assert.match(panel, /availableManualPaymentMethods/);
 
 // 6. Refresh after report still shows awaiting confirmation
 assert.equal(

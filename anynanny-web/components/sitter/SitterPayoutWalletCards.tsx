@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, ChevronLeft, Loader2, ShieldCheck, X } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
 import {
-  EMPTY_METHOD_HINT,
   WalletMethodCardRow,
   WalletMethodVisualCard
 } from "@/components/wallet/wallet-method-brand";
@@ -14,9 +13,12 @@ import {
   AUTH_MODAL_OVERLAY_SCROLL
 } from "@/lib/ui/auth-modal-overlay";
 import {
+  sitterReceivingDetailStatus,
+  sitterReceivingSetupState
+} from "@/lib/billing/payment-method-availability";
+import {
   EMPTY_SITTER_PAYOUT_METHODS,
   fetchSitterPayoutMethods,
-  formatIsraeliMobileDisplay,
   payoutMethodConfigured,
   type SitterPayoutMethodKind,
   type SitterPayoutMethods,
@@ -34,22 +36,24 @@ type SitterPayoutWalletCardsProps = {
 const fieldClassName =
   "w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#0B3C5D]/40 focus:bg-white focus:ring-2 focus:ring-[#0B3C5D]/15 disabled:opacity-60";
 
+function methodReady(methods: SitterPayoutMethods, kind: SitterPayoutMethodKind): boolean {
+  if (kind === "bit" || kind === "paybox") {
+    return sitterReceivingSetupState(methods, kind).configured;
+  }
+  return payoutMethodConfigured(methods, "card");
+}
+
 function statusLabel(methods: SitterPayoutMethods, kind: SitterPayoutMethodKind): string {
-  if (kind === "bit") {
-    if (!payoutMethodConfigured(methods, "bit")) return EMPTY_METHOD_HINT;
-    return formatIsraeliMobileDisplay(methods.bitPhone);
+  if (kind === "bit" || kind === "paybox") {
+    return sitterReceivingDetailStatus(methods, kind);
   }
-  if (kind === "paybox") {
-    if (!payoutMethodConfigured(methods, "paybox")) return EMPTY_METHOD_HINT;
-    return formatIsraeliMobileDisplay(methods.payboxPhone);
-  }
-  if (!payoutMethodConfigured(methods, "card")) return EMPTY_METHOD_HINT;
+  if (!payoutMethodConfigured(methods, "card")) return "כרטיס לא הוגדר";
   const brand = methods.cardBrand.trim() ? `${methods.cardBrand} · ` : "";
   const exp =
     methods.cardExpMonth && methods.cardExpYear
       ? ` · ${String(methods.cardExpMonth).padStart(2, "0")}/${String(methods.cardExpYear).slice(-2)}`
       : "";
-  const hyp = methods.hypTokenReady ? " · HYP מוכן" : "";
+  const hyp = methods.hypTokenReady ? " · שמור למשיכה" : " · פרטים שמורים";
   return `${brand}•••• ${methods.cardLast4}${exp}${hyp}`;
 }
 
@@ -181,7 +185,13 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
               <>
                 <div className="space-y-3 px-3 py-3">
                   {rows.map((row) => {
-                    const ready = payoutMethodConfigured(methods, row.kind);
+                    const ready = methodReady(methods, row.kind);
+                    const updateLabel =
+                      row.kind === "bit" || row.kind === "paybox"
+                        ? sitterReceivingSetupState(methods, row.kind).actionLabel
+                        : ready
+                          ? "עדכון"
+                          : "הוספה";
                     return (
                       <WalletMethodCardRow
                         key={row.kind}
@@ -189,6 +199,7 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
                         status={statusLabel(methods, row.kind)}
                         ready={ready}
                         cardTitle={methodTitle(row.kind)}
+                        updateLabel={updateLabel}
                         onOpen={() => {
                           if (ready) setViewing(row.kind);
                           else setEditing(row.kind);
@@ -199,7 +210,7 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
                   })}
                 </div>
                 <p className="border-t border-slate-100 px-4 py-3 text-center text-[13px] text-slate-500">
-                  כרטיס שמור ניתן לפתוח לצפייה בפרטים מוסתרים. הכספים מעובדים באופן מאובטח דרך שער התשלומים המורשה HYP.
+                  Bit ו-PayBox הם אמצעי קבלה מההורים. כרטיס שמור משמש למשיכה בלבד ואינו אמצעי תשלום להורה.
                 </p>
               </>
             )}
@@ -241,7 +252,7 @@ function SitterMethodDetails({
       <WalletMethodVisualCard
         kind={kind}
         status={statusLabel(methods, kind)}
-        ready={payoutMethodConfigured(methods, kind)}
+        ready={methodReady(methods, kind)}
         compact={false}
         cardTitle={methodTitle(kind)}
       />
@@ -260,13 +271,22 @@ function SitterMethodDetails({
         </div>
       ) : null}
 
-      {(kind === "bit" || kind === "paybox") && payoutMethodConfigured(methods, kind) ? (
-        <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-right">
-          <p className="text-[12px] font-semibold text-slate-400">מספר טלפון רשום</p>
+      {(kind === "bit" || kind === "paybox") && methodReady(methods, kind) ? (
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2.5 text-right">
+          <p className="text-[12px] font-semibold text-emerald-700">
+            {sitterReceivingSetupState(methods, kind).statusLabel}
+          </p>
           <p className="mt-0.5 text-xs font-bold text-slate-800" dir="ltr">
-            {kind === "bit"
-              ? formatIsraeliMobileDisplay(methods.bitPhone)
-              : formatIsraeliMobileDisplay(methods.payboxPhone)}
+            {sitterReceivingDetailStatus(methods, kind)}
+          </p>
+        </div>
+      ) : kind === "bit" || kind === "paybox" ? (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-right">
+          <p className="text-xs font-bold text-slate-600">
+            {sitterReceivingSetupState(methods, kind).statusLabel}
+          </p>
+          <p className="mt-0.5 text-[12px] text-slate-500">
+            ההורים לא יראו אפשרות זו עד שתשמרו יעד קבלה תקין.
           </p>
         </div>
       ) : null}

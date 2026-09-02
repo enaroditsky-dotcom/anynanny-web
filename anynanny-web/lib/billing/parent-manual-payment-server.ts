@@ -1,6 +1,10 @@
 import "server-only";
 
 import {
+  isManualPaymentMethodUsable,
+  sanitizeManualPaymentDestinations
+} from "@/lib/billing/payment-method-availability";
+import {
   parentMayReadManualPaymentDestinations,
   parentMayResolveManualPaymentDispute,
   type ManualPaymentDestinations
@@ -165,17 +169,23 @@ export async function loadAuthorizedManualPaymentDestinations(
     const payboxPhone = String(payload.paybox_phone ?? "").trim();
     return {
       ok: true,
-      destinations: {
-        bookingId: String(row.id),
-        cash: { available: true },
-        bit: isValidIsraeliMobile(bitPhone)
-          ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
-          : { available: false },
-        paybox: buildPayboxDestination({
-          phone: payboxPhone,
-          link: payload.paybox_link
-        })
-      }
+      destinations:
+        sanitizeManualPaymentDestinations({
+          bookingId: String(row.id),
+          cash: { available: true },
+          bit: isValidIsraeliMobile(bitPhone)
+            ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
+            : { available: false },
+          paybox: buildPayboxDestination({
+            phone: payboxPhone,
+            link: payload.paybox_link
+          })
+        }) ?? {
+          bookingId: String(row.id),
+          cash: { available: true },
+          bit: { available: false },
+          paybox: { available: false }
+        }
     };
   }
 
@@ -231,14 +241,20 @@ export async function loadAuthorizedManualPaymentDestinations(
 
   return {
     ok: true,
-    destinations: {
-      bookingId: String(row.id),
-      cash: { available: true },
-      bit: isValidIsraeliMobile(bitPhone)
-        ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
-        : { available: false },
-      paybox: buildPayboxDestination({ phone: payboxPhone, link: payboxLink })
-    }
+    destinations:
+      sanitizeManualPaymentDestinations({
+        bookingId: String(row.id),
+        cash: { available: true },
+        bit: isValidIsraeliMobile(bitPhone)
+          ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
+          : { available: false },
+        paybox: buildPayboxDestination({ phone: payboxPhone, link: payboxLink })
+      }) ?? {
+        bookingId: String(row.id),
+        cash: { available: true },
+        bit: { available: false },
+        paybox: { available: false }
+      }
   };
 }
 
@@ -246,9 +262,7 @@ export function methodHasAuthorizedDestination(
   method: ManualPaymentMethod,
   destinations: ManualPaymentDestinations
 ): boolean {
-  if (method === "cash") return true;
-  if (method === "bit") return destinations.bit.available === true;
-  return destinations.paybox.available === true;
+  return isManualPaymentMethodUsable(method, destinations);
 }
 
 export function parseReportManualPaymentMethod(value: unknown): ManualPaymentMethod | null {

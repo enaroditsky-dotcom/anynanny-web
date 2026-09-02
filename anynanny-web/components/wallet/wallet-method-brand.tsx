@@ -113,13 +113,32 @@ type VisualCardProps = {
   className?: string;
 };
 
+function walletCardTone(ready?: boolean): string {
+  return ready ? "" : "grayscale-[0.45] opacity-80";
+}
+
+function WalletCardStateBadge({ ready }: { ready?: boolean }) {
+  if (ready) {
+    return (
+      <span className="shrink-0 rounded-full bg-emerald-400/25 px-2 py-0.5 text-[11px] font-bold text-emerald-100 ring-1 ring-emerald-300/30 backdrop-blur-sm">
+        מחובר
+      </span>
+    );
+  }
+  return (
+    <span className="shrink-0 rounded-full bg-black/35 px-2 py-0.5 text-[11px] font-bold text-white/90 backdrop-blur-sm">
+      לא הוגדר
+    </span>
+  );
+}
+
 /** Official Bit brand card — blue→teal gradient + bit logo. */
 export function BitWalletCard({ status, ready, compact, className = "" }: VisualCardProps) {
   return (
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(10,79,140,0.55)] ring-1 ring-white/20 ${
         compact ? "h-[4.75rem]" : "h-[5.5rem]"
-      } ${className}`}
+      } ${walletCardTone(ready)} ${className}`}
       style={{
         background: "linear-gradient(135deg, #0A4F8C 0%, #0B7FA8 48%, #00B4C8 100%)"
       }}
@@ -145,11 +164,7 @@ export function BitWalletCard({ status, ready, compact, className = "" }: Visual
             </p>
           ) : null}
         </div>
-        {ready ? (
-          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold backdrop-blur-sm">
-            שמור
-          </span>
-        ) : null}
+        <WalletCardStateBadge ready={ready} />
       </div>
     </div>
   );
@@ -161,7 +176,7 @@ export function PayboxWalletCard({ status, ready, compact, className = "" }: Vis
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(30,143,214,0.5)] ring-1 ring-white/20 ${
         compact ? "h-[4.75rem]" : "h-[5.5rem]"
-      } ${className}`}
+      } ${walletCardTone(ready)} ${className}`}
       style={{
         background: "linear-gradient(135deg, #0E7CC0 0%, #1E8FD6 55%, #4BB4F0 100%)"
       }}
@@ -195,11 +210,7 @@ export function PayboxWalletCard({ status, ready, compact, className = "" }: Vis
             </p>
           ) : null}
         </div>
-        {ready ? (
-          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold backdrop-blur-sm">
-            שמור
-          </span>
-        ) : null}
+        <WalletCardStateBadge ready={ready} />
       </div>
     </div>
   );
@@ -215,7 +226,7 @@ function ApplePayWalletCard({
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(11,60,93,0.55)] ring-1 ring-white/20 ${
         compact ? "h-[4.75rem]" : "h-[5.5rem]"
-      } ${className}`}
+      } ${walletCardTone(ready)} ${className}`}
       style={{
         background:
           "linear-gradient(135deg, #0B3C5D 0%, #111827 55%, #0A84FF 120%)"
@@ -246,11 +257,7 @@ function ApplePayWalletCard({
             </p>
           ) : null}
         </div>
-        {ready ? (
-          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold backdrop-blur-sm">
-            שמור
-          </span>
-        ) : null}
+        <WalletCardStateBadge ready={ready} />
       </div>
     </div>
   );
@@ -266,7 +273,7 @@ function GooglePayWalletCard({
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(74,144,226,0.35)] ring-1 ring-white/20 ${
         compact ? "h-[4.75rem]" : "h-[5.5rem]"
-      } ${className}`}
+      } ${walletCardTone(ready)} ${className}`}
       style={{
         background:
           "linear-gradient(135deg, #2D6CDF 0%, #4A90E2 45%, #0A84FF 100%)"
@@ -297,11 +304,7 @@ function GooglePayWalletCard({
             </p>
           ) : null}
         </div>
-        {ready ? (
-          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold backdrop-blur-sm">
-            שמור
-          </span>
-        ) : null}
+        <WalletCardStateBadge ready={ready} />
       </div>
     </div>
   );
@@ -319,7 +322,7 @@ export function AnyNannyCreditCard({
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_-12px_rgba(11,60,93,0.65)] ring-1 ring-white/15 ${
         compact ? "h-[4.75rem]" : "h-[5.5rem]"
-      } ${className}`}
+      } ${walletCardTone(ready)} ${className}`}
       style={{
         background:
           "linear-gradient(145deg, #071E33 0%, #0B3C5D 42%, #145A6E 78%, #1F7A68 100%)"
@@ -369,11 +372,7 @@ export function AnyNannyCreditCard({
           )}
         </div>
 
-        {ready ? (
-          <span className="shrink-0 rounded-full bg-emerald-400/25 px-2 py-0.5 text-[11px] font-bold text-emerald-100 ring-1 ring-emerald-300/30">
-            שמור
-          </span>
-        ) : null}
+        <WalletCardStateBadge ready={ready} />
       </div>
     </div>
   );
