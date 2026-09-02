@@ -4,6 +4,7 @@ import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-lin
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section";
 import { SettingsFaqEntry } from "@/components/settings/settings-faq-entry";
 import { BlockedUsersSection } from "@/components/safety/blocked-users-section";
+import { CommunityResourcesSection } from "@/components/settings/community-resources-section";
 import { FileText, Shield, ExternalLink } from "lucide-react";
 
 export default function SitterSettingsPage() {
@@ -28,6 +29,8 @@ export default function SitterSettingsPage() {
       <BlockedUsersSection />
 
       <SettingsFaqEntry href="/sitter/faq" />
+
+      <CommunityResourcesSection role="sitter" />
 
       {/* מידע משפטי ותקנון - דרישת חנויות Apple ו-Google */}
       <div className="mt-6 rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft space-y-3 text-right">

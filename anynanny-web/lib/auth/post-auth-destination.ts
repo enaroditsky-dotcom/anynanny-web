@@ -6,6 +6,8 @@ import {
   roleMismatchHref,
   SECOND_ROLE_PATH
 } from "@/lib/auth/product-profiles";
+import { hasAcceptedCurrentCharter } from "@/lib/charter/acceptance";
+import { resolvePreOnboardingPath, welcomeHref } from "@/lib/charter/routing";
 import {
   hasSitterCompletedOnboarding,
   SITTER_PROFILES_TABLE,
@@ -85,10 +87,23 @@ async function loadSitterOnboardingCompletedAt(
  * Route an owned sitter product profile by onboarding_completed_at only.
  * Does not create sitter_profiles rows.
  */
+async function pathBeforeRoleOnboarding(
+  supabase: SupabaseClient,
+  userId: string,
+  role: ProfileRole
+): Promise<string> {
+  const charterAccepted = await hasAcceptedCurrentCharter(supabase, userId, role);
+  return resolvePreOnboardingPath({
+    role,
+    onboardingComplete: false,
+    charterAccepted
+  });
+}
+
 async function resolveOwnedSitterPostAuthPath(supabase: SupabaseClient, userId: string): Promise<string> {
   const completedAt = await loadSitterOnboardingCompletedAt(supabase, userId);
   if (!hasSitterCompletedOnboarding({ onboarding_completed_at: completedAt })) {
-    return SITTER_ONBOARDING_PATH;
+    return pathBeforeRoleOnboarding(supabase, userId, "sitter");
   }
 
   return SITTER_DASHBOARD_PATH;
@@ -110,6 +125,10 @@ export async function getSitterOnboardingGateRedirect(
   const complete = hasSitterCompletedOnboarding({ onboarding_completed_at: completedAt });
 
   if (!complete) {
+    const charterAccepted = await hasAcceptedCurrentCharter(supabase, userId, "sitter");
+    if (!charterAccepted) {
+      return welcomeHref("sitter");
+    }
     if (isSitterOnboardingPath(path)) return null;
     return SITTER_ONBOARDING_PATH;
   }
@@ -137,6 +156,10 @@ export async function getParentOnboardingGateRedirect(
   const complete = Boolean(ownership?.parentOnboardingComplete);
 
   if (!complete) {
+    const charterAccepted = await hasAcceptedCurrentCharter(supabase, userId, "parent");
+    if (!charterAccepted) {
+      return welcomeHref("parent");
+    }
     if (isParentOnboardingRoute(path)) return null;
     return PARENT_ONBOARDING_PATH;
   }
@@ -315,7 +338,7 @@ export async function resolvePostAuthPath(
         return destinationForMissingPortal("parent", nextParam);
       }
       if (!ownership.parentOnboardingComplete) {
-        return PARENT_ONBOARDING_PATH;
+        return pathBeforeRoleOnboarding(supabase, userId, "parent");
       }
       const nextOk = allowedNextPath("parent", nextParam);
       return nextOk ?? PARENT_DASHBOARD_PATH;
@@ -335,7 +358,7 @@ export async function resolvePostAuthPath(
     }
     if (storedRole === "parent" && ownership?.hasParent) {
       if (!ownership.parentOnboardingComplete) {
-        return PARENT_ONBOARDING_PATH;
+        return pathBeforeRoleOnboarding(supabase, userId, "parent");
       }
       return PARENT_DASHBOARD_PATH;
     }

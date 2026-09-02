@@ -3,7 +3,10 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
-import { getSitterOnboardingGateRedirect } from "@/lib/auth/post-auth-destination";
+import {
+  getParentOnboardingGateRedirect,
+  getSitterOnboardingGateRedirect
+} from "@/lib/auth/post-auth-destination";
 import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
@@ -108,7 +111,8 @@ function HomeInner() {
               router.replace(roleMismatchHref("parent"));
               return;
             }
-            router.replace(ownership.parentOnboardingComplete ? "/parent/dashboard" : "/parent/onboarding");
+            const dest = await getParentOnboardingGateRedirect(supabase, user.id, "/parent/dashboard");
+            router.replace(dest ?? "/parent/dashboard");
             return;
           }
           if (!ownership?.hasSitter) {
