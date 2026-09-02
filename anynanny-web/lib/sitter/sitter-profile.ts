@@ -106,16 +106,42 @@ export const SITTER_PROFILE_PRIVATE_PAYOUT_COLUMNS = [
 
 /**
  * Own-row Personal Area / profile API SELECT list.
- * Explicit columns only — never `*` (which includes private payout phones and
- * fails with "permission denied for table sitter_profiles").
+ * Explicit columns only — never `*` (private payout phones) and never `user_id`
+ * (production PK is `sitter_profiles.id = auth.uid()`; that column does not exist).
+ * Optional local-only columns (referee phones, light_cooking, legal declaration)
+ * are omitted so a missing-column error cannot blank the whole Personal Area.
  */
 export const SITTER_PROFILE_OWN_SELECT_COLUMNS = [
   "id",
-  "user_id",
   "nanny_serial",
   "avatar_url",
-  ...SITTER_PROFILE_PUT_COLUMNS,
-  "legal_no_criminal_declaration",
+  "first_name",
+  "last_name",
+  "show_full_name",
+  "id_number",
+  "birth_date",
+  "show_age",
+  "citizenship_israeli",
+  "birth_country",
+  "aliyah_year",
+  "address_full",
+  "military_service",
+  "years_experience",
+  "preferred_ages",
+  "has_car",
+  "languages",
+  "homework_help",
+  "bio",
+  "hourly_rate_nis",
+  "package_price_nis",
+  "pricing_model",
+  "service_types",
+  "service_locations",
+  "certifications",
+  "working_cities",
+  "is_public",
+  "onboarding_completed_at",
+  "updated_at",
   "avg_rating",
   "rating_count"
 ] as const;
@@ -134,8 +160,7 @@ export async function fetchOwnSitterProfileRow(
   userId: string
 ): Promise<{ data: SitterProfileRow | null; error: string | null }> {
   const table = getSitterProfilesTable();
-  const fk = SITTER_PROFILES_USER_COLUMN;
-  let columns: string[] = SITTER_PROFILE_OWN_SELECT_COLUMNS.filter(
+  let columns: string[] = [...SITTER_PROFILE_OWN_SELECT_COLUMNS].filter(
     (column) => !isSitterProfilePrivatePayoutColumn(column)
   );
 
@@ -147,7 +172,7 @@ export async function fetchOwnSitterProfileRow(
     const { data, error } = await supabase
       .from(table)
       .select(sitterProfileOwnSelectClause(columns))
-      .eq(fk, userId)
+      .eq("id", userId)
       .maybeSingle();
 
     if (!error) {
@@ -447,7 +472,7 @@ export function buildSitterProfilePutRow(
   return row;
 }
 
-/** Extract a missing-column name from a PostgREST schema-cache error, if present. */
+/** Extract a missing-column name from a PostgREST / Postgres schema error, if present. */
 export function extractMissingSitterProfileColumn(
   message: string | null | undefined
 ): string | null {
@@ -455,13 +480,22 @@ export function extractMissingSitterProfileColumn(
     return null;
   }
 
-  const match =
-    message.match(/Could not find the '([^']+)' column/i) ||
-    message.match(
-      /column ["'`]?([a-zA-Z0-9_]+)["'`]? (?:of relation )?.*does not exist/i
-    );
+  const patterns = [
+    /Could not find the '([^']+)' column/i,
+    /column sitter_profiles\.([A-Za-z_][A-Za-z0-9_]*) does not exist/i,
+    /column ["'`]([A-Za-z_][A-Za-z0-9_]*)["'`] of relation ["'`]sitter_profiles["'`]/i,
+    /column ["'`]([A-Za-z_][A-Za-z0-9_]*)["'`] does not exist/i
+  ];
 
-  return match?.[1] ?? null;
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    const column = match?.[1]?.trim();
+    if (column && column !== "sitter_profiles") {
+      return column;
+    }
+  }
+
+  return null;
 }
 
 export type SitterProfileRow = {

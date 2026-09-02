@@ -374,8 +374,13 @@ export function SitterPersonalArea({ userId }: Props) {
   const handleSave = useCallback(async () => {
     if (!userId || !editKey) return;
 
-    if (editKey !== "avatar" && (!draft.first_name.trim() || !draft.last_name.trim())) {
-      setModalError("יש למלא שם פרטי ושם משפחה.");
+    if (editKey === "first_name" && !draft.first_name.trim()) {
+      setModalError("יש למלא שם פרטי.");
+      return;
+    }
+
+    if (editKey === "last_name" && !draft.last_name.trim()) {
+      setModalError("יש למלא שם משפחה.");
       return;
     }
 
