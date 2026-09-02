@@ -152,7 +152,7 @@ assert.doesNotMatch(
     sitterProfileLib.indexOf("SITTER_PROFILE_OWN_SELECT_COLUMNS"),
     sitterProfileLib.indexOf("export function isSitterProfilePrivatePayoutColumn")
   ),
-  /payout_bit_phone|payout_paybox_phone/
+  /payout_bit_phone|payout_paybox_phone|"user_id"/
 );
 assert.match(personal, /\/api\/sitter\/profile/);
 assert.match(personal, /SitterManualReceivingDestinationsSection/);
