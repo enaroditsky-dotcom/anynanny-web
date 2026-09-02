@@ -5,6 +5,7 @@ import { HelpCircle, Loader2, Smartphone } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
 import { PersonalAreaSection } from "@/components/personal-area/personal-area-ui";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { sitterReceivingSetupState } from "@/lib/billing/payment-method-availability";
 import {
   EMPTY_SITTER_PAYOUT_METHODS,
   fetchSitterPayoutMethods,
@@ -211,15 +212,32 @@ export function SitterManualReceivingDestinationsSection({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-[#0B3C5D]" aria-hidden />
-                <p className="text-sm font-bold text-[#001F3F]">Bit</p>
+            <div
+              className={`rounded-xl border p-3 ${
+                sitterReceivingSetupState(methods, "bit").configured
+                  ? "border-emerald-200 bg-emerald-50/70"
+                  : "border-slate-200 bg-slate-50/70"
+              }`}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-[#0B3C5D]" aria-hidden />
+                  <p className="text-sm font-bold text-[#001F3F]">Bit</p>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                    sitterReceivingSetupState(methods, "bit").configured
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {sitterReceivingSetupState(methods, "bit").statusLabel}
+                </span>
               </div>
               <p className="text-[13px] text-slate-500">
                 {payoutMethodConfigured(methods, "bit")
                   ? `שמור: ${formatIsraeliMobileDisplay(methods.bitPhone)}`
-                  : "לא הוגדר — ההורים יראו מזומן בלבד עבור Bit."}
+                  : "לא הוגדר — ההורים לא יראו אפשרות Bit."}
               </p>
               <label className="mt-2 block text-right text-xs font-bold text-slate-600">
                 מספר נייד לקבלת Bit
@@ -245,10 +263,27 @@ export function SitterManualReceivingDestinationsSection({
               </button>
             </div>
 
-            <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-[#0B3C5D]" aria-hidden />
-                <p className="text-sm font-bold text-[#001F3F]">PayBox</p>
+            <div
+              className={`rounded-xl border p-3 ${
+                sitterReceivingSetupState(methods, "paybox").configured
+                  ? "border-emerald-200 bg-emerald-50/70"
+                  : "border-slate-200 bg-slate-50/70"
+              }`}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-[#0B3C5D]" aria-hidden />
+                  <p className="text-sm font-bold text-[#001F3F]">PayBox</p>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                    sitterReceivingSetupState(methods, "paybox").configured
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {sitterReceivingSetupState(methods, "paybox").statusLabel}
+                </span>
               </div>
               <p className="text-[13px] text-slate-500">
                 {payboxManualReceivingConfigured(methods)

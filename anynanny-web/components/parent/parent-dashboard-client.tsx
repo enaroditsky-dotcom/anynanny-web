@@ -87,6 +87,12 @@ import {
 import { finalizeHypCheckoutFromClient } from "@/lib/billing/hyp/finalize-client";
 import type { ManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
 import {
+  canReportManualPayment,
+  emptyManualPaymentDestinations,
+  isManualPaymentMethodUsable,
+  sanitizeManualPaymentDestinations
+} from "@/lib/billing/payment-method-availability";
+import {
   AWAITING_SITTER_CONFIRMATION_COPY,
   AWAITING_SITTER_CONFIRMATION_HEADING,
   AWAITING_SITTER_RATING_HEADING,
@@ -1584,6 +1590,10 @@ export function ParentDashboardClient({
       setShiftError("בחרו אמצעי תשלום ולחצו על שילמתי.");
       return;
     }
+    if (!canReportManualPayment(manualPaymentMethod, manualPaymentDestinations)) {
+      setShiftError("אמצעי התשלום שנבחר אינו זמין עבור נני זו.");
+      return;
+    }
     manualPaymentInFlightRef.current = true;
     setManualPaymentBusy(true);
     setShiftError(null);
@@ -1637,7 +1647,13 @@ export function ParentDashboardClient({
       manualPaymentInFlightRef.current = false;
       setManualPaymentBusy(false);
     }
-  }, [activeBooking?.id, lockSettlement, manualPaymentBusy, manualPaymentMethod]);
+  }, [
+    activeBooking?.id,
+    lockSettlement,
+    manualPaymentBusy,
+    manualPaymentDestinations,
+    manualPaymentMethod
+  ]);
 
   const handleResolveManualPaymentDispute = useCallback(async () => {
     if (manualPaymentInFlightRef.current || manualPaymentBusy) return;
@@ -1744,30 +1760,22 @@ export function ParentDashboardClient({
         };
         if (cancelled) return;
         if (!res.ok) {
-          setManualPaymentDestinations({
-            bookingId,
-            cash: { available: true },
-            bit: { available: false },
-            paybox: { available: false }
-          });
+          setManualPaymentDestinations(emptyManualPaymentDestinations(bookingId));
           if (json.error) setShiftError(json.error);
           return;
         }
-        setManualPaymentDestinations({
-          bookingId: json.bookingId || bookingId,
-          cash: { available: true },
-          bit: json.bit ?? { available: false },
-          paybox: json.paybox ?? { available: false }
-        });
+        setManualPaymentDestinations(
+          sanitizeManualPaymentDestinations({
+            bookingId: json.bookingId || bookingId,
+            cash: { available: true },
+            bit: json.bit ?? { available: false },
+            paybox: json.paybox ?? { available: false }
+          }) ?? emptyManualPaymentDestinations(bookingId)
+        );
       } catch (error) {
         console.warn("[parent-dashboard] manual payment destinations:", error);
         if (!cancelled) {
-          setManualPaymentDestinations({
-            bookingId,
-            cash: { available: true },
-            bit: { available: false },
-            paybox: { available: false }
-          });
+          setManualPaymentDestinations(emptyManualPaymentDestinations(bookingId));
         }
       } finally {
         if (!cancelled) setManualPaymentDestinationsLoading(false);
@@ -1780,10 +1788,7 @@ export function ParentDashboardClient({
 
   useEffect(() => {
     if (!manualPaymentMethod || !manualPaymentDestinations) return;
-    if (manualPaymentMethod === "bit" && !manualPaymentDestinations.bit.available) {
-      setManualPaymentMethod(null);
-    }
-    if (manualPaymentMethod === "paybox" && !manualPaymentDestinations.paybox.available) {
+    if (!isManualPaymentMethodUsable(manualPaymentMethod, manualPaymentDestinations)) {
       setManualPaymentMethod(null);
     }
   }, [manualPaymentDestinations, manualPaymentMethod]);

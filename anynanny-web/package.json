@@ -36,8 +36,11 @@
     "test:manual-payment-sitter-ui": "npx --yes tsx scripts/test-manual-payment-sitter-ui.ts",
     "test:manual-payment-dispute-ui": "npx --yes tsx scripts/test-manual-payment-dispute-ui.ts",
     "test:manual-payment-bit-paybox": "npx --yes tsx scripts/test-manual-payment-bit-paybox.ts",
+    "test:payment-method-availability": "npx --yes tsx scripts/test-payment-method-availability.ts",
     "test:sitter-personal-area-model": "npx --yes tsx scripts/test-sitter-personal-area-model.ts",
-    "test:welcome-charter-flow": "npx --yes tsx scripts/test-welcome-charter-flow.ts"
+    "test:welcome-charter-flow": "npx --yes tsx scripts/test-welcome-charter-flow.ts",
+    "test:settings-legal-documents": "npx --yes tsx scripts/test-settings-legal-documents.ts",
+    "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",

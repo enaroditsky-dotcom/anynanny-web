@@ -3,7 +3,14 @@
 import { Banknote, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
-  eligibleManualPaymentMethods,
+  availableManualPaymentMethods,
+  canReportManualPayment,
+  hasUsableDigitalReceivingMethod,
+  PARENT_NO_DIGITAL_RECEIVING_COPY,
+  PARENT_NO_DIGITAL_RECEIVING_SUPPORTING_COPY,
+  sanitizeManualPaymentDestinations
+} from "@/lib/billing/payment-method-availability";
+import {
   MANUAL_PAYMENT_CASH_COPY,
   MANUAL_PAYMENT_HEADING,
   MANUAL_PAYMENT_METHOD_LABELS,
@@ -44,27 +51,30 @@ export function ManualPaymentPanel({
   onReportPaid
 }: ManualPaymentPanelProps) {
   const [copied, setCopied] = useState(false);
-  const methods = useMemo(
-    () =>
-      eligibleManualPaymentMethods({
-        bitConfigured: destinations?.bit.available === true,
-        payboxConfigured: destinations?.paybox.available === true
-      }),
+  const safeDestinations = useMemo(
+    () => sanitizeManualPaymentDestinations(destinations),
     [destinations]
+  );
+  const methods = useMemo(
+    () => availableManualPaymentMethods(safeDestinations),
+    [safeDestinations]
   );
   const timerText = formatElapsed(elapsedSeconds);
   const destination =
     selectedMethod === "bit"
-      ? destinations?.bit.destination
+      ? safeDestinations?.bit.destination
       : selectedMethod === "paybox"
-        ? destinations?.paybox.destination
+        ? safeDestinations?.paybox.destination
         : null;
   const payboxLink =
     selectedMethod === "paybox"
-      ? parseAuthorizedPayboxPaymentLink(destinations?.paybox.link)
+      ? parseAuthorizedPayboxPaymentLink(safeDestinations?.paybox.link)
       : null;
+  const methodUsable = canReportManualPayment(selectedMethod, safeDestinations);
   const canReport =
-    Boolean(selectedMethod) && !busy && bookingReady && !destinationsLoading;
+    methodUsable && !busy && bookingReady && !destinationsLoading;
+  const showDigitalEmptyState =
+    !destinationsLoading && !hasUsableDigitalReceivingMethod(safeDestinations);
 
   const copyDestination = async () => {
     if (!destination || typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -106,6 +116,16 @@ export function ManualPaymentPanel({
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2.5">
+                {showDigitalEmptyState ? (
+                  <div className="rounded-xl border border-white/15 bg-white/5 px-3.5 py-3 text-right">
+                    <p className="text-sm font-bold text-white">
+                      {PARENT_NO_DIGITAL_RECEIVING_COPY}
+                    </p>
+                    <p className="mt-1 text-[13px] font-medium leading-snug text-white/75">
+                      {PARENT_NO_DIGITAL_RECEIVING_SUPPORTING_COPY}
+                    </p>
+                  </div>
+                ) : null}
                 {methods.map((id) => {
                   const selected = selectedMethod === id;
                   return (
@@ -131,7 +151,7 @@ export function ManualPaymentPanel({
             )}
           </div>
 
-          {selectedMethod ? (
+          {selectedMethod && methodUsable ? (
             <div className="space-y-2 rounded-xl border border-white/15 bg-white/5 px-3.5 py-3 text-right">
               <p className="text-sm font-bold text-white">
                 {manualPaymentMethodTitle(selectedMethod)}
@@ -206,7 +226,10 @@ export function ManualPaymentPanel({
           <button
             type="button"
             disabled={!canReport}
-            onClick={onReportPaid}
+            onClick={() => {
+              if (!canReport) return;
+              onReportPaid();
+            }}
             className="mt-1 w-full rounded-xl bg-emerald-600 px-4 py-3.5 text-base font-bold text-white shadow-[0_6px_18px_-6px_rgba(16,185,129,0.65)] ring-1 ring-emerald-300/50 transition hover:bg-emerald-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
           >
             {busy ? "מדווחים…" : MANUAL_PAYMENT_PAID_BUTTON}
