@@ -1,3 +1,5 @@
+import { parseManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
+import { manualPaymentReportedNotificationCopy } from "@/lib/billing/manual-payment-ui";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
 import {
   notificationDedupeKey,
@@ -76,16 +78,19 @@ export async function notifySitterManualPaymentReported(
   }
 ): Promise<void> {
   const kind: CanonicalNotificationKind = "manual_payment_reported";
+  const paymentMethod = parseManualPaymentMethod(input.paymentMethod);
+  const copy = manualPaymentReportedNotificationCopy(paymentMethod);
   await createInAppNotification(supabase, {
     userId: input.sitterId,
     kind,
-    title: "ההורה דיווח שהתשלום בוצע",
-    body: "יש לאשר האם התשלום התקבל.",
+    title: copy.title,
+    body: copy.body,
     payload: {
       booking_id: input.bookingId,
       sitter_id: input.sitterId,
       status: "awaiting_sitter_confirmation",
       gateway: "manual",
+      payment_method: paymentMethod,
       amount: null
     },
     dedupeKey: notificationDedupeKey(kind, {

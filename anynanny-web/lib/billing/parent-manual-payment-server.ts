@@ -135,10 +135,57 @@ export async function loadAuthorizedManualPaymentDestinations(
     paybox: { available: false }
   };
 
+  const rpc = await supabase.rpc("parent_manual_payment_destinations", {
+    p_booking_id: bookingId
+  });
+
+  if (!rpc.error) {
+    const payload = (rpc.data ?? {}) as {
+      bit_phone?: string | null;
+      paybox_phone?: string | null;
+    };
+    const bitPhone = String(payload.bit_phone ?? "").trim();
+    const payboxPhone = String(payload.paybox_phone ?? "").trim();
+    return {
+      ok: true,
+      destinations: {
+        bookingId: String(row.id),
+        cash: { available: true },
+        bit: isValidIsraeliMobile(bitPhone)
+          ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
+          : { available: false },
+        paybox: isValidIsraeliMobile(payboxPhone)
+          ? { available: true, destination: formatIsraeliMobileDisplay(payboxPhone) }
+          : { available: false }
+      }
+    };
+  }
+
+  const rpcMessage = String(rpc.error.message ?? "").toLowerCase();
+  if (
+    rpcMessage.includes("parent rating required") ||
+    rpcMessage.includes("shift is not completed") ||
+    rpcMessage.includes("not eligible") ||
+    rpcMessage.includes("not authorized") ||
+    rpcMessage.includes("booking not found")
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      error:
+        rpcMessage.includes("parent rating required")
+          ? "יש לדרג את הבייביסיטר לפני התשלום."
+          : rpcMessage.includes("shift is not completed")
+            ? "המשמרת טרם הסתיימה."
+            : "אין הרשאה לצפות בפרטי התשלום.",
+      reason: "rpc_denied"
+    };
+  }
+
   const admin = tryGetSupabaseServiceRoleClient();
   if (!admin) {
     console.warn(
-      "[loadAuthorizedManualPaymentDestinations] SUPABASE_SERVICE_ROLE_KEY missing; Bit/PayBox hidden"
+      "[loadAuthorizedManualPaymentDestinations] destinations RPC unavailable and SUPABASE_SERVICE_ROLE_KEY missing; Bit/PayBox hidden"
     );
     return { ok: true, destinations: cashOnly };
   }
