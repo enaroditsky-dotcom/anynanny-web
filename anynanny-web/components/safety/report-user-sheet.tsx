@@ -72,17 +72,18 @@ export function ReportUserSheet({ open, reportedUserId, reportedName, onClose }:
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+      className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-black/45 px-4 pt-4 pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))] scroll-pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="report-user-title"
       dir="rtl"
       onClick={close}
     >
-      <div
-        className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className="flex min-h-full justify-center">
+        <div
+          className="my-auto w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+        >
         {done ? (
           <>
             <h2 id="report-user-title" className="text-lg font-extrabold text-[#001F3F]">
@@ -166,6 +167,7 @@ export function ReportUserSheet({ open, reportedUserId, reportedName, onClose }:
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );

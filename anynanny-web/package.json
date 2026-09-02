@@ -30,7 +30,7 @@
     "test:parent-public-id-display": "npx --yes tsx scripts/test-parent-public-id-display.ts",
     "test:ugc-safety": "npx --yes tsx scripts/test-ugc-safety-moderation.ts",
     "test:release-stuck-shift-scope": "npx --yes tsx scripts/test-release-stuck-shift-scope.ts",
-    "test:missed-shift-lifecycle": "npx --yes tsx scripts/test-missed-shift-lifecycle.ts",
+    "test:modal-bottom-nav-clearance": "npx --yes tsx scripts/test-modal-bottom-nav-clearance.ts",
     "test:manual-payment-lifecycle": "npx --yes tsx scripts/test-manual-payment-lifecycle.ts",
     "test:manual-payment-parent-ui": "npx --yes tsx scripts/test-manual-payment-parent-ui.ts",
     "test:manual-payment-sitter-ui": "npx --yes tsx scripts/test-manual-payment-sitter-ui.ts",

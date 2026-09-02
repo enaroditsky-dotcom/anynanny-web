@@ -78,17 +78,18 @@ export function UserSafetyActions({ targetUserId, targetName, className = "" }: 
 
       {chooserOpen ? (
         <div
-          className="fixed inset-0 z-[120] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+          className="fixed inset-0 z-[120] overflow-y-auto overscroll-contain bg-black/45 px-4 pt-4 pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))] scroll-pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           dir="rtl"
           onClick={closeChooser}
         >
-          <div
-            className="relative w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
+          <div className="flex min-h-full justify-center">
+            <div
+              className="relative my-auto w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
             <button
               type="button"
               onClick={closeChooser}
@@ -137,6 +138,7 @@ export function UserSafetyActions({ targetUserId, targetName, className = "" }: 
               >
                 ביטול
               </button>
+            </div>
             </div>
           </div>
         </div>
