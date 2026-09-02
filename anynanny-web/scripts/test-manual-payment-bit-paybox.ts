@@ -5,14 +5,24 @@ import { fileURLToPath } from "node:url";
 import { evaluateManualPaymentTransition } from "../lib/billing/manual-payment-lifecycle";
 import {
   eligibleManualPaymentMethods,
+  MANUAL_PAYMENT_PAID_BUTTON,
+  MANUAL_PAYMENT_PAYBOX_OPEN_BUTTON,
   parentMayReadManualPaymentDestinations,
   parentReportedPaidByMethodCopy,
   sitterManualPaymentPromptForMethod
 } from "../lib/billing/manual-payment-ui";
 import {
+  EMPTY_SITTER_PAYOUT_METHODS,
+  payboxManualReceivingConfigured,
+  payoutMethodConfigured,
   validateOptionalBitPhone,
   validateOptionalPayboxPhone
 } from "../lib/wallet/sitter-payout-methods";
+import {
+  isValidPayboxPaymentLink,
+  parseAuthorizedPayboxPaymentLink,
+  validateOptionalPayboxPaymentLink
+} from "../lib/billing/paybox-payment-link";
 import { privacySafeBodyForKind } from "../lib/push/payload";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -42,6 +52,10 @@ const publicSearch = read("lib/sitter/parent-sitter-search.ts");
 const publicApi = read("app/api/parent/sitter/[id]/public/route.ts");
 const walletPage = read("app/sitter/wallet/page.tsx");
 const hypFinalize = read("lib/billing/finalize-hyp-payment.ts");
+const payboxLinkMigration = read(
+  "supabase/migrations/20260902140000_sitter_payout_paybox_link.sql"
+);
+const payboxLinkLib = read("lib/billing/paybox-payment-link.ts");
 
 // 1–4. Visibility by sitter configuration
 assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: true, payboxConfigured: false }), [
@@ -69,7 +83,14 @@ assert.match(parentDash, /\/api\/parent\/manual-payment-destinations/);
 assert.match(personal, /SitterManualReceivingDestinationsSection/);
 assert.match(receiving, /קבלה ב-Bit וב-PayBox/);
 assert.match(receiving, /שמירת Bit/);
-assert.match(receiving, /שמירת PayBox/);
+assert.match(receiving, /לינק אישי לקבלת תשלום ב-PayBox/);
+assert.match(receiving, /שמירת לינק|עדכון לינק/);
+assert.match(receiving, /מחיקת לינק/);
+assert.match(receiving, /validateOptionalPayboxPaymentLink/);
+assert.match(receiving, /payboxManualReceivingConfigured/);
+assert.doesNotMatch(receiving, /paybox:\/\//);
+assert.doesNotMatch(panel, /paybox:\/\//);
+assert.doesNotMatch(panel, /bit:\/\//);
 assert.match(receiving, /preferred: false/);
 assert.match(receiving, /validateOptionalBitPhone/);
 assert.match(receiving, /validateOptionalPayboxPhone/);
@@ -80,7 +101,8 @@ assert.ok(validateOptionalBitPhone("123") != null);
 assert.equal(validateOptionalBitPhone("0501234567"), null);
 
 assert.match(payoutRoute, /validateOptionalBitPhone/);
-assert.match(payoutRoute, /validateOptionalPayboxPhone/);
+assert.match(payoutRoute, /validateOptionalPayboxPaymentLink/);
+assert.match(payoutRoute, /payboxLink/);
 assert.match(payoutRoute, /preferred: bitPhone\.trim\(\) && setPreferred \? "bit"/);
 
 // Parent destinations RPC — no public exposure, no browser service role
@@ -117,9 +139,9 @@ assert.equal(
   false
 );
 
-assert.doesNotMatch(publicProfile, /payout_bit_phone|payout_paybox_phone/);
-assert.doesNotMatch(publicSearch, /payout_bit_phone|payout_paybox_phone/);
-assert.doesNotMatch(publicApi, /payout_bit_phone|payout_paybox_phone/);
+assert.doesNotMatch(publicProfile, /payout_bit_phone|payout_paybox_phone|payout_paybox_link/);
+assert.doesNotMatch(publicSearch, /payout_bit_phone|payout_paybox_phone|payout_paybox_link/);
+assert.doesNotMatch(publicApi, /payout_bit_phone|payout_paybox_phone|payout_paybox_link/);
 assert.match(publicApi, /sanitized JSON only via get_sitter_profile_public/);
 
 assert.match(columnPrivs, /revoke select \(payout_bit_phone, payout_paybox_phone\)/);
@@ -152,7 +174,7 @@ assert.doesNotMatch(
     sitterProfileLib.indexOf("SITTER_PROFILE_OWN_SELECT_COLUMNS"),
     sitterProfileLib.indexOf("export function isSitterProfilePrivatePayoutColumn")
   ),
-  /payout_bit_phone|payout_paybox_phone|"user_id"/
+  /payout_bit_phone|payout_paybox_phone|payout_paybox_link|"user_id"/
 );
 assert.match(personal, /\/api\/sitter\/profile/);
 assert.match(personal, /SitterManualReceivingDestinationsSection/);
@@ -200,5 +222,81 @@ assert.match(hypFinalize, /payment_status: "paid"/);
 assert.doesNotMatch(hypFinalize, /parent_manual_payment_destinations/);
 assert.match(walletPage, /SitterPayoutWalletCards/);
 assert.doesNotMatch(receiving, /hyp-register|PaymentFactory|כרטיס אשראי/);
+
+// PayBox personal payment link
+assert.match(payboxLinkMigration, /payout_paybox_link/);
+assert.match(payboxLinkMigration, /add column if not exists payout_paybox_link text/);
+assert.match(
+  payboxLinkMigration,
+  /revoke select \(payout_bit_phone, payout_paybox_phone, payout_paybox_link\)/
+);
+assert.match(payboxLinkMigration, /'paybox_link', nullif\(v_paybox_link, ''\)/);
+assert.match(payboxLinkMigration, /manual_payment_booking_has_parent_rating/);
+assert.match(payboxLinkLib, /links\.payboxapp\.com/);
+assert.match(payboxLinkLib, /payboxapp\.page\.link/);
+assert.doesNotMatch(payboxLinkLib, /paybox:\/\//);
+assert.match(panel, /MANUAL_PAYMENT_PAYBOX_OPEN_BUTTON/);
+assert.match(panel, /parseAuthorizedPayboxPaymentLink/);
+assert.equal(MANUAL_PAYMENT_PAYBOX_OPEN_BUTTON, "פתח PayBox");
+assert.equal(MANUAL_PAYMENT_PAID_BUTTON, "שילמתי");
+assert.match(destinationsServer, /paybox_link/);
+assert.match(destinationsServer, /parseAuthorizedPayboxPaymentLink/);
+assert.match(payoutMethodsLib, /payboxLink/);
+assert.match(payoutMethodsLib, /sitter_own_manual_payout_destinations/);
+assert.doesNotMatch(payoutMethodsLib, /const PUBLIC_SELECT_COLS =\s*"payout_preferred_method, payout_bit_phone/);
+
+assert.equal(validateOptionalPayboxPaymentLink(""), null);
+assert.equal(validateOptionalPayboxPaymentLink("   "), null);
+assert.ok(validateOptionalPayboxPaymentLink("javascript:alert(1)") != null);
+assert.ok(validateOptionalPayboxPaymentLink("data:text/html,hi") != null);
+assert.ok(validateOptionalPayboxPaymentLink("http://links.payboxapp.com/abc") != null);
+assert.ok(validateOptionalPayboxPaymentLink("https://example.com/pay") != null);
+assert.ok(validateOptionalPayboxPaymentLink("https://evilpayboxapp.com/x") != null);
+assert.ok(validateOptionalPayboxPaymentLink("paybox://pay") != null);
+assert.equal(
+  validateOptionalPayboxPaymentLink("https://links.payboxapp.com/BERDOOz1ZUb"),
+  null
+);
+assert.equal(validateOptionalPayboxPaymentLink(" https://www.payboxapp.com/pay/abc "), null);
+assert.ok(isValidPayboxPaymentLink("https://payboxapp.page.link/xyz"));
+assert.equal(
+  parseAuthorizedPayboxPaymentLink("https://links.payboxapp.com/BERDOOz1ZUb"),
+  "https://links.payboxapp.com/BERDOOz1ZUb"
+);
+assert.equal(parseAuthorizedPayboxPaymentLink("https://google.com"), null);
+
+const phoneOnly = {
+  ...EMPTY_SITTER_PAYOUT_METHODS,
+  payboxPhone: "0501234567"
+};
+const linkOnly = {
+  ...EMPTY_SITTER_PAYOUT_METHODS,
+  payboxLink: "https://links.payboxapp.com/BERDOOz1ZUb"
+};
+const neither = { ...EMPTY_SITTER_PAYOUT_METHODS };
+assert.equal(payoutMethodConfigured(phoneOnly, "paybox"), true);
+assert.equal(payboxManualReceivingConfigured(phoneOnly), true);
+assert.equal(payoutMethodConfigured(linkOnly, "paybox"), false);
+assert.equal(payboxManualReceivingConfigured(linkOnly), true);
+assert.equal(payboxManualReceivingConfigured(neither), false);
+assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConfigured: false }), [
+  "cash"
+]);
+assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConfigured: true }), [
+  "cash",
+  "paybox"
+]);
+
+assert.equal(
+  parentMayReadManualPaymentDestinations({
+    actorId: "p1",
+    bookingParentId: "p2",
+    bookingStatus: "completed",
+    paymentStatus: "unpaid",
+    hasParentRating: true
+  }).ok,
+  false
+);
+assert.doesNotMatch(destinationsRoute, /sitterId/);
 
 console.log("test-manual-payment-bit-paybox: PASS");

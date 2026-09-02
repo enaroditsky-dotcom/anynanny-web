@@ -7,6 +7,7 @@ import {
   validatePayoutCard,
   type SitterPayoutMethodKind
 } from "@/lib/wallet/sitter-payout-methods";
+import { validateOptionalPayboxPaymentLink } from "@/lib/billing/paybox-payment-link";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ type Body = {
   preferred?: boolean;
   bitPhone?: string;
   payboxPhone?: string;
+  payboxLink?: string;
   cardHolder?: string;
   /** Full card number or last4 — server stores last4 only. */
   cardNumber?: string;
@@ -75,12 +77,29 @@ export async function POST(request: Request) {
   }
 
   if (kind === "paybox") {
-    const payboxPhone = String(body.payboxPhone ?? "");
-    const err = validateOptionalPayboxPhone(payboxPhone);
-    if (err) return NextResponse.json({ error: err }, { status: 400 });
+    const hasPhone = Object.prototype.hasOwnProperty.call(body, "payboxPhone");
+    const hasLink = Object.prototype.hasOwnProperty.call(body, "payboxLink");
+    if (!hasPhone && !hasLink) {
+      return NextResponse.json(
+        { error: "נא להזין מספר PayBox או לינק אישי." },
+        { status: 400 }
+      );
+    }
+    const payboxPhone = hasPhone ? String(body.payboxPhone ?? "") : undefined;
+    const payboxLink = hasLink ? String(body.payboxLink ?? "") : undefined;
+    if (payboxPhone !== undefined) {
+      const err = validateOptionalPayboxPhone(payboxPhone);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+    }
+    if (payboxLink !== undefined) {
+      const err = validateOptionalPayboxPaymentLink(payboxLink);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+    }
     const saved = await saveSitterPayoutMethods(supabase, user.id, {
-      payboxPhone,
-      preferred: payboxPhone.trim() && setPreferred ? "paybox" : undefined
+      ...(payboxPhone !== undefined ? { payboxPhone } : {}),
+      ...(payboxLink !== undefined ? { payboxLink } : {}),
+      preferred:
+        payboxPhone?.trim() && setPreferred ? "paybox" : undefined
     });
     if (!saved.ok) {
       return NextResponse.json(

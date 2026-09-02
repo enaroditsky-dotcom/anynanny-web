@@ -9,11 +9,13 @@ import {
   EMPTY_SITTER_PAYOUT_METHODS,
   fetchSitterPayoutMethods,
   formatIsraeliMobileDisplay,
+  payboxManualReceivingConfigured,
   payoutMethodConfigured,
   validateOptionalBitPhone,
   validateOptionalPayboxPhone,
   type SitterPayoutMethods
 } from "@/lib/wallet/sitter-payout-methods";
+import { validateOptionalPayboxPaymentLink } from "@/lib/billing/paybox-payment-link";
 
 type SitterManualReceivingDestinationsSectionProps = {
   sitterId: string;
@@ -26,6 +28,7 @@ async function saveReceivingPhone(input: {
   kind: "bit" | "paybox";
   bitPhone?: string;
   payboxPhone?: string;
+  payboxLink?: string;
 }): Promise<{ ok: true; methods: SitterPayoutMethods } | { ok: false; error: string }> {
   const res = await fetch("/api/sitter/payout-methods", {
     method: "POST",
@@ -35,6 +38,7 @@ async function saveReceivingPhone(input: {
       kind: input.kind,
       bitPhone: input.bitPhone,
       payboxPhone: input.payboxPhone,
+      payboxLink: input.payboxLink,
       preferred: false
     })
   });
@@ -58,11 +62,14 @@ export function SitterManualReceivingDestinationsSection({
   const [methods, setMethods] = useState<SitterPayoutMethods>({ ...EMPTY_SITTER_PAYOUT_METHODS });
   const [bitPhone, setBitPhone] = useState("");
   const [payboxPhone, setPayboxPhone] = useState("");
+  const [payboxLink, setPayboxLink] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingBit, setSavingBit] = useState(false);
   const [savingPaybox, setSavingPaybox] = useState(false);
+  const [savingPayboxLink, setSavingPayboxLink] = useState(false);
   const [bitError, setBitError] = useState<string | null>(null);
   const [payboxError, setPayboxError] = useState<string | null>(null);
+  const [payboxLinkError, setPayboxLinkError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -76,6 +83,7 @@ export function SitterManualReceivingDestinationsSection({
     setMethods(result.methods);
     setBitPhone(result.methods.bitPhone);
     setPayboxPhone(result.methods.payboxPhone);
+    setPayboxLink(result.methods.payboxLink);
     setLoading(false);
   }, [sitterId]);
 
@@ -122,11 +130,49 @@ export function SitterManualReceivingDestinationsSection({
     }
     setMethods(result.methods);
     setPayboxPhone(result.methods.payboxPhone);
+    setPayboxLink(result.methods.payboxLink);
     setToast(
       result.methods.payboxPhone.trim()
         ? "מספר PayBox נשמר. ההורים יראו אותו רק בתשלום ידני."
         : "מספר PayBox הוסר."
     );
+  };
+
+  const savePayboxLink = async () => {
+    const err = validateOptionalPayboxPaymentLink(payboxLink);
+    if (err) {
+      setPayboxLinkError(err);
+      return;
+    }
+    setPayboxLinkError(null);
+    setSavingPayboxLink(true);
+    const result = await saveReceivingPhone({ kind: "paybox", payboxLink });
+    setSavingPayboxLink(false);
+    if (!result.ok) {
+      setPayboxLinkError(result.error);
+      return;
+    }
+    setMethods(result.methods);
+    setPayboxLink(result.methods.payboxLink);
+    setToast(
+      result.methods.payboxLink.trim()
+        ? "לינק PayBox נשמר. ההורים יפתחו אותו רק בתשלום ידני."
+        : "לינק PayBox הוסר."
+    );
+  };
+
+  const clearPayboxLink = async () => {
+    setPayboxLinkError(null);
+    setSavingPayboxLink(true);
+    const result = await saveReceivingPhone({ kind: "paybox", payboxLink: "" });
+    setSavingPayboxLink(false);
+    if (!result.ok) {
+      setPayboxLinkError(result.error);
+      return;
+    }
+    setMethods(result.methods);
+    setPayboxLink("");
+    setToast("לינק PayBox הוסר.");
   };
 
   return (
@@ -183,8 +229,15 @@ export function SitterManualReceivingDestinationsSection({
                 <p className="text-sm font-bold text-[#001F3F]">PayBox</p>
               </div>
               <p className="text-[13px] text-slate-500">
-                {payoutMethodConfigured(methods, "paybox")
-                  ? `שמור: ${formatIsraeliMobileDisplay(methods.payboxPhone)}`
+                {payboxManualReceivingConfigured(methods)
+                  ? [
+                      payoutMethodConfigured(methods, "paybox")
+                        ? `מספר שמור: ${formatIsraeliMobileDisplay(methods.payboxPhone)}`
+                        : null,
+                      methods.payboxLink.trim() ? "לינק אישי שמור" : null
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
                   : "לא הוגדר — ההורים לא יראו אפשרות PayBox."}
               </p>
               <label className="mt-2 block text-right text-xs font-bold text-slate-600">
@@ -211,6 +264,49 @@ export function SitterManualReceivingDestinationsSection({
               >
                 {savingPaybox ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת PayBox"}
               </button>
+              <label className="mt-4 block text-right text-xs font-bold text-slate-600">
+                לינק אישי לקבלת תשלום ב-PayBox
+                <input
+                  className={fieldClassName}
+                  dir="ltr"
+                  inputMode="url"
+                  autoComplete="off"
+                  placeholder="https://links.payboxapp.com/…"
+                  value={payboxLink}
+                  onChange={(e) => setPayboxLink(e.target.value)}
+                  disabled={savingPayboxLink}
+                />
+              </label>
+              <p className="mt-1 text-[12px] font-medium text-slate-400">אופציונלי. קישור HTTPS של PayBox בלבד.</p>
+              {payboxLinkError ? (
+                <p className="mt-1 text-xs font-medium text-rose-700">{payboxLinkError}</p>
+              ) : null}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void savePayboxLink()}
+                  disabled={savingPayboxLink}
+                  className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  {savingPayboxLink ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : methods.payboxLink.trim() ? (
+                    "עדכון לינק"
+                  ) : (
+                    "שמירת לינק"
+                  )}
+                </button>
+                {methods.payboxLink.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => void clearPayboxLink()}
+                    disabled={savingPayboxLink}
+                    className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 disabled:opacity-50"
+                  >
+                    מחיקת לינק
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         )}

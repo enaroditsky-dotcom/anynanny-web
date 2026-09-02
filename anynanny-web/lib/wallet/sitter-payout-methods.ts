@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { brandLabelHe, fetchHypCardToken, inferCardBrand } from "@/lib/billing/hyp/token";
+import {
+  normalizePayboxPaymentLink,
+  parseAuthorizedPayboxPaymentLink,
+  validateOptionalPayboxPaymentLink
+} from "@/lib/billing/paybox-payment-link";
 import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 
@@ -9,6 +14,8 @@ export type SitterPayoutMethods = {
   preferred: SitterPayoutMethodKind | "bank" | null;
   bitPhone: string;
   payboxPhone: string;
+  /** Optional private PayBox personal payment HTTPS link. */
+  payboxLink: string;
   cardHolder: string;
   cardLast4: string;
   cardExpMonth: number | null;
@@ -23,6 +30,7 @@ export const EMPTY_SITTER_PAYOUT_METHODS: SitterPayoutMethods = {
   preferred: null,
   bitPhone: "",
   payboxPhone: "",
+  payboxLink: "",
   cardHolder: "",
   cardLast4: "",
   cardExpMonth: null,
@@ -34,7 +42,7 @@ export const EMPTY_SITTER_PAYOUT_METHODS: SitterPayoutMethods = {
 
 export const HYP_SITTER_PAYOUT_METHOD_PREFIX = "SitterPayoutMethod_" as const;
 
-/** Direct table SELECT must not request payout_bit_phone / payout_paybox_phone (column privileges). */
+/** Direct table SELECT must not request payout_bit_phone / payout_paybox_phone / payout_paybox_link (column privileges). */
 const PUBLIC_SELECT_COLS =
   "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number, payout_card_brand, payout_hyp_tokef, payout_hyp_trans_id";
 
@@ -116,6 +124,8 @@ export function validateOptionalPayboxPhone(phone: string): string | null {
   return validatePayboxPhone(phone);
 }
 
+export { validateOptionalPayboxPaymentLink };
+
 export function validatePayoutCard(input: {
   holder: string;
   last4OrNumber: string;
@@ -185,6 +195,7 @@ function mapRow(row: Record<string, unknown> | null): SitterPayoutMethods {
     preferred,
     bitPhone: String(row.payout_bit_phone ?? ""),
     payboxPhone: String(row.payout_paybox_phone ?? ""),
+    payboxLink: parseAuthorizedPayboxPaymentLink(String(row.payout_paybox_link ?? "")) ?? "",
     cardHolder: String(row.payout_card_holder ?? ""),
     cardLast4: String(row.payout_card_last4 ?? ""),
     cardExpMonth:
@@ -206,6 +217,7 @@ function isMissingSchema(message: string | undefined): boolean {
     isPostgrestSchemaDriftError(msg) ||
     isPostgrestMissingColumnError(msg, "payout_bit_phone") ||
     isPostgrestMissingColumnError(msg, "payout_paybox_phone") ||
+    isPostgrestMissingColumnError(msg, "payout_paybox_link") ||
     isPostgrestMissingColumnError(msg, "payout_card_last4") ||
     isPostgrestMissingColumnError(msg, "payout_card_id_number") ||
     isPostgrestMissingColumnError(msg, "payout_hyp_token") ||
@@ -217,8 +229,8 @@ function isMissingSchema(message: string | undefined): boolean {
 async function loadOwnManualPayoutPhones(
   supabase: SupabaseClient,
   sitterId: string
-): Promise<{ bitPhone: string; payboxPhone: string }> {
-  const empty = { bitPhone: "", payboxPhone: "" };
+): Promise<{ bitPhone: string; payboxPhone: string; payboxLink: string }> {
+  const empty = { bitPhone: "", payboxPhone: "", payboxLink: "" };
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -228,10 +240,15 @@ async function loadOwnManualPayoutPhones(
 
   const rpc = await supabase.rpc("sitter_own_manual_payout_destinations");
   if (!rpc.error) {
-    const payload = (rpc.data ?? {}) as { bit_phone?: string | null; paybox_phone?: string | null };
+    const payload = (rpc.data ?? {}) as {
+      bit_phone?: string | null;
+      paybox_phone?: string | null;
+      paybox_link?: string | null;
+    };
     return {
       bitPhone: String(payload.bit_phone ?? ""),
-      payboxPhone: String(payload.paybox_phone ?? "")
+      payboxPhone: String(payload.paybox_phone ?? ""),
+      payboxLink: String(payload.paybox_link ?? "")
     };
   }
 
@@ -242,14 +259,19 @@ async function loadOwnManualPayoutPhones(
 
   const fallback = await supabase
     .from(SITTER_PROFILES_TABLE)
-    .select("payout_bit_phone, payout_paybox_phone")
+    .select("payout_bit_phone, payout_paybox_phone, payout_paybox_link")
     .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
     .maybeSingle();
   if (fallback.error) return empty;
-  const row = fallback.data as { payout_bit_phone?: string | null; payout_paybox_phone?: string | null } | null;
+  const row = fallback.data as {
+    payout_bit_phone?: string | null;
+    payout_paybox_phone?: string | null;
+    payout_paybox_link?: string | null;
+  } | null;
   return {
     bitPhone: String(row?.payout_bit_phone ?? ""),
-    payboxPhone: String(row?.payout_paybox_phone ?? "")
+    payboxPhone: String(row?.payout_paybox_phone ?? ""),
+    payboxLink: String(row?.payout_paybox_link ?? "")
   };
 }
 
@@ -282,7 +304,8 @@ async function selectPayoutRow(
   const merged: Record<string, unknown> = {
     ...(row ?? {}),
     payout_bit_phone: phones.bitPhone || null,
-    payout_paybox_phone: phones.payboxPhone || null
+    payout_paybox_phone: phones.payboxPhone || null,
+    payout_paybox_link: phones.payboxLink || null
   };
 
   return { row: merged, error: null, missingSchema: !tableSelectOk };
@@ -329,6 +352,10 @@ function buildUpdatePayload(patch: SitterPayoutSavePatch): Record<string, unknow
   }
   if (patch.payboxPhone !== undefined) {
     row.payout_paybox_phone = normalizePhone(patch.payboxPhone) || null;
+  }
+  if (patch.payboxLink !== undefined) {
+    const normalized = normalizePayboxPaymentLink(patch.payboxLink);
+    row.payout_paybox_link = parseAuthorizedPayboxPaymentLink(normalized) || null;
   }
   if (patch.cardHolder !== undefined) {
     row.payout_card_holder = patch.cardHolder.trim() || null;
@@ -475,5 +502,13 @@ export function payoutMethodConfigured(
       /^\d{4}$/.test(methods.cardLast4) &&
       methods.cardExpMonth &&
       methods.cardExpYear
+  );
+}
+
+/** Parent-visible PayBox: phone fallback and/or a valid personal payment link. */
+export function payboxManualReceivingConfigured(methods: SitterPayoutMethods): boolean {
+  return (
+    isValidIsraeliMobile(methods.payboxPhone) ||
+    Boolean(parseAuthorizedPayboxPaymentLink(methods.payboxLink))
   );
 }
