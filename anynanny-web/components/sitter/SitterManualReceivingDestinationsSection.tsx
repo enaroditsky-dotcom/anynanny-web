@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Smartphone } from "lucide-react";
+import { HelpCircle, Loader2, Smartphone } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
 import { PersonalAreaSection } from "@/components/personal-area/personal-area-ui";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -23,6 +23,27 @@ type SitterManualReceivingDestinationsSectionProps = {
 
 const fieldClassName =
   "mt-1.5 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#0B3C5D]/40 focus:bg-white focus:ring-2 focus:ring-[#0B3C5D]/15 disabled:opacity-60";
+
+export const PAYBOX_PERSONAL_LINK_HELP_TOGGLE = "הסבר";
+export const PAYBOX_PERSONAL_LINK_HELP_TITLE = "איך משתמשים בלינק האישי שלי ב-PayBox?";
+export const PAYBOX_PERSONAL_LINK_HELP_PARAGRAPHS = [
+  "יש כמה דרכים להשתמש בלינק האישי שלך ב-PayBox.",
+  "כדי למצוא את הלינק האישי שלך, יש להיכנס ל-PayBox ולפתוח את האפשרות של הלינק האישי שלך.",
+  "לאחר קבלת הלינק ניתן להעתיק אותו ולשתף אותו בוואטסאפ, SMS, מייל או בכל מקום אחר שבו ניתן לשלוח קישור.",
+  "כאשר הורה לוחץ על הלינק, PayBox נפתח ומאפשר לו להעביר אלייך תשלום.",
+  "ניתן להשתמש באותו לינק גם ליצירת קוד QR, כך שניתן לסרוק אותו ולבצע תשלום ישירות דרך PayBox.",
+  "ב-AnyNanny יש להעתיק את הלינק האישי שלך מ-PayBox ולהדביק אותו בשדה שמעל.",
+  "הלינק צריך להתחיל ב:"
+] as const;
+export const PAYBOX_PERSONAL_LINK_HELP_PREFIX = "https://";
+export const PAYBOX_PERSONAL_LINK_HELP_STEPS = [
+  "פתחי את אפליקציית PayBox.",
+  "מצאי את הלינק האישי שלך לקבלת תשלום.",
+  "העתיקי את הלינק.",
+  "חזרי ל-AnyNanny.",
+  "הדביקי אותו בשדה PayBox.",
+  "שמרי את השינוי."
+] as const;
 
 async function saveReceivingPhone(input: {
   kind: "bit" | "paybox";
@@ -70,6 +91,7 @@ export function SitterManualReceivingDestinationsSection({
   const [bitError, setBitError] = useState<string | null>(null);
   const [payboxError, setPayboxError] = useState<string | null>(null);
   const [payboxLinkError, setPayboxLinkError] = useState<string | null>(null);
+  const [payboxLinkHelpOpen, setPayboxLinkHelpOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -264,9 +286,27 @@ export function SitterManualReceivingDestinationsSection({
               >
                 {savingPaybox ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת PayBox"}
               </button>
-              <label className="mt-4 block text-right text-xs font-bold text-slate-600">
-                לינק אישי לקבלת תשלום ב-PayBox
+              <div className="mt-4 min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <label
+                    htmlFor="sitter-paybox-personal-link"
+                    className="min-w-0 text-right text-xs font-bold text-slate-600"
+                  >
+                    לינק אישי לקבלת תשלום ב-PayBox
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setPayboxLinkHelpOpen((open) => !open)}
+                    aria-expanded={payboxLinkHelpOpen}
+                    aria-controls="sitter-paybox-personal-link-help"
+                    className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-[#0B6BCB] underline decoration-[#0B6BCB]/35 underline-offset-2 transition hover:text-[#08529a] hover:decoration-[#08529a]"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" aria-hidden />
+                    {PAYBOX_PERSONAL_LINK_HELP_TOGGLE}
+                  </button>
+                </div>
                 <input
+                  id="sitter-paybox-personal-link"
                   className={fieldClassName}
                   dir="ltr"
                   inputMode="url"
@@ -276,8 +316,37 @@ export function SitterManualReceivingDestinationsSection({
                   onChange={(e) => setPayboxLink(e.target.value)}
                   disabled={savingPayboxLink}
                 />
-              </label>
-              <p className="mt-1 text-[12px] font-medium text-slate-400">אופציונלי. קישור HTTPS של PayBox בלבד.</p>
+                <p className="mt-1 text-[12px] font-medium text-slate-400">
+                  אופציונלי. קישור HTTPS של PayBox בלבד.
+                </p>
+                {payboxLinkHelpOpen ? (
+                  <div
+                    id="sitter-paybox-personal-link-help"
+                    className="mt-2 min-w-0 overflow-hidden break-words rounded-xl border border-slate-200/80 bg-white px-3 py-3 text-right text-[13px] leading-relaxed text-slate-600"
+                    dir="rtl"
+                  >
+                    <p className="font-bold text-slate-700">{PAYBOX_PERSONAL_LINK_HELP_TITLE}</p>
+                    <div className="mt-2 space-y-2 select-text">
+                      {PAYBOX_PERSONAL_LINK_HELP_PARAGRAPHS.map((paragraph) => (
+                        <p key={paragraph}>{paragraph}</p>
+                      ))}
+                      <p
+                        className="font-mono text-sm font-semibold tracking-tight text-slate-700"
+                        dir="ltr"
+                      >
+                        {PAYBOX_PERSONAL_LINK_HELP_PREFIX}
+                      </p>
+                    </div>
+                    <ol className="mt-3 list-decimal space-y-1 pr-5 text-[13px] text-slate-600 select-text">
+                      {PAYBOX_PERSONAL_LINK_HELP_STEPS.map((step) => (
+                        <li key={step} className="break-words pr-1">
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : null}
+              </div>
               {payboxLinkError ? (
                 <p className="mt-1 text-xs font-medium text-rose-700">{payboxLinkError}</p>
               ) : null}
