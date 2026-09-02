@@ -71,17 +71,18 @@ export function DeleteAccountSection() {
 
       {dialogOpen ? (
         <div
-          className="fixed inset-0 z-[130] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+          className="fixed inset-0 z-[130] overflow-y-auto overscroll-contain bg-black/45 px-4 pt-4 pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))] scroll-pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-account-title"
           dir="rtl"
           onClick={closeDialog}
         >
-          <div
-            className="w-full max-w-md rounded-2xl border border-navy-header/15 bg-white p-5 shadow-xl shadow-[#001F3F]/15"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="flex min-h-full justify-center">
+            <div
+              className="my-auto w-full max-w-md rounded-2xl border border-navy-header/15 bg-white p-5 shadow-xl shadow-[#001F3F]/15"
+              onClick={(e) => e.stopPropagation()}
+            >
             <h2 id="delete-account-title" className="text-right text-lg font-bold text-rose-700">
               אזהרה!
             </h2>
@@ -112,6 +113,7 @@ export function DeleteAccountSection() {
               >
                 לא
               </button>
+            </div>
             </div>
           </div>
         </div>
