@@ -48,7 +48,7 @@ for (const column of SITTER_PROFILE_PRIVATE_PAYOUT_COLUMNS) {
   assert.ok(!ownSelect.includes(column));
 }
 assert.doesNotMatch(sitterProfileOwnSelectClause(), /\buser_id\b/);
-assert.doesNotMatch(sitterProfileOwnSelectClause(), /payout_bit_phone|payout_paybox_phone/);
+assert.doesNotMatch(sitterProfileOwnSelectClause(), /payout_bit_phone|payout_paybox_phone|payout_paybox_link/);
 
 const fetchOwn = read("lib/sitter/sitter-profile.ts");
 assert.match(fetchOwn, /\.eq\("id", userId\)/);

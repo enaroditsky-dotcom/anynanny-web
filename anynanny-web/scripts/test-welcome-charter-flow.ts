@@ -220,8 +220,14 @@ assert.equal(
   "/welcome?role=parent&mode=replay&from=%2Fparent%2Fprofile"
 );
 
-// 16–17. Full charter later is read-only
-assert.match(community, /charterFullHref\(role, settingsPath\)/);
+// 16–17. Full charter later is read-only (canonical Settings legal section)
+const legalSection = read("components/settings/settings-legal-documents-section.tsx");
+assert.match(parentSettings, /SettingsLegalDocumentsSection from="\/parent\/settings"/);
+assert.match(sitterSettings, /SettingsLegalDocumentsSection from="\/sitter\/settings"/);
+assert.match(legalSection, /settingsLegalDocumentHrefs\(from\)/);
+assert.match(legalSection, /hrefs\.parentCharter/);
+assert.match(legalSection, /hrefs\.sitterCharter/);
+assert.doesNotMatch(community, /charterFullHref|getCharterDocument/);
 assert.equal(charterFullHref("parent", "/parent/settings").includes("/charter/full"), true);
 assert.match(read("app/charter/full/page.tsx"), /CharterFullDocument/);
 assert.doesNotMatch(read("app/charter/full/page.tsx"), /charter-acceptance/);
