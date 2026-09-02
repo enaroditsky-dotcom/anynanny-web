@@ -1,3 +1,4 @@
+import { parentReportedPaidByMethodCopy } from "@/lib/billing/manual-payment-ui";
 import {
   isCanonicalNotificationKind,
   notificationHrefForKind,
@@ -39,7 +40,14 @@ const KIND_BODY: Record<string, string> = {
   rating_required: "נדרש דירוג למשמרת"
 };
 
-export function privacySafeBodyForKind(kind: string): string {
+export function privacySafeBodyForKind(
+  kind: string,
+  payload?: CanonicalNotificationPayload | null
+): string {
+  if (kind === "manual_payment_reported") {
+    const reported = parentReportedPaidByMethodCopy(payload?.payment_method);
+    if (reported) return reported;
+  }
   return KIND_BODY[kind] ?? "יש לכם עדכון חדש ב-AnyNanny";
 }
 
@@ -72,7 +80,7 @@ export function buildPrivacySafePushPayload(input: {
   const url = href.startsWith("/") ? href : `/${href}`;
   const result: PrivacySafePushPayload = {
     title: DEFAULT_PUSH_TITLE,
-    body: privacySafeBodyForKind(kind),
+    body: privacySafeBodyForKind(kind, input.payload ?? null),
     url,
     notificationId: String(input.notificationId ?? "").trim(),
     kind

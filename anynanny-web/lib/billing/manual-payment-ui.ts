@@ -33,14 +33,49 @@ export const PARENT_PAYMENT_DISPUTE_SITTER_DENIED_MESSAGE =
   "הנני דיווחה שהתשלום טרם התקבל." as const;
 export const PARENT_RESOLVE_PAYMENT_DISPUTE_BUTTON = "הסדרתי את התשלום" as const;
 
+export const MANUAL_PAYMENT_REPORTED_BY_METHOD: Record<ManualPaymentMethod, string> = {
+  cash: "ההורה דיווח ששילם במזומן",
+  bit: "ההורה דיווח ששילם ב-Bit",
+  paybox: "ההורה דיווח ששילם ב-PayBox"
+};
+
 export const MANUAL_PAYMENT_REPORTED_NOTIFICATION = {
   kind: "manual_payment_reported",
   title: "ההורה דיווח שהתשלום בוצע",
   body: "יש לאשר האם התשלום התקבל."
 } as const;
 
+export function parentReportedPaidByMethodCopy(
+  method: string | null | undefined
+): string | null {
+  const parsed = parseSelectedManualPaymentMethod(method);
+  return parsed ? MANUAL_PAYMENT_REPORTED_BY_METHOD[parsed] : null;
+}
+
+export function manualPaymentReportedNotificationCopy(
+  method: string | null | undefined
+): { title: string; body: string } {
+  const reported = parentReportedPaidByMethodCopy(method);
+  if (!reported) {
+    return {
+      title: MANUAL_PAYMENT_REPORTED_NOTIFICATION.title,
+      body: MANUAL_PAYMENT_REPORTED_NOTIFICATION.body
+    };
+  }
+  return { title: reported, body: reported };
+}
+
 export const SITTER_MANUAL_PAYMENT_PROMPT =
   "ההורה דיווח שהתשלום בוצע. האם קיבלת את התשלום?" as const;
+
+export function sitterManualPaymentPromptForMethod(
+  method: string | null | undefined
+): string {
+  const reported = parentReportedPaidByMethodCopy(method);
+  if (!reported) return SITTER_MANUAL_PAYMENT_PROMPT;
+  return `${reported}. האם קיבלת את התשלום?`;
+}
+
 export const SITTER_CONFIRM_RECEIVED_BUTTON = "כן, קיבלתי" as const;
 export const SITTER_DENY_RECEIVED_BUTTON = "לא קיבלתי" as const;
 export const SITTER_AWAITING_RATING_LABEL = "ממתין לדירוג" as const;

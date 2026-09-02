@@ -64,6 +64,7 @@ export type CanonicalNotificationPayload = {
   session_ids?: string[] | null;
   amount?: string | null;
   gateway?: string | null;
+  payment_method?: string | null;
 };
 
 export function isCanonicalNotificationKind(

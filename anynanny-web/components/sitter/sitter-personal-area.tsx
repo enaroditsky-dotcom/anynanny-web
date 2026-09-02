@@ -18,6 +18,7 @@ import {
   yesNoLabel
 } from "@/components/personal-area/personal-area-ui";
 import { SitterBankDetailsSection } from "@/components/sitter/SitterBankDetailsSection";
+import { SitterManualReceivingDestinationsSection } from "@/components/sitter/SitterManualReceivingDestinationsSection";
 import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
@@ -715,6 +716,8 @@ export function SitterPersonalArea({ userId }: Props) {
             : "הצהרה טרם אושרה"}
         </p>
       </PersonalAreaSection>
+
+      <SitterManualReceivingDestinationsSection sitterId={userId} />
 
       <SitterBankDetailsSection sitterId={userId} />
 

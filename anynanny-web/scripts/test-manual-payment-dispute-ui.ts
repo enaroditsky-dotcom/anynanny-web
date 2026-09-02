@@ -23,7 +23,8 @@ import {
   resolveSitterManualPaymentStep,
   SITTER_CONFIRM_RECEIVED_BUTTON,
   SITTER_DENY_RECEIVED_BUTTON,
-  SITTER_MANUAL_PAYMENT_PROMPT
+  SITTER_MANUAL_PAYMENT_PROMPT,
+  sitterManualPaymentPromptForMethod
 } from "../lib/billing/manual-payment-ui";
 import {
   bookingPaymentStatusLabel,

@@ -76,7 +76,7 @@ export async function POST(request: Request) {
 
   const booking = await supabase
     .from("bookings")
-    .select("id, sitter_id, payment_status")
+    .select("id, sitter_id, payment_status, payment_method")
     .eq("id", bookingId)
     .eq("parent_id", user.id)
     .maybeSingle();
@@ -84,12 +84,15 @@ export async function POST(request: Request) {
   const sitterId = String(
     (booking.data as { sitter_id?: string | null } | null)?.sitter_id ?? ""
   ).trim();
+  const storedMethod = parseReportManualPaymentMethod(
+    (booking.data as { payment_method?: string | null } | null)?.payment_method
+  );
   const admin = tryGetSupabaseServiceRoleClient();
   if (sitterId && admin && payload.noop !== true) {
     await notifySitterManualPaymentReported(admin, {
       sitterId,
       bookingId,
-      paymentMethod
+      paymentMethod: storedMethod ?? paymentMethod
     });
   }
 

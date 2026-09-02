@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import {
   saveSitterPayoutMethods,
-  validateBitPhone,
-  validatePayboxPhone,
+  validateOptionalBitPhone,
+  validateOptionalPayboxPhone,
   validatePayoutCard,
   type SitterPayoutMethodKind
 } from "@/lib/wallet/sitter-payout-methods";
@@ -58,11 +58,12 @@ export async function POST(request: Request) {
   const setPreferred = body.preferred !== false;
 
   if (kind === "bit") {
-    const err = validateBitPhone(String(body.bitPhone ?? ""));
+    const bitPhone = String(body.bitPhone ?? "");
+    const err = validateOptionalBitPhone(bitPhone);
     if (err) return NextResponse.json({ error: err }, { status: 400 });
     const saved = await saveSitterPayoutMethods(supabase, user.id, {
-      bitPhone: String(body.bitPhone ?? ""),
-      preferred: setPreferred ? "bit" : undefined
+      bitPhone,
+      preferred: bitPhone.trim() && setPreferred ? "bit" : undefined
     });
     if (!saved.ok) {
       return NextResponse.json(
@@ -74,11 +75,12 @@ export async function POST(request: Request) {
   }
 
   if (kind === "paybox") {
-    const err = validatePayboxPhone(String(body.payboxPhone ?? ""));
+    const payboxPhone = String(body.payboxPhone ?? "");
+    const err = validateOptionalPayboxPhone(payboxPhone);
     if (err) return NextResponse.json({ error: err }, { status: 400 });
     const saved = await saveSitterPayoutMethods(supabase, user.id, {
-      payboxPhone: String(body.payboxPhone ?? ""),
-      preferred: setPreferred ? "paybox" : undefined
+      payboxPhone,
+      preferred: payboxPhone.trim() && setPreferred ? "paybox" : undefined
     });
     if (!saved.ok) {
       return NextResponse.json(

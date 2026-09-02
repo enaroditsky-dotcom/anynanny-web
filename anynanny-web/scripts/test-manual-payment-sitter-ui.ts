@@ -12,6 +12,7 @@ import {
   SITTER_CONFIRM_RECEIVED_BUTTON,
   SITTER_DENY_RECEIVED_BUTTON,
   SITTER_MANUAL_PAYMENT_PROMPT,
+  sitterManualPaymentPromptForMethod,
   resolveSitterManualPaymentStep
 } from "../lib/billing/manual-payment-ui";
 import {
@@ -41,13 +42,28 @@ const hypFinalize = read("lib/billing/finalize-hyp-payment.ts");
 
 // 1. awaiting_sitter_confirmation → כן / לא
 assert.equal(resolveSitterManualPaymentStep("awaiting_sitter_confirmation"), "confirm");
+assert.equal(
+  sitterManualPaymentPromptForMethod("cash"),
+  "ההורה דיווח ששילם במזומן. האם קיבלת את התשלום?"
+);
+assert.equal(
+  sitterManualPaymentPromptForMethod("bit"),
+  "ההורה דיווח ששילם ב-Bit. האם קיבלת את התשלום?"
+);
+assert.equal(
+  sitterManualPaymentPromptForMethod("paybox"),
+  "ההורה דיווח ששילם ב-PayBox. האם קיבלת את התשלום?"
+);
 assert.equal(SITTER_MANUAL_PAYMENT_PROMPT, "ההורה דיווח שהתשלום בוצע. האם קיבלת את התשלום?");
 assert.equal(SITTER_CONFIRM_RECEIVED_BUTTON, "כן, קיבלתי");
 assert.equal(SITTER_DENY_RECEIVED_BUTTON, "לא קיבלתי");
 assert.match(dashboard, /SitterManualPaymentConfirmPanel/);
 assert.match(dashboard, /showManualConfirm/);
+assert.match(dashboard, /settlementPayment\?\.paymentMethod/);
+assert.match(panel, /sitterManualPaymentPromptForMethod/);
 assert.match(panel, /SITTER_CONFIRM_RECEIVED_BUTTON/);
 assert.match(panel, /SITTER_DENY_RECEIVED_BUTTON/);
+assert.match(fetchHelper, /parseManualPaymentMethod\(row\.payment_method\)/);
 
 // 2–3. Confirm → awaiting_sitter_rating, actions disappear
 assert.deepEqual(

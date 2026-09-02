@@ -34,7 +34,8 @@
     "test:manual-payment-lifecycle": "npx --yes tsx scripts/test-manual-payment-lifecycle.ts",
     "test:manual-payment-parent-ui": "npx --yes tsx scripts/test-manual-payment-parent-ui.ts",
     "test:manual-payment-sitter-ui": "npx --yes tsx scripts/test-manual-payment-sitter-ui.ts",
-    "test:manual-payment-dispute-ui": "npx --yes tsx scripts/test-manual-payment-dispute-ui.ts"
+    "test:manual-payment-dispute-ui": "npx --yes tsx scripts/test-manual-payment-dispute-ui.ts",
+    "test:manual-payment-bit-paybox": "npx --yes tsx scripts/test-manual-payment-bit-paybox.ts"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",

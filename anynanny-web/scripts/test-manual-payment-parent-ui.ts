@@ -14,7 +14,9 @@ import {
   MANUAL_PAYMENT_HEADING,
   MANUAL_PAYMENT_PAID_BUTTON,
   MANUAL_PAYMENT_REPORTED_NOTIFICATION,
+  manualPaymentReportedNotificationCopy,
   parentMayReadManualPaymentDestinations,
+  parentReportedPaidByMethodCopy,
   PAYMENT_DISPUTE_HEADING,
   PARENT_RESOLVE_PAYMENT_DISPUTE_BUTTON,
   resolveParentManualSettlementStep
@@ -108,6 +110,7 @@ assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConf
   "cash",
   "paybox"
 ]);
+assert.match(destinationsServer, /parent_manual_payment_destinations/);
 assert.match(destinationsServer, /isValidIsraeliMobile\(bitPhone\)/);
 assert.match(destinationsServer, /isValidIsraeliMobile\(payboxPhone\)/);
 assert.match(reportRoute, /methodHasAuthorizedDestination/);
@@ -196,18 +199,37 @@ assert.match(dashboard, /PARENT_RESOLVE_PAYMENT_DISPUTE_BUTTON/);
 assert.match(dashboard, /PAYMENT_DISPUTE_PARENT_HEADING/);
 assert.doesNotMatch(dashboard, /PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE/);
 
-// Notification
+// Notification — method-specific copy from booking.payment_method
 assert.equal(MANUAL_PAYMENT_REPORTED_NOTIFICATION.kind, "manual_payment_reported");
-assert.equal(MANUAL_PAYMENT_REPORTED_NOTIFICATION.title, "ההורה דיווח שהתשלום בוצע");
-assert.equal(MANUAL_PAYMENT_REPORTED_NOTIFICATION.body, "יש לאשר האם התשלום התקבל.");
+assert.equal(parentReportedPaidByMethodCopy("cash"), "ההורה דיווח ששילם במזומן");
+assert.equal(parentReportedPaidByMethodCopy("bit"), "ההורה דיווח ששילם ב-Bit");
+assert.equal(parentReportedPaidByMethodCopy("paybox"), "ההורה דיווח ששילם ב-PayBox");
+assert.deepEqual(manualPaymentReportedNotificationCopy("cash"), {
+  title: "ההורה דיווח ששילם במזומן",
+  body: "ההורה דיווח ששילם במזומן"
+});
+assert.deepEqual(manualPaymentReportedNotificationCopy("bit"), {
+  title: "ההורה דיווח ששילם ב-Bit",
+  body: "ההורה דיווח ששילם ב-Bit"
+});
+assert.deepEqual(manualPaymentReportedNotificationCopy("paybox"), {
+  title: "ההורה דיווח ששילם ב-PayBox",
+  body: "ההורה דיווח ששילם ב-PayBox"
+});
 assert.equal(isCanonicalNotificationKind("manual_payment_reported"), true);
 assert.equal(
   notificationHrefForKind("manual_payment_reported", "sitter", { booking_id: "b1" }),
   "/sitter/dashboard"
 );
-assert.equal(privacySafeBodyForKind("manual_payment_reported"), "יש לאשר האם התשלום התקבל.");
+assert.equal(
+  privacySafeBodyForKind("manual_payment_reported", { payment_method: "bit" }),
+  "ההורה דיווח ששילם ב-Bit"
+);
 assert.match(reportRoute, /notifySitterManualPaymentReported/);
+assert.match(reportRoute, /payment_method/);
+assert.match(reportRoute, /storedMethod/);
 assert.doesNotMatch(reportRoute, /confirm_manual_payment_received/);
+assert.match(read("lib/notifications/create-notification.ts"), /manualPaymentReportedNotificationCopy/);
 
 assert.equal(MANUAL_PAYMENT_HEADING, "כמה נוח לך לשלם?");
 assert.match(panel, /MANUAL_PAYMENT_HEADING/);

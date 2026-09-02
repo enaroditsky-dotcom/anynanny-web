@@ -34,14 +34,15 @@ export const EMPTY_SITTER_PAYOUT_METHODS: SitterPayoutMethods = {
 
 export const HYP_SITTER_PAYOUT_METHOD_PREFIX = "SitterPayoutMethod_" as const;
 
+/** Direct table SELECT must not request payout_bit_phone / payout_paybox_phone (column privileges). */
 const PUBLIC_SELECT_COLS =
-  "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number, payout_card_brand, payout_hyp_tokef, payout_hyp_trans_id";
+  "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number, payout_card_brand, payout_hyp_tokef, payout_hyp_trans_id";
 
 const PUBLIC_SELECT_FALLBACKS = [
   PUBLIC_SELECT_COLS,
-  "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number",
-  "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year",
-  "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_card_holder, payout_card_last4"
+  "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number",
+  "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year",
+  "payout_preferred_method, payout_card_holder, payout_card_last4"
 ];
 
 function normalizePhone(raw: string): string {
@@ -102,6 +103,17 @@ export function validatePayboxPhone(phone: string): string | null {
   if (!phone.trim()) return "נא להזין מספר טלפון עבור PayBox.";
   if (!isValidIsraeliMobile(phone)) return "מספר PayBox חייב להיות נייד ישראלי תקין (05X…).";
   return null;
+}
+
+/** Empty is allowed (clears the destination). Non-empty must be a valid Israeli mobile. */
+export function validateOptionalBitPhone(phone: string): string | null {
+  if (!phone.trim()) return null;
+  return validateBitPhone(phone);
+}
+
+export function validateOptionalPayboxPhone(phone: string): string | null {
+  if (!phone.trim()) return null;
+  return validatePayboxPhone(phone);
 }
 
 export function validatePayoutCard(input: {
@@ -202,10 +214,51 @@ function isMissingSchema(message: string | undefined): boolean {
   );
 }
 
+async function loadOwnManualPayoutPhones(
+  supabase: SupabaseClient,
+  sitterId: string
+): Promise<{ bitPhone: string; payboxPhone: string }> {
+  const empty = { bitPhone: "", payboxPhone: "" };
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user || user.id !== sitterId) {
+    return empty;
+  }
+
+  const rpc = await supabase.rpc("sitter_own_manual_payout_destinations");
+  if (!rpc.error) {
+    const payload = (rpc.data ?? {}) as { bit_phone?: string | null; paybox_phone?: string | null };
+    return {
+      bitPhone: String(payload.bit_phone ?? ""),
+      payboxPhone: String(payload.paybox_phone ?? "")
+    };
+  }
+
+  const rpcMsg = String(rpc.error.message ?? "");
+  if (!/sitter_own_manual_payout_destinations|could not find the function|PGRST202/i.test(rpcMsg)) {
+    return empty;
+  }
+
+  const fallback = await supabase
+    .from(SITTER_PROFILES_TABLE)
+    .select("payout_bit_phone, payout_paybox_phone")
+    .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
+    .maybeSingle();
+  if (fallback.error) return empty;
+  const row = fallback.data as { payout_bit_phone?: string | null; payout_paybox_phone?: string | null } | null;
+  return {
+    bitPhone: String(row?.payout_bit_phone ?? ""),
+    payboxPhone: String(row?.payout_paybox_phone ?? "")
+  };
+}
+
 async function selectPayoutRow(
   supabase: SupabaseClient,
   sitterId: string
 ): Promise<{ row: Record<string, unknown> | null; error: string | null; missingSchema: boolean }> {
+  let row: Record<string, unknown> | null = null;
+  let tableSelectOk = false;
   for (const cols of PUBLIC_SELECT_FALLBACKS) {
     const { data, error } = await supabase
       .from(SITTER_PROFILES_TABLE)
@@ -214,21 +267,25 @@ async function selectPayoutRow(
       .maybeSingle();
 
     if (!error) {
-      return { row: (data as Record<string, unknown> | null) ?? null, error: null, missingSchema: false };
+      row = (data as Record<string, unknown> | null) ?? null;
+      tableSelectOk = true;
+      break;
     }
 
     if (isMissingSchema(error.message)) {
-      // Try a smaller column set before giving up.
       continue;
     }
     return { row: null, error: error.message, missingSchema: false };
   }
 
-  return {
-    row: null,
-    error: "עמודות אמצעי המשיכה חסרות בפרופיל. הריצו את מיגרציות ה-payout ב-Supabase.",
-    missingSchema: true
+  const phones = await loadOwnManualPayoutPhones(supabase, sitterId);
+  const merged: Record<string, unknown> = {
+    ...(row ?? {}),
+    payout_bit_phone: phones.bitPhone || null,
+    payout_paybox_phone: phones.payboxPhone || null
   };
+
+  return { row: merged, error: null, missingSchema: !tableSelectOk };
 }
 
 export async function fetchSitterPayoutMethods(
@@ -246,7 +303,7 @@ export async function fetchSitterPayoutMethods(
   return {
     methods: mapRow(result.row),
     error: null,
-    missingSchema: false
+    missingSchema: result.missingSchema
   };
 }
 

@@ -1,6 +1,7 @@
 import { BOOKINGS_TABLE, type BookingPaymentStatus, type BookingStatus } from "@/lib/bookings/constants";
 import { normalizeBookingStatus } from "@/lib/bookings/booking-status-normalize";
 import { coerceBookingPaymentStatus } from "@/lib/bookings/payment-status-label";
+import { parseManualPaymentMethod, type ManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
 import { SITTER_MANUAL_ACTIONABLE_STATUSES } from "@/lib/billing/manual-payment-ui";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -11,7 +12,7 @@ export type SitterActionableManualPayment = {
   sitterId: string;
   bookingStatus: BookingStatus | null;
   paymentStatus: BookingPaymentStatus;
-  paymentMethod: string | null;
+  paymentMethod: ManualPaymentMethod | null;
   chargedAmountNis: number | null;
 };
 
@@ -44,7 +45,7 @@ function mapRow(row: Record<string, unknown>): SitterActionableManualPayment | n
     sitterId,
     bookingStatus: bookingStatusFromQuery(row.status),
     paymentStatus,
-    paymentMethod: row.payment_method != null ? String(row.payment_method) : null,
+    paymentMethod: parseManualPaymentMethod(row.payment_method),
     chargedAmountNis:
       charged != null && Number.isFinite(Number(charged)) ? Number(charged) : null
   };

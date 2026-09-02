@@ -5,7 +5,7 @@ import {
   MANUAL_PAYMENT_METHOD_LABELS,
   SITTER_CONFIRM_RECEIVED_BUTTON,
   SITTER_DENY_RECEIVED_BUTTON,
-  SITTER_MANUAL_PAYMENT_PROMPT
+  sitterManualPaymentPromptForMethod
 } from "@/lib/billing/manual-payment-ui";
 import { isManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
 
@@ -35,7 +35,7 @@ export function SitterManualPaymentConfirmPanel({
   return (
     <div className="flex w-full max-w-[18rem] flex-col items-center gap-4 px-2 py-2 text-center">
       <p className="text-base font-bold leading-snug text-[#001F3F]">
-        {SITTER_MANUAL_PAYMENT_PROMPT}
+        {sitterManualPaymentPromptForMethod(paymentMethod)}
       </p>
       {amountLabel || methodLabel ? (
         <div className="w-full space-y-0.5 text-sm text-slate-600">
