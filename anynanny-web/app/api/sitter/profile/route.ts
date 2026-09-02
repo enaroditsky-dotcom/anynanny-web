@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import {
   buildSitterProfilePutRow,
   extractMissingSitterProfileColumn,
+  fetchOwnSitterProfileRow,
   formatSitterWorkingCitiesError,
   getSitterProfilesTable,
   isSitterProfileComplete,
@@ -12,6 +13,8 @@ import {
   normalizeSitterLanguages,
   SITTER_PROFILES_TABLE,
   SITTER_PROFILES_USER_COLUMN,
+  SITTER_PROFILE_OWN_SELECT_COLUMNS,
+  sitterProfileOwnSelectClause,
   SITTER_WORKING_CITIES_COLUMN,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
@@ -84,18 +87,18 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const fk = SITTER_PROFILES_USER_COLUMN;
     const table = getSitterProfilesTable() as typeof SITTER_PROFILES_TABLE;
-    const { data, error } = await supabase.from(table).select("*").eq(fk, user.id).maybeSingle();
+    const loaded = await fetchOwnSitterProfileRow(supabase, user.id);
 
-    if (error) {
-      console.error("[api/sitter/profile GET]", { table, userId: user.id, message: error.message });
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (loaded.error) {
+      console.error("[api/sitter/profile GET]", { table, userId: user.id, message: loaded.error });
+      return NextResponse.json({ error: loaded.error }, { status: 400 });
     }
 
+    const data = loaded.data;
     const mergedProfile = {
       ...(data || {}),
-      avatar_url: profile?.avatar_url ?? (data as { avatar_url?: string | null }).avatar_url ?? null,
+      avatar_url: profile?.avatar_url ?? data?.avatar_url ?? null,
       phone: String((profile as { phone?: string | null } | null)?.phone ?? "").trim() || null
     };
 
@@ -157,7 +160,8 @@ export async function PUT(request: Request) {
 
     const fk = SITTER_PROFILES_USER_COLUMN;
     const table = getSitterProfilesTable() as typeof SITTER_PROFILES_TABLE;
-    const { data: existing } = await supabase.from(table).select("*").eq(fk, user.id).maybeSingle();
+    const existingResult = await fetchOwnSitterProfileRow(supabase, user.id);
+    const existing = existingResult.data;
 
     const prev = (existing ?? {}) as Partial<SitterProfileRow>;
 
@@ -254,30 +258,39 @@ export async function PUT(request: Request) {
 
     let data: SitterProfileRow | null = null;
     let lastError: string | null = null;
+    let selectColumns: string[] = [...SITTER_PROFILE_OWN_SELECT_COLUMNS];
 
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const result = await supabase.from(table).upsert(row, { onConflict: fk }).select("*").single();
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const result = await supabase
+        .from(table)
+        .upsert(row, { onConflict: fk })
+        .select(sitterProfileOwnSelectClause(selectColumns))
+        .single();
 
       if (!result.error) {
-        data = result.data as SitterProfileRow;
+        data = result.data as unknown as SitterProfileRow;
         lastError = null;
         break;
       }
 
       lastError = result.error.message;
       const missingColumn = extractMissingSitterProfileColumn(lastError);
-      if (
-        missingColumn &&
-        Object.prototype.hasOwnProperty.call(row, missingColumn) &&
-        isPostgrestSchemaDriftError(lastError)
-      ) {
-        console.warn("[api/sitter/profile PUT] omitting missing column and retrying", {
-          table,
-          userId: user.id,
-          missingColumn
-        });
-        delete row[missingColumn];
-        continue;
+      if (missingColumn && isPostgrestSchemaDriftError(lastError)) {
+        let retried = false;
+        if (Object.prototype.hasOwnProperty.call(row, missingColumn)) {
+          console.warn("[api/sitter/profile PUT] omitting missing column and retrying", {
+            table,
+            userId: user.id,
+            missingColumn
+          });
+          delete row[missingColumn];
+          retried = true;
+        }
+        if (selectColumns.includes(missingColumn)) {
+          selectColumns = selectColumns.filter((column) => column !== missingColumn);
+          retried = true;
+        }
+        if (retried) continue;
       }
 
       console.error("[api/sitter/profile PUT]", { table, userId: user.id, message: lastError });
@@ -330,15 +343,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "יש לבחור לפחות עיר אחת." }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from(table)
       .update({
         [SITTER_WORKING_CITIES_COLUMN]: working_cities,
         updated_at: new Date().toISOString()
       })
-      .eq(fk, user.id)
-      .select("*")
-      .maybeSingle();
+      .eq(fk, user.id);
 
     if (error) {
       console.error("DB error:", error);
@@ -353,7 +364,12 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
-    return NextResponse.json({ profile: data as SitterProfileRow | null });
+    const loaded = await fetchOwnSitterProfileRow(supabase, user.id);
+    if (loaded.error) {
+      return NextResponse.json({ error: loaded.error }, { status: 400 });
+    }
+
+    return NextResponse.json({ profile: loaded.data });
   } catch (err) {
     console.error("[api/sitter/profile PATCH] exception:", err);
     const message = err instanceof Error ? err.message : "Server error";
