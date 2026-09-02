@@ -29,7 +29,11 @@ const CHROMELESS_PREFIXES = [
   "/terms",
   "/privacy",
   "/delete-account",
-  "/sitter/onboarding"
+  "/welcome",
+  "/charter",
+  "/sitter/onboarding",
+  "/welcome",
+  "/charter"
 ];
 
 const MAIN_LAYOUT_PREFIXES = [
