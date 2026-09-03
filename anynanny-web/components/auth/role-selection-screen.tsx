@@ -2,6 +2,7 @@
 
 import { Baby, Loader2, Users } from "lucide-react";
 import type { ProfileRole } from "@/lib/supabase/profiles";
+import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 type RoleSelectionScreenProps = {
   busy: ProfileRole | null;
@@ -16,6 +17,9 @@ export function RoleSelectionScreen({ busy, message, onChoose }: RoleSelectionSc
       dir="rtl"
     >
       <div className="text-center">
+        <div className="mb-3 flex justify-center">
+          <AnyNannyLogo variant="header" decorative />
+        </div>
         <p className="text-sm font-medium text-emerald-800/90">ברוכים הבאים ל-AnyNanny</p>
         <h1 className="mt-2 text-2xl font-bold leading-snug text-[#001F3F] sm:text-3xl">נעים להכיר! מי אתם?</h1>
         <p className="mt-3 text-sm leading-relaxed text-slate-600">בחרו את התפקיד שלכם כדי להמשיך. אפשר לשנות זאת רק בהמשך דרך התמיכה.</p>

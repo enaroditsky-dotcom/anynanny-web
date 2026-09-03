@@ -30,20 +30,22 @@ assert.match(landing, /פשוט למצוא זמן לחיים/);
 assert.doesNotMatch(landing, /AnyNannyWordmark/);
 assert.doesNotMatch(landing, /צפו בסרטון קצר שמסביר איך AnyNanny/);
 
-const wordmarkPath = resolve(root, "public/brand/anynanny-wordmark.png");
+const wordmarkPath = resolve(root, "public/brand/anynanny-official-wordmark.png");
 assert.equal(existsSync(wordmarkPath), true);
 assert.ok(statSync(wordmarkPath).size > 50_000);
 assert.equal(existsSync(resolve(root, "public/brand/anynanny-wordmark.jpg")), false);
+assert.equal(existsSync(resolve(root, "public/brand/anynanny-wordmark.png")), false);
 assert.equal(existsSync(resolve(root, "components/brand/anynanny-wordmark.tsx")), false);
 
 const logo = read("components/brand/anynanny-logo.tsx");
-assert.match(logo, /ANYNANNY_WORDMARK_SRC = "\/brand\/anynanny-wordmark\.png"/);
+assert.match(logo, /ANYNANNY_WORDMARK_SRC = "\/brand\/anynanny-official-wordmark\.png"/);
 assert.match(logo, /alt=\{decorative \? "" : "AnyNanny"\}/);
 assert.match(logo, /object-contain/);
 assert.match(logo, /bg-transparent/);
 assert.match(logo, /header:/);
 assert.match(logo, /hero:/);
 assert.doesNotMatch(logo, /anynanny-wordmark\.jpg/);
+assert.doesNotMatch(logo, /anynanny-wordmark\.png/);
 assert.doesNotMatch(logo, /<svg/);
 assert.doesNotMatch(logo, /strokeWidth/);
 
@@ -66,6 +68,17 @@ const verified = read("app/auth/verified/page.tsx");
 assert.match(verified, /AnyNannyLogo/);
 assert.match(verified, /variant="header"/);
 assert.doesNotMatch(verified, /<span className="text-xl font-bold text-\[#001F3F\]">AnyNanny<\/span>/);
+
+const login = read("app/auth/login/page.tsx");
+assert.match(login, /AnyNannyLogo/);
+const register = read("app/register/page.tsx");
+assert.match(register, /AnyNannyLogo/);
+assert.match(welcomeFlow, /AnyNannyLogo/);
+assert.match(welcomeFlow, /ברוכים הבאים ל-AnyNanny/);
+assert.doesNotMatch(welcomeFlow, /text-\[#B8860B\]">AnyNanny/);
+const nowHero = read("components/parent/anynanny-now-hero.tsx");
+assert.match(nowHero, /AnyNannyLogo/);
+assert.doesNotMatch(nowHero, /text-\[#00A86B\]">Nanny/);
 assert.match(landing, /welcomeSignupHref\(profileRole/);
 assert.match(landing, /action === "register"/);
 assert.match(landing, /router\.push\(`\/login\?\$\{qs\.toString\(\)\}`\)/);

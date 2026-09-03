@@ -17,6 +17,7 @@ import { createLegalAcceptanceRecord } from '@/lib/legal/acceptance';
 import { isProfileRole } from '@/lib/supabase/profiles';
 import { ensureSitterProfileRowForUser } from '@/lib/sitter/sitter-profile';
 import { RequiredFieldMark } from '@/components/ui/required-field-mark';
+import { AnyNannyLogo } from '@/components/brand/anynanny-logo';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -34,7 +35,6 @@ export default function SignUpPage() {
   const [legalError, setLegalError] = useState<string | null>(null);
 
   const brandColor = '#008080';
-  const darkColor = '#0B243B';
 
   useEffect(() => {
     const checkUser = async () => {
@@ -138,12 +138,12 @@ export default function SignUpPage() {
         <div className="flex flex-col items-center mb-8">
           <img
             src="/anynanny-clean-transparent.png.jpg"
-            alt="Logo"
+            alt=""
+            aria-hidden
             className="w-28 h-28 rounded-full object-cover border border-stone-100 shadow-sm mb-6"
           />
-          <h1 className="text-4xl font-black tracking-tight">
-            <span style={{ color: darkColor }}>Any</span>
-            <span style={{ color: brandColor }}>Nanny</span>
+          <h1 className="flex w-full min-w-0 justify-center">
+            <AnyNannyLogo variant="hero" />
           </h1>
         </div>
 

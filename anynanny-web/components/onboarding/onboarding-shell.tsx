@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ONBOARDING_STEP_COUNT, REQUIRED_FIELDS_NOTE } from "@/lib/onboarding/shared";
+import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 export function OnboardingPageShell({ children }: { children: ReactNode }) {
   return (
@@ -32,6 +33,9 @@ export function OnboardingCard({
   return (
     <section className="flex max-h-[min(85dvh,40rem)] w-full min-w-0 max-w-md flex-col overflow-hidden rounded-3xl border border-[#001F3F]/10 bg-white shadow-[0_16px_40px_-24px_rgba(0,31,63,0.35)]">
       <header className="shrink-0 border-b border-[#001F3F]/8 px-5 pb-4 pt-5">
+        <div className="mb-3 flex justify-center">
+          <AnyNannyLogo variant="header" decorative />
+        </div>
         <p className="text-center text-xs font-semibold text-teal-700">
           שלב {step} מתוך {totalSteps}
         </p>

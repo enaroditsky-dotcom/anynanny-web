@@ -210,6 +210,8 @@ assert.match(replayCard, /welcomeReplayHref/);
 assert.doesNotMatch(replayCard, /\/api\/charter\/accept|onboarding/);
 assert.match(welcomeFlow, /mode === "replay"/);
 assert.match(welcomeFlow, /חזרה לאזור האישי/);
+assert.match(welcomeFlow, /AnyNannyLogo/);
+assert.match(acceptanceScreen, /AnyNannyLogo/);
 assert.doesNotMatch(welcomeFlow, /onMandatoryComplete.*replay/);
 assert.equal(
   reduceWelcomePlayback(initialWelcomePlaybackState(), { type: "ended" }, "replay").shouldContinue,

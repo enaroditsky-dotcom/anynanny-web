@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 export function AuthCardShell({
   title,
@@ -15,6 +16,9 @@ export function AuthCardShell({
       dir="rtl"
     >
       <section className="w-full min-w-0 max-w-md rounded-3xl border border-[#001F3F]/10 bg-white p-6 shadow-soft">
+        <div className="mb-4 flex justify-center">
+          <AnyNannyLogo variant="header" />
+        </div>
         <h1 className="text-center text-2xl font-bold text-navy-header">{title}</h1>
         {description ? (
           <p className="mt-2 text-center text-base leading-relaxed text-slate-600">{description}</p>
