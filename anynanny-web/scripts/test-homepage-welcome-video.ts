@@ -24,15 +24,48 @@ assert.ok(statSync(videoPath).size > 1_000_000);
 assert.equal(WELCOME_VIDEO_SRC, "/welcome/anynanny-welcome.mp4");
 
 assert.match(landing, /HomepageWelcomeVideo/);
-assert.match(landing, /AnyNannyWordmark/);
-assert.match(landing, /למצוא זמן לחיים/);
+assert.match(landing, /AnyNannyLogo/);
+assert.match(landing, /variant="hero"/);
+assert.match(landing, /פשוט למצוא זמן לחיים/);
+assert.doesNotMatch(landing, /AnyNannyWordmark/);
 assert.doesNotMatch(landing, /צפו בסרטון קצר שמסביר איך AnyNanny/);
 
-const wordmark = read("components/brand/anynanny-wordmark.tsx");
-assert.match(wordmark, /text-\[#001F3F\]/);
-assert.match(wordmark, /text-\[#00A86B\]/);
-assert.match(wordmark, /fill="#FF8A8A"/);
-assert.match(wordmark, /aria-label="AnyNanny"/);
+const wordmarkPath = resolve(root, "public/brand/anynanny-wordmark.png");
+assert.equal(existsSync(wordmarkPath), true);
+assert.ok(statSync(wordmarkPath).size > 50_000);
+assert.equal(existsSync(resolve(root, "public/brand/anynanny-wordmark.jpg")), false);
+assert.equal(existsSync(resolve(root, "components/brand/anynanny-wordmark.tsx")), false);
+
+const logo = read("components/brand/anynanny-logo.tsx");
+assert.match(logo, /ANYNANNY_WORDMARK_SRC = "\/brand\/anynanny-wordmark\.png"/);
+assert.match(logo, /alt=\{decorative \? "" : "AnyNanny"\}/);
+assert.match(logo, /object-contain/);
+assert.match(logo, /bg-transparent/);
+assert.match(logo, /header:/);
+assert.match(logo, /hero:/);
+assert.doesNotMatch(logo, /anynanny-wordmark\.jpg/);
+assert.doesNotMatch(logo, /<svg/);
+assert.doesNotMatch(logo, /strokeWidth/);
+
+const appHeader = read("components/app-shell-header.tsx");
+assert.match(appHeader, /AnyNannyLogo/);
+assert.match(appHeader, /variant="header"/);
+assert.doesNotMatch(appHeader, /Any<span className="text-emerald-600">Nanny<\/span>/);
+
+const mainLayout = read("components/layout/MainLayout.tsx");
+assert.match(mainLayout, /AnyNannyLogo/);
+assert.match(mainLayout, /variant="header"/);
+assert.doesNotMatch(mainLayout, /text-\[#00A86B\]">Nanny/);
+
+const signUp = read("app/auth/sign-up/page.tsx");
+assert.match(signUp, /AnyNannyLogo/);
+assert.match(signUp, /variant="hero"/);
+assert.doesNotMatch(signUp, /darkColor/);
+
+const verified = read("app/auth/verified/page.tsx");
+assert.match(verified, /AnyNannyLogo/);
+assert.match(verified, /variant="header"/);
+assert.doesNotMatch(verified, /<span className="text-xl font-bold text-\[#001F3F\]">AnyNanny<\/span>/);
 assert.match(landing, /welcomeSignupHref\(profileRole/);
 assert.match(landing, /action === "register"/);
 assert.match(landing, /router\.push\(`\/login\?\$\{qs\.toString\(\)\}`\)/);
