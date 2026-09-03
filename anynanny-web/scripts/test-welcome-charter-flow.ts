@@ -81,6 +81,7 @@ assert.match(welcomeSignupHref("parent"), /next=%2Fregister%3Frole%3Dparent/);
 assert.match(landing, /welcomeSignupHref\(profileRole/);
 assert.match(landing, /action === "register"/);
 assert.match(landing, /router\.push\(`\/login\?\$\{qs\.toString\(\)\}`\)/);
+assert.match(landing, /HomepageWelcomeVideo/);
 assert.equal(nextPathAfterCharterAcceptance("parent"), "/parent/onboarding");
 assert.equal(nextPathAfterCharterAcceptance("sitter"), "/sitter/onboarding");
 assert.equal(onboardingPathForRole("parent"), "/parent/onboarding");

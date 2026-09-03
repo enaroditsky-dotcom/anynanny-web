@@ -8,6 +8,7 @@ import {
   getSitterOnboardingGateRedirect
 } from "@/lib/auth/post-auth-destination";
 import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
+import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
 import { welcomeSignupHref } from "@/lib/charter/routing";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
@@ -175,7 +176,7 @@ function HomeInner() {
       className="min-h-[100dvh] w-full overflow-y-auto bg-[#FDFBF6] px-4 py-3 sm:py-5"
       dir="rtl"
     >
-      <div className="mx-auto flex min-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col items-center justify-center gap-3 sm:min-h-[calc(100dvh-2.5rem)] sm:gap-4">
+      <div className="mx-auto flex min-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col items-center justify-start gap-3 pt-1 sm:min-h-[calc(100dvh-2.5rem)] sm:justify-center sm:gap-4 sm:pt-0">
         {/* Brand */}
         <div className="shrink-0 text-center">
           <h1 className="text-3xl font-extrabold tracking-tight text-navy-header sm:text-4xl">
@@ -189,7 +190,7 @@ function HomeInner() {
 
         {/* Anny */}
         <div className="flex shrink-0 justify-center">
-          <div className="relative flex h-[clamp(120px,20dvh,170px)] w-[clamp(120px,20dvh,170px)] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-navy-header/20 bg-white shadow-md sm:h-[180px] sm:w-[180px]">
+          <div className="relative flex h-[clamp(72px,12dvh,120px)] w-[clamp(72px,12dvh,120px)] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-navy-header/20 bg-white shadow-md sm:h-[140px] sm:w-[140px]">
             <img
               src="/anynanny-clean-transparent.png.jpg"
               alt="AnyNanny"
@@ -201,6 +202,17 @@ function HomeInner() {
             />
           </div>
         </div>
+
+        <HomepageWelcomeVideo
+          onJoinClick={() => {
+            setRegistrationOpen(true);
+            window.requestAnimationFrame(() => {
+              document
+                .getElementById("landing-registration-options")
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            });
+          }}
+        />
 
         {/* Login */}
         <section className="w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:p-4">

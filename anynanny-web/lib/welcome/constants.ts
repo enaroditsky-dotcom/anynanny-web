@@ -3,6 +3,10 @@ export const WELCOME_VIDEO_SRC = "/welcome/anynanny-welcome.mp4";
 
 export const WELCOME_VIDEO_ARIA_LABEL = "סרטון ברוכים הבאים ל-AnyNanny";
 
+export const WELCOME_HOMEPAGE_PLAY_LABEL = "הפעלת סרטון היכרות AnyNanny";
+
+export const WELCOME_HOMEPAGE_REPLAY_LABEL = "צפייה חוזרת בסרטון AnyNanny";
+
 /** ~10s video; allow load + playback without creating a dead-end. */
 export const WELCOME_PLAYBACK_TIMEOUT_MS = 20_000;
 
