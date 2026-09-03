@@ -10,6 +10,7 @@ import {
 import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
+import { AnynannyMascotPortrait } from "@/components/brand/anynanny-mascot-portrait";
 import { welcomeSignupHref } from "@/lib/charter/routing";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
@@ -190,18 +191,8 @@ function HomeInner() {
         </div>
 
         {/* Anny */}
-        <div className="flex shrink-0 justify-center">
-          <div className="relative flex h-[clamp(72px,12dvh,120px)] w-[clamp(72px,12dvh,120px)] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-navy-header/20 bg-white shadow-md sm:h-[140px] sm:w-[140px]">
-            <img
-              src="/anynanny-clean-transparent.png.jpg"
-              alt="AnyNanny"
-              className="h-full w-full object-contain p-2"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  "/anynanny_clean.jpg";
-              }}
-            />
-          </div>
+        <div className="flex shrink-0 justify-center py-2 sm:py-2.5">
+          <AnynannyMascotPortrait className="h-[clamp(72px,12dvh,120px)] w-[clamp(72px,12dvh,120px)] sm:h-[140px] sm:w-[140px]" />
         </div>
 
         <HomepageWelcomeVideo
