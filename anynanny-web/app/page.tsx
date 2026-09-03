@@ -190,9 +190,12 @@ function HomeInner() {
           </p>
         </div>
 
-        {/* Anny */}
-        <div className="flex shrink-0 justify-center py-2 sm:py-2.5">
-          <AnynannyMascotPortrait className="h-[clamp(72px,12dvh,120px)] w-[clamp(72px,12dvh,120px)] sm:h-[140px] sm:w-[140px]" />
+        {/* Anny — unframed cutout; bottom pad keeps the video title clear */}
+        <div className="flex shrink-0 justify-center pb-4 sm:pb-5">
+          <AnynannyMascotPortrait
+            framed={false}
+            className="h-[clamp(88px,14dvh,128px)] w-[clamp(88px,14dvh,128px)] sm:h-[148px] sm:w-[148px]"
+          />
         </div>
 
         <HomepageWelcomeVideo
