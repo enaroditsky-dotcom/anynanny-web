@@ -37,7 +37,7 @@ export function AppShellHeader() {
         ) : (
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="h-16 w-16 animate-pulse rounded-full bg-slate-100" />
-            <div className="h-12 w-[7.15rem] animate-pulse rounded bg-slate-100 sm:h-[3.25rem] sm:w-[7.7rem]" />
+            <div className="h-[3.6rem] w-[8.45rem] animate-pulse rounded bg-slate-100 sm:h-[3.9rem] sm:w-[9.3rem]" />
           </div>
         )}
       </div>

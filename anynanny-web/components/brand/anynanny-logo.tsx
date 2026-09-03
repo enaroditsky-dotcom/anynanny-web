@@ -1,8 +1,10 @@
 export const ANYNANNY_WORDMARK_SRC = "/brand/anynanny-official-wordmark.png";
 
 const WRAPPER_CLASS = {
-  header: "h-12 max-w-full sm:h-[3.25rem]",
-  hero: "h-16 max-w-full sm:h-[5rem]"
+  // Width-based sizing so height is derived from the fixed logo aspect ratio.
+  // This preserves the artwork proportions while making the wordmark visibly larger.
+  header: "w-[8.45rem] max-w-full sm:w-[9.3rem]",
+  hero: "w-[11.4rem] max-w-full sm:w-[14.25rem]"
 } as const;
 
 export type AnyNannyLogoVariant = keyof typeof WRAPPER_CLASS;
@@ -26,7 +28,7 @@ export function AnyNannyLogo({
   return (
     <span
       className={`inline-block min-w-0 shrink bg-transparent ${WRAPPER_CLASS[variant]} ${className}`.trim()}
-      style={{ aspectRatio: "1600 / 674", width: "auto" }}
+      style={{ aspectRatio: "1600 / 674" }}
     >
       <img
         src={ANYNANNY_WORDMARK_SRC}
