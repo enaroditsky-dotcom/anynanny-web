@@ -15,6 +15,7 @@ import {
 import { forgotPasswordHref, forwardExplicitRecoveryCallback, readAuthCallbackParams, resetPasswordCallbackHref } from "@/lib/auth/password-reset";
 import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 function formatLoginError(message: string): string {
   const m = message.trim();
@@ -183,6 +184,9 @@ function LoginInner() {
       </div>
 
       <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft" suppressHydrationWarning>
+        <div className="mb-4 flex justify-center">
+          <AnyNannyLogo variant="header" />
+        </div>
         <h1 className="text-center text-2xl font-bold text-navy-header">{loginHeadline}</h1>
         {roleFromQuery === "sitter" && trackFromQuery === "expert" ? (
           <p className="mt-1 text-center text-xs text-slate-500">הנקה · שינה · דולה</p>

@@ -16,6 +16,7 @@ import { isCharterType } from "@/lib/charter/versions";
 import type { ProfileRole } from "@/lib/supabase/profiles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { hasPlayedSignupWelcome, markSignupWelcomePlayed } from "@/lib/welcome/session";
+import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 function WelcomeFlowInner() {
   const router = useRouter();
@@ -133,9 +134,11 @@ function WelcomeFlowInner() {
       dir="rtl"
     >
       <section className="rounded-3xl border border-[#001F3F]/10 bg-white p-5 shadow-soft">
-        <header className="mb-4 text-right">
-          <p className="text-xs font-semibold text-[#B8860B]">AnyNanny</p>
-          <h1 className="mt-1 text-2xl font-bold text-navy-header">ברוכים הבאים ל-AnyNanny</h1>
+        <header className="mb-4 text-center">
+          <div className="mb-3 flex justify-center">
+            <AnyNannyLogo variant="header" decorative />
+          </div>
+          <h1 className="text-2xl font-bold text-navy-header">ברוכים הבאים ל-AnyNanny</h1>
           {mode === "mandatory" ? (
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               סרטון קצר לפני שמתחילים.

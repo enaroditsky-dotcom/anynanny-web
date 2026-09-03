@@ -9,6 +9,7 @@ import {
   resetPasswordCallbackHref
 } from "@/lib/auth/password-reset";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 type VerifyState = "checking" | "success" | "error";
 
@@ -129,8 +130,8 @@ function EmailVerifiedContent() {
       className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-start bg-[#FDFBF6] px-4 pb-6 pt-12 text-center"
       dir="rtl"
     >
-      <div className="mb-6 flex items-center gap-2">
-        <span className="text-xl font-bold text-[#001F3F]">AnyNanny</span>
+      <div className="mb-6 flex items-center justify-center">
+        <AnyNannyLogo variant="header" />
       </div>
 
       <div className="w-full max-w-sm space-y-4 rounded-3xl border border-slate-100 bg-white p-6 shadow-soft">

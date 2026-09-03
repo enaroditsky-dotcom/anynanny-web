@@ -1,9 +1,5 @@
 import type { CSSProperties } from "react";
-
-const STRAIGHT: CSSProperties = {
-  fontStyle: "normal",
-  transform: "none"
-};
+import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 const NOW_TYPE: CSSProperties = {
   fontFamily:
@@ -27,14 +23,9 @@ export function AnyNannyNowHero() {
       className="relative mx-auto mt-2 flex w-full flex-col items-center"
       aria-hidden
     >
-      <p
-        dir="ltr"
-        className="relative z-20 whitespace-nowrap text-center text-[28px] font-semibold leading-[1.1] tracking-normal not-italic min-[430px]:text-[30px]"
-        style={STRAIGHT}
-      >
-        <span className="text-[#001F3F]">Any</span>
-        <span className="text-[#00A86B]">Nanny</span>
-      </p>
+      <div className="relative z-20 flex justify-center">
+        <AnyNannyLogo variant="header" decorative />
+      </div>
 
       <div className="relative z-10 mt-1 h-[178px] w-[178px] min-[430px]:h-[185px] min-[430px]:w-[185px]">
         <span

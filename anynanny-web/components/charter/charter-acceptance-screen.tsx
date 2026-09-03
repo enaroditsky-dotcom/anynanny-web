@@ -14,6 +14,7 @@ import {
   nextPathAfterCharterAcceptance
 } from "@/lib/charter/routing";
 import type { CharterType } from "@/lib/charter/versions";
+import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 type CharterAcceptanceScreenProps = {
   role: CharterType;
@@ -66,7 +67,9 @@ export function CharterAcceptanceScreen({ role }: CharterAcceptanceScreenProps) 
     >
       <section className="flex min-h-0 flex-1 flex-col rounded-3xl border border-[#001F3F]/10 bg-white p-5 shadow-soft">
         <header className="space-y-3 text-right">
-          <p className="text-xs font-semibold text-[#B8860B]">קהילת AnyNanny</p>
+          <div className="flex justify-center">
+            <AnyNannyLogo variant="header" decorative />
+          </div>
           <h1 className="text-2xl font-bold text-navy-header">{doc.title}</h1>
           <p className="text-base leading-relaxed text-slate-600">{doc.intro}</p>
         </header>

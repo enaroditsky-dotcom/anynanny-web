@@ -1,8 +1,8 @@
-export const ANYNANNY_WORDMARK_SRC = "/brand/anynanny-wordmark.png";
+export const ANYNANNY_WORDMARK_SRC = "/brand/anynanny-official-wordmark.png";
 
 const WRAPPER_CLASS = {
-  header: "h-11 max-w-full sm:h-12",
-  hero: "h-14 max-w-full sm:h-[4.5rem]"
+  header: "h-12 max-w-full sm:h-[3.25rem]",
+  hero: "h-16 max-w-full sm:h-[5rem]"
 } as const;
 
 export type AnyNannyLogoVariant = keyof typeof WRAPPER_CLASS;
@@ -15,8 +15,8 @@ type AnyNannyLogoProps = {
 };
 
 /**
- * Canonical AnyNanny header/hero wordmark. Uses the official transparent
- * PNG — do not redraw in CSS/SVG.
+ * Canonical AnyNanny wordmark. Uses the official transparent PNG —
+ * do not redraw in CSS/SVG or recolor the artwork.
  */
 export function AnyNannyLogo({
   variant = "header",
@@ -26,7 +26,7 @@ export function AnyNannyLogo({
   return (
     <span
       className={`inline-block min-w-0 shrink bg-transparent ${WRAPPER_CLASS[variant]} ${className}`.trim()}
-      style={{ aspectRatio: "1600 / 494", width: "auto" }}
+      style={{ aspectRatio: "1600 / 674", width: "auto" }}
     >
       <img
         src={ANYNANNY_WORDMARK_SRC}

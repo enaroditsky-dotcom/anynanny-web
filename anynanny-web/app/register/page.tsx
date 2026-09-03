@@ -31,6 +31,7 @@ import {
   SITTER_PROFILES_USER_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import type { ProfileRole } from "@/lib/supabase/profiles";
+import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 const SUPABASE_URL = "https://dqycvddpdhxawdgdatfe.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -324,6 +325,9 @@ function RegisterInner() {
 
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
         <header className="mb-6 text-right">
+          <div className="mb-4 flex justify-center">
+            <AnyNannyLogo variant="header" />
+          </div>
           <h1 className="text-2xl font-bold text-navy-header">
             יצירת חשבון
           </h1>
