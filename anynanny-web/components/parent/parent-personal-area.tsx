@@ -9,6 +9,11 @@ import { WelcomeReplayCard } from "@/components/welcome/welcome-replay-card";
 import { IdentityPersonalSection } from "@/components/identity/identity-personal-section";
 import { IdentityVerifiedBadgeLive } from "@/components/identity/verified-user-badge";
 import {
+  OnboardingChips,
+  OnboardingSelect,
+  OnboardingYesNo
+} from "@/components/onboarding/onboarding-fields";
+import {
   PersonalAreaSection,
   PersonalChangeLink,
   PersonalCheckbox,
@@ -17,10 +22,46 @@ import {
   PersonalStaticRow,
   displayOrEmpty,
   formatDisplayDate,
-  personalInputClassName
+  personalInputClassName,
+  personalTextareaClassName,
+  yesNoLabel
 } from "@/components/personal-area/personal-area-ui";
 import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
+import { replaceUserSpecialOccasions, updateRowStrippingUnknownColumns } from "@/lib/onboarding/persist";
+import {
+  isFutureIsoDate,
+  optionalIsoDate,
+  validateOnboardingName
+} from "@/lib/onboarding/shared";
+import {
+  PARENT_FREQUENCY_OPTIONS,
+  PARENT_MARITAL_STATUS_OPTIONS,
+  PARENT_REASON_OPTIONS,
+  PARENT_REMINDER_OPTIONS,
+  PARENT_TYPICAL_NEED_OPTIONS,
+  isParentBabysitterFrequency,
+  isParentMaritalStatus,
+  isParentPreferredLanguage,
+  isParentReminderPreference,
+  isParentTypicalNeed,
+  isParentTypicalReason,
+  type ParentBabysitterFrequency,
+  type ParentMaritalStatus,
+  type ParentPreferredLanguage,
+  type ParentReminderPreference,
+  type ParentTypicalNeed,
+  type ParentTypicalReason
+} from "@/lib/onboarding/parent-options";
+import {
+  PARENT_LANGUAGE_SELECT_OPTIONS,
+  parentFrequencyLabel,
+  parentMaritalStatusLabel,
+  parentPreferredLanguageLabel,
+  parentReminderLabel,
+  parentTypicalNeedLabel,
+  parentTypicalReasonsLabel
+} from "@/lib/parent/parent-questionnaire-display";
 import {
   buildParentProfileUpdatePayload,
   createEmptyChild,
@@ -53,8 +94,11 @@ type EditKey =
   | "phone"
   | "avatar"
   | "address"
+  | "preferred_language"
   | "spouse"
   | "children"
+  | "household"
+  | "preferences"
   | "special_events";
 
 export function ParentPersonalArea() {
@@ -80,6 +124,18 @@ export function ParentPersonalArea() {
   const [draftChildren, setDraftChildren] = useState<ParentChild[]>([]);
   const [draftEvents, setDraftEvents] = useState<ParentSpecialEvent[]>([]);
   const [draftAvatarUrl, setDraftAvatarUrl] = useState("");
+  const [draftPreferredLanguage, setDraftPreferredLanguage] = useState<ParentPreferredLanguage | "">("");
+  const [draftMaritalStatus, setDraftMaritalStatus] = useState<ParentMaritalStatus | "">("");
+  const [draftHasPets, setDraftHasPets] = useState<boolean | null>(null);
+  const [draftPetDetails, setDraftPetDetails] = useState("");
+  const [draftHasMedical, setDraftHasMedical] = useState<boolean | null>(null);
+  const [draftMedicalDetails, setDraftMedicalDetails] = useState("");
+  const [draftTypicalNeed, setDraftTypicalNeed] = useState<ParentTypicalNeed[]>([]);
+  const [draftFrequency, setDraftFrequency] = useState<ParentBabysitterFrequency | "">("");
+  const [draftReasons, setDraftReasons] = useState<ParentTypicalReason[]>([]);
+  const [draftReasonsOther, setDraftReasonsOther] = useState("");
+  const [draftReminders, setDraftReminders] = useState<ParentReminderPreference[]>([]);
+  const [draftAutoSuggest, setDraftAutoSuggest] = useState<boolean | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [authPhone, setAuthPhone] = useState("");
 
@@ -153,12 +209,37 @@ export function ParentPersonalArea() {
       else if (key === "birth_date") setDraftText(form.birth_date);
       else if (key === "phone") setDraftText(form.phone || authPhone);
       else if (key === "address") setDraftAddress({ ...form.address });
-      else if (key === "spouse") {
-        setDraftHasSpouse(Boolean(form.spouse));
-        setDraftSpouse(form.spouse ? { ...form.spouse } : emptyParentSpouse());
+      else if (key === "preferred_language") {
+        setDraftPreferredLanguage(
+          isParentPreferredLanguage(form.preferred_language) ? form.preferred_language : ""
+        );
+      } else if (key === "spouse") {
+        setDraftHasSpouse(Boolean(form.spouse) || Boolean(form.spouse_birthday));
+        setDraftSpouse(
+          form.spouse
+            ? { ...form.spouse, birthDate: form.spouse.birthDate || form.spouse_birthday }
+            : { ...emptyParentSpouse(), birthDate: form.spouse_birthday }
+        );
         setDraftWeddingDate(form.wedding_date);
+        setDraftMaritalStatus(isParentMaritalStatus(form.marital_status) ? form.marital_status : "");
       } else if (key === "children") {
         setDraftChildren(form.children.map((child) => ({ ...child })));
+      } else if (key === "household") {
+        setDraftHasPets(form.has_pets);
+        setDraftPetDetails(form.pet_details);
+        setDraftHasMedical(form.has_child_special_or_medical_information);
+        setDraftMedicalDetails(form.child_special_or_medical_details);
+      } else if (key === "preferences") {
+        setDraftTypicalNeed(form.typical_babysitting_need.filter(isParentTypicalNeed));
+        setDraftFrequency(
+          isParentBabysitterFrequency(form.estimated_babysitter_frequency)
+            ? form.estimated_babysitter_frequency
+            : ""
+        );
+        setDraftReasons(form.typical_reasons.filter(isParentTypicalReason));
+        setDraftReasonsOther(form.typical_reasons_other);
+        setDraftReminders(form.reminder_preferences.filter(isParentReminderPreference));
+        setDraftAutoSuggest(form.automatic_babysitter_suggestion);
       } else if (key === "special_events") {
         setDraftEvents(form.special_events.map((event) => ({ ...event })));
       } else if (key === "avatar") {
@@ -191,52 +272,21 @@ export function ParentPersonalArea() {
       setModalError(null);
 
       const payload = buildParentProfileUpdatePayload(next);
-      const attempts = [
-        payload,
-        {
-          first_name: payload.first_name,
-          last_name: payload.last_name,
-          birth_date: payload.birth_date,
-          address: payload.address,
-          spouse: payload.spouse,
-          wedding_date: payload.wedding_date,
-          children: payload.children,
-          special_events: payload.special_events
-        },
-        {
-          first_name: payload.first_name,
-          last_name: payload.last_name,
-          birth_date: payload.birth_date,
-          address: payload.address,
-          children: payload.children
-        },
-        {
-          first_name: payload.first_name,
-          last_name: payload.last_name,
-          address: payload.address
-        }
-      ];
-
-      let saveError: string | null = null;
-      for (const attempt of attempts) {
-        const { error: updateError } = await supabase
-          .from(PROFILES_TABLE)
-          .update(attempt)
-          .eq("id", next.id);
-
-        if (!updateError) {
-          saveError = null;
-          break;
-        }
-        saveError = updateError.message;
-        if (!isPostgrestSchemaDriftError(updateError.message)) break;
-      }
+      const saved = await updateRowStrippingUnknownColumns(
+        supabase,
+        PROFILES_TABLE,
+        "id",
+        next.id,
+        payload
+      );
 
       setSaving(false);
-      if (saveError) {
-        setModalError(saveError);
+      if (saved.error) {
+        setModalError(saved.error);
         return false;
       }
+
+      await replaceUserSpecialOccasions(supabase, next.id, next.special_events);
 
       setForm(next);
       setEditKey(null);
@@ -345,14 +395,73 @@ export function ParentPersonalArea() {
         return;
       }
       next = { ...next, address: { ...draftAddress } };
+    } else if (editKey === "preferred_language") {
+      if (!draftPreferredLanguage || !isParentPreferredLanguage(draftPreferredLanguage)) {
+        setModalError("יש לבחור שפה מועדפת.");
+        return;
+      }
+      next = { ...next, preferred_language: draftPreferredLanguage };
     } else if (editKey === "spouse") {
+      if (draftWeddingDate && !optionalIsoDate(draftWeddingDate)) {
+        setModalError("יום הנישואין אינו תקין.");
+        return;
+      }
+      if (draftHasSpouse && draftSpouse.birthDate) {
+        if (!optionalIsoDate(draftSpouse.birthDate) || isFutureIsoDate(draftSpouse.birthDate)) {
+          setModalError("תאריך הלידה של בן/בת הזוג אינו תקין.");
+          return;
+        }
+      }
       next = {
         ...next,
         spouse: draftHasSpouse ? { ...draftSpouse } : null,
-        wedding_date: draftWeddingDate
+        wedding_date: draftWeddingDate,
+        spouse_birthday: draftHasSpouse ? draftSpouse.birthDate : "",
+        marital_status: draftMaritalStatus
       };
     } else if (editKey === "children") {
-      next = { ...next, children: draftChildren.map((child) => ({ ...child })) };
+      for (const [index, child] of draftChildren.entries()) {
+        const nameError = validateOnboardingName(child.name, `שם פרטי של ילד/ה ${index + 1}`);
+        if (nameError) {
+          setModalError(nameError);
+          return;
+        }
+        if (!optionalIsoDate(child.birthDate)) {
+          setModalError(`יש לבחור תאריך לידה לילד/ה ${index + 1}.`);
+          return;
+        }
+        if (isFutureIsoDate(child.birthDate)) {
+          setModalError(`תאריך הלידה של ילד/ה ${index + 1} לא יכול להיות בעתיד.`);
+          return;
+        }
+      }
+      next = {
+        ...next,
+        children: draftChildren.map((child) => ({ ...child })),
+        children_count: draftChildren.length || null
+      };
+    } else if (editKey === "household") {
+      if (draftHasMedical === true && !draftMedicalDetails.trim()) {
+        setModalError("יש למלא פרטים שחשוב לדעת.");
+        return;
+      }
+      next = {
+        ...next,
+        has_pets: draftHasPets,
+        pet_details: draftHasPets === true ? draftPetDetails : "",
+        has_child_special_or_medical_information: draftHasMedical,
+        child_special_or_medical_details: draftHasMedical === true ? draftMedicalDetails : ""
+      };
+    } else if (editKey === "preferences") {
+      next = {
+        ...next,
+        typical_babysitting_need: draftTypicalNeed,
+        estimated_babysitter_frequency: draftFrequency,
+        typical_reasons: draftReasons,
+        typical_reasons_other: draftReasons.includes("other") ? draftReasonsOther : "",
+        reminder_preferences: draftReminders,
+        automatic_babysitter_suggestion: draftAutoSuggest
+      };
     } else if (editKey === "special_events") {
       next = { ...next, special_events: draftEvents.map((event) => ({ ...event })) };
     } else if (editKey === "avatar") {
@@ -375,12 +484,24 @@ export function ParentPersonalArea() {
     await persist(next);
   }, [
     draftAddress,
+    draftAutoSuggest,
     draftAvatarUrl,
     draftChildren,
     draftEvents,
+    draftFrequency,
+    draftHasMedical,
+    draftHasPets,
     draftHasSpouse,
+    draftMaritalStatus,
+    draftMedicalDetails,
+    draftPetDetails,
+    draftPreferredLanguage,
+    draftReasons,
+    draftReasonsOther,
+    draftReminders,
     draftSpouse,
     draftText,
+    draftTypicalNeed,
     draftWeddingDate,
     editKey,
     form,
@@ -433,13 +554,19 @@ export function ParentPersonalArea() {
             ? "מספר טלפון"
             : editKey === "address"
               ? "שינוי כתובת"
-              : editKey === "spouse"
-                ? "שינוי בן/בת זוג ויום נישואין"
-                : editKey === "children"
-                  ? "שינוי פרטי ילדים"
-                  : editKey === "special_events"
-                    ? "שינוי אירועים מיוחדים"
-                    : "";
+              : editKey === "preferred_language"
+                ? "שינוי שפה מועדפת"
+                : editKey === "spouse"
+                  ? "שינוי בן/בת זוג ויום נישואין"
+                  : editKey === "children"
+                    ? "שינוי פרטי ילדים"
+                    : editKey === "household"
+                      ? "שינוי מידע חשוב למשמרת"
+                      : editKey === "preferences"
+                        ? "שינוי העדפות ותזכורות"
+                        : editKey === "special_events"
+                          ? "שינוי אירועים מיוחדים"
+                          : "";
 
   const displayName = `${form.first_name} ${form.last_name}`.trim() || "הפרופיל שלי";
 
@@ -521,6 +648,12 @@ export function ParentPersonalArea() {
           dir="ltr"
           actionLabel={form.phone || authPhone ? "שינוי" : "הוספת מספר"}
         />
+        <PersonalStaticRow
+          label="שפה מועדפת"
+          value={parentPreferredLanguageLabel(form.preferred_language)}
+          onEdit={() => openEdit("preferred_language")}
+          actionLabel={form.preferred_language ? "שינוי" : "הוספה"}
+        />
       </PersonalAreaSection>
 
       <PersonalAreaSection
@@ -535,28 +668,38 @@ export function ParentPersonalArea() {
       </PersonalAreaSection>
 
       <PersonalAreaSection
-        title="בן/בת זוג ויום נישואין"
+        title="משפחה וילדים"
         accent="gold"
-        action={<PersonalChangeLink onClick={() => openEdit("spouse")} />}
+        description="פרטים אישיים שנשמרים בחשבון בלבד"
       >
-        <div className="space-y-2 text-right">
-          <p className={`text-[16px] ${form.spouse ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
-            {spouseLabel}
-          </p>
-          {form.spouse?.birthDate ? (
-            <p className="text-xs text-slate-500">תאריך לידה: {formatDisplayDate(form.spouse.birthDate)}</p>
-          ) : null}
-          <p className="text-xs text-slate-500">
-            יום נישואין: {formatDisplayDate(form.wedding_date) || "לא הוגדר"}
-          </p>
-        </div>
+        <PersonalStaticRow
+          label="מצב משפחתי"
+          value={parentMaritalStatusLabel(form.marital_status)}
+          onEdit={() => openEdit("spouse")}
+          actionLabel={form.marital_status ? "שינוי" : "הוספה"}
+        />
+        <PersonalStaticRow
+          label="בן/בת זוג"
+          value={spouseLabel === "לא הוגדר" ? "" : spouseLabel}
+          onEdit={() => openEdit("spouse")}
+        />
+        <PersonalStaticRow
+          label="תאריך לידה של בן/בת הזוג"
+          value={formatDisplayDate(form.spouse?.birthDate || form.spouse_birthday)}
+          onEdit={() => openEdit("spouse")}
+        />
+        <PersonalStaticRow
+          label="יום נישואין"
+          value={formatDisplayDate(form.wedding_date)}
+          onEdit={() => openEdit("spouse")}
+        />
       </PersonalAreaSection>
 
       <PersonalAreaSection
         title="ילדים"
         accent="emerald"
-        description="ימי הולדת של הילדים לפינוקים ותזכורות"
-        action={<PersonalChangeLink onClick={() => openEdit("children")} />}
+        description="שמות ותאריכי לידה מאותו מאגר שבו נשמר השאלון"
+        action={<PersonalChangeLink onClick={() => openEdit("children")} label={form.children.length ? "עריכה" : "הוספה"} />}
       >
         <p
           className={`text-[16px] leading-relaxed ${
@@ -565,6 +708,71 @@ export function ParentPersonalArea() {
         >
           {childrenLabel}
         </p>
+      </PersonalAreaSection>
+
+      <PersonalAreaSection
+        title="מידע חשוב למשמרת"
+        accent="emerald"
+        description="מידע פרטי לחשבון שלך בלבד. לא מוצג בפרופיל הציבורי ולא בחיפוש בייביסיטרים."
+        action={<PersonalChangeLink onClick={() => openEdit("household")} label="עריכה" />}
+      >
+        <PersonalStaticRow
+          label="בעלי חיים בבית"
+          value={yesNoLabel(form.has_pets)}
+          onEdit={() => openEdit("household")}
+        />
+        <PersonalStaticRow
+          label="פרטי בעלי חיים"
+          value={form.has_pets === true ? form.pet_details : ""}
+          onEdit={() => openEdit("household")}
+        />
+        <PersonalStaticRow
+          label="מידע רפואי או צורך מיוחד"
+          value={yesNoLabel(form.has_child_special_or_medical_information)}
+          onEdit={() => openEdit("household")}
+        />
+        <PersonalStaticRow
+          label="פרטים שחשוב לדעת"
+          value={
+            form.has_child_special_or_medical_information === true
+              ? form.child_special_or_medical_details
+              : ""
+          }
+          onEdit={() => openEdit("household")}
+        />
+      </PersonalAreaSection>
+
+      <PersonalAreaSection
+        title="העדפות ותזכורות"
+        accent="sky"
+        description="העדפות אישיות לחשבון. לא מוצגות להורים או בייביסיטרים אחרים."
+        action={<PersonalChangeLink onClick={() => openEdit("preferences")} label="עריכה" />}
+      >
+        <PersonalStaticRow
+          label="מתי בדרך כלל צריך בייביסיטר"
+          value={parentTypicalNeedLabel(form.typical_babysitting_need)}
+          onEdit={() => openEdit("preferences")}
+        />
+        <PersonalStaticRow
+          label="תדירות משוערת"
+          value={parentFrequencyLabel(form.estimated_babysitter_frequency)}
+          onEdit={() => openEdit("preferences")}
+        />
+        <PersonalStaticRow
+          label="סיבות נפוצות"
+          value={parentTypicalReasonsLabel(form.typical_reasons, form.typical_reasons_other)}
+          onEdit={() => openEdit("preferences")}
+        />
+        <PersonalStaticRow
+          label="תזכורות"
+          value={parentReminderLabel(form.reminder_preferences)}
+          onEdit={() => openEdit("preferences")}
+        />
+        <PersonalStaticRow
+          label="הצעת בייביסיטר אוטומטית"
+          value={yesNoLabel(form.automatic_babysitter_suggestion)}
+          onEdit={() => openEdit("preferences")}
+        />
       </PersonalAreaSection>
 
       <PersonalAreaSection
@@ -659,6 +867,18 @@ export function ParentPersonalArea() {
           </PersonalField>
         ) : null}
 
+        {editKey === "preferred_language" ? (
+          <OnboardingSelect
+            id="parent-preferred-language"
+            label="שפה מועדפת"
+            value={draftPreferredLanguage}
+            onChange={(value) =>
+              setDraftPreferredLanguage(isParentPreferredLanguage(value) ? value : "")
+            }
+            options={PARENT_LANGUAGE_SELECT_OPTIONS}
+          />
+        ) : null}
+
         {editKey === "address" ? (
           <div className="space-y-3">
             <PersonalField label="עיר">
@@ -693,6 +913,15 @@ export function ParentPersonalArea() {
 
         {editKey === "spouse" ? (
           <div className="space-y-3">
+            <OnboardingSelect
+              id="parent-marital-status"
+              label="מצב משפחתי"
+              value={draftMaritalStatus}
+              onChange={(value) =>
+                setDraftMaritalStatus(isParentMaritalStatus(value) ? value : "")
+              }
+              options={PARENT_MARITAL_STATUS_OPTIONS}
+            />
             <PersonalCheckbox
               checked={draftHasSpouse}
               label="יש בן/בת זוג"
@@ -779,6 +1008,90 @@ export function ParentPersonalArea() {
               <Plus className="h-3.5 w-3.5" />
               הוסף ילד
             </button>
+          </div>
+        ) : null}
+
+        {editKey === "household" ? (
+          <div className="space-y-4">
+            <OnboardingYesNo
+              legend="יש בעלי חיים בבית?"
+              name="parent-has-pets"
+              value={draftHasPets}
+              onChange={setDraftHasPets}
+            />
+            {draftHasPets === true ? (
+              <PersonalField label="פרטי בעלי חיים">
+                <textarea
+                  className={personalTextareaClassName}
+                  value={draftPetDetails}
+                  onChange={(e) => setDraftPetDetails(e.target.value)}
+                  maxLength={280}
+                />
+              </PersonalField>
+            ) : null}
+            <OnboardingYesNo
+              legend="יש מידע רפואי או צורך מיוחד שחשוב לדעת?"
+              name="parent-has-medical"
+              value={draftHasMedical}
+              onChange={setDraftHasMedical}
+            />
+            {draftHasMedical === true ? (
+              <PersonalField label="פרטים שחשוב לדעת">
+                <textarea
+                  className={personalTextareaClassName}
+                  value={draftMedicalDetails}
+                  onChange={(e) => setDraftMedicalDetails(e.target.value)}
+                  maxLength={1000}
+                />
+              </PersonalField>
+            ) : null}
+          </div>
+        ) : null}
+
+        {editKey === "preferences" ? (
+          <div className="space-y-4">
+            <OnboardingChips
+              legend="מתי בדרך כלל צריך בייביסיטר"
+              options={PARENT_TYPICAL_NEED_OPTIONS}
+              value={draftTypicalNeed}
+              onChange={setDraftTypicalNeed}
+            />
+            <OnboardingSelect
+              id="parent-frequency"
+              label="תדירות משוערת"
+              value={draftFrequency}
+              onChange={(value) =>
+                setDraftFrequency(isParentBabysitterFrequency(value) ? value : "")
+              }
+              options={PARENT_FREQUENCY_OPTIONS}
+            />
+            <OnboardingChips
+              legend="סיבות נפוצות"
+              options={PARENT_REASON_OPTIONS}
+              value={draftReasons}
+              onChange={setDraftReasons}
+            />
+            {draftReasons.includes("other") ? (
+              <PersonalField label="פירוט אחר">
+                <input
+                  className={personalInputClassName}
+                  value={draftReasonsOther}
+                  onChange={(e) => setDraftReasonsOther(e.target.value)}
+                />
+              </PersonalField>
+            ) : null}
+            <OnboardingChips
+              legend="תזכורות"
+              options={PARENT_REMINDER_OPTIONS}
+              value={draftReminders}
+              onChange={setDraftReminders}
+            />
+            <OnboardingYesNo
+              legend="להציע בייביסיטר באופן אוטומטי?"
+              name="parent-auto-suggest"
+              value={draftAutoSuggest}
+              onChange={setDraftAutoSuggest}
+            />
           </div>
         ) : null}
 

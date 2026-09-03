@@ -40,7 +40,8 @@
     "test:sitter-personal-area-model": "npx --yes tsx scripts/test-sitter-personal-area-model.ts",
     "test:welcome-charter-flow": "npx --yes tsx scripts/test-welcome-charter-flow.ts",
     "test:settings-legal-documents": "npx --yes tsx scripts/test-settings-legal-documents.ts",
-    "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts"
+    "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts",
+    "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",

@@ -233,4 +233,12 @@ assert.doesNotMatch(migration, /drop policy|grant select on table public.profile
 assert.ok(ISRAEL_CITIES.includes("חיפה"));
 assert.ok(ISRAEL_CITIES.includes("יקנעם עילית"));
 
+const parentPersonal = read("components/parent/parent-personal-area.tsx");
+const sitterPersonal = read("components/sitter/sitter-personal-area.tsx");
+assert.match(parentPersonal, /preferred_language/);
+assert.match(parentPersonal, /buildParentProfileUpdatePayload/);
+assert.match(sitterPersonal, /working_cities/);
+assert.match(sitterPersonal, /home_city/);
+assert.doesNotMatch(sitterPersonal, /generic availability/);
+
 console.log("onboarding-questionnaires: ok");

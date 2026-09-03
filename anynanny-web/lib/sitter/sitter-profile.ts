@@ -91,6 +91,28 @@ export const SITTER_PROFILE_PUT_COLUMNS = [
   "service_locations",
   "certifications",
   "working_cities",
+  "home_city",
+  "years_experience_band",
+  "experience_age_groups",
+  "has_drivers_license",
+  "is_smoker",
+  "has_baby_experience",
+  "has_multiple_children_experience",
+  "current_status",
+  "desired_hours_per_week",
+  "desired_monthly_income_range",
+  "work_type_preferences",
+  "travel_distance",
+  "accepts_short_notice_shifts",
+  "additional_service_interests",
+  "preferred_child_age_groups",
+  "max_children",
+  "has_special_needs_experience",
+  "special_needs_experience_details",
+  "task_capabilities",
+  "has_first_aid_training",
+  "has_childcare_training",
+  "childcare_training_details",
   "is_public",
   "onboarding_completed_at",
   "updated_at"
@@ -140,6 +162,28 @@ export const SITTER_PROFILE_OWN_SELECT_COLUMNS = [
   "service_locations",
   "certifications",
   "working_cities",
+  "home_city",
+  "years_experience_band",
+  "experience_age_groups",
+  "has_drivers_license",
+  "is_smoker",
+  "has_baby_experience",
+  "has_multiple_children_experience",
+  "current_status",
+  "desired_hours_per_week",
+  "desired_monthly_income_range",
+  "work_type_preferences",
+  "travel_distance",
+  "accepts_short_notice_shifts",
+  "additional_service_interests",
+  "preferred_child_age_groups",
+  "max_children",
+  "has_special_needs_experience",
+  "special_needs_experience_details",
+  "task_capabilities",
+  "has_first_aid_training",
+  "has_childcare_training",
+  "childcare_training_details",
   "is_public",
   "onboarding_completed_at",
   "updated_at",
@@ -522,6 +566,28 @@ export type SitterProfileRow = {
 
   /** Canonical city names from `ISRAEL_CITIES` — parent search filters via `.contains`. */
   working_cities?: string[] | null;
+  home_city?: string | null;
+  years_experience_band?: string | null;
+  experience_age_groups?: string[] | null;
+  has_drivers_license?: boolean | null;
+  is_smoker?: boolean | null;
+  has_baby_experience?: boolean | null;
+  has_multiple_children_experience?: boolean | null;
+  current_status?: string | null;
+  desired_hours_per_week?: number | null;
+  desired_monthly_income_range?: string | null;
+  work_type_preferences?: string[] | null;
+  travel_distance?: string | null;
+  accepts_short_notice_shifts?: boolean | null;
+  additional_service_interests?: string[] | null;
+  preferred_child_age_groups?: string[] | null;
+  max_children?: number | null;
+  has_special_needs_experience?: boolean | null;
+  special_needs_experience_details?: string | null;
+  task_capabilities?: string[] | null;
+  has_first_aid_training?: boolean | null;
+  has_childcare_training?: boolean | null;
+  childcare_training_details?: string | null;
 
   military_service: string | null;
   referee_phone_1: string | null;
