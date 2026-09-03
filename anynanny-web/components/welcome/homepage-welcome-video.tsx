@@ -46,13 +46,9 @@ export function HomepageWelcomeVideo({ onJoinClick }: HomepageWelcomeVideoProps)
         >
           הכירו את AnyNanny ב־10 שניות
         </h2>
-        <p className="mx-auto mt-1 max-w-[22rem] text-[12px] leading-snug text-slate-500 sm:text-[13px]">
-          צפו בסרטון קצר שמסביר איך AnyNanny עוזרת להורים ולבייביסיטריות להתחבר בקלות, במהירות
-          ובביטחון.
-        </p>
       </div>
 
-      <div className="mt-2.5 overflow-hidden rounded-2xl border border-[#001F3F]/10 bg-white shadow-soft sm:rounded-3xl">
+      <div className="mt-2 overflow-hidden rounded-2xl border border-[#001F3F]/10 bg-white shadow-soft sm:rounded-3xl">
         <div className="relative aspect-video w-full overflow-hidden bg-[#0B243B]">
           <video
             ref={videoRef}

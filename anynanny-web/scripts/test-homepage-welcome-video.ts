@@ -24,12 +24,21 @@ assert.ok(statSync(videoPath).size > 1_000_000);
 assert.equal(WELCOME_VIDEO_SRC, "/welcome/anynanny-welcome.mp4");
 
 assert.match(landing, /HomepageWelcomeVideo/);
+assert.match(landing, /AnyNannyWordmark/);
+assert.match(landing, /למצוא זמן לחיים/);
+assert.doesNotMatch(landing, /צפו בסרטון קצר שמסביר איך AnyNanny/);
+
+const wordmark = read("components/brand/anynanny-wordmark.tsx");
+assert.match(wordmark, /text-\[#001F3F\]/);
+assert.match(wordmark, /text-\[#00A86B\]/);
+assert.match(wordmark, /fill="#FF8A8A"/);
+assert.match(wordmark, /aria-label="AnyNanny"/);
 assert.match(landing, /welcomeSignupHref\(profileRole/);
 assert.match(landing, /action === "register"/);
 assert.match(landing, /router\.push\(`\/login\?\$\{qs\.toString\(\)\}`\)/);
 
 assert.match(homepageVideo, /הכירו את AnyNanny ב־10 שניות/);
-assert.match(homepageVideo, /צפו בסרטון קצר שמסביר איך AnyNanny/);
+assert.doesNotMatch(homepageVideo, /צפו בסרטון קצר שמסביר איך AnyNanny/);
 assert.match(homepageVideo, /רוצים להצטרף\? התחילו כאן/);
 assert.match(homepageVideo, /10 שניות/);
 assert.match(homepageVideo, /WELCOME_VIDEO_SRC/);
