@@ -18,6 +18,7 @@ import { isProfileRole } from '@/lib/supabase/profiles';
 import { ensureSitterProfileRowForUser } from '@/lib/sitter/sitter-profile';
 import { RequiredFieldMark } from '@/components/ui/required-field-mark';
 import { AnyNannyLogo } from '@/components/brand/anynanny-logo';
+import { AnynannyMascotPortrait } from '@/components/brand/anynanny-mascot-portrait';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -135,13 +136,15 @@ export default function SignUpPage() {
   return (
     <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-4 font-sans dir-rtl" dir="rtl">
       <div className="w-full max-w-sm bg-white border border-stone-100 rounded-3xl p-8 shadow-sm">
-        <div className="flex flex-col items-center mb-8">
-          <img
-            src="/anynanny-clean-transparent.png.jpg"
-            alt=""
-            aria-hidden
-            className="w-28 h-28 rounded-full object-cover border border-stone-100 shadow-sm mb-6"
-          />
+        <div className="mb-8 flex flex-col items-center">
+          <div className="mb-6 flex justify-center py-1.5">
+            <AnynannyMascotPortrait
+              decorative
+              className="h-28 w-28"
+              borderClassName="border border-stone-100"
+              shadowClassName="shadow-sm"
+            />
+          </div>
           <h1 className="flex w-full min-w-0 justify-center">
             <AnyNannyLogo variant="hero" />
           </h1>
