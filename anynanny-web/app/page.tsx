@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/post-auth-destination";
 import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
+import { AnyNannyWordmark } from "@/components/brand/anynanny-wordmark";
 import { welcomeSignupHref } from "@/lib/charter/routing";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
@@ -179,11 +180,11 @@ function HomeInner() {
       <div className="mx-auto flex min-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col items-center justify-start gap-3 pt-1 sm:min-h-[calc(100dvh-2.5rem)] sm:justify-center sm:gap-4 sm:pt-0">
         {/* Brand */}
         <div className="shrink-0 text-center">
-          <h1 className="text-3xl font-extrabold tracking-tight text-navy-header sm:text-4xl">
-            AnyNanny
+          <h1 className="flex justify-center" aria-label="AnyNanny">
+            <AnyNannyWordmark />
           </h1>
 
-          <p className="mt-0.5 text-xs font-medium text-slate-500 sm:text-sm">
+          <p className="mt-1 text-xs font-medium text-slate-500 sm:text-sm">
             למצוא זמן לחיים
           </p>
         </div>
