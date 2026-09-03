@@ -99,7 +99,8 @@ function TimeBlock({
       }`}
     >
       <FieldLabel required={required}>{title}</FieldLabel>
-      <div className="grid grid-cols-2 gap-1.5">
+      {/* Fixed LTR order so hours stay left and minutes right inside RTL pages. */}
+      <div className="grid grid-cols-2 gap-1.5" dir="ltr">
         <label className="block min-w-0 text-right text-[15px] font-medium leading-none text-slate-500">
           <span className="mb-0 block min-h-[1rem]">שעה</span>
           <select

@@ -20,6 +20,10 @@ import {
   validateShiftWindow
 } from "@/lib/shift-requests/create-shift-request";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  AUTH_MODAL_CENTER_WRAP,
+  AUTH_MODAL_OVERLAY_SCROLL
+} from "@/lib/ui/auth-modal-overlay";
 
 export type BookShiftModalProps = {
   open: boolean;
@@ -231,15 +235,16 @@ export function BookShiftModal({
 
   return (
     <div
-      className="fixed inset-0 z-[130] flex items-end justify-center bg-black/50 p-4 backdrop-blur-[2px] sm:items-center"
+      className={`fixed inset-0 z-[130] ${AUTH_MODAL_OVERLAY_SCROLL} bg-black/50 backdrop-blur-[2px]`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="book-shift-title"
       dir="rtl"
       onClick={handleClose}
     >
+      <div className={AUTH_MODAL_CENTER_WRAP}>
       <div
-        className="w-full max-w-md rounded-3xl border border-navy-header/12 bg-white p-5 shadow-2xl shadow-[#001F3F]/20"
+        className="my-auto w-full max-w-md rounded-3xl border border-navy-header/12 bg-white p-5 shadow-2xl shadow-[#001F3F]/20"
         onClick={(ev) => ev.stopPropagation()}
       >
         <div className="flex flex-row-reverse items-start justify-between gap-3 border-b border-navy-header/8 pb-4">
@@ -333,7 +338,8 @@ export function BookShiftModal({
                     <legend className="px-1 text-right text-sm font-semibold text-[#001F3F]">
                       שעת התחלה
                     </legend>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
+                    {/* Fixed LTR order so hours stay left and minutes right inside RTL pages. */}
+                    <div className="mt-2 grid grid-cols-2 gap-2" dir="ltr">
                       <select
                         required
                         aria-label="שעת התחלה — שעה"
@@ -385,7 +391,8 @@ export function BookShiftModal({
                     <legend className="px-1 text-right text-sm font-semibold text-[#001F3F]">
                       שעת סיום
                     </legend>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
+                    {/* Fixed LTR order so hours stay left and minutes right inside RTL pages. */}
+                    <div className="mt-2 grid grid-cols-2 gap-2" dir="ltr">
                       <select
                         required
                         aria-label="שעת סיום — שעה"
@@ -447,6 +454,7 @@ export function BookShiftModal({
             </div>
           </form>
         )}
+      </div>
       </div>
     </div>
   );
