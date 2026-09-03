@@ -20,6 +20,7 @@ import {
 } from "@/lib/sitter/sitter-profile";
 import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
+import { pickSitterQuestionnairePutFields } from "@/lib/onboarding/sitter-questionnaire";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
 import {
   clampExpertBio,
@@ -231,7 +232,8 @@ export async function PUT(request: Request) {
       working_cities:
         body.working_cities !== undefined
           ? normalizeWorkingCities(body.working_cities)
-          : normalizeWorkingCities(prev.working_cities)
+          : normalizeWorkingCities(prev.working_cities),
+      ...pickSitterQuestionnairePutFields(body, prev)
     };
 
     const isExpertProfile = normalizeExpertServiceTypes(merged.service_types).some((t) =>

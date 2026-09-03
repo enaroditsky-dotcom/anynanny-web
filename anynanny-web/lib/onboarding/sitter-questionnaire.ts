@@ -226,3 +226,136 @@ export function buildSitterProfilePhonePatch(phone: string): { phone: string } |
 export function sitterPreferredWorkAreaFromDraft(draft: SitterOnboardingDraft): IsraelCity[] {
   return normalizeWorkingCities(draft.preferredWorkArea);
 }
+
+function pickOptionalBoolean(body: Record<string, unknown>, prev: unknown, key: string): boolean | null {
+  if (body[key] !== undefined) return optionalBoolean(body[key] as boolean | null);
+  if (prev === true || prev === false) return prev;
+  return null;
+}
+
+function pickStringList(
+  body: Record<string, unknown>,
+  prev: unknown,
+  key: string,
+  isKnown: (value: string) => boolean
+): string[] {
+  const source = body[key] !== undefined ? body[key] : prev;
+  if (!Array.isArray(source)) return [];
+  return filterKnownValues(
+    source.map((item) => String(item)),
+    isKnown as (value: string) => value is string
+  );
+}
+
+/** Merge onboarding questionnaire columns for Personal Area PUT. Same DB fields as onboarding. */
+export function pickSitterQuestionnairePutFields(
+  body: Record<string, unknown>,
+  prev: {
+    home_city?: string | null;
+    years_experience_band?: string | null;
+    experience_age_groups?: string[] | null;
+    has_drivers_license?: boolean | null;
+    is_smoker?: boolean | null;
+    has_baby_experience?: boolean | null;
+    has_multiple_children_experience?: boolean | null;
+    current_status?: string | null;
+    desired_hours_per_week?: number | null;
+    desired_monthly_income_range?: string | null;
+    work_type_preferences?: string[] | null;
+    travel_distance?: string | null;
+    accepts_short_notice_shifts?: boolean | null;
+    additional_service_interests?: string[] | null;
+    preferred_child_age_groups?: string[] | null;
+    max_children?: number | null;
+    has_special_needs_experience?: boolean | null;
+    special_needs_experience_details?: string | null;
+    task_capabilities?: string[] | null;
+    has_first_aid_training?: boolean | null;
+    has_childcare_training?: boolean | null;
+    childcare_training_details?: string | null;
+  }
+): Record<string, unknown> {
+  const homeCity = body.home_city !== undefined ? String(body.home_city ?? "").trim() : String(prev.home_city ?? "").trim();
+  const bandRaw =
+    body.years_experience_band !== undefined
+      ? String(body.years_experience_band ?? "")
+      : String(prev.years_experience_band ?? "");
+  const band = isSitterExperienceBand(bandRaw) ? bandRaw : null;
+  const hours =
+    body.desired_hours_per_week !== undefined
+      ? parseDesiredHoursPerWeek(body.desired_hours_per_week)
+      : parseDesiredHoursPerWeek(prev.desired_hours_per_week);
+  const maxChildrenRaw = body.max_children !== undefined ? body.max_children : prev.max_children;
+  const maxChildren =
+    maxChildrenRaw == null || maxChildrenRaw === ""
+      ? null
+      : Number(maxChildrenRaw) >= 1 && Number(maxChildrenRaw) <= 5
+        ? Number(maxChildrenRaw)
+        : null;
+  const hasSpecialNeeds = pickOptionalBoolean(body, prev.has_special_needs_experience, "has_special_needs_experience");
+  const hasTraining = pickOptionalBoolean(body, prev.has_childcare_training, "has_childcare_training");
+
+  return {
+    home_city: homeCity && isIsraelCity(homeCity) ? homeCity : homeCity || null,
+    years_experience_band: band,
+    ...(band ? { years_experience: yearsExperienceFromBand(band) } : {}),
+    experience_age_groups: pickStringList(body, prev.experience_age_groups, "experience_age_groups", isSitterAgeGroup),
+    has_drivers_license: pickOptionalBoolean(body, prev.has_drivers_license, "has_drivers_license"),
+    is_smoker: pickOptionalBoolean(body, prev.is_smoker, "is_smoker"),
+    has_baby_experience: pickOptionalBoolean(body, prev.has_baby_experience, "has_baby_experience"),
+    has_multiple_children_experience: pickOptionalBoolean(
+      body,
+      prev.has_multiple_children_experience,
+      "has_multiple_children_experience"
+    ),
+    current_status:
+      (body.current_status !== undefined ? String(body.current_status ?? "") : String(prev.current_status ?? "")) &&
+      isSitterCurrentStatus(String(body.current_status !== undefined ? body.current_status : prev.current_status ?? ""))
+        ? String(body.current_status !== undefined ? body.current_status : prev.current_status)
+        : null,
+    desired_hours_per_week: hours,
+    desired_monthly_income_range: (() => {
+      const raw = String(body.desired_monthly_income_range !== undefined ? body.desired_monthly_income_range : prev.desired_monthly_income_range ?? "");
+      return isSitterIncomeRange(raw) ? raw : null;
+    })(),
+    work_type_preferences: pickStringList(body, prev.work_type_preferences, "work_type_preferences", isSitterWorkType),
+    travel_distance: (() => {
+      const raw = String(body.travel_distance !== undefined ? body.travel_distance : prev.travel_distance ?? "");
+      return isSitterTravelDistance(raw) ? raw : null;
+    })(),
+    accepts_short_notice_shifts: pickOptionalBoolean(body, prev.accepts_short_notice_shifts, "accepts_short_notice_shifts"),
+    additional_service_interests: pickStringList(
+      body,
+      prev.additional_service_interests,
+      "additional_service_interests",
+      isSitterAdditionalService
+    ),
+    preferred_child_age_groups: pickStringList(
+      body,
+      prev.preferred_child_age_groups,
+      "preferred_child_age_groups",
+      isSitterAgeGroup
+    ),
+    max_children: maxChildren,
+    has_special_needs_experience: hasSpecialNeeds,
+    special_needs_experience_details:
+      hasSpecialNeeds === true
+        ? optionalTrimmedText(
+            body.special_needs_experience_details !== undefined
+              ? body.special_needs_experience_details
+              : prev.special_needs_experience_details
+          )
+        : null,
+    task_capabilities: pickStringList(body, prev.task_capabilities, "task_capabilities", isSitterTaskCapability),
+    has_first_aid_training: pickOptionalBoolean(body, prev.has_first_aid_training, "has_first_aid_training"),
+    has_childcare_training: hasTraining,
+    childcare_training_details:
+      hasTraining === true
+        ? optionalTrimmedText(
+            body.childcare_training_details !== undefined
+              ? body.childcare_training_details
+              : prev.childcare_training_details
+          )
+        : null
+  };
+}

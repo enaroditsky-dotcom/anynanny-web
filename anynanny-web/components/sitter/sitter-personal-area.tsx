@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Camera, User } from "lucide-react";
+import {
+  OnboardingChips,
+  OnboardingSelect,
+  OnboardingYesNo
+} from "@/components/onboarding/onboarding-fields";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import { WelcomeReplayCard } from "@/components/welcome/welcome-replay-card";
 import { IdentityPersonalSection } from "@/components/identity/identity-personal-section";
@@ -22,7 +27,57 @@ import { SitterBankDetailsSection } from "@/components/sitter/SitterBankDetailsS
 import { SitterManualReceivingDestinationsSection } from "@/components/sitter/SitterManualReceivingDestinationsSection";
 import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
-import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
+import { isIsraelCity, normalizeWorkingCities } from "@/lib/geo/israel-cities";
+import {
+  filterKnownValues,
+  isSitterAdditionalService,
+  isSitterAgeGroup,
+  isSitterCurrentStatus,
+  isSitterExperienceBand,
+  isSitterIncomeRange,
+  isSitterTaskCapability,
+  isSitterTravelDistance,
+  isSitterWorkType,
+  parseDesiredHoursPerWeek,
+  SITTER_ADDITIONAL_SERVICE_OPTIONS,
+  SITTER_AGE_GROUP_OPTIONS,
+  SITTER_CURRENT_STATUS_OPTIONS,
+  SITTER_DESIRED_HOURS_MAX,
+  SITTER_DESIRED_HOURS_MIN,
+  SITTER_EXPERIENCE_BAND_OPTIONS,
+  SITTER_INCOME_RANGE_OPTIONS,
+  SITTER_MAX_CHILDREN_OPTIONS,
+  SITTER_TASK_OPTIONS,
+  SITTER_TRAVEL_DISTANCE_OPTIONS,
+  SITTER_WORK_TYPE_OPTIONS,
+  yearsExperienceFromBand,
+  type SitterAdditionalService,
+  type SitterAgeGroup,
+  type SitterCurrentStatus,
+  type SitterExperienceBand,
+  type SitterIncomeRange,
+  type SitterMaxChildren,
+  type SitterTaskCapability,
+  type SitterTravelDistance,
+  type SitterWorkType
+} from "@/lib/onboarding/sitter-options";
+import { parseSitterHourlyRate } from "@/lib/onboarding/sitter-questionnaire";
+import {
+  experienceBandFromYears,
+  parseOptionalBoolean,
+  parseSitterAgeGroups,
+  sitterAdditionalServicesLabel,
+  sitterAgeGroupsLabel,
+  sitterCurrentStatusLabel,
+  sitterDesiredHoursLabel,
+  sitterExperienceBandLabel,
+  sitterHomeCityLabel,
+  sitterIncomeRangeLabel,
+  sitterMaxChildrenLabel,
+  sitterTaskCapabilitiesLabel,
+  sitterTravelDistanceLabel,
+  sitterWorkTypesLabel
+} from "@/lib/sitter/sitter-questionnaire-display";
 import {
   formatPreferredAgesDisplay,
   formatPreferredAgesRange,
@@ -68,6 +123,28 @@ type FormState = {
   referee_phone_2: string;
   legal_no_criminal_declaration: boolean;
   working_cities: IsraelCity[];
+  home_city: string;
+  years_experience_band: SitterExperienceBand | "";
+  experience_age_groups: SitterAgeGroup[];
+  has_drivers_license: boolean | null;
+  is_smoker: boolean | null;
+  has_baby_experience: boolean | null;
+  has_multiple_children_experience: boolean | null;
+  current_status: SitterCurrentStatus | "";
+  desired_hours_per_week: string;
+  desired_monthly_income_range: SitterIncomeRange | "";
+  work_type_preferences: SitterWorkType[];
+  travel_distance: SitterTravelDistance | "";
+  accepts_short_notice_shifts: boolean | null;
+  additional_service_interests: SitterAdditionalService[];
+  preferred_child_age_groups: SitterAgeGroup[];
+  max_children: SitterMaxChildren | null;
+  has_special_needs_experience: boolean | null;
+  special_needs_experience_details: string;
+  task_capabilities: SitterTaskCapability[];
+  has_first_aid_training: boolean | null;
+  has_childcare_training: boolean | null;
+  childcare_training_details: string;
   nanny_serial: string;
   avatar_url: string;
   phone: string;
@@ -92,6 +169,9 @@ type EditKey =
   | "referee_phone_1"
   | "referee_phone_2"
   | "working_cities"
+  | "home_city"
+  | "capabilities"
+  | "work_preferences"
   | "visibility"
   | "skills"
   | "legal"
@@ -195,6 +275,50 @@ function profileToForm(profile: SitterProfileRow | null): FormState {
     aliyah_year: profile?.aliyah_year != null ? String(profile.aliyah_year) : "",
     military_service: militaryToForm(profile?.military_service),
     years_experience: profile?.years_experience != null ? String(profile.years_experience) : "",
+    years_experience_band:
+      profile?.years_experience_band && isSitterExperienceBand(profile.years_experience_band)
+        ? profile.years_experience_band
+        : experienceBandFromYears(profile?.years_experience ?? null),
+    experience_age_groups: parseSitterAgeGroups(profile?.experience_age_groups),
+    has_drivers_license: parseOptionalBoolean(profile?.has_drivers_license),
+    is_smoker: parseOptionalBoolean(profile?.is_smoker),
+    has_baby_experience: parseOptionalBoolean(profile?.has_baby_experience),
+    has_multiple_children_experience: parseOptionalBoolean(profile?.has_multiple_children_experience),
+    current_status:
+      profile?.current_status && isSitterCurrentStatus(profile.current_status)
+        ? profile.current_status
+        : "",
+    desired_hours_per_week:
+      profile?.desired_hours_per_week != null ? String(profile.desired_hours_per_week) : "",
+    desired_monthly_income_range:
+      profile?.desired_monthly_income_range && isSitterIncomeRange(profile.desired_monthly_income_range)
+        ? profile.desired_monthly_income_range
+        : "",
+    work_type_preferences: filterKnownValues(profile?.work_type_preferences ?? [], isSitterWorkType),
+    travel_distance:
+      profile?.travel_distance && isSitterTravelDistance(profile.travel_distance)
+        ? profile.travel_distance
+        : "",
+    accepts_short_notice_shifts: parseOptionalBoolean(profile?.accepts_short_notice_shifts),
+    additional_service_interests: filterKnownValues(
+      profile?.additional_service_interests ?? [],
+      isSitterAdditionalService
+    ),
+    preferred_child_age_groups: parseSitterAgeGroups(profile?.preferred_child_age_groups),
+    max_children:
+      profile?.max_children === 1 ||
+      profile?.max_children === 2 ||
+      profile?.max_children === 3 ||
+      profile?.max_children === 4 ||
+      profile?.max_children === 5
+        ? profile.max_children
+        : null,
+    has_special_needs_experience: parseOptionalBoolean(profile?.has_special_needs_experience),
+    special_needs_experience_details: profile?.special_needs_experience_details ?? "",
+    task_capabilities: filterKnownValues(profile?.task_capabilities ?? [], isSitterTaskCapability),
+    has_first_aid_training: parseOptionalBoolean(profile?.has_first_aid_training),
+    has_childcare_training: parseOptionalBoolean(profile?.has_childcare_training),
+    childcare_training_details: profile?.childcare_training_details ?? "",
     hourly_rate_nis: profile?.hourly_rate_nis != null ? String(profile.hourly_rate_nis) : "",
     preferred_ages: formatPreferredAgesDisplay(profile?.preferred_ages),
     languages: normalizeSitterLanguages(profile?.languages),
@@ -206,6 +330,7 @@ function profileToForm(profile: SitterProfileRow | null): FormState {
     referee_phone_2: profile?.referee_phone_2 ?? "",
     legal_no_criminal_declaration: Boolean(profile?.legal_no_criminal_declaration),
     working_cities: normalizeWorkingCities(profile?.working_cities),
+    home_city: profile?.home_city && isIsraelCity(profile.home_city) ? profile.home_city : profile?.home_city ?? "",
     nanny_serial: profile?.nanny_serial ?? "",
     avatar_url: String(profile?.avatar_url ?? ""),
     phone: String((profile as { phone?: string | null } | null)?.phone ?? "")
@@ -225,10 +350,36 @@ function formToPayload(form: FormState): Record<string, unknown> {
     birth_country: form.birth_country.trim() || null,
     aliyah_year: form.aliyah_year.trim() ? Number(form.aliyah_year) : null,
     military_service: militaryToPayload(form.military_service),
-    years_experience: form.years_experience.trim() ? Number(form.years_experience) : null,
+    years_experience: form.years_experience_band
+      ? yearsExperienceFromBand(form.years_experience_band)
+      : form.years_experience.trim()
+        ? Number(form.years_experience)
+        : null,
+    years_experience_band: form.years_experience_band || null,
+    experience_age_groups: form.experience_age_groups,
     preferred_ages: normalizePreferredAges(form.preferred_ages),
     languages: normalizeSitterLanguages(form.languages),
     has_car: form.has_car,
+    has_drivers_license: form.has_drivers_license,
+    is_smoker: form.is_smoker,
+    has_baby_experience: form.has_baby_experience,
+    has_multiple_children_experience: form.has_multiple_children_experience,
+    current_status: form.current_status || null,
+    desired_hours_per_week: parseDesiredHoursPerWeek(form.desired_hours_per_week),
+    desired_monthly_income_range: form.desired_monthly_income_range || null,
+    work_type_preferences: form.work_type_preferences,
+    travel_distance: form.travel_distance || null,
+    accepts_short_notice_shifts: form.accepts_short_notice_shifts,
+    additional_service_interests: form.additional_service_interests,
+    preferred_child_age_groups: form.preferred_child_age_groups,
+    max_children: form.max_children,
+    has_special_needs_experience: form.has_special_needs_experience,
+    special_needs_experience_details: form.special_needs_experience_details.trim() || null,
+    task_capabilities: form.task_capabilities,
+    has_first_aid_training: form.has_first_aid_training,
+    has_childcare_training: form.has_childcare_training,
+    childcare_training_details: form.childcare_training_details.trim() || null,
+    home_city: form.home_city.trim() || null,
     homework_help: form.homework_help,
     light_cooking: form.light_cooking,
     bio: form.bio.trim().slice(0, 500) || null,
@@ -307,6 +458,11 @@ export function SitterPersonalArea({ userId }: Props) {
         ...form,
         working_cities: [...form.working_cities],
         languages: [...form.languages],
+        experience_age_groups: [...form.experience_age_groups],
+        preferred_child_age_groups: [...form.preferred_child_age_groups],
+        work_type_preferences: [...form.work_type_preferences],
+        additional_service_interests: [...form.additional_service_interests],
+        task_capabilities: [...form.task_capabilities],
         phone: form.phone || authPhone,
         preferred_ages:
           key === "preferred_ages"
@@ -388,6 +544,23 @@ export function SitterPersonalArea({ userId }: Props) {
     if (editKey === "working_cities" && draft.working_cities.length === 0) {
       setModalError("יש לבחור לפחות עיר אחת.");
       return;
+    }
+
+    if (editKey === "home_city" && draft.home_city.trim() && !isIsraelCity(draft.home_city)) {
+      setModalError("יש לבחור עיר / אזור מגורים.");
+      return;
+    }
+
+    if (editKey === "hourly_rate_nis" && draft.hourly_rate_nis.trim() && parseSitterHourlyRate(draft.hourly_rate_nis) == null) {
+      setModalError("יש להזין מחיר לשעה תקין.");
+      return;
+    }
+
+    if (editKey === "work_preferences" && draft.desired_hours_per_week.trim()) {
+      if (parseDesiredHoursPerWeek(draft.desired_hours_per_week) == null) {
+        setModalError("יש לבחור מספר שעות בין 1 ל-50.");
+        return;
+      }
     }
 
     if (editKey === "birth_date") {
@@ -517,7 +690,13 @@ export function SitterPersonalArea({ userId }: Props) {
                                   : editKey === "referee_phone_2"
                                     ? "שינוי טלפון ממליץ 2"
                                     : editKey === "working_cities"
-                                      ? "שינוי אזורי שירות"
+                                      ? "שינוי אזור עבודה מועדף"
+                                      : editKey === "home_city"
+                                        ? "שינוי עיר מגורים"
+                                        : editKey === "capabilities"
+                                          ? "שינוי יכולות והתאמה"
+                                          : editKey === "work_preferences"
+                                            ? "שינוי העדפות עבודה"
                                       : editKey === "visibility"
                                         ? "שינוי הגדרות תצוגה"
                                         : editKey === "skills"
@@ -606,6 +785,12 @@ export function SitterPersonalArea({ userId }: Props) {
           value={form.address_full}
           onEdit={() => openEdit("address_full")}
         />
+        <PersonalStaticRow
+          label="עיר / אזור מגורים"
+          value={sitterHomeCityLabel(form.home_city)}
+          onEdit={() => openEdit("home_city")}
+          actionLabel={form.home_city ? "שינוי" : "הוספה"}
+        />
       </PersonalAreaSection>
 
       <PersonalAreaSection
@@ -619,7 +804,12 @@ export function SitterPersonalArea({ userId }: Props) {
       <PersonalAreaSection title="רקע מקצועי" accent="emerald">
         <PersonalStaticRow
           label="שנות ניסיון"
-          value={form.years_experience}
+          value={sitterExperienceBandLabel(form.years_experience_band) || form.years_experience}
+          onEdit={() => openEdit("years_experience")}
+        />
+        <PersonalStaticRow
+          label="ניסיון לפי גילאים"
+          value={sitterAgeGroupsLabel(form.experience_age_groups)}
           onEdit={() => openEdit("years_experience")}
         />
         <PersonalStaticRow
@@ -685,8 +875,8 @@ export function SitterPersonalArea({ userId }: Props) {
       </PersonalAreaSection>
 
       <PersonalAreaSection
-        title="אזורי שירות"
-        description="הערים שבהן את מוכנה לעבוד"
+        title="אזור עבודה מועדף"
+        description="אותן ערים שמשמשות את חיפוש ההורים. שינוי כאן מתעדכן בחיפוש בלי שאלון מחדש."
         action={<PersonalChangeLink onClick={() => openEdit("working_cities")} />}
       >
         <p
@@ -694,8 +884,50 @@ export function SitterPersonalArea({ userId }: Props) {
             form.working_cities.length ? "font-medium text-[#001F3F]" : "italic text-slate-400"
           }`}
         >
-          {form.working_cities.length ? form.working_cities.join(", ") : "לא הוגדרו אזורי שירות"}
+          {form.working_cities.length ? form.working_cities.join(", ") : "לא הוגדר"}
         </p>
+      </PersonalAreaSection>
+
+      <PersonalAreaSection
+        title="יכולות והתאמה"
+        accent="emerald"
+        action={<PersonalChangeLink onClick={() => openEdit("capabilities")} label="עריכה" />}
+      >
+        <PersonalStaticRow label="רישיון נהיגה" value={yesNoLabel(form.has_drivers_license)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow label="רכב" value={yesNoLabel(form.has_car)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow label="מעשנת" value={yesNoLabel(form.is_smoker)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow label="ניסיון עם תינוקות" value={yesNoLabel(form.has_baby_experience)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow label="ניסיון עם כמה ילדים" value={yesNoLabel(form.has_multiple_children_experience)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow label="גילאים מועדפים לעבודה" value={sitterAgeGroupsLabel(form.preferred_child_age_groups)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow label="מספר ילדים מקסימלי" value={sitterMaxChildrenLabel(form.max_children)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow label="ניסיון עם צרכים מיוחדים" value={yesNoLabel(form.has_special_needs_experience)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow
+          label="פירוט צרכים מיוחדים"
+          value={form.has_special_needs_experience === true ? form.special_needs_experience_details : ""}
+          onEdit={() => openEdit("capabilities")}
+        />
+        <PersonalStaticRow label="יכולות במשימות" value={sitterTaskCapabilitiesLabel(form.task_capabilities)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow label="הכשרת עזרה ראשונה" value={yesNoLabel(form.has_first_aid_training)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow label="הכשרה בטיפול בילדים" value={yesNoLabel(form.has_childcare_training)} onEdit={() => openEdit("capabilities")} />
+        <PersonalStaticRow
+          label="פירוט הכשרה"
+          value={form.has_childcare_training === true ? form.childcare_training_details : ""}
+          onEdit={() => openEdit("capabilities")}
+        />
+      </PersonalAreaSection>
+
+      <PersonalAreaSection
+        title="העדפות עבודה"
+        accent="sky"
+        action={<PersonalChangeLink onClick={() => openEdit("work_preferences")} label="עריכה" />}
+      >
+        <PersonalStaticRow label="סטטוס נוכחי" value={sitterCurrentStatusLabel(form.current_status)} onEdit={() => openEdit("work_preferences")} />
+        <PersonalStaticRow label="שעות רצויות בשבוע" value={sitterDesiredHoursLabel(form.desired_hours_per_week)} onEdit={() => openEdit("work_preferences")} />
+        <PersonalStaticRow label="טווח הכנסה חודשי רצוי" value={sitterIncomeRangeLabel(form.desired_monthly_income_range)} onEdit={() => openEdit("work_preferences")} />
+        <PersonalStaticRow label="סוג עבודה מועדף" value={sitterWorkTypesLabel(form.work_type_preferences)} onEdit={() => openEdit("work_preferences")} />
+        <PersonalStaticRow label="מרחק נסיעה" value={sitterTravelDistanceLabel(form.travel_distance)} onEdit={() => openEdit("work_preferences")} />
+        <PersonalStaticRow label="משמרות בהתראה קצרה" value={yesNoLabel(form.accepts_short_notice_shifts)} onEdit={() => openEdit("work_preferences")} />
+        <PersonalStaticRow label="עניין בשירותים נוספים" value={sitterAdditionalServicesLabel(form.additional_service_interests)} onEdit={() => openEdit("work_preferences")} />
       </PersonalAreaSection>
 
       <PersonalAreaSection title="אנשי קשר ממליצים" accent="gold">
@@ -870,20 +1102,12 @@ export function SitterPersonalArea({ userId }: Props) {
           </PersonalField>
         ) : null}
 
-        {editKey === "years_experience" ||
-        editKey === "hourly_rate_nis" ||
-        editKey === "aliyah_year" ? (
+        {editKey === "hourly_rate_nis" || editKey === "aliyah_year" ? (
           <PersonalField label={modalTitle.replace("שינוי ", "")}>
             <input
               type="number"
               className={personalInputClassName}
-              value={
-                editKey === "years_experience"
-                  ? draft.years_experience
-                  : editKey === "hourly_rate_nis"
-                    ? draft.hourly_rate_nis
-                    : draft.aliyah_year
-              }
+              value={editKey === "hourly_rate_nis" ? draft.hourly_rate_nis : draft.aliyah_year}
               onChange={(e) =>
                 setDraft((prev) => ({
                   ...prev,
@@ -893,6 +1117,222 @@ export function SitterPersonalArea({ userId }: Props) {
               autoFocus
             />
           </PersonalField>
+        ) : null}
+
+        {editKey === "years_experience" ? (
+          <div className="space-y-4">
+            <OnboardingSelect
+              id="sitter-experience-band"
+              label="שנות ניסיון"
+              value={draft.years_experience_band}
+              onChange={(value) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  years_experience_band: isSitterExperienceBand(value) ? value : "",
+                  years_experience: isSitterExperienceBand(value)
+                    ? String(yearsExperienceFromBand(value))
+                    : prev.years_experience
+                }))
+              }
+              options={SITTER_EXPERIENCE_BAND_OPTIONS}
+            />
+            <OnboardingChips
+              legend="עם אילו גילאים יש לך ניסיון"
+              options={SITTER_AGE_GROUP_OPTIONS}
+              value={draft.experience_age_groups}
+              onChange={(value) => setDraft((prev) => ({ ...prev, experience_age_groups: value }))}
+            />
+          </div>
+        ) : null}
+
+        {editKey === "home_city" ? (
+          <IsraelCitiesMultiSelect
+            value={(draft.home_city && isIsraelCity(draft.home_city) ? [draft.home_city] : []) as IsraelCity[]}
+            onChange={(cities) =>
+              setDraft((prev) => ({ ...prev, home_city: cities[cities.length - 1] || "" }))
+            }
+            label="בחרו עיר מגורים"
+          />
+        ) : null}
+
+        {editKey === "capabilities" ? (
+          <div className="space-y-4">
+            <OnboardingYesNo
+              legend="יש רישיון נהיגה?"
+              name="sitter-license"
+              value={draft.has_drivers_license}
+              onChange={(value) => setDraft((prev) => ({ ...prev, has_drivers_license: value }))}
+            />
+            <OnboardingYesNo
+              legend="יש רכב?"
+              name="sitter-car"
+              value={draft.has_car}
+              onChange={(value) => setDraft((prev) => ({ ...prev, has_car: value }))}
+            />
+            <OnboardingYesNo
+              legend="מעשנת?"
+              name="sitter-smoker"
+              value={draft.is_smoker}
+              onChange={(value) => setDraft((prev) => ({ ...prev, is_smoker: value }))}
+            />
+            <OnboardingYesNo
+              legend="יש ניסיון עם תינוקות?"
+              name="sitter-baby"
+              value={draft.has_baby_experience}
+              onChange={(value) => setDraft((prev) => ({ ...prev, has_baby_experience: value }))}
+            />
+            <OnboardingYesNo
+              legend="יש ניסיון עם כמה ילדים במקביל?"
+              name="sitter-multi"
+              value={draft.has_multiple_children_experience}
+              onChange={(value) =>
+                setDraft((prev) => ({ ...prev, has_multiple_children_experience: value }))
+              }
+            />
+            <OnboardingChips
+              legend="גילאים מועדפים לעבודה"
+              options={SITTER_AGE_GROUP_OPTIONS}
+              value={draft.preferred_child_age_groups}
+              onChange={(value) => setDraft((prev) => ({ ...prev, preferred_child_age_groups: value }))}
+            />
+            <OnboardingSelect
+              id="sitter-max-children"
+              label="מספר ילדים מקסימלי"
+              value={draft.max_children == null ? "" : String(draft.max_children)}
+              onChange={(value) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  max_children: (SITTER_MAX_CHILDREN_OPTIONS as readonly number[]).includes(Number(value))
+                    ? (Number(value) as SitterMaxChildren)
+                    : null
+                }))
+              }
+              options={SITTER_MAX_CHILDREN_OPTIONS.map((value) => ({
+                value: String(value),
+                label: value === 5 ? "5+" : String(value)
+              }))}
+            />
+            <OnboardingYesNo
+              legend="יש ניסיון עם צרכים מיוחדים?"
+              name="sitter-special-needs"
+              value={draft.has_special_needs_experience}
+              onChange={(value) => setDraft((prev) => ({ ...prev, has_special_needs_experience: value }))}
+            />
+            {draft.has_special_needs_experience === true ? (
+              <PersonalField label="פירוט קצר">
+                <textarea
+                  className={personalTextareaClassName}
+                  value={draft.special_needs_experience_details}
+                  onChange={(e) =>
+                    setDraft((prev) => ({ ...prev, special_needs_experience_details: e.target.value }))
+                  }
+                />
+              </PersonalField>
+            ) : null}
+            <OnboardingChips
+              legend="יכולות במשימות"
+              options={SITTER_TASK_OPTIONS}
+              value={draft.task_capabilities}
+              onChange={(value) => setDraft((prev) => ({ ...prev, task_capabilities: value }))}
+            />
+            <OnboardingYesNo
+              legend="הכשרת עזרה ראשונה?"
+              name="sitter-first-aid"
+              value={draft.has_first_aid_training}
+              onChange={(value) => setDraft((prev) => ({ ...prev, has_first_aid_training: value }))}
+            />
+            <OnboardingYesNo
+              legend="הכשרה בטיפול בילדים?"
+              name="sitter-childcare-training"
+              value={draft.has_childcare_training}
+              onChange={(value) => setDraft((prev) => ({ ...prev, has_childcare_training: value }))}
+            />
+            {draft.has_childcare_training === true ? (
+              <PersonalField label="פירוט הכשרה">
+                <textarea
+                  className={personalTextareaClassName}
+                  value={draft.childcare_training_details}
+                  onChange={(e) =>
+                    setDraft((prev) => ({ ...prev, childcare_training_details: e.target.value }))
+                  }
+                />
+              </PersonalField>
+            ) : null}
+          </div>
+        ) : null}
+
+        {editKey === "work_preferences" ? (
+          <div className="space-y-4">
+            <OnboardingSelect
+              id="sitter-current-status"
+              label="סטטוס נוכחי"
+              value={draft.current_status}
+              onChange={(value) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  current_status: isSitterCurrentStatus(value) ? value : ""
+                }))
+              }
+              options={SITTER_CURRENT_STATUS_OPTIONS}
+            />
+            <OnboardingSelect
+              id="sitter-desired-hours"
+              label="שעות רצויות בשבוע"
+              value={draft.desired_hours_per_week}
+              onChange={(value) => setDraft((prev) => ({ ...prev, desired_hours_per_week: value }))}
+              options={Array.from(
+                { length: SITTER_DESIRED_HOURS_MAX - SITTER_DESIRED_HOURS_MIN + 1 },
+                (_, index) => {
+                  const hours = SITTER_DESIRED_HOURS_MIN + index;
+                  return { value: String(hours), label: `${hours}` };
+                }
+              )}
+            />
+            <OnboardingSelect
+              id="sitter-income"
+              label="טווח הכנסה חודשי רצוי"
+              value={draft.desired_monthly_income_range}
+              onChange={(value) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  desired_monthly_income_range: isSitterIncomeRange(value) ? value : ""
+                }))
+              }
+              options={SITTER_INCOME_RANGE_OPTIONS}
+            />
+            <OnboardingChips
+              legend="סוג עבודה מועדף"
+              options={SITTER_WORK_TYPE_OPTIONS}
+              value={draft.work_type_preferences}
+              onChange={(value) => setDraft((prev) => ({ ...prev, work_type_preferences: value }))}
+            />
+            <OnboardingSelect
+              id="sitter-travel"
+              label="מרחק נסיעה"
+              value={draft.travel_distance}
+              onChange={(value) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  travel_distance: isSitterTravelDistance(value) ? value : ""
+                }))
+              }
+              options={SITTER_TRAVEL_DISTANCE_OPTIONS}
+            />
+            <OnboardingYesNo
+              legend="מוכנה למשמרות בהתראה קצרה?"
+              name="sitter-short-notice"
+              value={draft.accepts_short_notice_shifts}
+              onChange={(value) => setDraft((prev) => ({ ...prev, accepts_short_notice_shifts: value }))}
+            />
+            <OnboardingChips
+              legend="עניין בשירותים נוספים"
+              options={SITTER_ADDITIONAL_SERVICE_OPTIONS}
+              value={draft.additional_service_interests}
+              onChange={(value) =>
+                setDraft((prev) => ({ ...prev, additional_service_interests: value }))
+              }
+            />
+          </div>
         ) : null}
 
         {editKey === "military_service" ? (

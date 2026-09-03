@@ -42,6 +42,9 @@ assert.ok(ownSelect.includes("hourly_rate_nis"));
 assert.ok(ownSelect.includes("years_experience"));
 assert.ok(ownSelect.includes("languages"));
 assert.ok(ownSelect.includes("working_cities"));
+assert.ok(ownSelect.includes("home_city"));
+assert.ok(ownSelect.includes("desired_hours_per_week"));
+assert.ok(ownSelect.includes("has_drivers_license"));
 assert.ok(ownSelect.includes("nanny_serial"));
 assert.ok(!ownSelect.includes("user_id"));
 for (const column of SITTER_PROFILE_PRIVATE_PAYOUT_COLUMNS) {
@@ -73,6 +76,8 @@ assert.doesNotMatch(
   /editKey !== "avatar" && \(!draft\.first_name\.trim\(\) \|\| !draft\.last_name\.trim\(\)\)/
 );
 assert.match(personal, /SitterManualReceivingDestinationsSection/);
+assert.match(personal, /אזור עבודה מועדף/);
+assert.doesNotMatch(personal, /זמינות כללית|generic availability/);
 assert.match(personal, /requestSaveOwnContactPhone/);
 
 const payoutLib = read("lib/wallet/sitter-payout-methods.ts");
