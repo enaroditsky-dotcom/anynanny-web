@@ -42,9 +42,11 @@
     "test:homepage-welcome-video": "npx --yes tsx scripts/test-homepage-welcome-video.ts",
     "test:settings-legal-documents": "npx --yes tsx scripts/test-settings-legal-documents.ts",
     "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts",
-    "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts"
+    "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts",
+    "test:didit-kyc": "npx --yes tsx scripts/test-didit-kyc.ts"
   },
   "dependencies": {
+    "@didit-protocol/sdk-web": "^0.3.0",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.112.4",

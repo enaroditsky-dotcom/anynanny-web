@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import { startDiditVerification } from "@/app/verify/VerifyButton";
 import {
   PersonalEditModal,
   PersonalField,
@@ -22,7 +21,6 @@ type IdentityVerificationFormProps = {
   nextPath?: string;
   onClose: () => void;
   onSaved: (record: IdentityVerificationRecord) => void | Promise<void>;
-  onFlowFinished?: () => void | Promise<void>;
 };
 
 export function IdentityVerificationForm({
@@ -31,18 +29,15 @@ export function IdentityVerificationForm({
   initialIdNumber = "",
   nextPath,
   onClose,
-  onSaved,
-  onFlowFinished
+  onSaved
 }: IdentityVerificationFormProps) {
   const [idNumber, setIdNumber] = useState(initialIdNumber);
-  const [consent, setConsent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setIdNumber(initialIdNumber);
-    setConsent(false);
     setError(null);
   }, [open, initialIdNumber]);
 
@@ -50,10 +45,6 @@ export function IdentityVerificationForm({
     const idError = validateIdentityIdNumber(idNumber);
     if (idError) {
       setError(idError);
-      return;
-    }
-    if (!consent) {
-      setError("יש לאשר את תנאי האימות לפני פתיחת התהליך.");
       return;
     }
 
@@ -93,7 +84,7 @@ export function IdentityVerificationForm({
     await onSaved(result.record);
 
     try {
-      const verifyRes = await fetch("/api/verify", {
+      const hypRes = await fetch("/api/identity-verification/hyp-register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -102,42 +93,33 @@ export function IdentityVerificationForm({
           next: nextPath
         })
       });
-      const verifyJson = (await verifyRes.json().catch(() => ({}))) as {
-        url?: string;
-        error?: string;
-      };
-      if (!verifyRes.ok || !verifyJson.url) {
+      const hypJson = (await hypRes.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!hypRes.ok || !hypJson.url) {
         setSaving(false);
-        setError(verifyJson.error || "לא ניתן לפתוח את תהליך אימות הזהות.");
+        setError(hypJson.error || "לא ניתן לפתוח את דף האימות של HYP.");
         return;
       }
-      await startDiditVerification(verifyJson.url, async () => {
-        await onFlowFinished?.();
-      });
-      setSaving(false);
-      onClose();
+      window.location.assign(hypJson.url);
+      return;
     } catch {
       setSaving(false);
-      setError("פתיחת אימות הזהות נכשלה. אפשר לנסות שוב מהאזור האישי.");
+      setError("פתיחת אימות HYP נכשלה. אפשר לנסות שוב מהאזור האישי.");
     }
   };
 
   return (
     <PersonalEditModal
       open={open}
-      title="אימות זהות"
+      title="אימות זהות ואמצעי תשלום"
       onClose={onClose}
       onSave={handleSave}
       saving={saving}
       error={error}
-      saveLabel="התחלת אימות"
-      savingLabel="פותחים אימות…"
     >
       <div className="space-y-3 text-right">
         <p className="text-xs leading-relaxed text-slate-600">
-          לאחר שמירת תעודת הזהות ואישור ההסכמה ייפתח תהליך אימות מאובטח של Didit. תתבקשו לצלם מסמך
-          זיהוי ולבצע בדיקת חיות (סלפי). ההחלטה הסופית מתקבלת בשרת — סיום המסך אינו אישור שהזהות
-          אומתה.
+          לאחר שמירת תעודת הזהות תועברו לדף מאובטח של HYP לרישום כרטיס אשראי אישי. האימות מסתיים רק
+          אחרי בדיקת ת.ז. מול SHVA — AnyNanny לא שומרת מספר כרטיס מלא או CVV.
         </p>
 
         <PersonalField label="תעודת זהות">
@@ -154,28 +136,14 @@ export function IdentityVerificationForm({
         </PersonalField>
 
         <ul className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-[13px] leading-relaxed text-slate-600">
-          <li>האימות כולל צילום תעודת זהות או דרכון ובדיקת פנים מול המסמך.</li>
-          <li>המצלמה והמיקרופון עשויים להיות בשימוש במהלך התהליך.</li>
-          <li>Didit מעבדת את המסמכים והביומטריה. AnyNanny שומרת את סטטוס האימות ומזהה המשתמש בלבד.</li>
+          <li>הכרטיס חייב להיות על שם המשתמש שמבצע את האימות.</li>
+          <li>פרטי הכרטיס יטופלו באופן מאובטח על ידי ספק התשלומים (HYP).</li>
+          <li>AnyNanny אינה שומרת מספר כרטיס מלא או CVV.</li>
         </ul>
-
-        <label className="flex cursor-pointer items-start gap-2 text-right text-[13px] leading-relaxed text-[#001F3F]">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(e) => setConsent(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-          />
-          <span>
-            אני מאשר/ת למסור מסמך זיהוי ותמונת פנים לספק האימות Didit לצורך אימות זהות ב-AnyNanny,
-            ומבין/ה שהסטטוס יתעדכן רק אחרי החלטת האימות.
-          </span>
-        </label>
 
         <p className="flex items-start gap-1.5 text-[13px] text-slate-500">
           <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" aria-hidden />
-          סימון &quot;משתמש מאומת&quot; יופיע רק אחרי החלטת Approved מהשרת (webhook), לא אחרי סגירת
-          החלון.
+          סימון &quot;משתמש מאומת&quot; יופיע רק אחרי בדיקת idStatus בשרת מול HYP (inquireTransactions).
         </p>
       </div>
     </PersonalEditModal>
