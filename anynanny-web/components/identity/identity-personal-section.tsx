@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
-import { VerifiedUserBadge } from "@/components/identity/verified-user-badge";
+import { IdentityShieldMark, VerifiedUserBadge } from "@/components/identity/verified-user-badge";
 import { PersonalAreaSection } from "@/components/personal-area/personal-area-ui";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -63,7 +63,10 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
     <>
       <PersonalAreaSection
         title="אימות זהות"
-        accent="emerald"
+        accent="gold"
+        tone="trust"
+        icon={<IdentityShieldMark size="md" />}
+        headerAccessory={verified ? <VerifiedUserBadge size="sm" showMark={false} /> : undefined}
         description="האימות מתבצע מול Didit באמצעות מסמך זיהוי ובדיקת חיות. ניתן לעדכן או לנסות שוב בכל עת."
         summary={
           loading
@@ -94,7 +97,6 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
         ) : (
           <div className="space-y-2 text-right">
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {verified ? <VerifiedUserBadge /> : null}
               <p
                 className={`text-[16px] font-semibold ${
                   record.status === "failed"
@@ -102,7 +104,7 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
                     : record.status === "pending"
                       ? "text-amber-800"
                       : record.status === "verified"
-                        ? "text-emerald-800"
+                        ? "text-[#6B4E12]"
                         : "text-slate-600"
                 }`}
               >

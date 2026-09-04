@@ -2239,8 +2239,8 @@ export function ParentDashboardClient({
 
       <div className={`space-y-4 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
         <div className="w-full min-w-0 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
                   {parentAvatarUrl ? (
                     <img
@@ -2254,11 +2254,11 @@ export function ParentDashboardClient({
                     </div>
                   )}
                 </div>
-                <h1 className="text-lg font-bold text-slate-900">שלום, {firstName}!</h1>
+                <h1 className="min-w-0 text-lg font-bold leading-snug text-slate-900">שלום, {firstName}!</h1>
               </div>
               {parentSerialLabel ? (
                 <span
-                  className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[13px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200"
+                  className="inline-flex shrink-0 items-center gap-1 bg-purple-100 text-purple-800 text-[13px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200"
                   dir="ltr"
                 >
                   <span>{parentSerialLabel}</span>
@@ -2267,9 +2267,9 @@ export function ParentDashboardClient({
               ) : null}
             </div>
 
-            <div className="flex items-center justify-start">
-              <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-md">
-                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+            <div className="flex items-start justify-between gap-3">
+              <div className="inline-flex min-w-0 items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-md">
+                <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
                 <span>
                   {parentRatingSummary.average.toFixed(1)}
                 </span>
@@ -2280,13 +2280,14 @@ export function ParentDashboardClient({
                     : "חוות דעת"})
                 </span>
               </div>
+              <div className="flex min-w-0 max-w-[11.5rem] shrink-0 justify-end sm:max-w-[13rem]">
+                <IdentityStatusIndicator
+                  userId={parentId}
+                  role="parent"
+                  nextPath="/parent/dashboard"
+                />
+              </div>
             </div>
-
-            <IdentityStatusIndicator
-              userId={parentId}
-              role="parent"
-              nextPath="/parent/dashboard"
-            />
 
             {sitterAcceptedToast ? (
               <div

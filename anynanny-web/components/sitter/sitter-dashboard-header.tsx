@@ -158,8 +158,8 @@ export function SitterDashboardHeader({
   return (
     <header className="px-0" dir="rtl">
       <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="תמונת פרופיל" className="h-full w-full object-cover" />
@@ -169,38 +169,40 @@ export function SitterDashboardHeader({
                 </div>
               )}
             </div>
-            <h1 className={`text-lg font-bold text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}>
+            <h1 className={`min-w-0 text-lg font-bold leading-snug text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}>
               {greeting}
             </h1>
           </div>
           {showIdPill && displayIdValue ? (
             <span
-              className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-[13px] font-bold text-purple-800"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-[13px] font-bold text-purple-800"
               dir="ltr"
             >
               <span>{displayIdValue}</span>
               <span className="text-[11px] font-normal text-purple-500">ID</span>
             </span>
           ) : showPublicId && !publicIdLoaded ? (
-            <span className="inline-block h-5 w-16 animate-pulse rounded-md bg-purple-100/80" aria-hidden />
+            <span className="inline-block h-5 w-16 shrink-0 animate-pulse rounded-md bg-purple-100/80" aria-hidden />
           ) : null}
         </div>
-        <div className="flex items-center justify-start">
+        <div className="flex items-start justify-between gap-3">
           {statsLoading ? (
             <span className="inline-block h-6 w-28 animate-pulse rounded-md bg-amber-50" aria-hidden />
           ) : (
-            <div className="inline-flex items-center gap-1 rounded-md border border-amber-200/60 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
-              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+            <div className="inline-flex min-w-0 items-center gap-1 rounded-md border border-amber-200/60 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+              <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
               <span>{numericRating}</span>
               <span className="text-[13px] text-slate-400">({reviewsCount} חוות דעת)</span>
             </div>
           )}
+          <div className="flex min-w-0 max-w-[11.5rem] shrink-0 justify-end sm:max-w-[13rem]">
+            <IdentityStatusIndicator
+              userId={sitterId}
+              role="sitter"
+              nextPath="/sitter/dashboard"
+            />
+          </div>
         </div>
-        <IdentityStatusIndicator
-          userId={sitterId}
-          role="sitter"
-          nextPath="/sitter/dashboard"
-        />
       </div>
       {children}
     </header>

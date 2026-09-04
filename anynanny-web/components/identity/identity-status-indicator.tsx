@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ShieldCheck } from "lucide-react";
 import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
+import { VerifiedUserBadge } from "@/components/identity/verified-user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   EMPTY_IDENTITY_VERIFICATION,
@@ -65,17 +65,17 @@ export function IdentityStatusIndicator({
   const verified = record.status === "verified";
   const pending = record.status === "pending";
 
-  const className = verified
-    ? "inline-flex items-center gap-1 rounded-md border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800"
-    : pending
-      ? "inline-flex items-center gap-1 rounded-md border border-amber-200/70 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
-      : "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-700";
+  const className = pending
+    ? "inline-flex items-center gap-1 rounded-md border border-amber-200/70 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
+    : "inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-700";
 
   return (
     <>
-      <div className="flex items-center justify-start">
+      <div className="inline-flex max-w-full items-center justify-end">
         {loading ? (
-          <span className="inline-block h-6 w-32 animate-pulse rounded-md bg-slate-100" aria-hidden />
+          <span className="inline-block h-8 w-36 animate-pulse rounded-xl bg-slate-100" aria-hidden />
+        ) : verified ? (
+          <VerifiedUserBadge size="lg" />
         ) : actionable ? (
           <button
             type="button"
@@ -87,7 +87,6 @@ export function IdentityStatusIndicator({
           </button>
         ) : (
           <span className={className} aria-label={label}>
-            {verified ? <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
             {label}
           </span>
         )}

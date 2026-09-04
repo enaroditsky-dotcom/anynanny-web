@@ -638,7 +638,7 @@ export function ParentPersonalArea() {
                   {publicId}
                 </p>
               ) : null}
-              <IdentityVerifiedBadgeLive userId={form.id} />
+              <IdentityVerifiedBadgeLive userId={form.id} className="mt-1" size="md" />
               <button
                 type="button"
                 onClick={() => openEdit("avatar")}
