@@ -23,6 +23,18 @@ export function parseUuid(raw: unknown): string | null {
   return UUID_RE.test(value) ? value.toLowerCase() : null;
 }
 
+export function isDiditSessionPrimaryKeyConflict(error: {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+}): boolean {
+  const code = String(error.code ?? "").trim();
+  const blob = [error.message, error.details].map((part) => String(part ?? "")).join(" ");
+  const named = /unique constraint ["']([^"']+)["']/i.exec(blob);
+  if (named && named[1] !== "didit_sessions_pkey") return false;
+  return code === "23505" || /didit_sessions_pkey/i.test(blob);
+}
+
 export async function insertDiditSession(
   supabase: SupabaseClient,
   input: {
@@ -45,13 +57,40 @@ export async function insertDiditSession(
     updated_at: new Date().toISOString()
   });
 
-  if (error) {
+  if (!error) {
+    return { error: null, missingSchema: false };
+  }
+
+  if (!isDiditSessionPrimaryKeyConflict(error)) {
     return {
       error: error.message,
       missingSchema: isPostgrestSchemaDriftError(error.message)
     };
   }
-  return { error: null, missingSchema: false };
+
+  const existing = await supabase
+    .from(DIDIT_SESSIONS_TABLE)
+    .select("session_id, user_id")
+    .eq("session_id", input.sessionId)
+    .maybeSingle();
+
+  if (existing.error) {
+    return {
+      error: existing.error.message,
+      missingSchema: isPostgrestSchemaDriftError(existing.error.message)
+    };
+  }
+
+  const ownerId = parseUuid((existing.data as { user_id?: unknown } | null)?.user_id);
+  const currentUserId = parseUuid(input.userId);
+  if (ownerId && currentUserId && ownerId === currentUserId) {
+    return { error: null, missingSchema: false };
+  }
+
+  return {
+    error: "Didit session already exists.",
+    missingSchema: false
+  };
 }
 
 export async function markDiditProfilePending(
