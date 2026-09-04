@@ -185,7 +185,7 @@ function HomeInner() {
             <AnyNannyLogo variant="hero" />
           </h1>
 
-          <p className="mt-1 text-xs font-medium text-slate-500 sm:text-sm">
+          <p className="-mt-2 text-xs font-bold leading-tight text-slate-500 sm:-mt-3 sm:text-sm">
             פשוט למצוא זמן לחיים
           </p>
         </div>
