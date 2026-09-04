@@ -10,6 +10,9 @@ import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/li
 
 export type SitterPayoutMethodKind = "bit" | "paybox" | "card";
 
+/** Preferred receiving/payout declaration stored on payout_preferred_method. */
+export type SitterPreferredPayoutMethod = SitterPayoutMethodKind | "bank" | "cash";
+
 /** Safe parent-facing labels for a sitter's preferred receiving destination. */
 export const PREFERRED_RECEIVING_METHOD_LABELS = {
   bit: "Bit",
@@ -37,7 +40,7 @@ export function preferredReceivingMethodLabel(raw: unknown): string | null {
 }
 
 export type SitterPayoutMethods = {
-  preferred: SitterPayoutMethodKind | "bank" | null;
+  preferred: SitterPreferredPayoutMethod | null;
   bitPhone: string;
   payboxPhone: string;
   /** Optional private PayBox personal payment HTTPS link. */
@@ -209,7 +212,8 @@ function mapRow(row: Record<string, unknown> | null): SitterPayoutMethods {
     preferredRaw === "bit" ||
     preferredRaw === "paybox" ||
     preferredRaw === "card" ||
-    preferredRaw === "bank"
+    preferredRaw === "bank" ||
+    preferredRaw === "cash"
       ? preferredRaw
       : null;
   const tokenReady = Boolean(
@@ -357,7 +361,7 @@ export async function fetchSitterPayoutMethods(
 }
 
 export type SitterPayoutSavePatch = Partial<SitterPayoutMethods> & {
-  preferred?: SitterPayoutMethodKind | "bank" | null;
+  preferred?: SitterPreferredPayoutMethod | null;
   /** Server-only Hyp fields — never accept from browser for arbitrary overwrite without complete flow. */
   hypToken?: string | null;
   hypTokef?: string | null;

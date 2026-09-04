@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Body = {
-  kind?: SitterPayoutMethodKind;
+  kind?: SitterPayoutMethodKind | "cash";
   preferred?: boolean;
   bitPhone?: string;
   payboxPhone?: string;
@@ -29,7 +29,8 @@ type Body = {
 };
 
 /**
- * Persist sitter payout destinations (Bit / PayBox / card metadata).
+ * Persist sitter payout destinations (Bit / PayBox / card metadata)
+ * or a preferred-receiving declaration (cash).
  * Card PAN is reduced to last4; CVV is never stored (PCI).
  */
 export async function POST(request: Request) {
@@ -53,8 +54,19 @@ export async function POST(request: Request) {
   }
 
   const kind = body.kind;
-  if (kind !== "bit" && kind !== "paybox" && kind !== "card") {
-    return NextResponse.json({ error: "kind must be bit | paybox | card." }, { status: 400 });
+  if (kind !== "bit" && kind !== "paybox" && kind !== "card" && kind !== "cash") {
+    return NextResponse.json({ error: "kind must be bit | paybox | card | cash." }, { status: 400 });
+  }
+
+  if (kind === "cash") {
+    const saved = await saveSitterPayoutMethods(supabase, user.id, { preferred: "cash" });
+    if (!saved.ok) {
+      return NextResponse.json(
+        { error: saved.error, missingSchema: saved.missingSchema === true },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ methods: saved.methods });
   }
 
   const setPreferred = body.preferred !== false;
