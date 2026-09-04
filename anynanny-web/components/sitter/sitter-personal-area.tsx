@@ -12,6 +12,17 @@ import { WelcomeReplayCard } from "@/components/welcome/welcome-replay-card";
 import { IdentityPersonalSection } from "@/components/identity/identity-personal-section";
 import { IdentityVerifiedBadgeLive } from "@/components/identity/verified-user-badge";
 import {
+  joinPersonalAreaSummary,
+  sitterBioSummary,
+  sitterCapabilitiesSummary,
+  sitterLegalSummary,
+  sitterPersonalDetailsSummary,
+  sitterProfessionalSummary,
+  sitterRefereesSummary,
+  sitterWorkPreferencesSummary,
+  sitterWorkingCitiesSummary
+} from "@/components/personal-area/personal-area-summaries";
+import {
   PersonalAreaSection,
   PersonalChangeLink,
   PersonalCheckbox,
@@ -651,6 +662,29 @@ export function SitterPersonalArea({ userId }: Props) {
     form.show_full_name ? "שם מלא מוצג" : "שם מלא מוסתר",
     form.show_age ? "גיל מוצג" : "גיל מוסתר"
   ].join(" · ");
+  const personalSummary = sitterPersonalDetailsSummary(
+    sitterHomeCityLabel(form.home_city),
+    formatDisplayDate(form.birth_date)
+  );
+  const professionalSummary = sitterProfessionalSummary(
+    sitterExperienceBandLabel(form.years_experience_band),
+    form.years_experience,
+    sitterAgeGroupsLabel(form.experience_age_groups)
+  );
+  const workingCitiesSummary = sitterWorkingCitiesSummary(form.working_cities);
+  const capabilitiesSummary = sitterCapabilitiesSummary({
+    hasLicense: form.has_drivers_license,
+    hasCar: form.has_car,
+    hasFirstAid: form.has_first_aid_training
+  });
+  const workPreferencesSummary = sitterWorkPreferencesSummary(
+    sitterDesiredHoursLabel(form.desired_hours_per_week),
+    form.accepts_short_notice_shifts
+  );
+  const bioSummary = sitterBioSummary(form.bio);
+  const skillsSummary = joinPersonalAreaSummary([skillsLabel]);
+  const refereesSummary = sitterRefereesSummary(form.referee_phone_1, form.referee_phone_2);
+  const legalSummary = sitterLegalSummary(form.legal_no_criminal_declaration);
 
   const modalTitle =
     editKey === "avatar"
@@ -759,7 +793,12 @@ export function SitterPersonalArea({ userId }: Props) {
 
       <IdentityPersonalSection role="sitter" userId={userId} />
 
-      <PersonalAreaSection title="פרטים אישיים" description="הפרטים שנשמרו בשאלון ובפרופיל">
+      <PersonalAreaSection
+        title="פרטים אישיים"
+        description="הפרטים שנשמרו בשאלון ובפרופיל"
+        summary={personalSummary}
+        defaultOpen
+      >
         <PersonalStaticRow label="שם פרטי" value={form.first_name} onEdit={() => openEdit("first_name")} />
         <PersonalStaticRow label="שם משפחה" value={form.last_name} onEdit={() => openEdit("last_name")} />
         <PersonalStaticRow
@@ -796,12 +835,13 @@ export function SitterPersonalArea({ userId }: Props) {
       <PersonalAreaSection
         title="הגדרות תצוגה"
         accent="sky"
+        summary={visibilityLabel}
         action={<PersonalChangeLink onClick={() => openEdit("visibility")} />}
       >
         <p className="text-[16px] font-medium text-[#001F3F]">{visibilityLabel}</p>
       </PersonalAreaSection>
 
-      <PersonalAreaSection title="רקע מקצועי" accent="emerald">
+      <PersonalAreaSection title="רקע מקצועי" accent="emerald" summary={professionalSummary}>
         <PersonalStaticRow
           label="שנות ניסיון"
           value={sitterExperienceBandLabel(form.years_experience_band) || form.years_experience}
@@ -852,6 +892,7 @@ export function SitterPersonalArea({ userId }: Props) {
       <PersonalAreaSection
         title="כישורים"
         accent="emerald"
+        summary={skillsSummary}
         action={<PersonalChangeLink onClick={() => openEdit("skills")} />}
       >
         <p className={`text-[16px] ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
@@ -863,6 +904,7 @@ export function SitterPersonalArea({ userId }: Props) {
         title="אודותיי"
         accent="sky"
         description="הטקסט שההורים רואים בכרטיס שלך"
+        summary={bioSummary}
         action={<PersonalChangeLink onClick={() => openEdit("bio")} />}
       >
         <p
@@ -877,6 +919,7 @@ export function SitterPersonalArea({ userId }: Props) {
       <PersonalAreaSection
         title="אזור עבודה מועדף"
         description="אותן ערים שמשמשות את חיפוש ההורים. שינוי כאן מתעדכן בחיפוש בלי שאלון מחדש."
+        summary={workingCitiesSummary}
         action={<PersonalChangeLink onClick={() => openEdit("working_cities")} />}
       >
         <p
@@ -891,6 +934,7 @@ export function SitterPersonalArea({ userId }: Props) {
       <PersonalAreaSection
         title="יכולות והתאמה"
         accent="emerald"
+        summary={capabilitiesSummary}
         action={<PersonalChangeLink onClick={() => openEdit("capabilities")} label="עריכה" />}
       >
         <PersonalStaticRow label="רישיון נהיגה" value={yesNoLabel(form.has_drivers_license)} onEdit={() => openEdit("capabilities")} />
@@ -919,6 +963,7 @@ export function SitterPersonalArea({ userId }: Props) {
       <PersonalAreaSection
         title="העדפות עבודה"
         accent="sky"
+        summary={workPreferencesSummary}
         action={<PersonalChangeLink onClick={() => openEdit("work_preferences")} label="עריכה" />}
       >
         <PersonalStaticRow label="סטטוס נוכחי" value={sitterCurrentStatusLabel(form.current_status)} onEdit={() => openEdit("work_preferences")} />
@@ -930,7 +975,7 @@ export function SitterPersonalArea({ userId }: Props) {
         <PersonalStaticRow label="עניין בשירותים נוספים" value={sitterAdditionalServicesLabel(form.additional_service_interests)} onEdit={() => openEdit("work_preferences")} />
       </PersonalAreaSection>
 
-      <PersonalAreaSection title="אנשי קשר ממליצים" accent="gold">
+      <PersonalAreaSection title="אנשי קשר ממליצים" accent="gold" summary={refereesSummary}>
         <PersonalStaticRow
           label="טלפון ממליץ 1"
           value={form.referee_phone_1}
@@ -948,6 +993,7 @@ export function SitterPersonalArea({ userId }: Props) {
       <PersonalAreaSection
         title="הצהרה"
         accent="gold"
+        summary={legalSummary}
         action={<PersonalChangeLink onClick={() => openEdit("legal")} />}
       >
         <p className="text-[16px] font-medium text-[#001F3F]">

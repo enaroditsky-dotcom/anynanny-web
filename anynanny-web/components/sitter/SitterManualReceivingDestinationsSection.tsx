@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { HelpCircle, Loader2, Smartphone } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
+import { sitterReceivingSummary } from "@/components/personal-area/personal-area-summaries";
 import { PersonalAreaSection } from "@/components/personal-area/personal-area-ui";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { sitterReceivingSetupState } from "@/lib/billing/payment-method-availability";
@@ -204,6 +205,14 @@ export function SitterManualReceivingDestinationsSection({
         title="קבלה ב-Bit וב-PayBox"
         accent="emerald"
         description="מספרים אופציונליים להורים אחרי המשמרת. התשלום מתבצע מחוץ ל-AnyNanny. לא מוצג בפרופיל הציבורי ולא מועתק ממספר הוואטסאפ."
+        summary={
+          loading
+            ? "טוען…"
+            : sitterReceivingSummary(
+                sitterReceivingSetupState(methods, "bit").configured,
+                sitterReceivingSetupState(methods, "paybox").configured
+              )
+        }
       >
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-4 text-slate-400">

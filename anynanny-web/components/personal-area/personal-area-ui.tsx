@@ -1,22 +1,38 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
+import { PERSONAL_AREA_EMPTY_SUMMARY } from "@/components/personal-area/personal-area-summaries";
+import {
+  AUTH_MODAL_CENTER_WRAP,
+  AUTH_MODAL_OVERLAY_SCROLL
+} from "@/lib/ui/auth-modal-overlay";
 
 export function PersonalAreaSection({
   title,
   description,
+  summary,
   accent = "navy",
   action,
-  children
+  children,
+  collapsible = true,
+  defaultOpen = false
 }: {
   title: string;
   description?: string;
+  summary?: string;
   accent?: "navy" | "gold" | "emerald" | "sky";
   action?: ReactNode;
   children: ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
 }) {
+  const reactId = useId();
+  const panelId = `${reactId}-panel`;
+  const headerId = `${reactId}-header`;
+  const [open, setOpen] = useState(defaultOpen);
+
   const accentClass =
     accent === "gold"
       ? "border-[#C5A059]/25"
@@ -26,16 +42,77 @@ export function PersonalAreaSection({
           ? "border-sky-200/80"
           : "border-navy-header/10";
 
-  return (
-    <section className={`rounded-2xl border bg-white p-4 shadow-soft sm:p-5 ${accentClass}`} dir="rtl">
-      <div className="mb-3 flex items-start justify-between gap-3 text-right">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-[17px] font-bold text-[#001F3F]">{title}</h2>
-          {description ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{description}</p> : null}
+  const collapsedSummary = (summary ?? "").trim() || PERSONAL_AREA_EMPTY_SUMMARY;
+
+  if (!collapsible) {
+    return (
+      <section className={`rounded-2xl border bg-white p-4 shadow-soft sm:p-5 ${accentClass}`} dir="rtl">
+        <div className="mb-3 flex items-start justify-between gap-3 text-right">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[17px] font-bold text-[#001F3F]">{title}</h2>
+            {description ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{description}</p> : null}
+          </div>
+          {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
         </div>
-        {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
+        {children}
+      </section>
+    );
+  }
+
+  return (
+    <section
+      data-personal-area-accordion
+      className={`min-w-0 w-full rounded-2xl border bg-white px-3.5 py-2.5 shadow-soft sm:px-5 sm:py-3 ${accentClass}`}
+      dir="rtl"
+    >
+      <h2 className="m-0 text-right text-[17px] font-bold text-[#001F3F]">
+        <button
+          type="button"
+          id={headerId}
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((current) => !current)}
+          className="flex min-h-[44px] w-full items-start gap-3 rounded-xl text-right outline-none transition hover:bg-[#FDFBF6]/80 focus-visible:ring-2 focus-visible:ring-[#001F3F]/25 focus-visible:ring-offset-2"
+        >
+          <span className="min-w-0 flex-1 py-1">
+            <span className="block leading-snug">{title}</span>
+            {open ? (
+              description ? (
+                <span className="mt-1 block text-xs font-normal leading-relaxed text-slate-500">
+                  {description}
+                </span>
+              ) : null
+            ) : (
+              <span className="mt-0.5 block line-clamp-2 break-words text-xs font-normal leading-relaxed text-slate-500">
+                {collapsedSummary}
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            className={`mt-2 h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 ${
+              open ? "rotate-180" : ""
+            }`}
+            aria-hidden
+          />
+        </button>
+      </h2>
+      <div
+        id={panelId}
+        role="region"
+        aria-labelledby={headerId}
+        aria-hidden={!open}
+        inert={open ? undefined : true}
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="border-t border-[#001F3F]/8 pt-3">
+            {action ? <div className="mb-2 flex justify-end">{action}</div> : null}
+            {children}
+          </div>
+        </div>
       </div>
-      {children}
     </section>
   );
 }
@@ -173,6 +250,8 @@ export function PersonalEditModal({
   onSave,
   saving = false,
   error = null,
+  saveLabel = "שמירה",
+  savingLabel = "שומר…",
   children
 }: {
   open: boolean;
@@ -181,6 +260,8 @@ export function PersonalEditModal({
   onSave: () => void | Promise<void>;
   saving?: boolean;
   error?: string | null;
+  saveLabel?: string;
+  savingLabel?: string;
   children: ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -239,7 +320,7 @@ export function PersonalEditModal({
   return createPortal(
     <div
       data-personal-edit-modal
-      className="fixed inset-0 z-[120] flex items-start justify-center overflow-hidden bg-black/40 px-4 pb-4 pt-[max(1.25rem,env(safe-area-inset-top))] sm:items-center sm:p-4"
+      className={`fixed inset-0 z-[120] ${AUTH_MODAL_OVERLAY_SCROLL} bg-black/40`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="personal-edit-modal-title"
@@ -248,8 +329,9 @@ export function PersonalEditModal({
         if (!saving) onClose();
       }}
     >
+      <div className={AUTH_MODAL_CENTER_WRAP}>
       <div
-        className="mt-2 flex w-full max-w-md max-h-[min(85dvh,calc(100dvh-2.5rem))] flex-col overflow-y-auto overscroll-contain rounded-2xl border border-[#001F3F]/12 bg-white p-5 shadow-xl shadow-[#001F3F]/15 animate-in fade-in zoom-in-95 duration-200 sm:mt-0"
+        className="my-auto w-full max-w-md rounded-2xl border border-[#001F3F]/12 bg-white p-5 shadow-xl shadow-[#001F3F]/15 animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="personal-edit-modal-title" className="text-right text-base font-bold text-[#001F3F]">
@@ -277,9 +359,10 @@ export function PersonalEditModal({
             className="flex-[1.4] inline-flex items-center justify-center gap-2 rounded-xl bg-[#001F3F] px-3 py-2.5 text-sm font-bold text-white transition hover:bg-[#003366] disabled:opacity-60"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {saving ? "שומר…" : "שמירה"}
+            {saving ? savingLabel : saveLabel}
           </button>
         </div>
+      </div>
       </div>
     </div>,
     document.body

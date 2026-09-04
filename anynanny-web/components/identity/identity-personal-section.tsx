@@ -62,9 +62,16 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
   return (
     <>
       <PersonalAreaSection
-        title="אימות זהות ואמצעי תשלום"
+        title="אימות זהות"
         accent="emerald"
-        description="האימות מתבצע מול HYP/SHVA באמצעות כרטיס אשראי אישי. ניתן לעדכן או לנסות שוב בכל עת."
+        description="האימות מתבצע מול Didit באמצעות מסמך זיהוי ובדיקת חיות. ניתן לעדכן או לנסות שוב בכל עת."
+        summary={
+          loading
+            ? "טוען…"
+            : missingSchema
+              ? "לא הוגדר"
+              : identityStatusLabel(record.status)
+        }
         action={
           cta && !missingSchema ? (
             <button
@@ -121,6 +128,9 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
         onClose={() => setFormOpen(false)}
         onSaved={(next) => {
           setRecord(next);
+        }}
+        onFlowFinished={() => {
+          void load();
         }}
       />
     </>
