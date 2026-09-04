@@ -42,7 +42,7 @@ export function HomepageWelcomeVideo({ onJoinClick }: HomepageWelcomeVideoProps)
       <div className="px-1 text-center">
         <h2
           id="homepage-welcome-video-title"
-          className="text-[15px] font-extrabold leading-snug tracking-tight text-navy-header sm:text-base"
+          className="text-[15px] font-normal leading-snug tracking-tight text-navy-header sm:text-base"
         >
           הכירו את AnyNanny ב־10 שניות
         </h2>
