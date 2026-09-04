@@ -4,7 +4,7 @@ import {
   insertDiditSession,
   markDiditProfilePending
 } from "@/lib/identity/didit-db";
-import { DIDIT_WORKFLOW_ID, readDiditApiKey } from "@/lib/identity/didit";
+import { readDiditApiKey } from "@/lib/identity/didit";
 import type { IdentityVerificationRole } from "@/lib/identity/identity-verification";
 import { createServerClient } from "@/lib/supabase/server";
 
@@ -37,7 +37,8 @@ function sanitizeNext(role: IdentityVerificationRole, raw: string | undefined): 
 
 export async function POST(request: Request) {
   const apiKey = readDiditApiKey();
-  if (!apiKey) {
+  const workflowId = String(process.env.DIDIT_WORKFLOW_ID ?? "").trim();
+  if (!apiKey || !workflowId) {
     return NextResponse.json({ error: "Didit is not configured." }, { status: 503 });
   }
 
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      workflow_id: DIDIT_WORKFLOW_ID,
+      workflow_id: workflowId,
       vendor_data: user.id,
       callback,
       language: "he",
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
     sessionId: session.session_id,
     userId: user.id,
     role,
-    workflowId: DIDIT_WORKFLOW_ID,
+    workflowId,
     status: session.status,
     metadata: { role, next }
   });
