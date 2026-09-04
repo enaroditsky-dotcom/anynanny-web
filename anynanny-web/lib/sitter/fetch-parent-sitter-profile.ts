@@ -135,7 +135,20 @@ export function normalizeSitterProfilePublic(
     is_public: raw.is_public !== false && raw.isPublic !== false,
     avg_rating: pickNumber(raw, "avg_rating", "avgRating"),
     rating_count: pickNumber(raw, "rating_count", "ratingCount") ?? 0,
-    avatar_url: pickString(raw, "avatar_url", "avatarUrl")
+    avatar_url: pickString(raw, "avatar_url", "avatarUrl"),
+    identity_verified:
+      pickBool(raw, "identity_verified", "identityVerified") ||
+      String(raw.identity_verification_status ?? raw.identityVerificationStatus ?? "")
+        .trim()
+        .toLowerCase() === "verified",
+    payout_preferred_method:
+      pickString(
+        raw,
+        "payout_preferred_method",
+        "payoutPreferredMethod",
+        "preferred_payout_method",
+        "preferred_payment_method"
+      )
   };
 }
 

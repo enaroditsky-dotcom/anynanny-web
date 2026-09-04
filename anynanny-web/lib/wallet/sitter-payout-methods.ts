@@ -10,6 +10,29 @@ import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/li
 
 export type SitterPayoutMethodKind = "bit" | "paybox" | "card";
 
+/** Safe parent-facing labels for a sitter's preferred receiving destination. */
+export const PREFERRED_RECEIVING_METHOD_LABELS = {
+  bit: "Bit",
+  paybox: "PayBox",
+  bank: "העברה בנקאית"
+} as const;
+
+export type PreferredReceivingMethodKind = keyof typeof PREFERRED_RECEIVING_METHOD_LABELS;
+
+export function parsePreferredReceivingMethod(
+  raw: unknown
+): PreferredReceivingMethodKind | null {
+  const value = String(raw ?? "").trim().toLowerCase();
+  if (value === "bit" || value === "paybox" || value === "bank") return value;
+  return null;
+}
+
+/** Display-only. Never includes phones, links, or bank account numbers. */
+export function preferredReceivingMethodLabel(raw: unknown): string | null {
+  const kind = parsePreferredReceivingMethod(raw);
+  return kind ? PREFERRED_RECEIVING_METHOD_LABELS[kind] : null;
+}
+
 export type SitterPayoutMethods = {
   preferred: SitterPayoutMethodKind | "bank" | null;
   bitPhone: string;

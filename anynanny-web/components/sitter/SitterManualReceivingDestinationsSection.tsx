@@ -13,6 +13,7 @@ import {
   formatIsraeliMobileDisplay,
   payboxManualReceivingConfigured,
   payoutMethodConfigured,
+  preferredReceivingMethodLabel,
   validateOptionalBitPhone,
   validateOptionalPayboxPhone,
   type SitterPayoutMethods
@@ -221,6 +222,18 @@ export function SitterManualReceivingDestinationsSection({
           </div>
         ) : (
           <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-right">
+              <p className="text-[13px] font-semibold text-slate-500">דרך קבלת תשלום מועדפת</p>
+              <p
+                className={`mt-1 text-sm ${
+                  preferredReceivingMethodLabel(methods.preferred)
+                    ? "font-bold text-[#001F3F]"
+                    : "italic text-slate-400"
+                }`}
+              >
+                {preferredReceivingMethodLabel(methods.preferred) || "לא הוגדר"}
+              </p>
+            </div>
             <div
               className={`rounded-xl border p-3 ${
                 sitterReceivingSetupState(methods, "bit").configured

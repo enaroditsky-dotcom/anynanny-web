@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { Calendar, ArrowRight, ChevronDown, Star, User } from "lucide-react";
+import { Calendar, ArrowRight, ChevronDown, Star, User, Wallet } from "lucide-react";
 import {
+  formatSitterLanguagesDisplay,
   type PublicSitterReview,
   type SitterProfilePublic
 } from "@/lib/sitter/sitter-profile";
@@ -13,13 +14,17 @@ import { publicSitterDisplayName } from "@/lib/sitter/fetch-parent-sitter-profil
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import { UserSafetyActions } from "@/components/safety/user-safety-actions";
 import {
+  VERIFIED_SITTER_IDENTITY_LABEL,
+  VerifiedUserBadge
+} from "@/components/identity/verified-user-badge";
+import {
   formatParentFacingPriceLabel,
   formatPublicExperienceLabel,
   formatPublicLanguagesLabel
 } from "@/lib/sitter/public-search-card";
-import { formatSitterLanguagesDisplay } from "@/lib/sitter/sitter-profile";
 import { broadcastRadarHref } from "@/lib/broadcast/parent-active-broadcast";
 import { requestedShiftFromSearchParams } from "@/lib/bookings/requested-shift";
+import { preferredReceivingMethodLabel } from "@/lib/wallet/sitter-payout-methods";
 
 function formatReviewDate(iso: string): string {
   const t = Date.parse(iso);
@@ -165,6 +170,7 @@ export default function ParentSitterProfileView() {
       : 0;
   const hasPublishedRating = avgRating != null && avgRating > 0 && ratingCount > 0;
   const writtenReviews = reviews.filter((r) => String(r.comment ?? "").trim().length > 0);
+  const preferredPaymentLabel = preferredReceivingMethodLabel(profile?.payout_preferred_method);
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-4 pb-24 px-2" dir="rtl">
@@ -184,38 +190,40 @@ export default function ParentSitterProfileView() {
         <p className="text-right text-sm text-rose-700 px-1">{errorMsg}</p>
       ) : profile ? (
         <div className="rounded-3xl border border-navy-header/12 bg-white p-5 shadow-soft space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
+          <div className="flex flex-col items-center text-center">
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
               {profile.avatar_url ? (
                 <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-slate-400">
-                  <User className="h-8 w-8" />
+                  <User className="h-10 w-10" />
                 </div>
               )}
             </div>
-            <div className="text-right space-y-0.5 min-w-0 flex-1">
-              <h1 className="text-xl font-bold text-[#001F3F] truncate">{displayName}</h1>
-              {serialDisplay && (
-                <p className="text-xs font-semibold text-violet-600">מזהה: {serialDisplay}</p>
-              )}
-              <div className="pt-1">
-                {hasPublishedRating ? (
-                  <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">
-                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
-                    <span>{avgRating!.toFixed(1)}</span>
-                    <span className="font-medium text-amber-700">
-                      ·{" "}
-                      {ratingCount === 1 ? "דירוג אחד" : `${ratingCount} דירוגים`}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-500">
-                    <Star className="h-3.5 w-3.5 text-slate-300" aria-hidden />
-                    <span>טרם דורג</span>
-                  </div>
-                )}
+            <h1 className="mt-3 max-w-full truncate text-xl font-bold text-[#001F3F]">{displayName}</h1>
+            {serialDisplay ? (
+              <p className="mt-0.5 text-xs font-semibold text-violet-600">מזהה: {serialDisplay}</p>
+            ) : null}
+            {profile.identity_verified ? (
+              <div className="mt-2 flex justify-center">
+                <VerifiedUserBadge size="xl" label={VERIFIED_SITTER_IDENTITY_LABEL} />
               </div>
+            ) : null}
+            <div className="mt-2">
+              {hasPublishedRating ? (
+                <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">
+                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
+                  <span>{avgRating!.toFixed(1)}</span>
+                  <span className="font-medium text-amber-700">
+                    · {ratingCount === 1 ? "דירוג אחד" : `${ratingCount} דירוגים`}
+                  </span>
+                </div>
+              ) : (
+                <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-500">
+                  <Star className="h-3.5 w-3.5 text-slate-300" aria-hidden />
+                  <span>טרם דורג</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -236,6 +244,19 @@ export default function ParentSitterProfileView() {
             <p className="text-xs text-violet-700 font-medium">
               {profile.has_car ? "דרך הגעה: עצמאית" : "דרך הגעה: תחבורה ציבורית"}
             </p>
+            {preferredPaymentLabel ? (
+              <div className="flex items-center gap-1.5 pt-1 text-sm font-bold text-[#001F3F]" dir="rtl">
+                <Wallet className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+                <span className="font-semibold text-slate-600">דרך קבלת תשלום מועדפת:</span>
+                <span>{preferredPaymentLabel}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 pt-1 text-sm" dir="rtl">
+                <Wallet className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+                <span className="font-semibold text-slate-600">דרך קבלת תשלום מועדפת:</span>
+                <span className="font-medium italic text-slate-400">לא הוגדר</span>
+              </div>
+            )}
             <p className="text-sm font-semibold text-navy-800 pt-1">{rateLabel}</p>
           </div>
 
