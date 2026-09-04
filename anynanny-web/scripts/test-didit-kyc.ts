@@ -9,6 +9,7 @@ import {
   shouldKeepDiditPending
 } from "../lib/identity/didit";
 import { hmacSha256Hex, verifyDiditWebhook } from "../lib/identity/didit-signature";
+import { isDiditSessionPrimaryKeyConflict } from "../lib/identity/didit-db";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function read(relativePath: string): string {
@@ -18,15 +19,44 @@ function read(relativePath: string): string {
 assert.equal(DIDIT_WORKFLOW_ID, "3f1ec9f2-1722-4264-bb57-7fac9649256c");
 
 const verifyRoute = read("app/api/verify/route.ts");
-assert.match(verifyRoute, /DIDIT_WORKFLOW_ID/);
-assert.match(verifyRoute, /workflow_id: DIDIT_WORKFLOW_ID/);
+assert.match(verifyRoute, /process\.env\.DIDIT_WORKFLOW_ID/);
+assert.match(verifyRoute, /workflow_id: workflowId/);
 assert.match(verifyRoute, /x-api-key/);
 assert.match(verifyRoute, /readDiditApiKey/);
 assert.match(verifyRoute, /auth\.getUser\(\)/);
 assert.match(verifyRoute, /vendor_data: user\.id/);
 assert.match(verifyRoute, /url: session\.url, session_id: session\.session_id/);
 assert.doesNotMatch(verifyRoute, /DIDIT_API_KEY!/);
-assert.doesNotMatch(verifyRoute, /process\.env\.DIDIT_WORKFLOW/);
+
+const diditDb = read("lib/identity/didit-db.ts");
+const insertFn = diditDb.slice(
+  diditDb.indexOf("export function isDiditSessionPrimaryKeyConflict"),
+  diditDb.indexOf("export async function markDiditProfilePending")
+);
+assert.match(insertFn, /\.insert\(/);
+assert.match(insertFn, /isDiditSessionPrimaryKeyConflict/);
+assert.match(insertFn, /23505/);
+assert.match(insertFn, /didit_sessions_pkey/);
+assert.match(insertFn, /\.eq\("session_id", input\.sessionId\)/);
+assert.match(insertFn, /ownerId === currentUserId/);
+assert.doesNotMatch(insertFn, /\.upsert\(/);
+assert.doesNotMatch(insertFn, /onConflict/);
+assert.doesNotMatch(insertFn, /getSupabaseServiceRoleClient/);
+
+assert.equal(
+  isDiditSessionPrimaryKeyConflict({
+    code: "23505",
+    message: 'duplicate key value violates unique constraint "didit_sessions_pkey"'
+  }),
+  true
+);
+assert.equal(
+  isDiditSessionPrimaryKeyConflict({
+    code: "42501",
+    message: "permission denied for table didit_sessions"
+  }),
+  false
+);
 
 const diditLib = read("lib/identity/didit.ts");
 assert.doesNotMatch(diditLib, /from ["']node:crypto["']/);
@@ -126,9 +156,5 @@ const badSig = verifyDiditWebhook({
 });
 assert.equal(badSig.ok, false);
 if (!badSig.ok) assert.equal(badSig.error, "bad_sig");
-
-const identityLib = read("lib/identity/identity-verification.ts");
-assert.match(identityLib, /DIDIT_SESSIONS_TABLE/);
-assert.match(identityLib, /shouldKeepDiditPending/);
 
 console.log("Didit KYC checks passed.");
