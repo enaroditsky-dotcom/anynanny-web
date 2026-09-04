@@ -17,7 +17,10 @@ export function PersonalAreaSection({
   action,
   children,
   collapsible = true,
-  defaultOpen = false
+  defaultOpen = false,
+  icon,
+  headerAccessory,
+  tone = "default"
 }: {
   title: string;
   description?: string;
@@ -27,6 +30,9 @@ export function PersonalAreaSection({
   children: ReactNode;
   collapsible?: boolean;
   defaultOpen?: boolean;
+  icon?: ReactNode;
+  headerAccessory?: ReactNode;
+  tone?: "default" | "trust";
 }) {
   const reactId = useId();
   const panelId = `${reactId}-panel`;
@@ -42,15 +48,27 @@ export function PersonalAreaSection({
           ? "border-sky-200/80"
           : "border-navy-header/10";
 
+  const isTrust = tone === "trust";
+  const cardToneClass = isTrust
+    ? "border-[#C5A059]/55 bg-gradient-to-l from-[#FFF3D4] via-[#FFF8EA] to-[#FFFDF8] shadow-[0_1px_10px_rgba(197,160,89,0.16)]"
+    : `bg-white shadow-soft ${accentClass}`;
+  const titleWeightClass = isTrust ? "font-extrabold text-[#001F3F]" : "font-bold text-[#001F3F]";
   const collapsedSummary = (summary ?? "").trim() || PERSONAL_AREA_EMPTY_SUMMARY;
+  const showCollapsedSummary = !headerAccessory;
 
   if (!collapsible) {
     return (
-      <section className={`rounded-2xl border bg-white p-4 shadow-soft sm:p-5 ${accentClass}`} dir="rtl">
+      <section className={`rounded-2xl border p-4 sm:p-5 ${cardToneClass}`} dir="rtl">
         <div className="mb-3 flex items-start justify-between gap-3 text-right">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-[17px] font-bold text-[#001F3F]">{title}</h2>
-            {description ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{description}</p> : null}
+          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+            {icon ? <span className="mt-0.5 shrink-0">{icon}</span> : null}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-start gap-2">
+                <h2 className={`text-[17px] ${titleWeightClass}`}>{title}</h2>
+                {headerAccessory}
+              </div>
+              {description ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{description}</p> : null}
+            </div>
           </div>
           {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
         </div>
@@ -62,31 +80,37 @@ export function PersonalAreaSection({
   return (
     <section
       data-personal-area-accordion
-      className={`min-w-0 w-full rounded-2xl border bg-white px-3.5 py-2.5 shadow-soft sm:px-5 sm:py-3 ${accentClass}`}
+      className={`min-w-0 w-full rounded-2xl border px-3.5 py-2.5 sm:px-5 sm:py-3 ${cardToneClass}`}
       dir="rtl"
     >
-      <h2 className="m-0 text-right text-[17px] font-bold text-[#001F3F]">
+      <h2 className={`m-0 text-right text-[17px] ${titleWeightClass}`}>
         <button
           type="button"
           id={headerId}
           aria-expanded={open}
           aria-controls={panelId}
           onClick={() => setOpen((current) => !current)}
-          className="flex min-h-[44px] w-full items-start gap-3 rounded-xl text-right outline-none transition hover:bg-[#FDFBF6]/80 focus-visible:ring-2 focus-visible:ring-[#001F3F]/25 focus-visible:ring-offset-2"
+          className={`flex min-h-[44px] w-full items-start gap-2.5 rounded-xl text-right outline-none transition focus-visible:ring-2 focus-visible:ring-[#001F3F]/25 focus-visible:ring-offset-2 ${
+            isTrust ? "hover:bg-[#F5E4B8]/40" : "hover:bg-[#FDFBF6]/80"
+          }`}
         >
+          {icon ? <span className="mt-1.5 shrink-0">{icon}</span> : null}
           <span className="min-w-0 flex-1 py-1">
-            <span className="block leading-snug">{title}</span>
+            <span className="flex flex-wrap items-center justify-start gap-2">
+              <span className="leading-snug">{title}</span>
+              {headerAccessory ? <span className="shrink-0">{headerAccessory}</span> : null}
+            </span>
             {open ? (
               description ? (
                 <span className="mt-1 block text-xs font-normal leading-relaxed text-slate-500">
                   {description}
                 </span>
               ) : null
-            ) : (
+            ) : showCollapsedSummary ? (
               <span className="mt-0.5 block line-clamp-2 break-words text-xs font-normal leading-relaxed text-slate-500">
                 {collapsedSummary}
               </span>
-            )}
+            ) : null}
           </span>
           <ChevronDown
             className={`mt-2 h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 ${

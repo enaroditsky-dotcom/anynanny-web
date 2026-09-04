@@ -768,7 +768,7 @@ export function SitterPersonalArea({ userId }: Props) {
                 {form.nanny_serial}
               </p>
             ) : null}
-            <IdentityVerifiedBadgeLive userId={userId} />
+            <IdentityVerifiedBadgeLive userId={userId} className="mt-1" size="md" />
             <button
               type="button"
               onClick={() => openEdit("avatar")}
