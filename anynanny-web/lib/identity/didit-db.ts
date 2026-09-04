@@ -34,19 +34,16 @@ export async function insertDiditSession(
     metadata?: Record<string, unknown> | null;
   }
 ): Promise<{ error: string | null; missingSchema: boolean }> {
-  const { error } = await supabase.from(DIDIT_SESSIONS_TABLE).upsert(
-    {
-      session_id: input.sessionId,
-      user_id: input.userId,
-      role: input.role,
-      vendor_data: input.userId,
-      workflow_id: input.workflowId,
-      status: isDiditSessionStatus(input.status) ? input.status : "Not Started",
-      metadata: input.metadata ?? null,
-      updated_at: new Date().toISOString()
-    },
-    { onConflict: "session_id" }
-  );
+  const { error } = await supabase.from(DIDIT_SESSIONS_TABLE).insert({
+    session_id: input.sessionId,
+    user_id: input.userId,
+    role: input.role,
+    vendor_data: input.userId,
+    workflow_id: input.workflowId,
+    status: isDiditSessionStatus(input.status) ? input.status : "Not Started",
+    metadata: input.metadata ?? null,
+    updated_at: new Date().toISOString()
+  });
 
   if (error) {
     return {
