@@ -15,6 +15,7 @@ import {
   EMPTY_SITTER_PAYOUT_METHODS,
   payboxManualReceivingConfigured,
   payoutMethodConfigured,
+  preferredReceivingMethodLabel,
   validateOptionalBitPhone,
   validateOptionalPayboxPhone
 } from "../lib/wallet/sitter-payout-methods";
@@ -95,6 +96,50 @@ assert.doesNotMatch(panel, /bit:\/\//);
 assert.match(receiving, /preferred: false/);
 assert.match(receiving, /validateOptionalBitPhone/);
 assert.match(receiving, /validateOptionalPayboxPhone/);
+assert.match(receiving, /מזומן/);
+assert.match(receiving, /kind: "cash"/);
+assert.match(receiving, /בחירה כדרך קבלה מועדפת/);
+assert.match(receiving, /savePreferredCash/);
+assert.equal(preferredReceivingMethodLabel("cash"), "מזומן");
+assert.equal(preferredReceivingMethodLabel("bit"), "Bit");
+assert.equal(preferredReceivingMethodLabel("paybox"), "PayBox");
+assert.equal(preferredReceivingMethodLabel("bank"), "העברה בנקאית");
+assert.equal(preferredReceivingMethodLabel("card"), null);
+
+assert.match(payoutRoute, /validateOptionalBitPhone/);
+assert.match(payoutRoute, /validateOptionalPayboxPaymentLink/);
+assert.match(payoutRoute, /payboxLink/);
+assert.match(payoutRoute, /preferred: bitPhone\.trim\(\) && setPreferred \? "bit"/);
+assert.match(payoutRoute, /kind === "cash"/);
+assert.match(payoutRoute, /preferred: "cash"/);
+assert.match(payoutMethodsLib, /preferredRaw === "cash"/);
+
+const cashPreferredMigration = read(
+  "supabase/migrations/20260904120000_sitter_payout_preferred_method_cash.sql"
+);
+assert.match(cashPreferredMigration, /add column if not exists payout_preferred_method text/);
+assert.match(cashPreferredMigration, /drop constraint if exists sitter_profiles_payout_preferred_method_check/);
+assert.match(
+  cashPreferredMigration,
+  /payout_preferred_method is null\s+or payout_preferred_method in \('bit', 'paybox', 'card', 'bank', 'cash'\)/
+);
+assert.match(
+  cashPreferredMigration,
+  /grant select \(payout_preferred_method\)\s+on public\.sitter_profiles\s+to authenticated/
+);
+assert.match(
+  cashPreferredMigration,
+  /grant update \(payout_preferred_method\)\s+on public\.sitter_profiles\s+to authenticated/
+);
+assert.match(cashPreferredMigration, /notify pgrst, 'reload schema'/);
+assert.doesNotMatch(cashPreferredMigration, /to anon/);
+assert.doesNotMatch(cashPreferredMigration, /to public/);
+assert.doesNotMatch(cashPreferredMigration, /\brevoke\b/i);
+assert.doesNotMatch(cashPreferredMigration, /enable row level security/i);
+assert.doesNotMatch(cashPreferredMigration, /create policy|drop policy/i);
+assert.doesNotMatch(cashPreferredMigration, /pg_constraint|pg_get_constraintdef/i);
+assert.doesNotMatch(cashPreferredMigration, /payout_bit_phone|payout_paybox_phone|payout_paybox_link/);
+assert.doesNotMatch(cashPreferredMigration, /bank_account_number|payout_card_/);
 assert.match(receiving, /PAYBOX_PERSONAL_LINK_HELP_TOGGLE/);
 assert.match(receiving, /aria-expanded=\{payboxLinkHelpOpen\}/);
 assert.match(receiving, /sitter-paybox-personal-link-help/);

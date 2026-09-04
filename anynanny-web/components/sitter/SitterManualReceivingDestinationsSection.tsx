@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { HelpCircle, Loader2, Smartphone } from "lucide-react";
+import { Banknote, HelpCircle, Loader2, Smartphone } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
 import { sitterReceivingSummary } from "@/components/personal-area/personal-area-summaries";
 import { PersonalAreaSection } from "@/components/personal-area/personal-area-ui";
@@ -48,6 +48,25 @@ export const PAYBOX_PERSONAL_LINK_HELP_STEPS = [
   "שמרי את השינוי."
 ] as const;
 
+async function savePreferredCash(): Promise<
+  { ok: true; methods: SitterPayoutMethods } | { ok: false; error: string }
+> {
+  const res = await fetch("/api/sitter/payout-methods", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ kind: "cash" })
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    methods?: SitterPayoutMethods;
+    error?: string;
+  };
+  if (!res.ok || !json.methods) {
+    return { ok: false, error: json.error || "שמירת מזומן נכשלה." };
+  }
+  return { ok: true, methods: json.methods };
+}
+
 async function saveReceivingPhone(input: {
   kind: "bit" | "paybox";
   bitPhone?: string;
@@ -90,8 +109,10 @@ export function SitterManualReceivingDestinationsSection({
   const [loading, setLoading] = useState(true);
   const [savingBit, setSavingBit] = useState(false);
   const [savingPaybox, setSavingPaybox] = useState(false);
+  const [savingCash, setSavingCash] = useState(false);
   const [savingPayboxLink, setSavingPayboxLink] = useState(false);
   const [bitError, setBitError] = useState<string | null>(null);
+  const [cashError, setCashError] = useState<string | null>(null);
   const [payboxError, setPayboxError] = useState<string | null>(null);
   const [payboxLinkError, setPayboxLinkError] = useState<string | null>(null);
   const [payboxLinkHelpOpen, setPayboxLinkHelpOpen] = useState(false);
@@ -115,6 +136,19 @@ export function SitterManualReceivingDestinationsSection({
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const saveCashPreferred = async () => {
+    setCashError(null);
+    setSavingCash(true);
+    const result = await savePreferredCash();
+    setSavingCash(false);
+    if (!result.ok) {
+      setCashError(result.error);
+      return;
+    }
+    setMethods(result.methods);
+    setToast("מזומן נבחר כדרך קבלה מועדפת.");
+  };
 
   const saveBit = async () => {
     const err = validateOptionalBitPhone(bitPhone);
@@ -233,6 +267,47 @@ export function SitterManualReceivingDestinationsSection({
               >
                 {preferredReceivingMethodLabel(methods.preferred) || "לא הוגדר"}
               </p>
+            </div>
+            <div
+              className={`rounded-xl border p-3 ${
+                methods.preferred === "cash"
+                  ? "border-emerald-200 bg-emerald-50/70"
+                  : "border-slate-200 bg-slate-50/70"
+              }`}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Banknote className="h-4 w-4 text-[#0B3C5D]" aria-hidden />
+                  <p className="text-sm font-bold text-[#001F3F]">מזומן</p>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                    methods.preferred === "cash"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {methods.preferred === "cash" ? "מועדף" : "לא נבחר"}
+                </span>
+              </div>
+              <p className="text-[13px] text-slate-500">
+                הצהרה בלבד — אין צורך במספר, לינק או פרטי חשבון.
+              </p>
+              {cashError ? <p className="mt-1 text-xs font-medium text-rose-700">{cashError}</p> : null}
+              <button
+                type="button"
+                onClick={() => void saveCashPreferred()}
+                disabled={savingCash || methods.preferred === "cash"}
+                className="mt-2 inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              >
+                {savingCash ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : methods.preferred === "cash" ? (
+                  "נבחר כמועדף"
+                ) : (
+                  "בחירה כדרך קבלה מועדפת"
+                )}
+              </button>
             </div>
             <div
               className={`rounded-xl border p-3 ${
