@@ -670,6 +670,15 @@ export type SitterProfilePublic = {
 
   /** From `auth.users` metadata via RPC — not a sitter_profiles column. */
   avatar_url?: string | null;
+
+  /** Present when the public payload includes identity status. Display-only. */
+  identity_verified?: boolean;
+
+  /**
+   * Preferred receiving destination kind (`bit` | `paybox` | `bank`) when the
+   * public payload includes it. Never phones, links, or account numbers.
+   */
+  payout_preferred_method?: string | null;
 };
 
 /** Row from `list_public_sitters_search` RPC (parent search cards). */

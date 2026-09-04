@@ -23,9 +23,10 @@ const MIGRATION = "supabase/migrations/20260823160000_ugc_safety_moderation.sql"
 const sql = read(MIGRATION);
 const sqlWithoutComments = sql.replace(/--[^\n]*/g, "");
 
-const laterMigrations = readdirSync(resolve(root, "supabase/migrations"))
-  .filter((name) => name.endsWith(".sql") && name > "20260823160000_ugc_safety_moderation.sql");
-assert.equal(laterMigrations.length, 0, "UGC safety must be the latest migration");
+assert.ok(
+  readdirSync(resolve(root, "supabase/migrations")).includes("20260823160000_ugc_safety_moderation.sql"),
+  "UGC safety migration must remain in supabase/migrations"
+);
 
 assert.match(sql, /add column if not exists suspended_at timestamptz/);
 assert.match(sql, /add column if not exists suspended_reason text/);
@@ -143,10 +144,14 @@ assert.match(parentProfile, /UserSafetyActions/);
 assert.doesNotMatch(parentProfile, /report.*message|report.*review/i);
 
 const parentPreview = read("components/sitter/sitter-parent-profile-preview.tsx");
-assert.match(parentPreview, /UserSafetyActions/);
+assert.match(parentPreview, /ParentDetailsModal/);
+
+const parentDetailsModal = read("components/sitter/parent-details-modal.tsx");
+assert.match(parentDetailsModal, /UserSafetyActions/);
 
 const approvalCard = read("components/sitter/sitter-shift-approval-card.tsx");
 assert.match(approvalCard, /UserSafetyActions/);
+assert.match(approvalCard, /ParentDetailsModal/);
 
 const chatHeader = read("components/chat/parent-chat-room.tsx");
 assert.match(chatHeader, /UserSafetyActions/);
@@ -258,7 +263,7 @@ const privacy = read("components/legal/privacy-policy-document.tsx");
 const legal = read("lib/legal/acceptance.ts");
 assert.doesNotMatch(terms, /user_reports/);
 assert.doesNotMatch(privacy, /user_reports/);
-assert.match(legal, /PRIVACY_DOC_VERSION = "1.1"/);
+assert.match(legal, /PRIVACY_DOC_VERSION = "1.2"/);
 assert.match(legal, /TERMS_DOC_VERSION = LEGAL_DOC_VERSION/);
 
 console.log("UGC safety moderation checks passed.");

@@ -84,8 +84,7 @@ const modified = {
   "session-rating": read("components/session/session-rating-modal.tsx"),
   "bank-details": read("components/sitter/SitterBankDetailsModal.tsx"),
   "availability": read("components/sitter/sitter-availability-manager.tsx"),
-  "shift-approval": read("components/sitter/sitter-shift-approval-card.tsx"),
-  "parent-preview": read("components/sitter/sitter-parent-profile-preview.tsx"),
+  "parent-details": read("components/sitter/parent-details-modal.tsx"),
   "broadcast-alert": read("components/sitter/SitterBroadcastAlertModal.tsx"),
   "settings-sheet": read("components/settings/mobile-settings-ui.tsx"),
   "cancel-request": read("components/bookings/shift-cancellation-request-modal.tsx"),
@@ -118,6 +117,15 @@ assert.doesNotMatch(parentWallet, /items-end/);
 const hyp = modified["hyp-checkout"];
 assert.match(hyp, /sticky top-0/);
 assert.doesNotMatch(hyp, /sticky bottom/);
+
+const parentDetails = modified["parent-details"];
+assert.match(parentDetails, /AUTH_MODAL_CARD_SHELL/);
+assert.match(parentDetails, /AUTH_MODAL_BODY_SCROLL/);
+assert.match(parentDetails, /חוות דעת מבייביסיטרים/);
+assert.match(parentDetails, /aria-expanded/);
+assert.match(parentDetails, /VerifiedUserBadge/);
+assert.match(parentDetails, /VERIFIED_PARENT_IDENTITY_LABEL/);
+assert.doesNotMatch(parentDetails, /sticky bottom/);
 
 const VIEWPORTS = [
   { w: 320, h: 568 },
