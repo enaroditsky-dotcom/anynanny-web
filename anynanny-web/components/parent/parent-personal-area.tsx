@@ -14,6 +14,16 @@ import {
   OnboardingYesNo
 } from "@/components/onboarding/onboarding-fields";
 import {
+  countParentPreferenceGroups,
+  parentAddressSummary,
+  parentChildrenSummary,
+  parentEventsSummary,
+  parentFamilySummary,
+  parentHouseholdSummary,
+  parentPersonalDetailsSummary,
+  parentPreferencesSummary
+} from "@/components/personal-area/personal-area-summaries";
+import {
   PersonalAreaSection,
   PersonalChangeLink,
   PersonalCheckbox,
@@ -540,6 +550,34 @@ export function ParentPersonalArea() {
             return date ? `${event.title || "ללא כותרת"} (${date})` : event.title || "ללא כותרת";
           })
           .join(" · ");
+  const personalSummary = parentPersonalDetailsSummary(
+    form.first_name,
+    form.last_name,
+    parentPreferredLanguageLabel(form.preferred_language)
+  );
+  const addressSummary = parentAddressSummary(form.address.city);
+  const familySummary = parentFamilySummary(
+    form.children.length,
+    parentMaritalStatusLabel(form.marital_status)
+  );
+  const childrenSummary = parentChildrenSummary(
+    form.children.map((child) => child.name),
+    form.children.length
+  );
+  const householdSummary = parentHouseholdSummary(
+    form.has_pets,
+    form.has_child_special_or_medical_information
+  );
+  const preferencesSummary = parentPreferencesSummary(
+    countParentPreferenceGroups({
+      typicalNeed: form.typical_babysitting_need,
+      frequency: form.estimated_babysitter_frequency,
+      reasons: form.typical_reasons,
+      reminders: form.reminder_preferences,
+      autoSuggest: form.automatic_babysitter_suggestion
+    })
+  );
+  const eventsSummary = parentEventsSummary(form.special_events.length);
 
   const modalTitle =
     editKey === "avatar"
@@ -633,7 +671,12 @@ export function ParentPersonalArea() {
 
       <IdentityPersonalSection role="parent" userId={form.id} />
 
-      <PersonalAreaSection title="פרטים אישיים" description="הפרטים שנשמרו בשאלון ההרשמה">
+      <PersonalAreaSection
+        title="פרטים אישיים"
+        description="הפרטים שנשמרו בשאלון ההרשמה"
+        summary={personalSummary}
+        defaultOpen
+      >
         <PersonalStaticRow label="שם פרטי" value={form.first_name} onEdit={() => openEdit("first_name")} />
         <PersonalStaticRow label="שם משפחה" value={form.last_name} onEdit={() => openEdit("last_name")} />
         <PersonalStaticRow
@@ -660,6 +703,7 @@ export function ParentPersonalArea() {
         title="כתובת מגורים"
         accent="sky"
         description="הכתובת שמוצגת לשמרטפית במשמרות מאושרות"
+        summary={addressSummary}
         action={<PersonalChangeLink onClick={() => openEdit("address")} />}
       >
         <p className={`text-[16px] ${addressLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
@@ -671,6 +715,7 @@ export function ParentPersonalArea() {
         title="משפחה וילדים"
         accent="gold"
         description="פרטים אישיים שנשמרים בחשבון בלבד"
+        summary={familySummary}
       >
         <PersonalStaticRow
           label="מצב משפחתי"
@@ -699,6 +744,7 @@ export function ParentPersonalArea() {
         title="ילדים"
         accent="emerald"
         description="שמות ותאריכי לידה מאותו מאגר שבו נשמר השאלון"
+        summary={childrenSummary}
         action={<PersonalChangeLink onClick={() => openEdit("children")} label={form.children.length ? "עריכה" : "הוספה"} />}
       >
         <p
@@ -714,6 +760,7 @@ export function ParentPersonalArea() {
         title="מידע חשוב למשמרת"
         accent="emerald"
         description="מידע פרטי לחשבון שלך בלבד. לא מוצג בפרופיל הציבורי ולא בחיפוש בייביסיטרים."
+        summary={householdSummary}
         action={<PersonalChangeLink onClick={() => openEdit("household")} label="עריכה" />}
       >
         <PersonalStaticRow
@@ -746,6 +793,7 @@ export function ParentPersonalArea() {
         title="העדפות ותזכורות"
         accent="sky"
         description="העדפות אישיות לחשבון. לא מוצגות להורים או בייביסיטרים אחרים."
+        summary={preferencesSummary}
         action={<PersonalChangeLink onClick={() => openEdit("preferences")} label="עריכה" />}
       >
         <PersonalStaticRow
@@ -778,6 +826,7 @@ export function ParentPersonalArea() {
       <PersonalAreaSection
         title="אירועים מיוחדים לפינוק"
         accent="gold"
+        summary={eventsSummary}
         action={<PersonalChangeLink onClick={() => openEdit("special_events")} />}
       >
         <p
