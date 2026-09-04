@@ -14,7 +14,8 @@ export type SitterPayoutMethodKind = "bit" | "paybox" | "card";
 export const PREFERRED_RECEIVING_METHOD_LABELS = {
   bit: "Bit",
   paybox: "PayBox",
-  bank: "העברה בנקאית"
+  bank: "העברה בנקאית",
+  cash: "מזומן"
 } as const;
 
 export type PreferredReceivingMethodKind = keyof typeof PREFERRED_RECEIVING_METHOD_LABELS;
@@ -23,7 +24,9 @@ export function parsePreferredReceivingMethod(
   raw: unknown
 ): PreferredReceivingMethodKind | null {
   const value = String(raw ?? "").trim().toLowerCase();
-  if (value === "bit" || value === "paybox" || value === "bank") return value;
+  if (value === "bit" || value === "paybox" || value === "bank" || value === "cash") {
+    return value;
+  }
   return null;
 }
 
