@@ -28,6 +28,10 @@ const fieldClassName =
   "mt-1.5 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#0B3C5D]/40 focus:bg-white focus:ring-2 focus:ring-[#0B3C5D]/15 disabled:opacity-60";
 
 export const PAYBOX_PERSONAL_LINK_HELP_TOGGLE = "הסבר";
+export const PAYBOX_PERSONAL_LINK_HELP_BUSINESS = [
+  "אפשרות זו מיועדת למשתמשי PayBox Business.",
+  "אם ברצונך להשתמש בקישור אישי לקבלת תשלום, יש להסדיר ולהפעיל את השירות ישירות מול PayBox."
+] as const;
 export const PAYBOX_PERSONAL_LINK_HELP_TITLE = "איך משתמשים בלינק האישי שלי ב-PayBox?";
 export const PAYBOX_PERSONAL_LINK_HELP_PARAGRAPHS = [
   "יש כמה דרכים להשתמש בלינק האישי שלך ב-PayBox.",
@@ -482,7 +486,12 @@ export function SitterManualReceivingDestinationsSection({
                     className="mt-2 min-w-0 overflow-hidden break-words rounded-xl border border-slate-200/80 bg-white px-3 py-3 text-right text-[13px] leading-relaxed text-slate-600"
                     dir="rtl"
                   >
-                    <p className="font-bold text-slate-700">{PAYBOX_PERSONAL_LINK_HELP_TITLE}</p>
+                    <div className="space-y-2 select-text">
+                      {PAYBOX_PERSONAL_LINK_HELP_BUSINESS.map((paragraph) => (
+                        <p key={paragraph}>{paragraph}</p>
+                      ))}
+                    </div>
+                    <p className="mt-3 font-bold text-slate-700">{PAYBOX_PERSONAL_LINK_HELP_TITLE}</p>
                     <div className="mt-2 space-y-2 select-text">
                       {PAYBOX_PERSONAL_LINK_HELP_PARAGRAPHS.map((paragraph) => (
                         <p key={paragraph}>{paragraph}</p>

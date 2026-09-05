@@ -179,6 +179,28 @@ assert.match(receiving, /הלינק צריך להתחיל ב:/);
 assert.match(receiving, /https:\/\//);
 assert.match(receiving, /פתחי את אפליקציית PayBox/);
 assert.match(receiving, /select-text/);
+assert.match(receiving, /PAYBOX_PERSONAL_LINK_HELP_BUSINESS/);
+assert.match(receiving, /אפשרות זו מיועדת למשתמשי PayBox Business/);
+assert.match(
+  receiving,
+  /אם ברצונך להשתמש בקישור אישי לקבלת תשלום, יש להסדיר ולהפעיל את השירות ישירות מול PayBox/
+);
+assert.match(receiving, /payboxLinkHelpOpen \?[\s\S]*PAYBOX_PERSONAL_LINK_HELP_BUSINESS/);
+{
+  const alwaysVisiblePayboxLink = receiving.slice(
+    receiving.indexOf('htmlFor="sitter-paybox-personal-link"'),
+    receiving.indexOf("payboxLinkHelpOpen ?")
+  );
+  assert.match(alwaysVisiblePayboxLink, /לינק אישי לקבלת תשלום ב-PayBox/);
+  assert.match(alwaysVisiblePayboxLink, /PAYBOX_PERSONAL_LINK_HELP_TOGGLE/);
+  assert.match(alwaysVisiblePayboxLink, /https:\/\/links\.payboxapp\.com/);
+  assert.doesNotMatch(alwaysVisiblePayboxLink, /PayBox Business/);
+  assert.doesNotMatch(alwaysVisiblePayboxLink, /PAYBOX_PERSONAL_LINK_HELP_BUSINESS/);
+  assert.doesNotMatch(
+    alwaysVisiblePayboxLink,
+    /יש להסדיר ולהפעיל את השירות ישירות מול PayBox/
+  );
+}
 assert.doesNotMatch(receiving, /form\.phone|referee_phone|whatsapp_phone|contactPhone/);
 assert.equal(validateOptionalBitPhone(""), null);
 assert.equal(validateOptionalPayboxPhone(""), null);
