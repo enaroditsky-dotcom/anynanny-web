@@ -298,6 +298,16 @@ export function publicSitterDisplayName(profile: SitterProfilePublic | null | un
   return first || null;
 }
 
+/** Parent-facing age line. Uses RPC `age_years` only — never a date of birth. */
+export function formatPublicSitterAgeLabel(ageYears: unknown): string | null {
+  if (ageYears == null || ageYears === "") return null;
+  const n = typeof ageYears === "number" ? ageYears : Number(ageYears);
+  if (!Number.isFinite(n)) return null;
+  const age = Math.floor(n);
+  if (age < 1 || age > 120) return null;
+  return `גיל: ${age}`;
+}
+
 export async function fetchParentSitterProfile(
   supabase: SupabaseClient,
   sitterId: string

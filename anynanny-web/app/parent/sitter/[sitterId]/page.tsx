@@ -10,7 +10,7 @@ import {
   type PublicSitterReview,
   type SitterProfilePublic
 } from "@/lib/sitter/sitter-profile";
-import { publicSitterDisplayName } from "@/lib/sitter/fetch-parent-sitter-profile";
+import { publicSitterDisplayName, formatPublicSitterAgeLabel } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import { UserSafetyActions } from "@/components/safety/user-safety-actions";
 import {
@@ -171,6 +171,7 @@ export default function ParentSitterProfileView() {
   const hasPublishedRating = avgRating != null && avgRating > 0 && ratingCount > 0;
   const writtenReviews = reviews.filter((r) => String(r.comment ?? "").trim().length > 0);
   const preferredPaymentLabel = preferredReceivingMethodLabel(profile?.payout_preferred_method);
+  const ageLabel = formatPublicSitterAgeLabel(profile?.age_years);
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-4 pb-24 px-2" dir="rtl">
@@ -228,6 +229,11 @@ export default function ParentSitterProfileView() {
           </div>
 
           <div className="text-right space-y-1">
+            {ageLabel ? (
+              <p className="text-sm font-bold text-[#001F3F] pt-0.5" dir="rtl">
+                {ageLabel}
+              </p>
+            ) : null}
             <div className="flex items-center gap-1 text-xs text-slate-600 pt-1" dir="rtl">
               <span className="font-semibold text-slate-700">{experienceLabel}</span>
             </div>
