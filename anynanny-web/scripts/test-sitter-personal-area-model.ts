@@ -76,11 +76,22 @@ assert.doesNotMatch(
   /editKey !== "avatar" && \(!draft\.first_name\.trim\(\) \|\| !draft\.last_name\.trim\(\)\)/
 );
 assert.match(personal, /SitterManualReceivingDestinationsSection/);
+assert.doesNotMatch(personal, /SitterBankDetailsSection/);
+assert.doesNotMatch(personal, /פרטי בנק|הוספת פרטי בנק/);
 assert.match(personal, /אזור עבודה מועדף/);
 assert.doesNotMatch(personal, /זמינות כללית|generic availability/);
 assert.match(personal, /requestSaveOwnContactPhone/);
 
 const payoutLib = read("lib/wallet/sitter-payout-methods.ts");
 assert.match(payoutLib, /sitter_own_manual_payout_destinations/);
+
+const ownerGrants = read("supabase/migrations/20260903074347_sitter_profiles_owner_column_grants.sql");
+assert.match(ownerGrants, /grant select \(%s\) on public\.sitter_profiles to authenticated/);
+assert.match(ownerGrants, /desired_hours_per_week/);
+assert.doesNotMatch(ownerGrants, /grant select on public\.sitter_profiles to/);
+assert.doesNotMatch(ownerGrants, /grant all on public\.sitter_profiles/);
+assert.doesNotMatch(read("app/api/sitter/profile/route.ts"), /service_role|SUPABASE_SERVICE_ROLE/);
+assert.doesNotMatch(read("lib/sitter/sitter-profile.ts"), /service_role|SUPABASE_SERVICE_ROLE/);
+assert.doesNotMatch(personal, /service_role|SUPABASE_SERVICE_ROLE/);
 
 console.log("test-sitter-personal-area-model: PASS");
