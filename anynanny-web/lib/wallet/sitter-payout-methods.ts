@@ -18,7 +18,8 @@ export const PREFERRED_RECEIVING_METHOD_LABELS = {
   bit: "Bit",
   paybox: "PayBox",
   bank: "העברה בנקאית",
-  cash: "מזומן"
+  cash: "מזומן",
+  card: "כרטיס"
 } as const;
 
 export type PreferredReceivingMethodKind = keyof typeof PREFERRED_RECEIVING_METHOD_LABELS;
@@ -27,7 +28,13 @@ export function parsePreferredReceivingMethod(
   raw: unknown
 ): PreferredReceivingMethodKind | null {
   const value = String(raw ?? "").trim().toLowerCase();
-  if (value === "bit" || value === "paybox" || value === "bank" || value === "cash") {
+  if (
+    value === "bit" ||
+    value === "paybox" ||
+    value === "bank" ||
+    value === "cash" ||
+    value === "card"
+  ) {
     return value;
   }
   return null;
@@ -79,7 +86,9 @@ const PUBLIC_SELECT_FALLBACKS = [
   PUBLIC_SELECT_COLS,
   "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number",
   "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year",
-  "payout_preferred_method, payout_card_holder, payout_card_last4"
+  "payout_preferred_method, payout_card_holder, payout_card_last4",
+  "payout_preferred_method, payout_card_holder",
+  "payout_preferred_method"
 ];
 
 function normalizePhone(raw: string): string {
@@ -249,6 +258,7 @@ function isMissingSchema(message: string | undefined): boolean {
     isPostgrestMissingColumnError(msg, "payout_paybox_phone") ||
     isPostgrestMissingColumnError(msg, "payout_paybox_link") ||
     isPostgrestMissingColumnError(msg, "payout_card_last4") ||
+    isPostgrestMissingColumnError(msg, "payout_preferred_method") ||
     isPostgrestMissingColumnError(msg, "payout_card_id_number") ||
     isPostgrestMissingColumnError(msg, "payout_hyp_token") ||
     /Could not find the table/i.test(msg) ||
@@ -480,7 +490,13 @@ export async function saveSitterPayoutMethods(
     };
   }
 
-  return { ok: true, methods: loaded.methods };
+  return {
+    ok: true,
+    methods: {
+      ...loaded.methods,
+      preferred: patch.preferred !== undefined ? patch.preferred : loaded.methods.preferred
+    }
+  };
 }
 
 /** After Hyp success: getToken + persist payout card token on sitter_profiles. */

@@ -79,7 +79,8 @@ for (const title of [
 
 assert.match(identity, /title="אימות זהות"/);
 assert.match(identity, /summary=/);
-assert.match(receiving, /title="קבלה ב-Bit וב-PayBox"/);
+assert.match(receiving, /title="בחירת דרך קבלת התשלום"/);
+assert.doesNotMatch(receiving, /קבלה ב-Bit וב-PayBox/);
 assert.match(receiving, /sitterReceivingSummary/);
 assert.match(bank, /title="פרטי בנק"/);
 assert.match(bank, /sitterBankSummary/);
