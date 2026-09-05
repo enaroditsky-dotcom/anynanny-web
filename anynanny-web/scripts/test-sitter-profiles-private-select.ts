@@ -183,7 +183,12 @@ const preferredReturn = publicPreferredRpc.slice(
   publicPreferredRpc.indexOf("end;", preferredReturnStart)
 );
 assert.match(preferredReturn, /'payout_preferred_method'/);
+assert.match(preferredReturn, /'age_years',\s*ay/);
 assert.match(publicPreferredRpc, /preferred_raw in \('bit', 'paybox', 'bank', 'card', 'cash'\)/);
+assert.match(publicPreferredRpc, /show_age_flag := coalesce\(\(spj->>'show_age'\)::boolean, false\)/);
+assert.match(publicPreferredRpc, /if show_age_flag and birth is not null then/);
+assert.match(publicPreferredRpc, /ay := extract\(year from age\(birth\)\)::integer/);
+assert.doesNotMatch(preferredReturn, /'show_age'/);
 for (const field of SENSITIVE_PUBLIC_FIELDS) {
   assert.doesNotMatch(preferredReturn, new RegExp(`'${field}'`));
 }
