@@ -34,7 +34,6 @@ import {
   personalTextareaClassName,
   yesNoLabel
 } from "@/components/personal-area/personal-area-ui";
-import { SitterBankDetailsSection } from "@/components/sitter/SitterBankDetailsSection";
 import { SitterManualReceivingDestinationsSection } from "@/components/sitter/SitterManualReceivingDestinationsSection";
 import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
@@ -1004,8 +1003,6 @@ export function SitterPersonalArea({ userId }: Props) {
       </PersonalAreaSection>
 
       <SitterManualReceivingDestinationsSection sitterId={userId} />
-
-      <SitterBankDetailsSection sitterId={userId} />
 
       <PersonalEditModal
         open={editKey != null}

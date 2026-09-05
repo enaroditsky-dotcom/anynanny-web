@@ -83,6 +83,7 @@ assert.match(parentDash, /\/api\/parent\/manual-payment-destinations/);
 
 // Sitter Personal Area configuration — optional, independent, Hebrew
 assert.match(personal, /SitterManualReceivingDestinationsSection/);
+assert.doesNotMatch(personal, /SitterBankDetailsSection/);
 assert.match(receiving, /title="בחירת דרך קבלת התשלום"/);
 assert.doesNotMatch(receiving, /קבלה ב-Bit וב-PayBox/);
 assert.match(receiving, /sitterReceivingSummary/);
@@ -285,6 +286,7 @@ assert.doesNotMatch(
 );
 assert.match(personal, /\/api\/sitter\/profile/);
 assert.match(personal, /SitterManualReceivingDestinationsSection/);
+assert.doesNotMatch(personal, /SitterBankDetailsSection/);
 
 // 5–7. Method-specific report + sitter prompt
 assert.equal(parentReportedPaidByMethodCopy("cash"), "ההורה דיווח ששילם במזומן");
