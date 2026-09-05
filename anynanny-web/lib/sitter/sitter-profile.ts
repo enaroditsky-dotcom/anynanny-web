@@ -675,8 +675,9 @@ export type SitterProfilePublic = {
   identity_verified?: boolean;
 
   /**
-   * Preferred receiving destination kind (`bit` | `paybox` | `bank`) when the
-   * public payload includes it. Never phones, links, or account numbers.
+   * Preferred receiving destination kind
+   * (`bit` | `paybox` | `bank` | `card` | `cash`) when the public payload includes it.
+   * Never phones, links, or account numbers.
    */
   payout_preferred_method?: string | null;
 };

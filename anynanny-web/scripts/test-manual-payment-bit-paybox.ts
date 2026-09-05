@@ -83,7 +83,9 @@ assert.match(parentDash, /\/api\/parent\/manual-payment-destinations/);
 
 // Sitter Personal Area configuration — optional, independent, Hebrew
 assert.match(personal, /SitterManualReceivingDestinationsSection/);
-assert.match(receiving, /קבלה ב-Bit וב-PayBox/);
+assert.match(receiving, /title="בחירת דרך קבלת התשלום"/);
+assert.doesNotMatch(receiving, /קבלה ב-Bit וב-PayBox/);
+assert.match(receiving, /sitterReceivingSummary/);
 assert.match(receiving, /שמירת Bit/);
 assert.match(receiving, /לינק אישי לקבלת תשלום ב-PayBox/);
 assert.match(receiving, /שמירת לינק|עדכון לינק/);
@@ -97,22 +99,50 @@ assert.match(receiving, /preferred: false/);
 assert.match(receiving, /validateOptionalBitPhone/);
 assert.match(receiving, /validateOptionalPayboxPhone/);
 assert.match(receiving, /מזומן/);
-assert.match(receiving, /kind: "cash"/);
-assert.match(receiving, /בחירה כדרך קבלה מועדפת/);
-assert.match(receiving, /savePreferredCash/);
+assert.match(receiving, /בחירת דרך קבלת התשלום/);
+assert.match(receiving, /בחירה כעדיפות/);
+assert.equal([...receiving.matchAll(/בחירה כעדיפות/g)].length, 1);
+assert.match(receiving, /PREFERRED_SELECT_BUTTON_LABEL/);
+assert.match(receiving, /preferredButton\("cash"\)/);
+assert.match(receiving, /preferredButton\("bit"\)/);
+assert.match(receiving, /preferredButton\("paybox"\)/);
+assert.doesNotMatch(receiving, /בחירה כדרך קבלה מועדפת/);
+assert.match(receiving, /savePreferredMethod/);
+assert.match(receiving, /kind, preferred: true/);
+assert.match(receiving, /שמירת Bit/);
+assert.match(receiving, /שמירת PayBox/);
 assert.equal(preferredReceivingMethodLabel("cash"), "מזומן");
 assert.equal(preferredReceivingMethodLabel("bit"), "Bit");
 assert.equal(preferredReceivingMethodLabel("paybox"), "PayBox");
 assert.equal(preferredReceivingMethodLabel("bank"), "העברה בנקאית");
-assert.equal(preferredReceivingMethodLabel("card"), null);
+assert.equal(preferredReceivingMethodLabel("card"), "כרטיס");
 
 assert.match(payoutRoute, /validateOptionalBitPhone/);
 assert.match(payoutRoute, /validateOptionalPayboxPaymentLink/);
 assert.match(payoutRoute, /payboxLink/);
 assert.match(payoutRoute, /preferred: bitPhone\.trim\(\) && setPreferred \? "bit"/);
 assert.match(payoutRoute, /kind === "cash"/);
-assert.match(payoutRoute, /preferred: "cash"/);
+assert.match(payoutRoute, /preferredOnly/);
+assert.match(payoutRoute, /preferred: kind/);
 assert.match(payoutMethodsLib, /preferredRaw === "cash"/);
+assert.match(payoutMethodsLib, /"payout_preferred_method"\s*\]/);
+assert.match(
+  payoutMethodsLib,
+  /preferred: patch\.preferred !== undefined \? patch\.preferred : loaded\.methods\.preferred/
+);
+
+const publicPreferredRpc = read(
+  "supabase/migrations/20260905120000_public_sitter_preferred_receiving_method.sql"
+);
+assert.match(publicPreferredRpc, /'payout_preferred_method'/);
+assert.match(
+  publicPreferredRpc,
+  /preferred_raw in \('bit', 'paybox', 'bank', 'card', 'cash'\)/
+);
+assert.doesNotMatch(
+  publicPreferredRpc,
+  /payout_bit_phone|payout_paybox_phone|payout_paybox_link|bank_account_number|payout_hyp_token/
+);
 
 const cashPreferredMigration = read(
   "supabase/migrations/20260904120000_sitter_payout_preferred_method_cash.sql"

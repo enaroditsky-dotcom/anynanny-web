@@ -10,8 +10,13 @@ function read(relativePath: string): string {
 
 const F7 = "supabase/migrations/20260822220000_sitter_profiles_private_select.sql";
 const AVATAR_RPC = "supabase/migrations/20260823001000_public_sitter_rpc_avatar_source.sql";
+const PUBLIC_PREFERRED_RPC =
+  "supabase/migrations/20260905120000_public_sitter_preferred_receiving_method.sql";
+const OWNER_GRANTS = "supabase/migrations/20260903074347_sitter_profiles_owner_column_grants.sql";
 const sql = read(F7);
 const publicProfileSql = read(AVATAR_RPC);
+const publicPreferredRpc = read(PUBLIC_PREFERRED_RPC);
+const ownerGrants = read(OWNER_GRANTS);
 
 const CROSS_USER_APP_FILES = [
   "lib/sitter/fetch-parent-sitter-profile.ts",
@@ -47,6 +52,7 @@ const SENSITIVE_PUBLIC_FIELDS = [
   "bank_account_number",
   "payout_bit_phone",
   "payout_paybox_phone",
+  "payout_paybox_link",
   "payout_card_holder",
   "payout_card_last4",
   "payout_card_exp_month",
@@ -115,7 +121,7 @@ function extractJsonbBuildObjectKeys(source: string): string[] {
   const keys: string[] = [];
   const re =
     /'([a-z_]+)'\s*,\s*(?:\(|sp|spj|rt|u|p|dn|ay|photo|combined|nullif|coalesce|target_id)/g;
-  const slice = source.slice(start, start + 2500);
+  const slice = source.slice(start, start + 4000);
   let match: RegExpExecArray | null;
   while ((match = re.exec(slice))) {
     keys.push(match[1]);
@@ -137,7 +143,7 @@ assert.match(ownRowSql, /auth\.uid\(\) = id/);
 
 // 3–5. Public RPC projections.
 const searchFn = publicProfileSql.slice(
-  publicProfileSql.indexOf("create or replace function public.list_public_sitters_search")
+  publicProfileSql.lastIndexOf("create or replace function public.list_public_sitters_search")
 );
 assert.match(searchFn, /security definer/);
 assert.match(searchFn, /set search_path = public/);
@@ -162,6 +168,24 @@ const profileKeys = extractJsonbBuildObjectKeys(profileReturn);
 assert.deepEqual([...new Set(profileKeys)], [...APPROVED_PROFILE_FIELDS]);
 for (const field of SENSITIVE_PUBLIC_FIELDS) {
   assert.doesNotMatch(profileReturn, new RegExp(`'${field}'`));
+}
+
+assert.match(publicPreferredRpc, /create or replace function public\.get_sitter_profile_public\(target_id uuid\)/);
+assert.match(publicPreferredRpc, /security definer/);
+assert.match(publicPreferredRpc, /sp\.onboarding_completed_at is not null/);
+assert.match(publicPreferredRpc, /grant execute on function public\.get_sitter_profile_public\(uuid\) to authenticated/);
+assert.match(publicPreferredRpc, /revoke all on function public\.get_sitter_profile_public\(uuid\) from public/);
+assert.match(publicPreferredRpc, /revoke all on function public\.get_sitter_profile_public\(uuid\) from anon/);
+const preferredReturnStart = publicPreferredRpc.indexOf("return jsonb_build_object(");
+assert.ok(preferredReturnStart >= 0, "preferred-method RPC must return jsonb_build_object");
+const preferredReturn = publicPreferredRpc.slice(
+  preferredReturnStart,
+  publicPreferredRpc.indexOf("end;", preferredReturnStart)
+);
+assert.match(preferredReturn, /'payout_preferred_method'/);
+assert.match(publicPreferredRpc, /preferred_raw in \('bit', 'paybox', 'bank', 'card', 'cash'\)/);
+for (const field of SENSITIVE_PUBLIC_FIELDS) {
+  assert.doesNotMatch(preferredReturn, new RegExp(`'${field}'`));
 }
 
 // 6. Booking INSERT eligibility uses SECURITY DEFINER boolean helper.
@@ -205,7 +229,7 @@ for (const relativePath of OWN_ROW_APP_FILES) {
 const sitterProfileApi = read("app/api/sitter/profile/route.ts");
 assert.match(sitterProfileApi, /fetchOwnSitterProfileRow/);
 assert.doesNotMatch(sitterProfileApi, /\.select\(["']\*["']\)/);
-assert.doesNotMatch(sitterProfileApi, /payout_bit_phone|payout_paybox_phone/);
+assert.doesNotMatch(sitterProfileApi, /payout_bit_phone|payout_paybox_phone|payout_paybox_link/);
 
 // 9–10. Public RPCs still exist and require completed onboarding.
 assert.match(publicProfileSql, /create or replace function public\.get_sitter_profile_public\(target_id uuid\)/);
@@ -234,5 +258,23 @@ assert.match(lifecycle, /booking_source = 'direct'/);
 assert.match(pendingLifecycle, /notify_pending_no_response_reminders/);
 const canonical = read("lib/notifications/kinds.ts");
 assert.match(canonical, /CANONICAL_NOTIFICATION_KINDS/);
+
+// Owner Personal Area column grants: restore SELECT after onboarding columns,
+// without table-level SELECT/UPDATE and without payout destination SELECT.
+assert.match(ownerGrants, /revoke select on public\.sitter_profiles from authenticated/);
+assert.match(ownerGrants, /grant select \(%s\) on public\.sitter_profiles to authenticated/);
+assert.match(ownerGrants, /column_name not in \('payout_bit_phone', 'payout_paybox_phone', 'payout_paybox_link'\)/);
+assert.match(ownerGrants, /revoke select \(payout_bit_phone, payout_paybox_phone, payout_paybox_link\)/);
+assert.match(ownerGrants, /grant update \(%s\) on public\.sitter_profiles to authenticated/);
+assert.match(ownerGrants, /desired_hours_per_week/);
+assert.match(ownerGrants, /home_city/);
+assert.doesNotMatch(ownerGrants, /grant select on public\.sitter_profiles to/);
+assert.doesNotMatch(ownerGrants, /grant update on public\.sitter_profiles to/);
+assert.doesNotMatch(ownerGrants, /grant select, update on public\.sitter_profiles/);
+assert.doesNotMatch(ownerGrants, /grant all on public\.sitter_profiles/);
+assert.doesNotMatch(ownerGrants, /create policy/);
+assert.doesNotMatch(ownerGrants, /drop policy/);
+assert.doesNotMatch(ownerGrants, /service_role/);
+assert.doesNotMatch(ownerGrants, /get_sitter_profile_public|list_public_sitters_search/);
 
 console.log("F7 sitter_profiles private-select checks passed.");

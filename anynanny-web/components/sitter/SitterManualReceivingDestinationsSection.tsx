@@ -48,21 +48,23 @@ export const PAYBOX_PERSONAL_LINK_HELP_STEPS = [
   "שמרי את השינוי."
 ] as const;
 
-async function savePreferredCash(): Promise<
-  { ok: true; methods: SitterPayoutMethods } | { ok: false; error: string }
-> {
+const PREFERRED_SELECT_BUTTON_LABEL = "בחירה כעדיפות";
+
+async function savePreferredMethod(
+  kind: "cash" | "bit" | "paybox"
+): Promise<{ ok: true; methods: SitterPayoutMethods } | { ok: false; error: string }> {
   const res = await fetch("/api/sitter/payout-methods", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ kind: "cash" })
+    body: JSON.stringify(kind === "cash" ? { kind: "cash" } : { kind, preferred: true })
   });
   const json = (await res.json().catch(() => ({}))) as {
     methods?: SitterPayoutMethods;
     error?: string;
   };
   if (!res.ok || !json.methods) {
-    return { ok: false, error: json.error || "שמירת מזומן נכשלה." };
+    return { ok: false, error: json.error || "שמירת ההעדפה נכשלה." };
   }
   return { ok: true, methods: json.methods };
 }
@@ -109,10 +111,12 @@ export function SitterManualReceivingDestinationsSection({
   const [loading, setLoading] = useState(true);
   const [savingBit, setSavingBit] = useState(false);
   const [savingPaybox, setSavingPaybox] = useState(false);
-  const [savingCash, setSavingCash] = useState(false);
+  const [savingPreferred, setSavingPreferred] = useState<"cash" | "bit" | "paybox" | null>(
+    null
+  );
   const [savingPayboxLink, setSavingPayboxLink] = useState(false);
   const [bitError, setBitError] = useState<string | null>(null);
-  const [cashError, setCashError] = useState<string | null>(null);
+  const [preferredError, setPreferredError] = useState<string | null>(null);
   const [payboxError, setPayboxError] = useState<string | null>(null);
   const [payboxLinkError, setPayboxLinkError] = useState<string | null>(null);
   const [payboxLinkHelpOpen, setPayboxLinkHelpOpen] = useState(false);
@@ -137,17 +141,35 @@ export function SitterManualReceivingDestinationsSection({
     void reload();
   }, [reload]);
 
-  const saveCashPreferred = async () => {
-    setCashError(null);
-    setSavingCash(true);
-    const result = await savePreferredCash();
-    setSavingCash(false);
+  const selectPreferred = async (kind: "cash" | "bit" | "paybox") => {
+    setPreferredError(null);
+    setSavingPreferred(kind);
+    const result = await savePreferredMethod(kind);
+    setSavingPreferred(null);
     if (!result.ok) {
-      setCashError(result.error);
+      setPreferredError(result.error);
       return;
     }
     setMethods(result.methods);
-    setToast("מזומן נבחר כדרך קבלה מועדפת.");
+    const label = preferredReceivingMethodLabel(kind) || kind;
+    setToast(`${label} נבחר כדרך קבלת התשלום.`);
+  };
+
+  const preferredButton = (kind: "cash" | "bit" | "paybox") => {
+    const selected = methods.preferred === kind;
+    const saving = savingPreferred === kind;
+    return (
+      <button
+        type="button"
+        onClick={() => void selectPreferred(kind)}
+        disabled={savingPreferred !== null || selected}
+        className={`inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50 ${
+          kind === "cash" ? "mt-2" : ""
+        }`}
+      >
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : PREFERRED_SELECT_BUTTON_LABEL}
+      </button>
+    );
   };
 
   const saveBit = async () => {
@@ -237,7 +259,7 @@ export function SitterManualReceivingDestinationsSection({
   return (
     <>
       <PersonalAreaSection
-        title="קבלה ב-Bit וב-PayBox"
+        title="בחירת דרך קבלת התשלום"
         accent="emerald"
         description="מספרים אופציונליים להורים אחרי המשמרת. התשלום מתבצע מחוץ ל-AnyNanny. לא מוצג בפרופיל הציבורי ולא מועתק ממספר הוואטסאפ."
         summary={
@@ -257,7 +279,7 @@ export function SitterManualReceivingDestinationsSection({
         ) : (
           <div className="space-y-4">
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-right">
-              <p className="text-[13px] font-semibold text-slate-500">דרך קבלת תשלום מועדפת</p>
+              <p className="text-[13px] font-semibold text-slate-500">בחירת דרך קבלת התשלום</p>
               <p
                 className={`mt-1 text-sm ${
                   preferredReceivingMethodLabel(methods.preferred)
@@ -267,6 +289,9 @@ export function SitterManualReceivingDestinationsSection({
               >
                 {preferredReceivingMethodLabel(methods.preferred) || "לא הוגדר"}
               </p>
+              {preferredError ? (
+                <p className="mt-1 text-xs font-medium text-rose-700">{preferredError}</p>
+              ) : null}
             </div>
             <div
               className={`rounded-xl border p-3 ${
@@ -293,25 +318,11 @@ export function SitterManualReceivingDestinationsSection({
               <p className="text-[13px] text-slate-500">
                 הצהרה בלבד — אין צורך במספר, לינק או פרטי חשבון.
               </p>
-              {cashError ? <p className="mt-1 text-xs font-medium text-rose-700">{cashError}</p> : null}
-              <button
-                type="button"
-                onClick={() => void saveCashPreferred()}
-                disabled={savingCash || methods.preferred === "cash"}
-                className="mt-2 inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-              >
-                {savingCash ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : methods.preferred === "cash" ? (
-                  "נבחר כמועדף"
-                ) : (
-                  "בחירה כדרך קבלה מועדפת"
-                )}
-              </button>
+              {preferredButton("cash")}
             </div>
             <div
               className={`rounded-xl border p-3 ${
-                sitterReceivingSetupState(methods, "bit").configured
+                methods.preferred === "bit"
                   ? "border-emerald-200 bg-emerald-50/70"
                   : "border-slate-200 bg-slate-50/70"
               }`}
@@ -323,12 +334,16 @@ export function SitterManualReceivingDestinationsSection({
                 </div>
                 <span
                   className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                    sitterReceivingSetupState(methods, "bit").configured
+                    methods.preferred === "bit"
                       ? "bg-emerald-100 text-emerald-800"
-                      : "bg-slate-200 text-slate-600"
+                      : sitterReceivingSetupState(methods, "bit").configured
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-200 text-slate-600"
                   }`}
                 >
-                  {sitterReceivingSetupState(methods, "bit").statusLabel}
+                  {methods.preferred === "bit"
+                    ? "מועדף"
+                    : sitterReceivingSetupState(methods, "bit").statusLabel}
                 </span>
               </div>
               <p className="text-[13px] text-slate-500">
@@ -350,19 +365,22 @@ export function SitterManualReceivingDestinationsSection({
                 />
               </label>
               {bitError ? <p className="mt-1 text-xs font-medium text-rose-700">{bitError}</p> : null}
-              <button
-                type="button"
-                onClick={() => void saveBit()}
-                disabled={savingBit}
-                className="mt-2 inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-              >
-                {savingBit ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת Bit"}
-              </button>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void saveBit()}
+                  disabled={savingBit}
+                  className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  {savingBit ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת Bit"}
+                </button>
+                {preferredButton("bit")}
+              </div>
             </div>
 
             <div
               className={`rounded-xl border p-3 ${
-                sitterReceivingSetupState(methods, "paybox").configured
+                methods.preferred === "paybox"
                   ? "border-emerald-200 bg-emerald-50/70"
                   : "border-slate-200 bg-slate-50/70"
               }`}
@@ -374,12 +392,16 @@ export function SitterManualReceivingDestinationsSection({
                 </div>
                 <span
                   className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                    sitterReceivingSetupState(methods, "paybox").configured
+                    methods.preferred === "paybox"
                       ? "bg-emerald-100 text-emerald-800"
-                      : "bg-slate-200 text-slate-600"
+                      : sitterReceivingSetupState(methods, "paybox").configured
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-200 text-slate-600"
                   }`}
                 >
-                  {sitterReceivingSetupState(methods, "paybox").statusLabel}
+                  {methods.preferred === "paybox"
+                    ? "מועדף"
+                    : sitterReceivingSetupState(methods, "paybox").statusLabel}
                 </span>
               </div>
               <p className="text-[13px] text-slate-500">
@@ -410,14 +432,17 @@ export function SitterManualReceivingDestinationsSection({
               {payboxError ? (
                 <p className="mt-1 text-xs font-medium text-rose-700">{payboxError}</p>
               ) : null}
-              <button
-                type="button"
-                onClick={() => void savePaybox()}
-                disabled={savingPaybox}
-                className="mt-2 inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-              >
-                {savingPaybox ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת PayBox"}
-              </button>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void savePaybox()}
+                  disabled={savingPaybox}
+                  className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  {savingPaybox ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת PayBox"}
+                </button>
+                {preferredButton("paybox")}
+              </div>
               <div className="mt-4 min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                   <label
