@@ -5,6 +5,8 @@ import {
   PARENT_SEARCH_MAX_HOURLY_SLIDER,
   PARENT_SEARCH_MINUTE_OPTIONS,
   PARENT_SEARCH_RATING_OPTIONS,
+  PARENT_SEARCH_VERIFIED_ONLY_HINT,
+  PARENT_SEARCH_VERIFIED_ONLY_LABEL,
   type ParentSearchFilters,
   type ParentSearchMinute,
   type ParentSearchMinExperience,
@@ -15,6 +17,7 @@ import {
   type ParentSearchMandatoryField
 } from "@/lib/sitter/parent-search-validation";
 import { CityAutocomplete } from "@/components/geo/city-autocomplete";
+import { IdentityShieldMark } from "@/components/identity/verified-user-badge";
 import {
   SEARCH_LIMIT_CLEAR_BUTTON,
   SEARCH_LIMIT_SLIDER_CLASS,
@@ -345,6 +348,38 @@ export function ParentSearchFiltersBar({
           </div>
         </div>
       </SearchLimitToggleCard>
+
+      <div
+        className={`${SECTION_SURFACE} space-y-3 ${
+          filters.verifiedOnly
+            ? "border-[#C5A059]/70 ring-1 ring-[#C5A059]/30"
+            : ""
+        }`}
+      >
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+          <IdentityShieldMark size="md" />
+          <span id="verified-only-heading" className={SECTION_HEADING}>
+            {PARENT_SEARCH_VERIFIED_ONLY_LABEL}
+          </span>
+        </div>
+        <p
+          id="verified-only-hint"
+          className="text-right text-[15px] font-medium leading-relaxed text-slate-500"
+        >
+          {PARENT_SEARCH_VERIFIED_ONLY_HINT}
+        </p>
+        <label className="inline-flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-medium text-[#001F3F]">
+          <input
+            type="checkbox"
+            className="h-[18px] w-[18px] rounded border-slate-300 accent-[#001F3F]"
+            checked={Boolean(filters.verifiedOnly)}
+            aria-labelledby="verified-only-heading"
+            aria-describedby="verified-only-hint"
+            onChange={(e) => patch({ verifiedOnly: e.target.checked })}
+          />
+          {PARENT_SEARCH_VERIFIED_ONLY_LABEL}
+        </label>
+      </div>
 
     </section>
   );
