@@ -126,7 +126,7 @@ async function invokeListPublicSittersSearchRpc(
   filters: ParentSearchFilters
 ): Promise<{ data: unknown; error: unknown }> {
   const args = toListPublicSittersSearchRpcArgs(filters);
-  const cleanArgs = { ...args } as Record<string, unknown>;
+  let cleanArgs = { ...args } as Record<string, unknown>;
   delete cleanArgs.min_rating;
   delete cleanArgs.rating;
 
@@ -137,6 +137,15 @@ async function invokeListPublicSittersSearchRpc(
 
   if (read.error) {
     const message = readSupabaseErrorMessage(read.error).toLowerCase();
+    if (message.includes("p_verified_only") || message.includes("verified_only")) {
+      const { p_verified_only: _ignoredVerified, ...withoutVerified } = cleanArgs;
+      const retry = await safeSupabaseReadAsync(
+        () => supabase.rpc("list_public_sitters_search", withoutVerified),
+        "list_public_sitters_search"
+      );
+      if (!retry.error) return { data: retry.data, error: retry.error };
+      cleanArgs = withoutVerified as Record<string, unknown>;
+    }
     if (message.includes("p_service_type") || message.includes("service_type")) {
       const { p_service_type: _ignored, ...legacyArgs } = cleanArgs;
       const legacy = await safeSupabaseReadAsync(

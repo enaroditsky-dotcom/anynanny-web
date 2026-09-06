@@ -7,9 +7,9 @@ import { useAuth } from "@/components/auth-provider";
 import { MainLayout } from "@components/layout/MainLayout";
 import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filters";
 import {
-  defaultParentSearchFilters,
   normalizeParentSearchFilters,
   parentSearchResultsPath,
+  parseFiltersFromSearchParams,
   type ParentSearchFilters
 } from "@/lib/sitter/parent-search-filters";
 import {
@@ -22,21 +22,29 @@ function ParentSearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoading, signedIn, effectiveRole, user } = useAuth();
-  const [draftFilters, setDraftFilters] = useState<ParentSearchFilters>(() => defaultParentSearchFilters());
+  const searchQuery = searchParams.toString();
+  const [draftFilters, setDraftFilters] = useState<ParentSearchFilters>(() =>
+    parseFiltersFromSearchParams(searchParams)
+  );
   const [navigating, setNavigating] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [invalidFields, setInvalidFields] = useState<ParentSearchMandatoryField[]>([]);
 
   useEffect(() => {
+    setDraftFilters(parseFiltersFromSearchParams(new URLSearchParams(searchQuery)));
+  }, [searchQuery]);
+
+  useEffect(() => {
     if (isLoading) return;
     if (!signedIn) {
-      router.replace("/auth/login?next=/parent/search");
+      const nextPath = searchQuery ? `/parent/search?${searchQuery}` : "/parent/search";
+      router.replace(`/auth/login?next=${encodeURIComponent(nextPath)}`);
       return;
     }
     if (effectiveRole === "sitter") {
       router.replace("/sitter/dashboard");
     }
-  }, [isLoading, signedIn, effectiveRole, router]);
+  }, [isLoading, signedIn, effectiveRole, router, searchQuery]);
 
   const handleSearch = useCallback(() => {
     const filters = normalizeParentSearchFilters(draftFilters);

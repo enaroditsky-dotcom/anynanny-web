@@ -1,4 +1,8 @@
 import { isIsraelCity, type IsraelCity } from "@/lib/geo/israel-cities";
+import {
+  isIdentityVerified,
+  parseIdentityVerificationStatus
+} from "@/lib/identity/identity-verification";
 
 export type ParentSearchTransportFilter = "all" | "self" | "taxi";
 
@@ -86,7 +90,35 @@ export type ParentSearchFilters = {
   selectedCity: IsraelCity | "";
   /** Selected parent search service (`babysitter` | `sleep_consultant` | `lactation_consultant`). */
   serviceType: ParentSearchServiceType;
+  /**
+   * When true, search includes only sitters whose canonical
+   * `profiles.identity_verification_status` is `verified`.
+   * Default false — absent URL/RPC params must not exclude unverified sitters.
+   */
+  verifiedOnly: boolean;
 };
+
+export const PARENT_SEARCH_VERIFIED_ONLY_LABEL = "זהות מאומתת בלבד";
+export const PARENT_SEARCH_VERIFIED_ONLY_HINT =
+  "יוצגו רק בייביסיטריות שעברו אימות זהות במערכת AnyNanny.";
+
+/** Parse URL / form verified-only values. Absent or unknown → false. */
+export function parseParentSearchVerifiedOnly(raw: string | null | undefined): boolean {
+  const value = String(raw ?? "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+/**
+ * Inclusion rule for the verified-only filter, using the canonical identity helper.
+ * `verifiedOnly === false` never restricts by identity status.
+ */
+export function matchesParentSearchVerifiedOnly(
+  identityVerificationStatus: unknown,
+  verifiedOnly: boolean
+): boolean {
+  if (!verifiedOnly) return true;
+  return isIdentityVerified(parseIdentityVerificationStatus(identityVerificationStatus));
+}
 
 export const defaultParentSearchFilters = (): ParentSearchFilters => ({
   searchSitterSerial: "",
@@ -101,7 +133,8 @@ export const defaultParentSearchFilters = (): ParentSearchFilters => ({
   transport: "all",
   maxHourlyRate: null,
   selectedCity: "",
-  serviceType: "babysitter"
+  serviceType: "babysitter",
+  verifiedOnly: false
 });
 
 /** Map UI / URL role aliases to the RPC `p_service_type` value. */
@@ -160,7 +193,8 @@ export function normalizeParentSearchFilters(
       (partial as { serviceType?: string; roleType?: string }).serviceType ??
         (partial as { roleType?: string }).roleType ??
         base.serviceType
-    )
+    ),
+    verifiedOnly: partial.verifiedOnly === true
   };
 }
 
@@ -272,16 +306,18 @@ export type ListPublicSittersSearchRpcParams = {
   p_max_hourly_rate: number | null;
   p_search_city: string | null;
   p_service_type: ParentSearchServiceType;
+  /** Omitted when false so unmigrated RPCs and old clients keep today's behavior. */
+  p_verified_only?: boolean;
 };
 
 /** RPC args for `list_public_sitters_search`. */
 export function toListPublicSittersSearchRpcArgs(
-  filters: ParentSearchFilters
+  filters: ParentSearchFilters | Partial<ParentSearchFilters>
 ): ListPublicSittersSearchRpcParams {
   const safe = normalizeParentSearchFilters(filters);
   const serialOnly = shouldUseDirectSerialLookup(safe.searchSitterSerial);
 
-  return {
+  const args: ListPublicSittersSearchRpcParams = {
     p_search_nanny_id: sitterSerialToRpcParam(safe.searchSitterSerial),
     p_start_time: buildSearchStartTimeIso(safe),
     p_end_time: buildSearchEndTimeIso(safe),
@@ -292,6 +328,12 @@ export function toListPublicSittersSearchRpcArgs(
     p_search_city: serialOnly || !safe.selectedCity ? null : safe.selectedCity,
     p_service_type: safe.serviceType
   };
+
+  if (safe.verifiedOnly) {
+    args.p_verified_only = true;
+  }
+
+  return args;
 }
 
 function parseClockParam(raw: string | null): { hour: string; minute: string } {
@@ -365,6 +407,9 @@ export function parseFiltersFromSearchParams(params: Pick<URLSearchParams, "get"
     selectedCity: readSearchParam(params, ["city", "selectedCity"]) as ParentSearchFilters["selectedCity"],
     serviceType: normalizeParentSearchServiceType(
       readSearchParam(params, ["serviceType", "roleType", "p_service_type"])
+    ),
+    verifiedOnly: parseParentSearchVerifiedOnly(
+      readSearchParam(params, ["verifiedOnly", "identityVerifiedOnly"])
     )
   });
 }
@@ -408,12 +453,22 @@ export function parentSearchFiltersToUrlSearchParams(filters: ParentSearchFilter
     params.set("maxHourlyRate", String(safe.maxHourlyRate));
   }
 
+  if (safe.verifiedOnly) {
+    params.set("verifiedOnly", "1");
+  }
+
   return params;
 }
 
 export function parentSearchResultsPath(filters: ParentSearchFilters): string {
   const query = parentSearchFiltersToUrlSearchParams(filters).toString();
   return query ? `/parent/search/results?${query}` : "/parent/search/results";
+}
+
+/** Filters page with the same canonical query params used by results. */
+export function parentSearchFiltersPath(filters: ParentSearchFilters): string {
+  const query = parentSearchFiltersToUrlSearchParams(filters).toString();
+  return query ? `/parent/search?${query}` : "/parent/search";
 }
 
 /**

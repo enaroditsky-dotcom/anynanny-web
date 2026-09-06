@@ -165,6 +165,12 @@ assert.equal(parsedFilters.searchEndHour, "16");
 assert.equal(parsedFilters.searchEndMinute, "00");
 assert.equal(parsedFilters.minRating, "4");
 assert.equal(parsedFilters.selectedCity, "חיפה");
+assert.equal(parsedFilters.verifiedOnly, false);
+
+assert.equal(
+  parentSearchFiltersToUrlSearchParams(searchFilters).get("verifiedOnly"),
+  null
+);
 
 assert.equal(
   requestedShiftFromFilters(
@@ -269,11 +275,15 @@ assert.match(resultsPage, /if \(!criteria\.ok\)/);
 assert.match(resultsPage, /runParentSitterSearch\(supabase, normalized/);
 assert.doesNotMatch(resultsPage, /fetchPublicSitterSearchBySerial/);
 assert.match(resultsPage, /PublicSitterSearchCardLink key=\{s\.id\} sitter=\{s\} query=\{searchQuery\}/);
+assert.match(resultsPage, /parentSearchFiltersPath\(filters\)/);
+assert.match(resultsPage, /חזרה לשינוי תנאי החיפוש/);
+assert.doesNotMatch(resultsPage, /href="\/parent\/search"/);
 
 const searchPage = read("app/parent/search/page.tsx");
 assert.match(searchPage, /validateParentSearchCriteria/);
 assert.match(searchPage, /PARENT_SEARCH_MISSING_CRITERIA_MESSAGE|criteria\.error/);
 assert.match(searchPage, /setInvalidFields/);
+assert.match(searchPage, /parseFiltersFromSearchParams/);
 
 const searchCard = read("components/sitter/public-sitter-search-card.tsx");
 assert.match(searchCard, /parentSitterProfilePath\(sitter\.id, query\)/);
