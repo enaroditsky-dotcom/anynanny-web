@@ -9,6 +9,7 @@ import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
   isSerialTargetedSearch,
   normalizeParentSearchFilters,
+  parentSearchFiltersPath,
   parseFiltersFromSearchParams
 } from "@/lib/sitter/parent-search-filters";
 import { validateParentSearchCriteria } from "@/lib/sitter/parent-search-validation";
@@ -126,7 +127,7 @@ function ParentSearchResultsInner() {
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
       <div className="px-1">
         <Link
-          href="/parent/search"
+          href={parentSearchFiltersPath(filters)}
           className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-navy-header/15 bg-white px-4 py-3.5 text-sm font-bold text-[#001F3F] shadow-soft transition hover:border-navy-header/25 hover:bg-brand-cream active:scale-[0.99]"
         >
           <span aria-hidden>←</span>

@@ -42,6 +42,8 @@
     "test:homepage-welcome-video": "npx --yes tsx scripts/test-homepage-welcome-video.ts",
     "test:settings-legal-documents": "npx --yes tsx scripts/test-settings-legal-documents.ts",
     "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts",
+    "test:parent-search-verified-only": "npx --yes tsx scripts/test-parent-search-verified-only.ts",
+    "test:parent-search-filter-restore": "npx --yes tsx scripts/test-parent-search-filter-restore.ts",
     "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts",
     "test:didit-kyc": "npx --yes tsx scripts/test-didit-kyc.ts",
     "test:admin-broadcast": "npx --yes tsx scripts/test-admin-broadcast.ts"
