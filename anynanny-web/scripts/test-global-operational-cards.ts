@@ -43,7 +43,8 @@ assert.deepEqual(
     "manual_payment_resolved_reported",
     "payment_received",
     "shift_end_reminder",
-    "missed_shift_clarification"
+    "missed_shift_clarification",
+    "admin_broadcast"
   ]
 );
 assert.equal(isGlobalOperationalNotificationKind("payment_required"), false);
@@ -117,7 +118,9 @@ assert.doesNotMatch(session, /read_at|dismissed_at/);
 
 const ui = read("components/notifications/global-coordination-notifications.tsx");
 assert.match(ui, /isOperationalCardsSuppressedRoute/);
-assert.match(ui, /isOperationalCardsSuppressedRoute\(pathname\)\) return null/);
+assert.match(ui, /visibleItems/);
+assert.match(ui, /fetchUnreadAdminBroadcastNotifications/);
+assert.doesNotMatch(ui, /isOperationalCardsSuppressedRoute\(pathname\)\) return null/);
 assert.doesNotMatch(ui, /fetchUnreadCoordinationNotifications/);
 assert.doesNotMatch(ui, /event: "\*"/);
 assert.match(ui, /event: "INSERT"/);
@@ -153,6 +156,14 @@ assert.equal(
     kind: "manual_payment_confirmed"
   }),
   false
+);
+assert.equal(
+  shouldPresentOperationalEventPopup({
+    eventType: "INSERT",
+    pathname: "/parent/dashboard",
+    kind: "admin_broadcast"
+  }),
+  true
 );
 assert.equal(
   shouldPresentOperationalEventPopup({

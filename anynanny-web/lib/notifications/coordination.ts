@@ -29,7 +29,8 @@ export const OPERATIONAL_CARD_NOTIFICATION_KINDS = [
   "manual_payment_resolved_reported",
   "payment_received",
   "shift_end_reminder",
-  "missed_shift_clarification"
+  "missed_shift_clarification",
+  "admin_broadcast"
 ] as const satisfies readonly CanonicalNotificationKind[];
 
 export const GLOBAL_OPERATIONAL_NOTIFICATION_KINDS = [
@@ -72,7 +73,8 @@ const OPERATIONAL_FALLBACK_TITLE: Record<OperationalCardNotificationKind, string
   manual_payment_resolved_reported: "ההורה דיווח שהתשלום הוסדר",
   payment_received: "תשלום התקבל",
   shift_end_reminder: "המשמרת מסתיימת בעוד 30 דקות",
-  missed_shift_clarification: "המשמרת לא התקיימה"
+  missed_shift_clarification: "המשמרת לא התקיימה",
+  admin_broadcast: "הודעת מערכת"
 };
 
 export function isCoordinationNotificationKind(value: string): value is CoordinationNotificationKind {
@@ -109,7 +111,14 @@ export function globalOperationalNotificationTitle(
   return "עדכון";
 }
 
-export function operationalCardActionLabel(kind: GlobalOperationalNotificationKind): string {
+export function operationalCardActionLabel(
+  kind: GlobalOperationalNotificationKind,
+  payload?: CanonicalNotificationPayload
+): string {
+  if (kind === "admin_broadcast") {
+    const label = String(payload?.cta_label ?? "").trim();
+    return label || "לפרטים";
+  }
   if (kind === "payment_received") return "לארנק";
   if (
     kind === "manual_payment_confirmed" ||
@@ -218,6 +227,10 @@ export function applyCoordinationRealtimeChange(
 export const OPERATIONAL_EVENT_POPUP_DURATION_MS = 8000;
 export const MAX_LIVE_OPERATIONAL_EVENT_POPUPS = 2;
 
+export function isAdminBroadcastNotificationKind(value: string | null | undefined): boolean {
+  return String(value ?? "").trim() === "admin_broadcast";
+}
+
 /** Event-time popups only — never from historical unread rows or read_at. */
 export function shouldPresentOperationalEventPopup(args: {
   eventType?: string;
@@ -225,8 +238,10 @@ export function shouldPresentOperationalEventPopup(args: {
   kind?: string | null;
 }): boolean {
   if (String(args.eventType ?? "").toUpperCase() !== "INSERT") return false;
+  const kind = String(args.kind ?? "");
+  if (isAdminBroadcastNotificationKind(kind)) return true;
   if (isOperationalCardsSuppressedRoute(args.pathname)) return false;
-  return isGlobalOperationalNotificationKind(String(args.kind ?? ""));
+  return isGlobalOperationalNotificationKind(kind);
 }
 
 export function applyOperationalEventPopupChange(
@@ -271,6 +286,34 @@ export async function fetchUnreadCoordinationNotifications(
     .in("kind", [...GLOBAL_OPERATIONAL_NOTIFICATION_KINDS])
     .is("read_at", null)
     .order("created_at", { ascending: false });
+
+  if (error) {
+    return { notifications: [], error: readSupabaseErrorMessage(error) };
+  }
+
+  const notifications = ((data ?? []) as Record<string, unknown>[])
+    .map((row) => mapCoordinationNotificationRow(row))
+    .filter((row): row is CoordinationNotification => Boolean(row));
+
+  return { notifications: sortNewestFirst(notifications), error: null };
+}
+
+/** Unread admin system messages only — replayed on mount so offline recipients still see them. */
+export async function fetchUnreadAdminBroadcastNotifications(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ notifications: CoordinationNotification[]; error: string | null }> {
+  const uid = userId.trim();
+  if (!uid) return { notifications: [], error: null };
+
+  const { data, error } = await supabase
+    .from(NOTIFICATIONS_TABLE)
+    .select("id, kind, title, body, payload, created_at, read_at")
+    .eq("user_id", uid)
+    .eq("kind", "admin_broadcast")
+    .is("read_at", null)
+    .order("created_at", { ascending: false })
+    .limit(5);
 
   if (error) {
     return { notifications: [], error: readSupabaseErrorMessage(error) };

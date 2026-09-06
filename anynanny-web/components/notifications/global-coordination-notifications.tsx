@@ -7,6 +7,7 @@ import {
   CalendarCheck2,
   CalendarX2,
   Clock3,
+  Megaphone,
   MessageCircle,
   Wallet,
   X
@@ -18,6 +19,8 @@ import {
   coordinationBookingHref,
   coordinationChatHref,
   coordinationScheduleLabel,
+  fetchUnreadAdminBroadcastNotifications,
+  isAdminBroadcastNotificationKind,
   isCoordinationNotificationKind,
   isGlobalOperationalNotificationKind,
   operationalCardActionLabel,
@@ -30,6 +33,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
 function toneForKind(kind: CoordinationNotification["kind"]): "emerald" | "amber" | "rose" {
+  if (isAdminBroadcastNotificationKind(kind)) return "amber";
   if (
     kind === "booking_approved" ||
     kind === "shift_confirmed" ||
@@ -59,6 +63,9 @@ const TONE_CLASS = {
 
 function IconForKind({ kind }: { kind: CoordinationNotification["kind"] }) {
   const className = "mt-0.5 h-5 w-5 shrink-0";
+  if (isAdminBroadcastNotificationKind(kind)) {
+    return <Megaphone className={className} aria-hidden />;
+  }
   if (kind === "booking_rejected" || kind === "booking_withdrawn_by_parent") {
     return <CalendarX2 className={className} aria-hidden />;
   }
@@ -102,15 +109,22 @@ export function GlobalCoordinationNotifications() {
   }, []);
 
   const dismissPopup = useCallback(
-    (id: string) => {
+    (id: string, options?: { markRead?: boolean; kind?: CoordinationNotification["kind"] }) => {
       clearDismissTimer(id);
       setItems((prev) => prev.filter((row) => row.id !== id));
+      if (options?.markRead && userId && isAdminBroadcastNotificationKind(options.kind)) {
+        const supabase = getSupabaseBrowserClient();
+        if (supabase) {
+          void markNotificationsReadBestEffort(supabase, userId, { ids: [id] });
+        }
+      }
     },
-    [clearDismissTimer]
+    [clearDismissTimer, userId]
   );
 
   const scheduleDismiss = useCallback(
-    (id: string) => {
+    (id: string, kind?: string) => {
+      if (isAdminBroadcastNotificationKind(kind)) return;
       if (dismissTimersRef.current.has(id)) return;
       const timer = setTimeout(() => {
         dismissTimersRef.current.delete(id);
@@ -129,10 +143,32 @@ export function GlobalCoordinationNotifications() {
 
   useEffect(() => {
     if (!isOperationalCardsSuppressedRoute(pathname)) return;
-    setItems([]);
-    for (const timer of dismissTimersRef.current.values()) clearTimeout(timer);
-    dismissTimersRef.current.clear();
+    setItems((prev) => prev.filter((row) => isAdminBroadcastNotificationKind(row.kind)));
+    for (const [id, timer] of [...dismissTimersRef.current.entries()]) {
+      clearTimeout(timer);
+      dismissTimersRef.current.delete(id);
+    }
   }, [pathname]);
+
+  useEffect(() => {
+    if (!userId || isLoading) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    let cancelled = false;
+    void fetchUnreadAdminBroadcastNotifications(supabase, userId).then((result) => {
+      if (cancelled || result.error) return;
+      setItems((prev) => {
+        const byId = new Map(prev.map((row) => [row.id, row]));
+        for (const row of result.notifications) byId.set(row.id, row);
+        return [...byId.values()];
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, isLoading]);
 
   useEffect(() => {
     if (!userId || isLoading) return;
@@ -153,7 +189,7 @@ export function GlobalCoordinationNotifications() {
             const next = applyOperationalEventPopupChange(prev, payload, pathnameRef.current);
             for (const row of next) {
               if (!prev.some((existing) => existing.id === row.id)) {
-                scheduleDismiss(row.id);
+                scheduleDismiss(row.id, row.kind);
               }
             }
             return next;
@@ -184,8 +220,11 @@ export function GlobalCoordinationNotifications() {
     [userId, router, dismissPopup]
   );
 
-  if (isOperationalCardsSuppressedRoute(pathname)) return null;
-  if (!userId || items.length === 0) return null;
+  const visibleItems = isOperationalCardsSuppressedRoute(pathname)
+    ? items.filter((row) => isAdminBroadcastNotificationKind(row.kind))
+    : items;
+
+  if (!userId || visibleItems.length === 0) return null;
 
   return (
     <div
@@ -194,7 +233,7 @@ export function GlobalCoordinationNotifications() {
       aria-live="polite"
     >
       <div className="pointer-events-none mx-auto flex max-h-[min(38vh,18rem)] w-full max-w-md flex-col gap-2 overflow-y-auto overscroll-y-contain sm:mx-0 sm:ms-4 sm:me-auto">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const tone = toneForKind(item.kind);
           const schedule = coordinationScheduleLabel(item.payload);
           const bookingHref = coordinationBookingHref(item.kind, role, item.payload);
@@ -213,7 +252,9 @@ export function GlobalCoordinationNotifications() {
                   type="button"
                   aria-label="סגור"
                   className={ICON_BUTTON}
-                  onClick={() => dismissPopup(item.id)}
+                  onClick={() =>
+                    dismissPopup(item.id, { markRead: true, kind: item.kind })
+                  }
                 >
                   <X className="h-4 w-4" aria-hidden />
                 </button>
@@ -243,7 +284,7 @@ export function GlobalCoordinationNotifications() {
                         className="inline-flex min-h-11 items-center rounded-xl bg-[#001F3F] px-3 text-[12px] font-bold text-white"
                         onClick={() => void openHref(item, bookingHref)}
                       >
-                        {operationalCardActionLabel(item.kind)}
+                        {operationalCardActionLabel(item.kind, item.payload)}
                       </button>
                     </div>
                   </div>

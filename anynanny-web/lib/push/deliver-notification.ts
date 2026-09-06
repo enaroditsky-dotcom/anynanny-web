@@ -99,6 +99,11 @@ export async function deliverCanonicalNotificationPush(
     return { skipped: true, sent: 0, removed: 0, reason: "push_enabled=false" };
   }
 
+  const kind = String(notification.kind ?? "");
+  if (kind === "admin_broadcast") {
+    return { skipped: true, sent: 0, removed: 0, reason: "in-app only" };
+  }
+
   const role = isProfileRole(profile?.role) ? profile.role : "parent";
   const { data: subscriptions, error: subError } = await deps.admin
     .from(PUSH_SUBSCRIPTIONS_TABLE)

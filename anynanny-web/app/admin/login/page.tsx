@@ -34,7 +34,7 @@ export default function AdminLoginPage() {
     <main className="mx-auto max-w-md p-6 md:py-20">
       <h1 className="mb-2 text-2xl font-semibold text-navy-900">Admin Access</h1>
       <p className="mb-6 text-sm text-navy-700">
-        Enter admin password to access reports, shift reviews, and ops tools.
+        Enter admin password to access reports, shift reviews, system messages, and ops tools.
       </p>
 
       <form className="space-y-3 rounded-xl border border-navy-200 bg-white p-5 shadow-sm" onSubmit={handleSubmit}>

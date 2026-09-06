@@ -1,4 +1,5 @@
-﻿import { calendarBookingHref } from "@/lib/bookings/calendar-booking-href";
+﻿import { isInternalBroadcastCtaRoute } from "@/lib/admin/broadcast-cta";
+import { calendarBookingHref } from "@/lib/bookings/calendar-booking-href";
 
 export const CANONICAL_NOTIFICATION_KINDS = [
   "booking_request",
@@ -21,6 +22,7 @@ export const CANONICAL_NOTIFICATION_KINDS = [
   "manual_payment_confirmed",
   "manual_payment_denied",
   "manual_payment_resolved_reported",
+  "admin_broadcast",
 ] as const;
 
 export type CanonicalNotificationKind =
@@ -65,6 +67,9 @@ export type CanonicalNotificationPayload = {
   amount?: string | null;
   gateway?: string | null;
   payment_method?: string | null;
+  cta_route?: string | null;
+  cta_label?: string | null;
+  is_test?: boolean | null;
 };
 
 export function isCanonicalNotificationKind(
@@ -85,7 +90,9 @@ export function notificationDedupeKey(
   }
 ): string | null {
   if (kind === "chat_message") return ids.messageId?.trim() || null;
-  if (kind === "broadcast_alert") return ids.broadcastId?.trim() || null;
+  if (kind === "broadcast_alert" || kind === "admin_broadcast") {
+    return ids.broadcastId?.trim() || null;
+  }
 
   if (kind === "payment_required") {
     return ids.sessionId?.trim() || ids.bookingId?.trim() || null;
@@ -128,6 +135,11 @@ export function notificationHrefForKind(
     return "/parent/dashboard";
   }
   if (kind === "broadcast_alert") return "/sitter/dashboard";
+  if (kind === "admin_broadcast") {
+    const ctaRoute = String(payload.cta_route ?? "").trim();
+    if (ctaRoute && isInternalBroadcastCtaRoute(ctaRoute)) return ctaRoute;
+    return role === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
+  }
 
   if (kind.startsWith("booking_cancellation")) {
     return calendarBookingHref(
