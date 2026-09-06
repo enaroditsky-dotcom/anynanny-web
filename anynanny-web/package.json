@@ -43,7 +43,8 @@
     "test:settings-legal-documents": "npx --yes tsx scripts/test-settings-legal-documents.ts",
     "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts",
     "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts",
-    "test:didit-kyc": "npx --yes tsx scripts/test-didit-kyc.ts"
+    "test:didit-kyc": "npx --yes tsx scripts/test-didit-kyc.ts",
+    "test:admin-broadcast": "npx --yes tsx scripts/test-admin-broadcast.ts"
   },
   "dependencies": {
     "@didit-protocol/sdk-web": "^0.3.0",

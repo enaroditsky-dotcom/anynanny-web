@@ -93,8 +93,19 @@ assert.deepEqual(
     "manual_payment_reported",
     "manual_payment_confirmed",
     "manual_payment_denied",
-    "manual_payment_resolved_reported"
+    "manual_payment_resolved_reported",
+    "admin_broadcast"
   ]
+);
+assert.equal(isCanonicalNotificationKind("admin_broadcast"), true);
+assert.equal(notificationDedupeKey("admin_broadcast", { broadcastId: "br1" }), "br1");
+assert.equal(
+  notificationHrefForKind("admin_broadcast", "parent", { cta_route: "/parent/profile" }),
+  "/parent/profile"
+);
+assert.equal(
+  notificationHrefForKind("admin_broadcast", "sitter", { cta_route: "https://evil.example" }),
+  "/sitter/dashboard"
 );
 assert.ok(DEFERRED_NOTIFICATION_KINDS.includes("confirm_start_required"));
 assert.ok(DEFERRED_NOTIFICATION_KINDS.includes("confirm_end_required"));

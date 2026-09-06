@@ -48,6 +48,14 @@ export function AdminTopBar() {
           >
             Chat Logs
           </Link>
+          <Link
+            href="/admin/broadcast"
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              pathname === "/admin/broadcast" ? "bg-navy-800 text-white" : "bg-slate-100 text-navy-800"
+            }`}
+          >
+            הודעות מערכת
+          </Link>
         </nav>
 
         <button

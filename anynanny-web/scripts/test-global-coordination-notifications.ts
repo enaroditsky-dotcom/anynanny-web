@@ -159,11 +159,14 @@ const chromelessReturn = shell.slice(shell.indexOf("if (chromeless)"), shell.ind
 assert.doesNotMatch(chromelessReturn, /GlobalCoordinationNotifications/);
 
 const ui = read("components/notifications/global-coordination-notifications.tsx");
+assert.match(ui, /fetchUnreadAdminBroadcastNotifications/);
 assert.doesNotMatch(ui, /fetchUnreadCoordinationNotifications/);
 assert.match(ui, /event: "INSERT"/);
 assert.match(ui, /applyOperationalEventPopupChange/);
 assert.match(ui, /isOperationalCardsSuppressedRoute/);
-assert.match(ui, /isOperationalCardsSuppressedRoute\(pathname\)\) return null/);
+assert.match(ui, /visibleItems/);
+assert.match(ui, /isAdminBroadcastNotificationKind/);
+assert.doesNotMatch(ui, /isOperationalCardsSuppressedRoute\(pathname\)\) return null/);
 assert.match(ui, /markNotificationsReadBestEffort/);
 assert.match(ui, /dismissPopup/);
 assert.doesNotMatch(ui, /hideForSession|minimizeForSession|הסתר כרגע/);
