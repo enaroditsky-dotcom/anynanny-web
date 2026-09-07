@@ -297,6 +297,7 @@ const modal = read("components/parent/book-shift-modal.tsx");
 assert.match(modal, /requestedShift\?: RequestedShiftWindow \| null/);
 assert.match(modal, /lockedShift \? lockedShift\.startIso : validated\.startIso/);
 assert.match(modal, /formatRequestedShiftTimeRange/);
+assert.match(modal, /BookingTimeRange/);
 assert.match(modal, /lockedShift \? \(/);
 assert.match(modal, /type="date"/);
 

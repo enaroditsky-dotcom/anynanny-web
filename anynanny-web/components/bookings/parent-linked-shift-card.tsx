@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { MessageCircle, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import ChatInterface from "@/components/chat/ChatInterface";
 import type { TodaysLinkedBookingView } from "@/lib/bookings/todays-linked-booking";
 
@@ -30,7 +31,9 @@ export function ParentLinkedShiftCard({ booking }: Props) {
         {sitterName}
         {sitterCode ? <span className="font-semibold text-slate-600"> ({sitterCode})</span> : null}
       </p>
-      <p className="mt-0.5 text-xs tabular-nums text-slate-600">{booking.schedule_label}</p>
+      <p className="mt-0.5 text-xs tabular-nums text-slate-600">
+        <BookingScheduleText label={booking.schedule_label} />
+      </p>
       {waitingParent ? (
         <p className="mt-2 text-xs font-semibold text-amber-900">
           הבייביסיטר סימנה הגעה — ניתן לאשר התחלה ב-Double-Shake למטה.

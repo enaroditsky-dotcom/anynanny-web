@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { X } from "lucide-react";
+import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import { CANCELLATION_COPY, formatCancellationShiftWhen } from "@/lib/bookings/cancellation-request";
 import type { CancellationAttentionItem } from "@/lib/bookings/cancellation-attention";
 
@@ -51,7 +52,9 @@ export function ShiftCancellationApprovedModal({
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-700">{CANCELLATION_COPY.approvedBody}</p>
         <p className="mt-3 text-sm font-semibold text-navy-header">{item.partnerName}</p>
-        <p className="mt-0.5 text-sm font-medium tabular-nums text-slate-600">{whenLabel}</p>
+        <p className="mt-0.5 text-sm font-medium tabular-nums text-slate-600">
+          <BookingScheduleText label={whenLabel} />
+        </p>
         <p className="mt-4 text-sm font-semibold text-rose-800">{CANCELLATION_COPY.closeHint}</p>
 
         {error ? (

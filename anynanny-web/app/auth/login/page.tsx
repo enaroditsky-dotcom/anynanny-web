@@ -6,6 +6,7 @@ import Link from "next/link";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { PageBackButton, PageBackRow } from "@/components/navigation/page-back-link";
 import { navigateAfterAuth } from "@/lib/auth/redirect-after-sign-in";
+import { resolveValidAuthUser } from "@/lib/auth/valid-session";
 import {
   readLastUsedEmail,
   saveLastUsedEmail,
@@ -87,15 +88,14 @@ function LoginInner() {
       if (callback.isRecoveryType) {
         return;
       }
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (cancelled || !user) return;
+      const resolved = await resolveValidAuthUser(supabase);
+      if (cancelled || !resolved.ok) return;
       setBypassLogin(true);
       await navigateAfterAuth(
         supabase,
-        user.id,
+        resolved.user.id,
         nextPath,
-        user.email ?? null,
+        resolved.user.email ?? null,
         roleFromQuery === "parent" || roleFromQuery === "sitter" ? roleFromQuery : null
       );
     };
@@ -117,14 +117,18 @@ function LoginInner() {
         if (callback.isRecoveryType) {
           return;
         }
-        setBypassLogin(true);
-        void navigateAfterAuth(
-          supabase,
-          session.user.id,
-          nextPath,
-          session.user.email ?? null,
-          roleFromQuery === "parent" || roleFromQuery === "sitter" ? roleFromQuery : null
-        );
+        void (async () => {
+          const resolved = await resolveValidAuthUser(supabase);
+          if (cancelled || !resolved.ok) return;
+          setBypassLogin(true);
+          await navigateAfterAuth(
+            supabase,
+            resolved.user.id,
+            nextPath,
+            resolved.user.email ?? null,
+            roleFromQuery === "parent" || roleFromQuery === "sitter" ? roleFromQuery : null
+          );
+        })();
       }
     });
 

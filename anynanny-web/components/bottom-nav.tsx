@@ -16,6 +16,7 @@ type NavItem = {
   match: (path: string) => boolean;
   Icon: typeof Home;
   badgeKey?: "messages" | "wallet";
+  tour?: "messages" | "personal-area" | "settings";
 };
 
 const parentSideItems: NavItem[] = [
@@ -30,20 +31,23 @@ const parentSideItems: NavItem[] = [
     label: "הודעות",
     match: (p) => p.startsWith("/parent/messages") || p.startsWith("/parent/chat/"),
     Icon: MessageCircle,
-    badgeKey: "messages"
+    badgeKey: "messages",
+    tour: "messages"
   },
   {
     href: "/parent/profile",
     label: "אזור אישי",
     match: (p) => p.startsWith("/parent/profile") || p.startsWith("/parent/wallet"),
     Icon: UserRound,
-    badgeKey: "wallet"
+    badgeKey: "wallet",
+    tour: "personal-area"
   },
   {
     href: "/parent/settings",
     label: "הגדרות",
     match: (p) => p.startsWith("/parent/settings") || p.startsWith("/parent/faq"),
-    Icon: Settings
+    Icon: Settings,
+    tour: "settings"
   }
 ];
 
@@ -88,7 +92,7 @@ function NavLink({
   hasWalletUpdate: boolean;
   clearWalletNotification: () => void;
 }) {
-  const { href, label, match, Icon, badgeKey } = item;
+  const { href, label, match, Icon, badgeKey, tour } = item;
   const active = match(pathname);
   const showMessageBadge = badgeKey === "messages" && hasUnreadMessages;
   const showWalletBadge = badgeKey === "wallet" && hasWalletUpdate;
@@ -97,6 +101,7 @@ function NavLink({
   return (
     <Link
       href={href}
+      {...(tour ? { "data-tour": tour } : {})}
       onClick={() => {
         if (badgeKey === "wallet") clearWalletNotification();
       }}
@@ -155,6 +160,7 @@ function AnyNannyNowFab({ active }: { active: boolean }) {
   return (
     <Link
       href="/parent/broadcast"
+      data-tour="anynanny-now"
       aria-label="AnyNanny Now"
       className="group relative z-10 -mt-7 flex w-full flex-col items-center justify-end gap-1 outline-none"
     >

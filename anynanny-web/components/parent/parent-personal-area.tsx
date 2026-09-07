@@ -669,7 +669,9 @@ export function ParentPersonalArea() {
         </p>
       ) : null}
 
-      <IdentityPersonalSection role="parent" userId={form.id} />
+      <div data-tour="identity-verification">
+        <IdentityPersonalSection role="parent" userId={form.id} />
+      </div>
 
       <PersonalAreaSection
         title="פרטים אישיים"

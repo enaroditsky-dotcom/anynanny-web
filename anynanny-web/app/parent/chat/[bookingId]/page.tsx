@@ -24,7 +24,9 @@ export default function ParentChatPage() {
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
-      <BookingChatHeader bookingId={bookingId} backHref="/parent/messages" />
+      <div data-tour="messages-chat">
+        <BookingChatHeader bookingId={bookingId} backHref="/parent/messages" />
+      </div>
       <BookingChat bookingId={bookingId} messagesHref="/parent/messages" />
     </main>
   );

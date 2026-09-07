@@ -3,7 +3,7 @@
 import { CalendarCheck2, CalendarX2, X } from "lucide-react";
 import type { ParentBookingResponseNotification } from "@/lib/bookings/parent-booking-response-notifications";
 import { parentBookingResponseMessage } from "@/lib/bookings/parent-booking-response-notifications";
-import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
+import { BookingScheduleLabel } from "@/components/bookings/booking-schedule-label";
 
 export type ParentBookingResponseModalProps = {
   notification: ParentBookingResponseNotification | null;
@@ -20,7 +20,6 @@ export function ParentBookingResponseModal({
 
   const { title, body, variant } = parentBookingResponseMessage(notification);
   const isSuccess = variant === "success";
-  const scheduleLabel = formatBookingSchedule(notification);
 
   return (
     <div
@@ -77,7 +76,9 @@ export function ParentBookingResponseModal({
             >
               {body}
             </p>
-            <p className="mt-2 text-xs font-medium tabular-nums text-slate-600">{scheduleLabel}</p>
+            <p className="mt-2 text-xs font-medium tabular-nums text-slate-600">
+              <BookingScheduleLabel booking={notification} />
+            </p>
             {isSuccess ? (
               <p className="mt-1 text-xs leading-snug text-slate-500">
                 המשמרת תופיע ביומן שלך.

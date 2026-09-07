@@ -202,6 +202,7 @@ assert.match(sql, /revoke all on function public\.withdraw_pending_booking\(uuid
 // UI surfaces
 assert.match(parentDash, /PendingWithdrawButton/);
 assert.match(parentDash, /PendingNoResponseReminderModal/);
+assert.match(parentDash, /BookingScheduleLabel/);
 assert.match(parentCalendar, /onWithdrawPending/);
 assert.match(parentCalendar, /PendingNoResponseReminderModal/);
 assert.match(calendarViews, /PendingWithdrawButton/);

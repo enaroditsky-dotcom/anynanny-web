@@ -16,6 +16,7 @@ import { ensureProfile } from "@/lib/auth/supabase-profile";
 import { loadProductProfileOwnership, secondRoleHref } from "@/lib/auth/product-profiles";
 import { resolveNamePartsFromAuthUser } from "@/lib/user/greeting-display-name";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { resolveValidAuthUser } from "@/lib/auth/valid-session";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { ensureSitterProfileRowForUser } from "@/lib/sitter/sitter-profile";
 import { PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
@@ -40,17 +41,17 @@ function RoleSelectionInner() {
     }
 
     void (async () => {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
+      const resolved = await resolveValidAuthUser(supabase);
 
       if (cancelled) return;
 
-      if (!user) {
+      if (!resolved.ok) {
         setSessionGate("anon");
         router.replace(AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT);
         return;
       }
+
+      const user = resolved.user;
 
       if (isNannyOnboardingBypassEmail(user.email) || isSitterTestBypassEmail(user.email)) {
         const dest = await resolvePostAuthPath(supabase, user.id, nextParam, { userEmail: user.email });
@@ -85,13 +86,12 @@ function RoleSelectionInner() {
       setBusy(role);
       setMessage("");
       try {
-        const {
-          data: { user }
-        } = await supabase.auth.getUser();
-        if (!user) {
+        const resolved = await resolveValidAuthUser(supabase);
+        if (!resolved.ok) {
           router.replace(AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT);
           return;
         }
+        const user = resolved.user;
 
         const ownership = await loadProductProfileOwnership(supabase, user.id);
         if (ownership?.hasParent || ownership?.hasSitter) {

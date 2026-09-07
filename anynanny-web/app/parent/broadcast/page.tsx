@@ -112,6 +112,7 @@ export default function ParentBroadcastSetupPage() {
 
         <div className="-mx-4 mt-6 w-[calc(100%+2rem)] px-0.5 text-center">
           <h1
+            data-tour="anynanny-now-explain"
             className="text-center text-[23px] font-medium not-italic leading-[1.25] [word-break:keep-all] max-[429px]:whitespace-normal min-[430px]:whitespace-nowrap min-[430px]:text-[24px] min-[480px]:text-[25px]"
             style={{
               fontStyle: "normal",

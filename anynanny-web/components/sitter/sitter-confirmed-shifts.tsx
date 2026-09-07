@@ -10,6 +10,7 @@ import { SitterParentProfilePreview } from "@/components/sitter/sitter-parent-pr
 import { isBookingDateToday } from "@/lib/bookings/booking-date-utils";
 import { CANCELLATION_COPY, type CancellationShiftLike } from "@/lib/bookings/cancellation-request";
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
+import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import {
   fetchConfirmedShiftsForSitter,
   type ConfirmedShiftView
@@ -92,7 +93,9 @@ function ShiftCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-[#001F3F]">{shift.parent_full_name ?? "הורה"}</p>
-          <p className="mt-1 text-xs font-medium text-slate-600 tabular-nums">{shift.schedule_label}</p>
+          <p className="mt-1 text-xs font-medium text-slate-600 tabular-nums">
+            <BookingScheduleText label={shift.schedule_label} />
+          </p>
         </div>
         <CalendarClock className="h-5 w-5 shrink-0 text-[#001F3F]/70" aria-hidden />
       </div>

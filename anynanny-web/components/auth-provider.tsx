@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { resetRedirectDedupe } from "@/lib/auth/redirect-after-sign-in";
 import { resolveRoleForUser } from "@/lib/auth/supabase-profile";
+import { resolveValidAuthUser } from "@/lib/auth/valid-session";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { readSupabaseErrorMessage } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
@@ -37,11 +38,11 @@ async function loadAuthState(): Promise<{
     return { user: null, displayName: null, effectiveRole: null, suspendedAt: null };
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
+  const resolved = await resolveValidAuthUser(supabase);
+  if (!resolved.ok) {
     return { user: null, displayName: null, effectiveRole: null, suspendedAt: null };
   }
+  const user = resolved.user;
 
   const metaFirst = typeof user.user_metadata?.first_name === "string" ? user.user_metadata.first_name.trim() : "";
   const metaLast = typeof user.user_metadata?.last_name === "string" ? user.user_metadata.last_name.trim() : "";

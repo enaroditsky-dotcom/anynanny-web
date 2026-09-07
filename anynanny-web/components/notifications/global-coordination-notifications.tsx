@@ -13,6 +13,7 @@ import {
   X
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
 import {
   applyOperationalEventPopupChange,
@@ -263,7 +264,9 @@ export function GlobalCoordinationNotifications() {
                   <div className="min-w-0 flex-1">
                     <h2 className="text-sm font-bold leading-snug">{item.title}</h2>
                     {schedule ? (
-                      <p className="mt-1 text-[12px] font-medium tabular-nums text-current/80">{schedule}</p>
+                      <p className="mt-1 text-[12px] font-medium tabular-nums text-current/80">
+                        <BookingScheduleText label={schedule} />
+                      </p>
                     ) : null}
                     {item.body && item.body !== item.title ? (
                       <p className="mt-1 break-words text-[12px] leading-snug text-current/75">{item.body}</p>
