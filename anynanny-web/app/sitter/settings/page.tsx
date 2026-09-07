@@ -3,6 +3,7 @@ import { LogoutButton } from "@/components/account/logout-button";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section";
 import { SettingsFaqEntry } from "@/components/settings/settings-faq-entry";
+import { SitterTourSettingsEntry } from "@/components/product-tour/sitter-tour-settings-entry";
 import { BlockedUsersSection } from "@/components/safety/blocked-users-section";
 import { CommunityResourcesSection } from "@/components/settings/community-resources-section";
 import { FileText, Shield, ExternalLink } from "lucide-react";
@@ -29,6 +30,8 @@ export default function SitterSettingsPage() {
       <BlockedUsersSection />
 
       <SettingsFaqEntry href="/sitter/faq" />
+
+      <SitterTourSettingsEntry />
 
       <CommunityResourcesSection role="sitter" />
 

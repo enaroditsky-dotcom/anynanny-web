@@ -1678,6 +1678,7 @@ export default function SitterShiftsPage() {
       subtitle="בקשות ממתינות לאישור, יומן משמרות מאושרות והיסטוריית ביצוע בפועל."
     >
       <div
+        data-tour="sitter-shift-board"
         className="mx-auto flex w-full max-w-md flex-col text-right"
         dir="rtl"
       >
