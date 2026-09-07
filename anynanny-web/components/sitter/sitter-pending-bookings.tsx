@@ -30,9 +30,9 @@ import {
   type BookingRow
 } from "@/lib/bookings/constants";
 
+import { BookingScheduleLabel } from "@/components/bookings/booking-schedule-label";
 import {
   fetchPendingBookingsForSitter,
-  formatBookingSchedule,
   updateBookingStatus,
   type PendingBookingView
 } from "@/lib/bookings/sitter-pending-bookings";
@@ -853,9 +853,7 @@ export function SitterPendingBookings({
                     </p>
 
                     <p className="mt-1 text-xs font-medium tabular-nums text-slate-600">
-                      {formatBookingSchedule(
-                        booking
-                      )}
+                      <BookingScheduleLabel booking={booking} />
                     </p>
                   </div>
 

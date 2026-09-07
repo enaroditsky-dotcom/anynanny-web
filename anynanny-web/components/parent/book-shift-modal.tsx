@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Calendar, CheckCircle2, Clock, X } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { BookingTimeRange } from "@/components/bookings/booking-schedule-label";
 import { createBooking } from "@/lib/bookings/create-booking";
 import { dispatchNewBookingCreated } from "@/lib/bookings/new-booking-reset";
 import {
@@ -310,7 +311,9 @@ export function BookShiftModal({
                 </div>
                 <div className="flex flex-row-reverse items-center gap-3">
                   <Clock className="h-5 w-5 shrink-0 text-[#001F3F]" aria-hidden />
-                  <p className="text-base font-bold tabular-nums text-[#001F3F]">{lockedTimeLabel}</p>
+                  <p className="text-base font-bold tabular-nums text-[#001F3F]">
+                    <BookingTimeRange>{lockedTimeLabel}</BookingTimeRange>
+                  </p>
                 </div>
               </div>
             ) : (

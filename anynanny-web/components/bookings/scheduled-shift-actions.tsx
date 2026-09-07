@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import {
   CANCELLATION_COPY,
   formatCancellationShiftWhen,
@@ -78,7 +79,9 @@ export function ScheduledShiftActions({
         <p className="text-xs text-slate-600">
           {roleHint === requesterName ? `${requesterName} ביקש/ה לבטל את המשמרת.` : `${roleHint} ביקש/ה לבטל את המשמרת.`}
         </p>
-        <p className="text-xs font-medium tabular-nums text-slate-500">{whenLabel}</p>
+        <p className="text-xs font-medium tabular-nums text-slate-500">
+          <BookingScheduleText label={whenLabel} />
+        </p>
         {shift.cancellationMessage ? (
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
             {shift.cancellationMessage}

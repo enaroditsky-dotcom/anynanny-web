@@ -27,6 +27,7 @@ import {
   calendarDateButtonAria,
   defaultCalendarSelectedIso
 } from "@/lib/bookings/calendar-date-cell";
+import { BookingScheduleText, BookingTimeRange } from "@/components/bookings/booking-schedule-label";
 import { CalendarDayNumber } from "@/components/calendar/calendar-day-number";
 import { PendingWithdrawButton } from "@/components/bookings/pending-withdraw-button";
 import { ScheduledShiftActions } from "@/components/bookings/scheduled-shift-actions";
@@ -470,14 +471,19 @@ function ShiftCard({
               <span className="min-w-0 text-right">{shift.partnerAddress.trim()}</span>
             </p>
           ) : null}
-          <p className="mt-0.5 text-sm font-normal text-slate-600 tabular-nums">{shift.scheduleLabel}</p>
+          <p className="mt-0.5 text-sm font-normal text-slate-600 tabular-nums">
+            <BookingScheduleText label={shift.scheduleLabel} />
+          </p>
         </div>
       </div>
       {!compact ? (
         <div className="mt-2 flex items-center justify-end text-xs text-slate-500">
           <span className="inline-flex items-center gap-1 tabular-nums">
             <Clock className="h-3.5 w-3.5" aria-hidden />
-            {formatClockTime(shift.startTime)} – {formatClockTime(shift.endTime)}
+            <BookingTimeRange
+              start={formatClockTime(shift.startTime)}
+              end={formatClockTime(shift.endTime)}
+            />
           </span>
         </div>
       ) : null}
@@ -567,7 +573,10 @@ export function TodayGridView({
                 >
                   <p className="truncate text-xs font-semibold text-navy-header">{shift.partnerName}</p>
                   <p className="truncate text-xs font-normal text-slate-600 tabular-nums">
-                    {formatClockTime(shift.startTime)} – {formatClockTime(shift.endTime)}
+                    <BookingTimeRange
+                      start={formatClockTime(shift.startTime)}
+                      end={formatClockTime(shift.endTime)}
+                    />
                   </p>
                 </div>
               );

@@ -11,8 +11,8 @@ import {
   SITTER_OVERLAP_APPROVE_MESSAGE
 } from "@/lib/bookings/sitter-shift-overlap";
 
+import { BookingScheduleLabel } from "@/components/bookings/booking-schedule-label";
 import {
-  formatBookingSchedule,
   updateBookingStatus,
   type PendingBookingView
 } from "@/lib/bookings/sitter-pending-bookings";
@@ -301,10 +301,7 @@ export function SitterShiftApprovalCard({
         ) : null}
 
         <p className="text-right text-sm font-semibold text-slate-700">
-          {booking.schedule_label ||
-            formatBookingSchedule(
-              booking
-            )}
+          <BookingScheduleLabel booking={booking} />
         </p>
 
         <p className="text-right text-xs leading-relaxed text-slate-600">

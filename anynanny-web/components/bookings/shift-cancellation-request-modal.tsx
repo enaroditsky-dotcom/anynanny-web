@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import {
   CANCELLATION_COPY,
   CANCELLATION_MESSAGE_MAX_LENGTH,
@@ -58,7 +59,9 @@ export function ShiftCancellationRequestModal({
         <h2 id={titleId} className="text-lg font-bold text-navy-header">
           {CANCELLATION_COPY.modalTitle}
         </h2>
-        <p className="mt-2 text-sm font-semibold tabular-nums text-navy-header">{whenLabel}</p>
+        <p className="mt-2 text-sm font-semibold tabular-nums text-navy-header">
+          <BookingScheduleText label={whenLabel} />
+        </p>
         <p className="mt-0.5 text-sm font-medium text-slate-600">{partnerName}</p>
         <p className="mt-3 text-sm leading-relaxed text-slate-600">{CANCELLATION_COPY.explanation}</p>
 

@@ -93,7 +93,8 @@ const modified = {
   "cancel-approve": read("components/bookings/shift-cancellation-approve-modal.tsx"),
   "pending-reminder": read("components/bookings/pending-no-response-reminder-modal.tsx"),
   "booking-response": read("components/parent/parent-booking-response-modal.tsx"),
-  "hyp-checkout": read("components/billing/HypCheckoutFrame.tsx")
+  "hyp-checkout": read("components/billing/HypCheckoutFrame.tsx"),
+  "parent-tour": read("components/product-tour/parent-tour-modals.tsx")
 } as const;
 
 for (const [label, source] of Object.entries(modified)) {

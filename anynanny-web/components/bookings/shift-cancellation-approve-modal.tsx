@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import {
   CANCELLATION_COPY,
   formatCancellationShiftWhen,
@@ -50,7 +51,9 @@ export function ShiftCancellationApproveModal({
         <h2 id={titleId} className="text-lg font-bold text-navy-header">
           {CANCELLATION_COPY.approveConfirmTitle}
         </h2>
-        <p className="mt-2 text-sm font-semibold tabular-nums text-navy-header">{whenLabel}</p>
+        <p className="mt-2 text-sm font-semibold tabular-nums text-navy-header">
+          <BookingScheduleText label={whenLabel} />
+        </p>
         <p className="mt-0.5 text-sm font-medium text-slate-600">{partnerName}</p>
 
         {error ? (

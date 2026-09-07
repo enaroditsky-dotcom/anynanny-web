@@ -44,6 +44,9 @@
     "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts",
     "test:parent-search-verified-only": "npx --yes tsx scripts/test-parent-search-verified-only.ts",
     "test:parent-search-filter-restore": "npx --yes tsx scripts/test-parent-search-filter-restore.ts",
+    "test:long-primary-cta": "npx --yes tsx scripts/test-long-primary-cta.ts",
+    "test:logout-button-unplug": "npx --yes tsx scripts/test-logout-button-unplug.ts",
+    "test:parent-product-tour": "npx --yes tsx scripts/test-parent-product-tour.ts",
     "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts",
     "test:didit-kyc": "npx --yes tsx scripts/test-didit-kyc.ts",
     "test:admin-broadcast": "npx --yes tsx scripts/test-admin-broadcast.ts"

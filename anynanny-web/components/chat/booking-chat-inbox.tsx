@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { fetchBookingChatInboxForRole, type BookingChatInboxRow } from "@/lib/chat/booking-messages";
 import { chatLifecycleFromInboxRow, type ChatLifecycle } from "@/lib/chat/chat-lifecycle";
@@ -18,6 +19,7 @@ type BookingChatInboxProps = {
   emptyDescription: string;
   emptyActionHref?: string;
   emptyActionLabel?: string;
+  tourAnchor?: string;
 };
 
 function ConversationCard({
@@ -58,7 +60,9 @@ function ConversationCard({
             </span>
           ) : null}
         </span>
-        <span className="mt-0.5 block truncate text-xs text-slate-500">{row.schedule_label}</span>
+        <span className="mt-0.5 block truncate text-xs text-slate-500">
+          <BookingScheduleText label={row.schedule_label} />
+        </span>
         {lifecycle.label ? (
           <span
             className={`mt-0.5 block text-[11px] font-medium ${
@@ -117,7 +121,8 @@ function BookingChatInbox({
   emptyPartnerLabel,
   emptyDescription,
   emptyActionHref,
-  emptyActionLabel
+  emptyActionLabel,
+  tourAnchor
 }: BookingChatInboxProps) {
   const { isLoading, signedIn, effectiveRole } = useAuth();
   const [inbox, setInbox] = useState<BookingChatInboxRow[]>([]);
@@ -170,7 +175,7 @@ function BookingChatInbox({
 
   return (
     <>
-      <div className="space-y-2">
+      <div {...(tourAnchor ? { "data-tour": tourAnchor } : {})} className="space-y-2">
         <PageBackRow>
           <PageBackLink href={dashboardHref} />
         </PageBackRow>
@@ -222,6 +227,7 @@ export function ParentBookingChatInbox() {
       emptyDescription="שלחו הודעה ממשמרת פעילה או מפרופיל בייביסיטר לאחר תיאום משמרת."
       emptyActionHref="/parent/search"
       emptyActionLabel="לחיפוש בייביסיטרים"
+      tourAnchor="messages-chat"
     />
   );
 }

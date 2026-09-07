@@ -16,7 +16,13 @@ import {
   validateParentSearchCriteria,
   type ParentSearchMandatoryField
 } from "@/lib/sitter/parent-search-validation";
+import { LongPrimaryCtaContent } from "@/components/ui/long-primary-cta";
 import { RequiredFieldMark } from "@/components/ui/required-field-mark";
+import {
+  LONG_PRIMARY_CTA_CLASS,
+  LONG_PRIMARY_CTA_ICON_CLASS,
+  PARENT_SITTER_SEARCH_CTA_LABEL
+} from "@/lib/ui/long-primary-cta";
 
 function ParentSearchContent() {
   const router = useRouter();
@@ -116,15 +122,16 @@ function ParentSearchContent() {
               </p>
             ) : null}
 
-            <div className="flex justify-center pt-1">
+            <div className="pt-1">
               <button
                 type="button"
                 disabled={navigating}
                 onClick={handleSearch}
-                className="inline-flex w-fit min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#001F3F] px-6 py-3 text-base font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
+                className={LONG_PRIMARY_CTA_CLASS}
               >
-                <Search className="h-4 w-4 shrink-0" aria-hidden />
-                חפש בייביסיטר
+                <LongPrimaryCtaContent icon={<Search className={LONG_PRIMARY_CTA_ICON_CLASS} />}>
+                  {PARENT_SITTER_SEARCH_CTA_LABEL}
+                </LongPrimaryCtaContent>
               </button>
             </div>
           </div>

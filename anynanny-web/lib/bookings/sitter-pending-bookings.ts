@@ -10,7 +10,15 @@ export type PendingBookingView = BookingRow & {
   rejection_note?: string | null;
 };
 
-export function formatBookingSchedule(booking: Pick<PendingBookingView, "booking_date" | "start_time" | "end_time">): string {
+export type BookingScheduleParts = {
+  dayLabel: string;
+  startLabel: string;
+  endLabel: string;
+};
+
+export function formatBookingScheduleParts(
+  booking: Pick<PendingBookingView, "booking_date" | "start_time" | "end_time">
+): BookingScheduleParts {
   const dayLabel = new Date(`${booking.booking_date}T12:00:00`).toLocaleDateString("he-IL", {
     weekday: "short",
     day: "numeric",
@@ -24,7 +32,26 @@ export function formatBookingSchedule(booking: Pick<PendingBookingView, "booking
     hour: "2-digit",
     minute: "2-digit"
   });
-  return `${dayLabel} · ${startLabel}–${endLabel}`;
+  return { dayLabel, startLabel, endLabel };
+}
+
+/** Logical `HH:mm–HH:mm` (start then end). Visual LTR isolation belongs in the display component. */
+export function formatBookingTimeRangeText(startLabel: string, endLabel: string): string {
+  return `${startLabel}–${endLabel}`;
+}
+
+export function formatBookingSchedule(
+  booking: Pick<PendingBookingView, "booking_date" | "start_time" | "end_time">
+): string {
+  const { dayLabel, startLabel, endLabel } = formatBookingScheduleParts(booking);
+  return `${dayLabel} · ${formatBookingTimeRangeText(startLabel, endLabel)}`;
+}
+
+/** Split a mixed Hebrew/date + clock schedule so the time range can be rendered as an LTR isolate. */
+export function splitScheduleTimeRange(label: string): { prefix: string; timeRange: string } | null {
+  const match = label.match(/^(.*?)(\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2})\s*$/u);
+  if (!match?.[2]) return null;
+  return { prefix: match[1] ?? "", timeRange: match[2] };
 }
 
 export async function fetchPendingBookingsForSitter(

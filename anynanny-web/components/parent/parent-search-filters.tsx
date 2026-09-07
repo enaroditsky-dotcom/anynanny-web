@@ -175,7 +175,7 @@ export function ParentSearchFiltersBar({
   const endTimeInvalid = parentSearchFieldIsInvalid(invalidFields, "searchEndTime");
 
   return (
-    <section className="flex flex-col gap-4" dir="rtl">
+    <section data-tour="parent-search-filters" className="flex flex-col gap-4" dir="rtl">
       <div className={`${SECTION_SURFACE} grid grid-cols-2 items-start gap-3`}>
         <div className={PAIR_COL}>
           <FieldLabel>מספר ID</FieldLabel>
@@ -350,6 +350,7 @@ export function ParentSearchFiltersBar({
       </SearchLimitToggleCard>
 
       <div
+        data-tour="verified-only"
         className={`${SECTION_SURFACE} space-y-3 ${
           filters.verifiedOnly
             ? "border-[#C5A059]/70 ring-1 ring-[#C5A059]/30"

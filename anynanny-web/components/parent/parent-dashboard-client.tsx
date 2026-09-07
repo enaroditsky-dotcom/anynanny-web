@@ -21,7 +21,7 @@ import {
   isFutureConfirmedScheduleBooking,
   isFutureScheduledBooking
 } from "@/lib/bookings/booking-shift-ui";
-import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
+import { BookingScheduleLabel } from "@/components/bookings/booking-schedule-label";
 import { MissedShiftClarificationCard } from "@/components/bookings/missed-shift-clarification-card";
 import {
   isMissedShiftLifecycleStatus,
@@ -134,9 +134,16 @@ import {
   removeRealtimeChannel,
   subscribePostgresChanges
 } from "@/lib/supabase/subscribe-postgres-changes";
+import { LOGOUT_BUTTON_CLASS, LogoutButtonContent } from "@/components/account/logout-button";
 import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
+import { LongPrimaryCtaContent } from "@/components/ui/long-primary-cta";
 import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
-import { Calendar, Wallet, History, LogOut, Search, CheckCircle2, Clock, Star, User, X, Loader2 } from "lucide-react";
+import {
+  LONG_PRIMARY_CTA_CLASS,
+  LONG_PRIMARY_CTA_ICON_CLASS,
+  PARENT_SITTER_SEARCH_CTA_LABEL
+} from "@/lib/ui/long-primary-cta";
+import { Calendar, Wallet, History, Search, CheckCircle2, Clock, Star, User, X, Loader2 } from "lucide-react";
 import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 const BOOKING_LIVE_SELECT =
@@ -1949,9 +1956,9 @@ export function ParentDashboardClient({
     !awaitingEndApproval &&
     !inSettlement;
   const bookingStatus = normalizeStatus(activeBooking?.status);
-  const scheduledLabel =
+  const scheduledBooking =
     activeBooking?.booking_date && activeBooking?.start_time && activeBooking?.end_time
-      ? formatBookingSchedule(activeBooking)
+      ? activeBooking
       : null;
 
   const liveElapsedSeconds = useMemo(() => {
@@ -2238,7 +2245,10 @@ export function ParentDashboardClient({
       ) : null}
 
       <div className={`space-y-4 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
-        <div className="w-full min-w-0 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 space-y-3">
+        <div
+          data-tour="parent-home"
+          className="w-full min-w-0 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 space-y-3"
+        >
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
@@ -2537,8 +2547,10 @@ export function ParentDashboardClient({
                   <p className="text-xs text-emerald-800/80">
                     ההזמנה אושרה על ידי הבייביסיטר ותופיע ביומן שלך.
                   </p>
-                  {scheduledLabel ? (
-                    <p className="text-xs font-semibold text-emerald-900">{scheduledLabel}</p>
+                  {scheduledBooking ? (
+                    <p className="text-xs font-semibold text-emerald-900">
+                      <BookingScheduleLabel booking={scheduledBooking} />
+                    </p>
                   ) : null}
                   <Link
                     href="/parent/calendar"
@@ -2554,8 +2566,10 @@ export function ParentDashboardClient({
                     <Clock className="h-5 w-5" />
                   </div>
                   <p className="text-sm font-bold text-amber-900">בקשה עתידית ממתינה לאישור</p>
-                  {scheduledLabel ? (
-                    <p className="text-xs font-medium text-amber-900/80">{scheduledLabel}</p>
+                  {scheduledBooking ? (
+                    <p className="text-xs font-medium text-amber-900/80">
+                      <BookingScheduleLabel booking={scheduledBooking} />
+                    </p>
                   ) : null}
                   {scheduledBookingId ? (
                     <PendingWithdrawButton
@@ -2610,10 +2624,12 @@ export function ParentDashboardClient({
               <div className="space-y-2 pt-1">
                 <Link
                   href="/parent/search"
-                  className="flex items-center justify-center gap-1.5 rounded-xl bg-[#001F3F] py-3 px-2 text-xs font-bold text-white shadow-md transition hover:bg-[#001F3F]/90"
+                  data-tour="parent-search"
+                  className={LONG_PRIMARY_CTA_CLASS}
                 >
-                  <Search className="h-4 w-4" />
-                  חיפוש נני
+                  <LongPrimaryCtaContent icon={<Search className={LONG_PRIMARY_CTA_ICON_CLASS} />}>
+                    {PARENT_SITTER_SEARCH_CTA_LABEL}
+                  </LongPrimaryCtaContent>
                 </Link>
               </div>
 
@@ -2635,10 +2651,9 @@ export function ParentDashboardClient({
                     setBroadcastMinimized(false);
                     if (supabase) void supabase.auth.signOut().then(() => (window.location.href = "/login"));
                   }}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50/30 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 shadow-2xs"
+                  className={LOGOUT_BUTTON_CLASS}
                 >
-                  <LogOut className="h-4 w-4" />
-                  התנתקות
+                  <LogoutButtonContent />
                 </button>
               </div>
             </>
