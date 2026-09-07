@@ -24,8 +24,10 @@ export default function SitterChatPage() {
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
-      <BookingChatHeader bookingId={bookingId} backHref="/sitter/messages" />
-      <BookingChat bookingId={bookingId} messagesHref="/sitter/messages" />
+      <div data-tour="sitter-messages-chat">
+        <BookingChatHeader bookingId={bookingId} backHref="/sitter/messages" />
+        <BookingChat bookingId={bookingId} messagesHref="/sitter/messages" />
+      </div>
     </main>
   );
 }

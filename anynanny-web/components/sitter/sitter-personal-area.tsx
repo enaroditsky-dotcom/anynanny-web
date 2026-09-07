@@ -790,7 +790,9 @@ export function SitterPersonalArea({ userId }: Props) {
         </p>
       ) : null}
 
-      <IdentityPersonalSection role="sitter" userId={userId} />
+      <div data-tour="sitter-identity-verification">
+        <IdentityPersonalSection role="sitter" userId={userId} />
+      </div>
 
       <PersonalAreaSection
         title="פרטים אישיים"
@@ -1002,7 +1004,9 @@ export function SitterPersonalArea({ userId }: Props) {
         </p>
       </PersonalAreaSection>
 
-      <SitterManualReceivingDestinationsSection sitterId={userId} />
+      <div data-tour="sitter-payment-methods">
+        <SitterManualReceivingDestinationsSection sitterId={userId} />
+      </div>
 
       <PersonalEditModal
         open={editKey != null}

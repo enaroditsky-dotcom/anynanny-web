@@ -115,7 +115,11 @@ export default function SitterWalletPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-12">
-      <div className="mx-auto w-full max-w-md space-y-5 px-4 pt-4" dir="rtl">
+      <div
+        data-tour="sitter-wallet-container"
+        className="mx-auto w-full max-w-md space-y-5 px-4 pt-4"
+        dir="rtl"
+      >
         <div className="flex w-full items-center justify-between gap-3 px-1" dir="ltr">
           <PageBackLink href="/sitter/dashboard" />
           <button

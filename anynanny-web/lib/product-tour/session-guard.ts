@@ -1,12 +1,16 @@
-import { PARENT_TOUR_KEY } from "@/lib/product-tour/constants";
+import { PARENT_TOUR_KEY, SITTER_TOUR_KEY } from "@/lib/product-tour/constants";
 import {
   applyParentTourPatch,
+  applyProductTourPatch,
   mergeParentTourRows,
-  type ParentTourTimestampPatch
+  mergeProductTourRows,
+  type ParentTourTimestampPatch,
+  type ProductTourTimestampPatch
 } from "@/lib/product-tour/tour-row";
-import type { UserProductTourRow } from "@/lib/product-tour/types";
+import type { ProductTourKey, UserProductTourRow } from "@/lib/product-tour/types";
 
 export const PARENT_TOUR_SESSION_KEY_PREFIX = "anynanny_parent_tour_choice:" as const;
+export const SITTER_TOUR_SESSION_KEY_PREFIX = "anynanny_sitter_tour_choice:" as const;
 
 export type ParentTourSessionStore = {
   getItem(key: string): string | null;
@@ -26,12 +30,12 @@ function defaultSessionStore(): ParentTourSessionStore | null {
   }
 }
 
-function asTourRow(value: unknown, userId: string): UserProductTourRow | null {
+function asTourRow(value: unknown, userId: string, tourKey: ProductTourKey): UserProductTourRow | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
   return {
     user_id: typeof row.user_id === "string" && row.user_id ? row.user_id : userId,
-    tour_key: PARENT_TOUR_KEY,
+    tour_key: tourKey,
     offered_at: typeof row.offered_at === "string" ? row.offered_at : null,
     started_at: typeof row.started_at === "string" ? row.started_at : null,
     completed_at: typeof row.completed_at === "string" ? row.completed_at : null,
@@ -48,7 +52,7 @@ export function readParentTourSession(
   try {
     const raw = store.getItem(parentTourSessionKey(userId));
     if (!raw) return null;
-    return asTourRow(JSON.parse(raw) as unknown, userId);
+    return asTourRow(JSON.parse(raw) as unknown, userId, PARENT_TOUR_KEY);
   } catch {
     return null;
   }
@@ -80,5 +84,55 @@ export function rememberParentTourChoice(
     patch
   );
   writeParentTourSession(next, store);
+  return next;
+}
+
+export type SitterTourSessionStore = ParentTourSessionStore;
+
+export function sitterTourSessionKey(userId: string): string {
+  return `${SITTER_TOUR_SESSION_KEY_PREFIX}${userId}`;
+}
+
+export function readSitterTourSession(
+  userId: string,
+  store: SitterTourSessionStore | null = defaultSessionStore()
+): UserProductTourRow | null {
+  if (!userId || !store) return null;
+  try {
+    const raw = store.getItem(sitterTourSessionKey(userId));
+    if (!raw) return null;
+    return asTourRow(JSON.parse(raw) as unknown, userId, SITTER_TOUR_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeSitterTourSession(
+  row: UserProductTourRow,
+  store: SitterTourSessionStore | null = defaultSessionStore()
+): void {
+  if (!row.user_id || !store) return;
+  try {
+    const merged =
+      mergeProductTourRows(SITTER_TOUR_KEY, readSitterTourSession(row.user_id, store), row) ?? row;
+    store.setItem(sitterTourSessionKey(row.user_id), JSON.stringify(merged));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+export function rememberSitterTourChoice(
+  userId: string,
+  existing: UserProductTourRow | null | undefined,
+  patch: ProductTourTimestampPatch,
+  store: SitterTourSessionStore | null = defaultSessionStore()
+): UserProductTourRow {
+  const next = applyProductTourPatch(
+    mergeProductTourRows(SITTER_TOUR_KEY, existing, readSitterTourSession(userId, store)),
+    userId,
+    SITTER_TOUR_KEY,
+    patch
+  );
+  writeSitterTourSession(next, store);
   return next;
 }

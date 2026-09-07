@@ -372,7 +372,7 @@ export function SitterAvailabilityManager() {
   }
 
   return (
-    <section className="mx-1 space-y-4 rounded-3xl border border-navy-header/12 bg-white p-4 shadow-soft sm:p-5" dir="rtl">
+    <section data-tour="sitter-work-schedule-container" className="mx-1 space-y-4 rounded-3xl border border-navy-header/12 bg-white p-4 shadow-soft sm:p-5" dir="rtl">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-3">
           <span className="text-sm font-bold text-[#001F3F]">רזולוציית יומן:</span>

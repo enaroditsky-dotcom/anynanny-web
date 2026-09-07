@@ -240,6 +240,7 @@ export function SitterBookingChatInbox() {
       chatHref={(bookingId) => `/sitter/chat/${encodeURIComponent(bookingId)}`}
       emptyPartnerLabel="הורה"
       emptyDescription="כאן יופיעו שיחות עם הורים ממשמרות שיש בהן הודעות."
+      tourAnchor="sitter-messages-chat"
     />
   );
 }

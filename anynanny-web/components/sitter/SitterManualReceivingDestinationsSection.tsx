@@ -282,7 +282,7 @@ export function SitterManualReceivingDestinationsSection({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-right">
+            <div data-tour="sitter-preferred-payment" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-right">
               <p className="text-[13px] font-semibold text-slate-500">בחירת דרך קבלת התשלום</p>
               <p
                 className={`mt-1 text-sm ${

@@ -1,8 +1,12 @@
 import {
   PARENT_PRODUCT_TOUR_AUTO_OFFER_AFTER,
-  PARENT_TOUR_ONBOARDING_PATH
+  PARENT_TOUR_ONBOARDING_PATH,
+  SITTER_PRODUCT_TOUR_AUTO_OFFER_AFTER,
+  SITTER_TOUR_DASHBOARD_PATH,
+  SITTER_TOUR_KEY,
+  SITTER_TOUR_ONBOARDING_PATH
 } from "@/lib/product-tour/constants";
-import { mergeParentTourRows } from "@/lib/product-tour/tour-row";
+import { mergeParentTourRows, mergeProductTourRows } from "@/lib/product-tour/tour-row";
 import type { UserProductTourRow } from "@/lib/product-tour/types";
 
 export function isParentTourOnboardingPath(pathname: string): boolean {
@@ -16,6 +20,10 @@ export function isParentAppPath(pathname: string): boolean {
 }
 
 export function hasParentTourChoice(row: UserProductTourRow | null | undefined): boolean {
+  return hasProductTourChoice(row);
+}
+
+export function hasProductTourChoice(row: UserProductTourRow | null | undefined): boolean {
   if (!row) return false;
   return Boolean(
     row.offered_at || row.started_at || row.completed_at || row.declined_at || row.skipped_at
@@ -59,6 +67,56 @@ export function canRestartParentTour(input: {
   role: "parent" | "sitter" | null;
 }): boolean {
   return Boolean(input.authenticated && input.role === "parent");
+}
+
+export function isSitterTourOnboardingPath(pathname: string): boolean {
+  const path = pathname.split("?")[0] || pathname;
+  return path === SITTER_TOUR_ONBOARDING_PATH || path.startsWith(`${SITTER_TOUR_ONBOARDING_PATH}/`);
+}
+
+export function isSitterAppPath(pathname: string): boolean {
+  const path = pathname.split("?")[0] || pathname;
+  return path === "/sitter" || path.startsWith("/sitter/");
+}
+
+export function isSitterDashboardPath(pathname: string): boolean {
+  const path = pathname.split("?")[0] || pathname;
+  return path === SITTER_TOUR_DASHBOARD_PATH || path.startsWith(`${SITTER_TOUR_DASHBOARD_PATH}/`);
+}
+
+export function shouldAutoOfferSitterTour(input: {
+  authenticated: boolean;
+  role: "parent" | "sitter" | null;
+  pathname: string;
+  sitterOnboardingCompletedAt: string | null | undefined;
+  tour: UserProductTourRow | null | undefined;
+  sessionTour?: UserProductTourRow | null | undefined;
+  autoOfferAfterIso?: string;
+}): boolean {
+  if (!input.authenticated) return false;
+  if (input.role !== "sitter") return false;
+  if (!isSitterAppPath(input.pathname)) return false;
+  if (!isSitterDashboardPath(input.pathname)) return false;
+  if (isSitterTourOnboardingPath(input.pathname)) return false;
+  if (
+    !isOnboardingCompletedAfterRollout(
+      input.sitterOnboardingCompletedAt,
+      input.autoOfferAfterIso ?? SITTER_PRODUCT_TOUR_AUTO_OFFER_AFTER
+    )
+  ) {
+    return false;
+  }
+  if (hasProductTourChoice(mergeProductTourRows(SITTER_TOUR_KEY, input.tour, input.sessionTour))) {
+    return false;
+  }
+  return true;
+}
+
+export function canRestartSitterTour(input: {
+  authenticated: boolean;
+  role: "parent" | "sitter" | null;
+}): boolean {
+  return Boolean(input.authenticated && input.role === "sitter");
 }
 
 export function matchesTourRoute(pathname: string, route: string, exact = false): boolean {

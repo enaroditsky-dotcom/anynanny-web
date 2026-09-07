@@ -365,7 +365,7 @@ assert.match(parentSettings, /DeleteAccountSection/);
 
 // 16. sitter users are unaffected
 assert.doesNotMatch(sitterLayout, /ParentTourProvider/);
-assert.doesNotMatch(sitterSettings, /ParentTourSettingsEntry|מדריך שימוש באפליקציה/);
+assert.doesNotMatch(sitterSettings, /ParentTourSettingsEntry|restartParentTour/);
 assert.doesNotMatch(sitterPersonal, /data-tour="identity-verification"/);
 assert.equal(shouldAutoOfferParentTour(offerInput({ role: "sitter" })), false);
 assert.doesNotMatch(read("lib/product-tour/parent-steps.ts"), /sitter-home|sitter-tour/);
@@ -373,7 +373,7 @@ assert.doesNotMatch(sitterMessages, /data-tour="messages-chat"|tourAnchor="messa
 assert.doesNotMatch(sitterChatPage, /data-tour="messages-chat"/);
 assert.doesNotMatch(
   inboxUi.slice(inboxUi.indexOf("export function SitterBookingChatInbox")),
-  /tourAnchor/
+  /tourAnchor="messages-chat"/
 );
 
 // Compact tooltip stays mobile-safe and off the highlighted target

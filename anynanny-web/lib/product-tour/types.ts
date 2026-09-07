@@ -2,7 +2,7 @@ export type ProductTourAdvanceMode = "click-target" | "next-button";
 
 export type ProductTourPlacement = "top" | "bottom" | "left" | "right" | "auto";
 
-export type ProductTourKey = "parent";
+export type ProductTourKey = "parent" | "sitter";
 
 export type ProductTourStep = {
   id: string;
@@ -32,3 +32,5 @@ export type UserProductTourRow = {
 };
 
 export type ParentTourPhase = "idle" | "invite" | "declined-ack" | "touring" | "complete";
+
+export type SitterTourPhase = ParentTourPhase;

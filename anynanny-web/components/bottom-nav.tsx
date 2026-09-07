@@ -16,7 +16,7 @@ type NavItem = {
   match: (path: string) => boolean;
   Icon: typeof Home;
   badgeKey?: "messages" | "wallet";
-  tour?: "messages" | "personal-area" | "settings";
+  tour?: string;
 };
 
 const parentSideItems: NavItem[] = [
@@ -63,19 +63,22 @@ const sitterItems: NavItem[] = [
     label: "הודעות",
     match: (p) => p.startsWith("/sitter/messages") || p.startsWith("/sitter/chat/"),
     Icon: MessageCircle,
-    badgeKey: "messages"
+    badgeKey: "messages",
+    tour: "sitter-messages"
   },
   {
     href: "/sitter/profile",
     label: "אזור אישי",
     match: (p) => p.startsWith("/sitter/profile") || p.startsWith("/sitter/personal"),
-    Icon: UserRound
+    Icon: UserRound,
+    tour: "sitter-personal-area"
   },
   {
     href: "/sitter/settings",
     label: "הגדרות",
     match: (p) => p.startsWith("/sitter/settings") || p.startsWith("/sitter/faq"),
-    Icon: Settings
+    Icon: Settings,
+    tour: "sitter-settings"
   }
 ];
 
@@ -132,6 +135,7 @@ function SitterSurprisesFab({ active }: { active: boolean }) {
   return (
     <Link
       href="/sitter/surprises"
+      data-tour="sitter-surprises"
       aria-label="הפתעות"
       className="group relative z-10 -mt-7 flex w-full flex-col items-center justify-end gap-1 outline-none"
     >
