@@ -38,6 +38,11 @@ assert.match(helper, /overscroll-contain/);
 assert.match(helper, SHELL_INSET);
 assert.match(helper, SHELL_SCROLL_PAD);
 assert.match(helper, /flex min-h-full justify-center/);
+assert.match(helper, /max-h-\[calc\(100dvh-8\.5rem-var\(--anynanny-now-dock,0px\)-env\(safe-area-inset-bottom,0px\)\)\]/);
+assert.match(helper, /AUTH_MODAL_CARD_SHELL_MD/);
+assert.match(helper, /AUTH_MODAL_FOOTER/);
+assert.match(helper, /min-h-0 flex-1 overflow-y-auto overscroll-contain/);
+assert.doesNotMatch(helper, /sticky bottom|fixed bottom/);
 
 const deleteUi = read("components/account/delete-account-section.tsx");
 const safetyUi = read("components/safety/user-safety-actions.tsx");
@@ -96,6 +101,20 @@ const modified = {
   "hyp-checkout": read("components/billing/HypCheckoutFrame.tsx"),
   "parent-tour": read("components/product-tour/parent-tour-modals.tsx")
 } as const;
+
+const availability = modified["availability"];
+overlayContract(availability, "availability");
+assert.doesNotMatch(availability, /absolute inset-0/, "availability: no full-screen close trap");
+assert.match(availability, /AUTH_MODAL_CARD_SHELL_MD/);
+assert.match(availability, /AUTH_MODAL_HEADER/);
+assert.match(availability, /AUTH_MODAL_BODY_SCROLL/);
+assert.match(availability, /AUTH_MODAL_FOOTER/);
+assert.match(availability, /עדכון שעות/);
+assert.match(availability, /שמירת יום/);
+assert.match(availability, /handleSaveDailyAvailability/);
+assert.doesNotMatch(availability, /max-h-\[85vh\]|max-h-\[90dvh\]/);
+assert.doesNotMatch(availability, /sticky bottom/);
+assert.doesNotMatch(availability, /z-50 flex items-center justify-center/);
 
 for (const [label, source] of Object.entries(modified)) {
   overlayContract(source, label);
