@@ -4,6 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { X, Plus, Trash2 } from "lucide-react";
+import {
+  AUTH_MODAL_BODY_SCROLL,
+  AUTH_MODAL_CARD_SHELL_MD,
+  AUTH_MODAL_CENTER_WRAP,
+  AUTH_MODAL_FOOTER,
+  AUTH_MODAL_HEADER,
+  AUTH_MODAL_OVERLAY_SCROLL
+} from "@/lib/ui/auth-modal-overlay";
 import { todayDateISO } from "@/lib/bookings/booking-date-utils";
 import { calendarDateButtonAria } from "@/lib/bookings/calendar-date-cell";
 import { CalendarDayNumber } from "@/components/calendar/calendar-day-number";
@@ -443,9 +451,15 @@ export function SitterAvailabilityManager() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="flex h-full max-h-[85vh] w-full max-w-md flex-col rounded-3xl bg-white p-5 shadow-xl animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div
+          className={`fixed inset-0 z-[80] ${AUTH_MODAL_OVERLAY_SCROLL} bg-black/40 backdrop-blur-xs animate-in fade-in duration-200`}
+          role="dialog"
+          aria-modal="true"
+          dir="rtl"
+        >
+          <div className={AUTH_MODAL_CENTER_WRAP}>
+            <div className={`my-auto ${AUTH_MODAL_CARD_SHELL_MD} animate-in zoom-in-95 duration-200`}>
+            <div className={AUTH_MODAL_HEADER}>
               <h3 className="text-base font-bold text-[#001F3F]">עדכון שעות: {activeDateISO}</h3>
               <button
                 type="button"
@@ -456,7 +470,7 @@ export function SitterAvailabilityManager() {
               </button>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto py-4" style={{ scrollbarWidth: "none" }}>
+            <div className={`${AUTH_MODAL_BODY_SCROLL} space-y-5`}>
               {loadingDay ? (
                 <p className="text-center text-xs text-slate-500">טוען זמינות ליום…</p>
               ) : (
@@ -576,7 +590,7 @@ export function SitterAvailabilityManager() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+            <div className={AUTH_MODAL_FOOTER}>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
@@ -592,6 +606,7 @@ export function SitterAvailabilityManager() {
               >
                 {savingDay ? "שומר..." : "שמירת יום"}
               </button>
+            </div>
             </div>
           </div>
         </div>
