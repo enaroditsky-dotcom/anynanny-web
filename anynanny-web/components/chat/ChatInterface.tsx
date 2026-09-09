@@ -19,6 +19,8 @@ import {
   normalizeChatMessageRow,
   mergeFetchedChatMessages
 } from '@/lib/chat/message-list';
+import { ChatComposerEmojiControl } from '@/components/chat/chat-emoji-picker';
+import { insertTextAtSelection } from '@/lib/chat/emoji-insert';
 import {
   CHAT_INCOMING_MESSAGE_EVENT,
   markBookingMessagesRead,
@@ -45,6 +47,8 @@ export default function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
+  const pendingSelectionRef = useRef<number | null>(null);
   const blurHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const stickToBottomRef = useRef(true);
@@ -230,6 +234,25 @@ export default function ChatInterface({
     stickToBottomRef.current = isNearScrollBottom(list);
   };
 
+  useEffect(() => {
+    const cursor = pendingSelectionRef.current;
+    if (cursor == null) return;
+    pendingSelectionRef.current = null;
+    const input = messageInputRef.current;
+    if (!input) return;
+    input.focus();
+    input.setSelectionRange(cursor, cursor);
+  }, [newMessage]);
+
+  const insertEmoji = (emoji: string) => {
+    const input = messageInputRef.current;
+    const start = input?.selectionStart ?? newMessage.length;
+    const end = input?.selectionEnd ?? start;
+    const next = insertTextAtSelection(newMessage, emoji, start, end);
+    pendingSelectionRef.current = next.selectionStart;
+    setNewMessage(next.value);
+  };
+
   const sendMessageHandler = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || sending || lifecycle?.writable === false) return;
@@ -275,7 +298,7 @@ export default function ChatInterface({
       <div
         ref={messageListRef}
         onScroll={onMessageListScroll}
-        className="space-y-4 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto"
+        className="min-h-[12.5rem] space-y-4 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto"
       >
         {messages.map((m) => (
           <div 
@@ -308,9 +331,10 @@ export default function ChatInterface({
       <form
         ref={composerRef}
         onSubmit={sendMessageHandler}
-        className="flex items-center gap-2 border-t bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:pb-3 scroll-mb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]"
+        className="relative flex items-center gap-2 border-t bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:pb-3 scroll-mb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]"
       >
-        <input 
+        <input
+          ref={messageInputRef}
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           onFocus={() => {
@@ -334,13 +358,35 @@ export default function ChatInterface({
           disabled={sending}
           enterKeyHint="send"
           autoComplete="off"
-          className="min-h-11 flex-1 rounded-full border border-slate-200 px-4 py-2 text-[16px] leading-normal text-right focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50"
+          className="min-h-11 min-w-0 flex-1 rounded-full border border-slate-200 px-4 py-2 text-[16px] leading-normal text-right focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50"
           placeholder="הקלד הודעה..."
         />
-        <button 
-          type="submit" 
+        <ChatComposerEmojiControl
+          disabled={sending}
+          onInsert={insertEmoji}
+          onOpenChange={(open) => {
+            if (open) {
+              if (blurHideTimerRef.current) {
+                clearTimeout(blurHideTimerRef.current);
+                blurHideTimerRef.current = null;
+              }
+              setComposerFocused(true);
+              setChatComposerActive(true);
+              requestAnimationFrame(() => revealComposer());
+              return;
+            }
+            if (document.activeElement === messageInputRef.current) return;
+            if (blurHideTimerRef.current) clearTimeout(blurHideTimerRef.current);
+            blurHideTimerRef.current = setTimeout(() => {
+              setComposerFocused(false);
+              setChatComposerActive(false);
+            }, 250);
+          }}
+        />
+        <button
+          type="submit"
           disabled={!newMessage.trim() || sending}
-          className="min-h-11 rounded-full bg-blue-600 px-5 py-2 text-base font-bold text-white transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
+          className="min-h-11 shrink-0 rounded-full bg-blue-600 px-5 py-2 text-base font-bold text-white transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
         >
           {sending ? 'שולח...' : 'שלח'}
         </button>
