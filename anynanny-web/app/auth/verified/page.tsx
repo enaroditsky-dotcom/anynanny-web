@@ -1,34 +1,31 @@
 "use client";
 
 import React, { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { EmailOtpType } from "@supabase/supabase-js";
+import {
+  EMAIL_VERIFIED_BODY_LOGIN,
+  EMAIL_VERIFIED_LOGIN_CTA,
+  EMAIL_VERIFIED_TITLE,
+  EMAIL_VERIFY_EXPIRED_TITLE,
+  emailVerifiedLoginHref,
+  resolveSignupEmailVerification,
+  type SignupVerifyView
+} from "@/lib/auth/email-verification";
 import {
   isExplicitRecoveryCallback,
   readAuthCallbackParams,
   resetPasswordCallbackHref
 } from "@/lib/auth/password-reset";
+import { navigateAfterAuth } from "@/lib/auth/redirect-after-sign-in";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
-type VerifyState = "checking" | "success" | "error";
-
-function signupOtpType(callbackType: string): EmailOtpType {
-  if (
-    callbackType === "signup" ||
-    callbackType === "email" ||
-    callbackType === "email_change" ||
-    callbackType === "invite"
-  ) {
-    return callbackType;
-  }
-  return "signup";
-}
+type VerifyState = "checking" | SignupVerifyView;
 
 function EmailVerifiedContent() {
   const searchParams = useSearchParams();
-  const errorCode = searchParams.get("error_code");
-  const [verifyState, setVerifyState] = useState<VerifyState>(errorCode ? "error" : "checking");
+  const [verifyState, setVerifyState] = useState<VerifyState>("checking");
 
   useEffect(() => {
     const params = readAuthCallbackParams();
@@ -38,31 +35,18 @@ function EmailVerifiedContent() {
       return;
     }
 
-    if (errorCode && !params.hasCode && !params.hasTokenHash) {
-      setVerifyState("error");
-      return;
-    }
-
-    if (params.hasError && !params.hasCode && !params.hasTokenHash) {
-      setVerifyState("error");
-      return;
-    }
-
-    if (!params.hasCode && !params.hasTokenHash) {
-      setVerifyState(errorCode ? "error" : "success");
-      return;
-    }
-
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setVerifyState("error");
+      setVerifyState(
+        params.hasCode || params.hasTokenHash ? "success_login" : "expired"
+      );
       return;
     }
 
     let cancelled = false;
     let settled = false;
 
-    const finish = (state: VerifyState) => {
+    const finish = (state: SignupVerifyView) => {
       if (cancelled || settled) return;
       settled = true;
       setVerifyState(state);
@@ -77,53 +61,43 @@ function EmailVerifiedContent() {
         return;
       }
       if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session) {
-        finish("success");
+        finish("success_session");
       }
     });
 
     void (async () => {
-      if (params.tokenHash) {
-        const { data, error } = await supabase.auth.verifyOtp({
-          type: signupOtpType(params.callbackType),
-          token_hash: params.tokenHash
-        });
-        if (cancelled) return;
-        if (!error && data.session) {
-          finish("success");
-          return;
-        }
-      }
+      const result = await resolveSignupEmailVerification({
+        params,
+        getSession: async () => {
+          const { data } = await supabase.auth.getSession();
+          return data;
+        },
+        verifyOtp: (args) => supabase.auth.verifyOtp(args),
+        exchangeCodeForSession: (code) => supabase.auth.exchangeCodeForSession(code)
+      });
+      if (cancelled) return;
+      finish(result.view);
 
-      if (params.code) {
-        const { data, error } = await supabase.auth.exchangeCodeForSession(params.code);
-        if (cancelled) return;
-        if (!error && data.session) {
-          finish("success");
-          return;
-        }
+      if (result.view === "success_session") {
         const {
           data: { session }
         } = await supabase.auth.getSession();
-        if (cancelled) return;
-        finish(session ? "success" : "error");
-        return;
+        const userId = session?.user?.id;
+        if (userId) {
+          await navigateAfterAuth(supabase, userId, null, session.user.email);
+        }
       }
-
-      const {
-        data: { session }
-      } = await supabase.auth.getSession();
-      if (cancelled) return;
-      finish(session ? "success" : "error");
     })();
 
     return () => {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [errorCode]);
+  }, [searchParams]);
 
-  const isError = verifyState === "error";
+  const isError = verifyState === "expired";
   const isChecking = verifyState === "checking";
+  const needsLogin = verifyState === "success_login";
 
   return (
     <main
@@ -156,14 +130,19 @@ function EmailVerifiedContent() {
               </svg>
             </div>
 
-            <h1 className="text-lg font-bold text-[#001F3F]">
-              הקישור פג תוקף או שגוי
-            </h1>
+            <h1 className="text-lg font-bold text-[#001F3F]">{EMAIL_VERIFY_EXPIRED_TITLE}</h1>
 
             <p className="text-sm leading-relaxed text-slate-600">
               נראה שקישור האימות כבר נוצל או שעבר הזמן הקצוב שלו. אנא נסה
               להתחבר מחדש או לבקש מייל אימות חדש.
             </p>
+
+            <Link
+              href={emailVerifiedLoginHref()}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#001F3F] px-5 py-2.5 text-sm font-bold text-white"
+            >
+              {EMAIL_VERIFIED_LOGIN_CTA}
+            </Link>
           </>
         ) : (
           <>
@@ -185,19 +164,29 @@ function EmailVerifiedContent() {
             </div>
 
             <h1 className="text-lg font-bold text-[#001F3F]">
-              האימייל אומת בהצלחה!
+              {needsLogin ? EMAIL_VERIFIED_TITLE : `${EMAIL_VERIFIED_TITLE}!`}
             </h1>
 
             <p className="text-sm leading-relaxed text-slate-600">
-              החשבון שלך הופעל בהצלחה. כעת ניתן לסגור חלון זה, לחזור
-              לאפליקציה ולהתחבר מחדש.
+              {needsLogin
+                ? EMAIL_VERIFIED_BODY_LOGIN
+                : "החשבון שלך הופעל בהצלחה. כעת ניתן לסגור חלון זה, לחזור לאפליקציה ולהתחבר מחדש."}
             </p>
 
-            <div className="pt-1">
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-500">
-                טיפ: לאחר ההתחברות מחדש, הכל יהיה מוכן לעבודה.
+            <Link
+              href={emailVerifiedLoginHref()}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#001F3F] px-5 py-2.5 text-sm font-bold text-white"
+            >
+              {EMAIL_VERIFIED_LOGIN_CTA}
+            </Link>
+
+            {needsLogin ? null : (
+              <div className="pt-1">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-500">
+                  טיפ: לאחר ההתחברות מחדש, הכל יהיה מוכן לעבודה.
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

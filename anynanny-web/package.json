@@ -50,7 +50,8 @@
     "test:sitter-product-tour": "npx --yes tsx scripts/test-sitter-product-tour.ts",
     "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts",
     "test:didit-kyc": "npx --yes tsx scripts/test-didit-kyc.ts",
-    "test:admin-broadcast": "npx --yes tsx scripts/test-admin-broadcast.ts"
+    "test:admin-broadcast": "npx --yes tsx scripts/test-admin-broadcast.ts",
+    "test:email-verification": "npx --yes tsx scripts/test-email-verification.ts"
   },
   "dependencies": {
     "@didit-protocol/sdk-web": "^0.3.0",
