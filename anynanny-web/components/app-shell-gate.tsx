@@ -23,6 +23,7 @@ const CHROMELESS_PREFIXES = [
   "/auth/sign-up",
   "/auth/forgot-password",
   "/auth/reset-password",
+  "/auth/verified",
   "/reset-password",
   "/login",
   "/register",
