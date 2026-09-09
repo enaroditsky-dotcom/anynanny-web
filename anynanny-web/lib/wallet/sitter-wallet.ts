@@ -1,4 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
+import { isBookingPaymentPaid } from "@/lib/bookings/payment-status-label";
+import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 
 export const SITTER_WALLET_BALANCES_TABLE = "sitter_wallet_balances" as const;
 export const SITTER_TRANSACTIONS_TABLE = "sitter_transactions" as const;
@@ -38,6 +41,30 @@ export const EMPTY_SITTER_EARNINGS_SUMMARY: SitterEarningsSummary = {
 
 function isSucceededIncomeType(type: string): boolean {
   return type === "earnings" || type === "bonus";
+}
+
+function normalizeWalletType(raw: unknown): SitterWalletTransactionType {
+  const typeRaw = String(raw ?? "earnings");
+  return typeRaw === "payout" || typeRaw === "bonus" ? typeRaw : "earnings";
+}
+
+function normalizeWalletStatus(raw: unknown): SitterWalletTransactionStatus {
+  const statusRaw = String(raw ?? "succeeded");
+  return statusRaw === "pending" || statusRaw === "failed" ? statusRaw : "succeeded";
+}
+
+/**
+ * Pending ledger rows stay pending until the linked booking is actually paid.
+ * Manual cash/BIT/PayBox marks the booking paid without promoting sitter_transactions.
+ */
+export function promotePendingSitterIncomeIfPaid(
+  row: SitterEarningsLedgerRow,
+  paidBookingIds: ReadonlySet<string>
+): SitterEarningsLedgerRow {
+  if (String(row.status ?? "") !== "pending") return row;
+  const bookingId = typeof row.booking_id === "string" ? row.booking_id.trim() : "";
+  if (!bookingId || !paidBookingIds.has(bookingId)) return row;
+  return { ...row, status: "succeeded" };
 }
 
 /** Calendar-local earnings from succeeded shift payments (excludes pending/failed/payout). */
@@ -83,12 +110,56 @@ export function summarizeSitterEarnings(
 function mapLedgerRow(row: Record<string, unknown>): SitterEarningsLedgerRow {
   return {
     id: row.id != null ? String(row.id) : null,
-    type: String(row.type ?? "earnings"),
+    type: normalizeWalletType(row.type),
     amount: Number(row.amount) || 0,
-    status: String(row.status ?? "succeeded"),
+    status: normalizeWalletStatus(row.status),
     created_at: String(row.created_at ?? ""),
     booking_id: row.booking_id != null ? String(row.booking_id) : null
   };
+}
+
+function collectPendingBookingIds(rows: SitterEarningsLedgerRow[]): string[] {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (String(row.status) !== "pending") continue;
+    const bookingId = typeof row.booking_id === "string" ? row.booking_id.trim() : "";
+    if (bookingId) ids.add(bookingId);
+  }
+  return [...ids];
+}
+
+async function fetchPaidBookingIds(
+  supabase: SupabaseClient,
+  bookingIds: string[]
+): Promise<Set<string>> {
+  const paid = new Set<string>();
+  if (bookingIds.length === 0) return paid;
+
+  const { data, error } = await supabase
+    .from(BOOKINGS_TABLE)
+    .select("id, payment_status, paid_at")
+    .in("id", bookingIds);
+
+  if (error) {
+    console.warn("[sitter-wallet] paid booking lookup failed:", error.message);
+    return paid;
+  }
+
+  for (const row of data ?? []) {
+    const record = row as { id?: unknown; payment_status?: unknown; paid_at?: unknown };
+    const id = record.id != null ? String(record.id).trim() : "";
+    if (!id) continue;
+    if (
+      isBookingPaymentPaid({
+        paymentStatus: record.payment_status != null ? String(record.payment_status) : null,
+        paidAt: record.paid_at != null ? String(record.paid_at) : null
+      })
+    ) {
+      paid.add(id);
+    }
+  }
+
+  return paid;
 }
 
 function isMissingRelationError(message: string | undefined): boolean {
@@ -190,12 +261,27 @@ export async function fetchSitterWalletView(
       ? Number(wallet.balance)
       : ensured.balance;
 
-  const { data: txData, error: txError } = await supabase
+  const listSelectWithBooking = "id, type, amount, description, created_at, status, booking_id";
+  const listSelect = "id, type, amount, description, created_at, status";
+  let txData: Record<string, unknown>[] | null = null;
+  let { data: listData, error: txError } = await supabase
     .from(SITTER_TRANSACTIONS_TABLE)
-    .select("id, type, amount, description, created_at, status")
+    .select(listSelectWithBooking)
     .eq("sitter_id", sitterId)
     .order("created_at", { ascending: false })
     .limit(25);
+  txData = (listData as Record<string, unknown>[] | null) ?? null;
+
+  if (txError && isPostgrestMissingColumnError(txError.message, "booking_id")) {
+    const retry = await supabase
+      .from(SITTER_TRANSACTIONS_TABLE)
+      .select(listSelect)
+      .eq("sitter_id", sitterId)
+      .order("created_at", { ascending: false })
+      .limit(25);
+    txData = (retry.data as Record<string, unknown>[] | null) ?? null;
+    txError = retry.error;
+  }
 
   if (txError) {
     return {
@@ -203,51 +289,65 @@ export async function fetchSitterWalletView(
     };
   }
 
-  const transactions: SitterWalletTransaction[] = (txData ?? []).map((row) => {
-    const typeRaw = String((row as { type?: string }).type ?? "earnings");
-    const type: SitterWalletTransactionType =
-      typeRaw === "payout" || typeRaw === "bonus" ? typeRaw : "earnings";
-    const statusRaw = String((row as { status?: string }).status ?? "succeeded");
-    const status: SitterWalletTransactionStatus =
-      statusRaw === "pending" || statusRaw === "failed" ? statusRaw : "succeeded";
-    return {
-      id: String((row as { id: string }).id),
-      type,
-      amount: Number((row as { amount?: unknown }).amount) || 0,
-      description: String((row as { description?: string }).description ?? ""),
-      created_at: String((row as { created_at?: string }).created_at ?? new Date().toISOString()),
-      status
-    };
-  });
+  const rawListRows: Record<string, unknown>[] = (txData ?? []).map((row) => ({
+    ...row,
+    created_at: row.created_at ?? new Date().toISOString()
+  }));
+  const listLedgerRows = rawListRows.map((row) => mapLedgerRow(row));
 
   const yearStartIso = new Date(asOf.getFullYear(), 0, 1).toISOString();
-  const { data: earningsRows, error: earningsError } = await supabase
+  const summarySelectWithBooking = "id, type, amount, created_at, status, booking_id";
+  const summarySelect = "id, type, amount, created_at, status";
+  let earningsRows: Record<string, unknown>[] | null = null;
+  let { data: summaryData, error: earningsError } = await supabase
     .from(SITTER_TRANSACTIONS_TABLE)
-    .select("id, type, amount, created_at, status, booking_id")
+    .select(summarySelectWithBooking)
     .eq("sitter_id", sitterId)
     .in("type", ["earnings", "bonus"])
-    .eq("status", "succeeded")
     .gte("created_at", yearStartIso);
+  earningsRows = (summaryData as Record<string, unknown>[] | null) ?? null;
 
-  let earningsSummary = EMPTY_SITTER_EARNINGS_SUMMARY;
+  if (earningsError && isPostgrestMissingColumnError(earningsError.message, "booking_id")) {
+    const retry = await supabase
+      .from(SITTER_TRANSACTIONS_TABLE)
+      .select(summarySelect)
+      .eq("sitter_id", sitterId)
+      .in("type", ["earnings", "bonus"])
+      .gte("created_at", yearStartIso);
+    earningsRows = (retry.data as Record<string, unknown>[] | null) ?? null;
+    earningsError = retry.error;
+  }
+
+  const summaryLedgerRows = earningsError
+    ? listLedgerRows
+    : (earningsRows ?? []).map((row) => mapLedgerRow(row as Record<string, unknown>));
+
   if (earningsError) {
     console.warn("[sitter-wallet] earnings summary query failed:", earningsError.message);
-    earningsSummary = summarizeSitterEarnings(
-      transactions.map((tx) => ({
-        id: tx.id,
-        type: tx.type,
-        amount: tx.amount,
-        status: tx.status,
-        created_at: tx.created_at
-      })),
-      asOf
-    );
-  } else {
-    earningsSummary = summarizeSitterEarnings(
-      (earningsRows ?? []).map((row) => mapLedgerRow(row as Record<string, unknown>)),
-      asOf
-    );
   }
+
+  const paidBookingIds = await fetchPaidBookingIds(
+    supabase,
+    collectPendingBookingIds([...summaryLedgerRows, ...listLedgerRows])
+  );
+
+  const countableSummaryRows = summaryLedgerRows.map((row) =>
+    promotePendingSitterIncomeIfPaid(row, paidBookingIds)
+  );
+  const earningsSummary = summarizeSitterEarnings(countableSummaryRows, asOf);
+
+  const transactions: SitterWalletTransaction[] = rawListRows.map((row, index) => {
+    const ledger = listLedgerRows[index] ?? mapLedgerRow(row);
+    const promoted = promotePendingSitterIncomeIfPaid(ledger, paidBookingIds);
+    return {
+      id: String(promoted.id ?? ""),
+      type: normalizeWalletType(promoted.type),
+      amount: promoted.amount,
+      description: String(row.description ?? ""),
+      created_at: String(promoted.created_at || row.created_at || new Date().toISOString()),
+      status: normalizeWalletStatus(promoted.status)
+    };
+  });
 
   return { balance, transactions, earningsSummary, error: null, missingSchema: false };
 }
