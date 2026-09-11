@@ -10,6 +10,11 @@ import {
 import { areSoundAlertsEnabled } from "@/lib/settings/notification-preferences";
 import { ACCOUNT_SUSPENDED_MESSAGE, BLOCKED_PAIR_MESSAGE } from "@/lib/safety/constants";
 import { assertMarketplacePairAllowed, fetchIsAccountSuspended } from "@/lib/safety/enforcement";
+import {
+  isActiveSitterBroadcastStatus,
+  isTerminalSitterBroadcastStatus,
+  recoverActiveSitterBroadcast
+} from "@/lib/broadcast/sitter-broadcast-recovery";
 import { Zap } from "lucide-react";
 
 interface BroadcastAlertModalProps {
@@ -29,21 +34,8 @@ type ActiveAlert = {
 const DISMISSED_STORAGE_KEY = "anynanny_broadcast_dismissed_v1";
 
 /**
- * Broadcasts remain eligible for recovery for up to 10 minutes.
- */
-const ALERT_MAX_AGE_MS = 10 * 60 * 1000;
-
-/**
- * If Realtime misses the INSERT, the fallback poll may still open
- * a recently-created broadcast.
- *
- * Must be longer than FALLBACK_POLL_MS.
- */
-const FRESH_EVENT_MAX_AGE_MS = 90 * 1000;
-
-/**
- * Realtime is primary.
- * Polling is only a fallback when an INSERT event is missed.
+ * Database status is the source of truth.
+ * Polling recovers currently active rows even if Realtime missed the INSERT.
  */
 const FALLBACK_POLL_MS = 10_000;
 
@@ -94,25 +86,6 @@ function persistDismissedIds(
   } catch {
     /* ignore */
   }
-}
-
-function isFreshIso(
-  createdAt: string | null | undefined,
-  maxAgeMs: number
-): boolean {
-  if (!createdAt) {
-    return false;
-  }
-
-  const timestamp = Date.parse(createdAt);
-
-  if (!Number.isFinite(timestamp)) {
-    return false;
-  }
-
-  const ageMs = Date.now() - timestamp;
-
-  return ageMs >= 0 && ageMs <= maxAgeMs;
 }
 
 function playAlertSound(): void {
@@ -169,12 +142,9 @@ function playAlertSound(): void {
 /**
  * Incoming AnyNanny Now broadcast modal.
  *
- * Primary delivery:
- * Supabase Realtime INSERT.
- *
- * Recovery:
- * lightweight polling every 10 seconds in case the realtime
- * event was missed while the tab/network was temporarily unavailable.
+ * Source of truth: broadcast_alerts.status = 'active' in the database.
+ * Realtime INSERT is an optimization. Catch-up polling recovers every
+ * currently active, city-eligible request regardless of created_at age.
  *
  * Dismissed alerts persist across component remounts in sessionStorage.
  */
@@ -398,12 +368,6 @@ export function SitterBroadcastAlertModal({
           return;
         }
 
-        const since =
-          new Date(
-            Date.now() -
-              ALERT_MAX_AGE_MS
-          ).toISOString();
-
         const {
           data: alertsData,
           error
@@ -419,10 +383,6 @@ export function SitterBroadcastAlertModal({
           .eq(
             "status",
             "active"
-          )
-          .gte(
-            "created_at",
-            since
           )
           .order(
             "created_at",
@@ -446,34 +406,27 @@ export function SitterBroadcastAlertModal({
           return;
         }
 
-        const rows =
-          alertsData ?? [];
-
-        const valid =
-          rows.find(
-            (alert) =>
-              alert?.id &&
-              !dismissedAlertIdsRef.current.has(
-                alert.id
-              ) &&
-              isFreshIso(
-                alert.created_at,
-                ALERT_MAX_AGE_MS
-              )
-          );
-
         const currentId =
           activeAlertIdRef.current;
 
+        const recovery =
+          recoverActiveSitterBroadcast(
+            {
+              rows:
+                alertsData ??
+                [],
+              sitterCities:
+                stableCities,
+              dismissedIds:
+                dismissedAlertIdsRef.current,
+              paused:
+                pausedRef.current,
+              currentId
+            }
+          );
+
         if (
-          currentId &&
-          !rows.some(
-            (alert) =>
-              alert.id ===
-                currentId &&
-              alert.status ===
-                "active"
-          )
+          recovery.clearCurrent
         ) {
           clearActiveIfMatch(
             currentId
@@ -482,44 +435,13 @@ export function SitterBroadcastAlertModal({
 
         if (
           !allowOpen ||
-          !valid
-        ) {
-          return;
-        }
-
-        /*
-         * Poll recovery should only open a recent broadcast,
-         * not an old active row from many minutes ago.
-         */
-        if (
-          !isFreshIso(
-            valid.created_at,
-            FRESH_EVENT_MAX_AGE_MS
-          )
+          !recovery.open
         ) {
           return;
         }
 
         tryOpenAlert(
-          {
-            id: String(
-              valid.id
-            ),
-            city: String(
-              valid.city ?? ""
-            ),
-            service_type:
-              String(
-                valid.service_type ??
-                  ""
-              ),
-            created_at:
-              valid.created_at
-                ? String(
-                    valid.created_at
-                  )
-                : undefined
-          },
+          recovery.open,
           {
             playSound: false
           }
@@ -575,17 +497,8 @@ export function SitterBroadcastAlertModal({
 
                 if (
                   !next?.id ||
-                  next.status !==
-                    "active"
-                ) {
-                  return;
-                }
-
-                if (
-                  next.created_at &&
-                  !isFreshIso(
-                    next.created_at,
-                    ALERT_MAX_AGE_MS
+                  !isActiveSitterBroadcastStatus(
+                    next.status
                   )
                 ) {
                   return;
@@ -633,14 +546,9 @@ export function SitterBroadcastAlertModal({
                 }
 
                 if (
-                  next.status ===
-                    "expired" ||
-                  next.status ===
-                    "filled" ||
-                  next.status ===
-                    "paused" ||
-                  next.status ===
-                    "cancelled"
+                  isTerminalSitterBroadcastStatus(
+                    next.status
+                  )
                 ) {
                   dismissAlertId(
                     next.id
