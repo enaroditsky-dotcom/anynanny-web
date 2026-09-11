@@ -51,5 +51,23 @@ assert.match(modal, /קריאת ברק מיידית בסביבה!/);
 assert.match(modal, /createPortal/);
 assert.match(modal, /document\.body/);
 assert.match(modal, /z-\[9999\]/);
+assert.match(modal, /recoverActiveSitterBroadcast/);
+assert.match(modal, /\.eq\(\s*"status",\s*"active"/);
+
+// Visibility must follow DB status, not client-side age TTLs.
+assert.doesNotMatch(modal, /FRESH_EVENT_MAX_AGE_MS/);
+assert.doesNotMatch(modal, /ALERT_MAX_AGE_MS/);
+assert.doesNotMatch(modal, /isFreshIso/);
+assert.doesNotMatch(modal, /90 \* 1000/);
+assert.doesNotMatch(modal, /10 \* 60 \* 1000/);
+assert.doesNotMatch(modal, /\.gte\(\s*"created_at"/);
+assert.doesNotMatch(
+  modal,
+  /eligible for recovery for up to 10 minutes/
+);
+assert.doesNotMatch(
+  modal,
+  /Poll recovery should only open a recent broadcast/
+);
 
 console.log("sitter broadcast global host checks passed");
