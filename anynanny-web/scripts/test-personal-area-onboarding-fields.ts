@@ -16,7 +16,8 @@ import {
 } from "../lib/onboarding/sitter-questionnaire";
 import {
   buildParentProfileUpdatePayload,
-  parseParentProfileRow
+  parseParentProfileRow,
+  sanitizeParentProfileSpouseDates
 } from "../lib/parent/parent-profile";
 import { SITTER_PROFILE_OWN_SELECT_COLUMNS, SITTER_PROFILE_PUT_COLUMNS } from "../lib/sitter/sitter-profile";
 
@@ -98,6 +99,38 @@ assert.equal(parentPayload.preferred_language, "עברית");
 assert.ok("preferred_language" in parentPayload && "preferred_language" in updated);
 assert.ok("has_child_special_or_medical_information" in parentPayload);
 assert.equal(updated.child_special_or_medical_details, "אלרגיה לבוטנים");
+
+const marriedProfile = {
+  ...parentRow,
+  marital_status: "married",
+  wedding_date: "2015-06-20",
+  spouse_birthday: "1988-04-12",
+  spouse: { firstName: "יוסי", lastName: "לוי", birthDate: "1988-04-12" }
+};
+const marriedUpdate = buildParentProfileUpdatePayload(marriedProfile);
+assert.equal(marriedUpdate.wedding_date, "2015-06-20");
+assert.equal(marriedUpdate.spouse_birthday, "1988-04-12");
+
+const partneredUpdate = buildParentProfileUpdatePayload({ ...marriedProfile, marital_status: "partnered" });
+assert.equal(partneredUpdate.wedding_date, null);
+assert.equal(partneredUpdate.spouse_birthday, "1988-04-12");
+
+for (const status of ["divorced", "widowed", "single", "separated"]) {
+  const hiddenUpdate = buildParentProfileUpdatePayload({ ...marriedProfile, marital_status: status });
+  assert.equal(hiddenUpdate.wedding_date, null, status);
+  assert.equal(hiddenUpdate.spouse_birthday, null, status);
+  assert.equal((hiddenUpdate.spouse as { birthDate: string | null } | null)?.birthDate ?? null, null, status);
+}
+
+const clearedLocal = sanitizeParentProfileSpouseDates({ ...marriedProfile, marital_status: "divorced" });
+assert.equal(clearedLocal.wedding_date, "");
+assert.equal(clearedLocal.spouse_birthday, "");
+assert.equal(clearedLocal.spouse?.birthDate, "");
+
+assert.match(parentPersonal, /parentShowsWeddingAnniversary/);
+assert.match(parentPersonal, /parentShowsPartnerDateOfBirth/);
+assert.match(parentPersonal, /parentSpouseDateFieldsForStatus/);
+assert.match(parentPersonal, /sanitizeParentProfileSpouseDates/);
 
 // 5. child information remains editable
 assert.match(parentPersonal, /editKey === "children"/);

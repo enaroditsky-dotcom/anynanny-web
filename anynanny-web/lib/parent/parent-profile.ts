@@ -1,3 +1,5 @@
+import { parentSpouseDateFieldsForStatus } from "@/lib/onboarding/parent-options";
+
 export type ParentAddress = {
   city: string;
   street: string;
@@ -209,41 +211,54 @@ export function createEmptySpecialEvent(): ParentSpecialEvent {
   return { id: newId(), title: "", date: "" };
 }
 
-export function buildParentProfileUpdatePayload(data: ParentProfileData): Record<string, unknown> {
-  const hasSpouse =
-    Boolean(data.spouse) &&
-    Boolean(
-      data.spouse?.firstName.trim() || data.spouse?.lastName.trim() || data.spouse?.birthDate.trim()
-    );
+export function sanitizeParentProfileSpouseDates(data: ParentProfileData): ParentProfileData {
+  const spouseDates = parentSpouseDateFieldsForStatus(data.marital_status, {
+    weddingAnniversary: data.wedding_date,
+    partnerDateOfBirth: data.spouse?.birthDate.trim() || data.spouse_birthday
+  });
+  const hasNamedSpouse = Boolean(data.spouse?.firstName.trim() || data.spouse?.lastName.trim());
+  const spouse =
+    data.spouse && (hasNamedSpouse || spouseDates.partnerDateOfBirth)
+      ? { ...data.spouse, birthDate: spouseDates.partnerDateOfBirth }
+      : null;
+  return {
+    ...data,
+    spouse,
+    wedding_date: spouseDates.weddingAnniversary,
+    spouse_birthday: spouseDates.partnerDateOfBirth
+  };
+}
 
-  const partnerBirth =
-    data.spouse?.birthDate.trim() || data.spouse_birthday.trim() || "";
-  const children = data.children.map((child) => ({
+export function buildParentProfileUpdatePayload(data: ParentProfileData): Record<string, unknown> {
+  const sanitized = sanitizeParentProfileSpouseDates(data);
+  const hasSpouse = Boolean(sanitized.spouse);
+
+  const children = sanitized.children.map((child) => ({
     id: child.id,
     name: child.name.trim(),
     birthDate: child.birthDate.trim()
   }));
 
   return {
-    first_name: data.first_name.trim() || null,
-    last_name: data.last_name.trim() || null,
-    birth_date: data.birth_date.trim() || null,
-    phone: data.phone.trim() || null,
-    city: data.address.city.trim() || null,
+    first_name: sanitized.first_name.trim() || null,
+    last_name: sanitized.last_name.trim() || null,
+    birth_date: sanitized.birth_date.trim() || null,
+    phone: sanitized.phone.trim() || null,
+    city: sanitized.address.city.trim() || null,
     address: {
-      city: data.address.city.trim(),
-      street: data.address.street.trim(),
-      houseNumber: data.address.houseNumber.trim()
+      city: sanitized.address.city.trim(),
+      street: sanitized.address.street.trim(),
+      houseNumber: sanitized.address.houseNumber.trim()
     },
     spouse: hasSpouse
       ? {
-          firstName: data.spouse!.firstName.trim(),
-          lastName: data.spouse!.lastName.trim(),
-          birthDate: data.spouse!.birthDate.trim() || null
+          firstName: sanitized.spouse!.firstName.trim(),
+          lastName: sanitized.spouse!.lastName.trim(),
+          birthDate: sanitized.spouse!.birthDate.trim() || null
         }
       : null,
-    wedding_date: data.wedding_date.trim() || null,
-    spouse_birthday: partnerBirth || null,
+    wedding_date: sanitized.wedding_date || null,
+    spouse_birthday: sanitized.spouse_birthday || null,
     children,
     children_count: children.length || data.children_count || null,
     special_events: data.special_events.map((event) => ({
