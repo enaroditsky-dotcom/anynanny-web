@@ -74,6 +74,31 @@ export function isParentMaritalStatus(value: string): value is ParentMaritalStat
   return PARENT_MARITAL_SET.has(value);
 }
 
+/** Partner/spouse date of birth is relevant while the parent currently has a partner. */
+export function parentShowsPartnerDateOfBirth(status: string | null | undefined): boolean {
+  const value = String(status ?? "").trim();
+  return value === "married" || value === "partnered";
+}
+
+/** Wedding / marriage date is only relevant while the parent is currently married. */
+export function parentShowsWeddingAnniversary(status: string | null | undefined): boolean {
+  return String(status ?? "").trim() === "married";
+}
+
+export function parentSpouseDateFieldsForStatus(
+  status: string | null | undefined,
+  current: { weddingAnniversary?: string | null; partnerDateOfBirth?: string | null }
+): { weddingAnniversary: string; partnerDateOfBirth: string } {
+  return {
+    weddingAnniversary: parentShowsWeddingAnniversary(status)
+      ? String(current.weddingAnniversary ?? "").trim()
+      : "",
+    partnerDateOfBirth: parentShowsPartnerDateOfBirth(status)
+      ? String(current.partnerDateOfBirth ?? "").trim()
+      : ""
+  };
+}
+
 export function isParentBabysitterFrequency(value: string): value is ParentBabysitterFrequency {
   return PARENT_FREQUENCY_SET.has(value);
 }

@@ -56,6 +56,9 @@ import {
   isParentReminderPreference,
   isParentTypicalNeed,
   isParentTypicalReason,
+  parentShowsPartnerDateOfBirth,
+  parentShowsWeddingAnniversary,
+  parentSpouseDateFieldsForStatus,
   type ParentBabysitterFrequency,
   type ParentMaritalStatus,
   type ParentPreferredLanguage,
@@ -78,6 +81,7 @@ import {
   createEmptySpecialEvent,
   emptyParentSpouse,
   parseParentProfileRow,
+  sanitizeParentProfileSpouseDates,
   PARENT_PROFILE_SELECT_FALLBACKS,
   type ParentAddress,
   type ParentChild,
@@ -281,7 +285,8 @@ export function ParentPersonalArea() {
       setSaving(true);
       setModalError(null);
 
-      const payload = buildParentProfileUpdatePayload(next);
+      const sanitized = sanitizeParentProfileSpouseDates(next);
+      const payload = buildParentProfileUpdatePayload(sanitized);
       const saved = await updateRowStrippingUnknownColumns(
         supabase,
         PROFILES_TABLE,
@@ -296,9 +301,9 @@ export function ParentPersonalArea() {
         return false;
       }
 
-      await replaceUserSpecialOccasions(supabase, next.id, next.special_events);
+      await replaceUserSpecialOccasions(supabase, sanitized.id, sanitized.special_events);
 
-      setForm(next);
+      setForm(sanitized);
       setEditKey(null);
       setSuccess("הפרטים עודכנו בהצלחה");
       return true;
@@ -412,21 +417,25 @@ export function ParentPersonalArea() {
       }
       next = { ...next, preferred_language: draftPreferredLanguage };
     } else if (editKey === "spouse") {
-      if (draftWeddingDate && !optionalIsoDate(draftWeddingDate)) {
+      const spouseDates = parentSpouseDateFieldsForStatus(draftMaritalStatus, {
+        weddingAnniversary: draftWeddingDate,
+        partnerDateOfBirth: draftSpouse.birthDate
+      });
+      if (spouseDates.weddingAnniversary && !optionalIsoDate(spouseDates.weddingAnniversary)) {
         setModalError("יום הנישואין אינו תקין.");
         return;
       }
-      if (draftHasSpouse && draftSpouse.birthDate) {
-        if (!optionalIsoDate(draftSpouse.birthDate) || isFutureIsoDate(draftSpouse.birthDate)) {
+      if (draftHasSpouse && spouseDates.partnerDateOfBirth) {
+        if (!optionalIsoDate(spouseDates.partnerDateOfBirth) || isFutureIsoDate(spouseDates.partnerDateOfBirth)) {
           setModalError("תאריך הלידה של בן/בת הזוג אינו תקין.");
           return;
         }
       }
       next = {
         ...next,
-        spouse: draftHasSpouse ? { ...draftSpouse } : null,
-        wedding_date: draftWeddingDate,
-        spouse_birthday: draftHasSpouse ? draftSpouse.birthDate : "",
+        spouse: draftHasSpouse ? { ...draftSpouse, birthDate: spouseDates.partnerDateOfBirth } : null,
+        wedding_date: spouseDates.weddingAnniversary,
+        spouse_birthday: draftHasSpouse ? spouseDates.partnerDateOfBirth : "",
         marital_status: draftMaritalStatus
       };
     } else if (editKey === "children") {
@@ -708,7 +717,7 @@ export function ParentPersonalArea() {
         summary={addressSummary}
         action={<PersonalChangeLink onClick={() => openEdit("address")} />}
       >
-        <p className={`text-[16px] ${addressLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
+        <p className={`text-sm ${addressLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
           {displayOrEmpty(addressLabel)}
         </p>
       </PersonalAreaSection>
@@ -730,16 +739,20 @@ export function ParentPersonalArea() {
           value={spouseLabel === "לא הוגדר" ? "" : spouseLabel}
           onEdit={() => openEdit("spouse")}
         />
-        <PersonalStaticRow
-          label="תאריך לידה של בן/בת הזוג"
-          value={formatDisplayDate(form.spouse?.birthDate || form.spouse_birthday)}
-          onEdit={() => openEdit("spouse")}
-        />
-        <PersonalStaticRow
-          label="יום נישואין"
-          value={formatDisplayDate(form.wedding_date)}
-          onEdit={() => openEdit("spouse")}
-        />
+        {parentShowsPartnerDateOfBirth(form.marital_status) ? (
+          <PersonalStaticRow
+            label="תאריך לידה של בן/בת הזוג"
+            value={formatDisplayDate(form.spouse?.birthDate || form.spouse_birthday)}
+            onEdit={() => openEdit("spouse")}
+          />
+        ) : null}
+        {parentShowsWeddingAnniversary(form.marital_status) ? (
+          <PersonalStaticRow
+            label="יום נישואין"
+            value={formatDisplayDate(form.wedding_date)}
+            onEdit={() => openEdit("spouse")}
+          />
+        ) : null}
       </PersonalAreaSection>
 
       <PersonalAreaSection
@@ -750,7 +763,7 @@ export function ParentPersonalArea() {
         action={<PersonalChangeLink onClick={() => openEdit("children")} label={form.children.length ? "עריכה" : "הוספה"} />}
       >
         <p
-          className={`text-[16px] leading-relaxed ${
+          className={`text-sm leading-relaxed ${
             form.children.length ? "font-medium text-[#001F3F]" : "italic text-slate-400"
           }`}
         >
@@ -832,7 +845,7 @@ export function ParentPersonalArea() {
         action={<PersonalChangeLink onClick={() => openEdit("special_events")} />}
       >
         <p
-          className={`text-[16px] leading-relaxed ${
+          className={`text-sm leading-relaxed ${
             form.special_events.length ? "font-medium text-[#001F3F]" : "italic text-slate-400"
           }`}
         >
@@ -968,9 +981,20 @@ export function ParentPersonalArea() {
               id="parent-marital-status"
               label="מצב משפחתי"
               value={draftMaritalStatus}
-              onChange={(value) =>
-                setDraftMaritalStatus(isParentMaritalStatus(value) ? value : "")
-              }
+              onChange={(value) => {
+                const nextStatus = isParentMaritalStatus(value) ? value : "";
+                const spouseDates = parentSpouseDateFieldsForStatus(nextStatus, {
+                  weddingAnniversary: draftWeddingDate,
+                  partnerDateOfBirth: draftSpouse.birthDate
+                });
+                setDraftMaritalStatus(nextStatus);
+                setDraftWeddingDate(spouseDates.weddingAnniversary);
+                setDraftSpouse((prev) =>
+                  prev.birthDate === spouseDates.partnerDateOfBirth
+                    ? prev
+                    : { ...prev, birthDate: spouseDates.partnerDateOfBirth }
+                );
+              }}
               options={PARENT_MARITAL_STATUS_OPTIONS}
             />
             <PersonalCheckbox
@@ -994,24 +1018,28 @@ export function ParentPersonalArea() {
                     onChange={(e) => setDraftSpouse((prev) => ({ ...prev, lastName: e.target.value }))}
                   />
                 </PersonalField>
-                <PersonalField label="תאריך לידה">
-                  <input
-                    type="date"
-                    className={personalInputClassName}
-                    value={draftSpouse.birthDate}
-                    onChange={(e) => setDraftSpouse((prev) => ({ ...prev, birthDate: e.target.value }))}
-                  />
-                </PersonalField>
+                {parentShowsPartnerDateOfBirth(draftMaritalStatus) ? (
+                  <PersonalField label="תאריך לידה">
+                    <input
+                      type="date"
+                      className={personalInputClassName}
+                      value={draftSpouse.birthDate}
+                      onChange={(e) => setDraftSpouse((prev) => ({ ...prev, birthDate: e.target.value }))}
+                    />
+                  </PersonalField>
+                ) : null}
               </div>
             ) : null}
-            <PersonalField label="יום נישואין">
-              <input
-                type="date"
-                className={personalInputClassName}
-                value={draftWeddingDate}
-                onChange={(e) => setDraftWeddingDate(e.target.value)}
-              />
-            </PersonalField>
+            {parentShowsWeddingAnniversary(draftMaritalStatus) ? (
+              <PersonalField label="יום נישואין">
+                <input
+                  type="date"
+                  className={personalInputClassName}
+                  value={draftWeddingDate}
+                  onChange={(e) => setDraftWeddingDate(e.target.value)}
+                />
+              </PersonalField>
+            ) : null}
           </div>
         ) : null}
 

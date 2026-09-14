@@ -34,7 +34,10 @@ import {
   PARENT_MARITAL_STATUS_OPTIONS,
   PARENT_REASON_OPTIONS,
   PARENT_REMINDER_OPTIONS,
-  PARENT_TYPICAL_NEED_OPTIONS
+  PARENT_TYPICAL_NEED_OPTIONS,
+  parentShowsPartnerDateOfBirth,
+  parentShowsWeddingAnniversary,
+  parentSpouseDateFieldsForStatus
 } from "@/lib/onboarding/parent-options";
 import {
   buildParentOnboardingSavePayload,
@@ -380,24 +383,35 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
               id="marital-status"
               label="מצב משפחתי"
               value={draft.maritalStatus}
-              onChange={(maritalStatus) =>
-                updateDraft({ maritalStatus: maritalStatus as ParentOnboardingDraft["maritalStatus"] })
-              }
+              onChange={(maritalStatus) => {
+                const nextStatus = maritalStatus as ParentOnboardingDraft["maritalStatus"];
+                updateDraft({
+                  maritalStatus: nextStatus,
+                  ...parentSpouseDateFieldsForStatus(nextStatus, {
+                    weddingAnniversary: draft.weddingAnniversary,
+                    partnerDateOfBirth: draft.partnerDateOfBirth
+                  })
+                });
+              }}
               options={PARENT_MARITAL_STATUS_OPTIONS}
             />
-            <OnboardingDateInput
-              id="wedding-anniversary"
-              label="מתי יום הנישואין שלכם?"
-              value={draft.weddingAnniversary}
-              onChange={(weddingAnniversary) => updateDraft({ weddingAnniversary })}
-            />
-            <OnboardingDateInput
-              id="partner-dob"
-              label="תאריך הלידה של בן/בת הזוג"
-              value={draft.partnerDateOfBirth}
-              onChange={(partnerDateOfBirth) => updateDraft({ partnerDateOfBirth })}
-              disallowFuture
-            />
+            {parentShowsWeddingAnniversary(draft.maritalStatus) ? (
+              <OnboardingDateInput
+                id="wedding-anniversary"
+                label="מתי יום הנישואין שלכם?"
+                value={draft.weddingAnniversary}
+                onChange={(weddingAnniversary) => updateDraft({ weddingAnniversary })}
+              />
+            ) : null}
+            {parentShowsPartnerDateOfBirth(draft.maritalStatus) ? (
+              <OnboardingDateInput
+                id="partner-dob"
+                label="תאריך הלידה של בן/בת הזוג"
+                value={draft.partnerDateOfBirth}
+                onChange={(partnerDateOfBirth) => updateDraft({ partnerDateOfBirth })}
+                disallowFuture
+              />
+            ) : null}
             <div className="space-y-2">
               <p className="text-sm font-semibold text-[#001F3F]">יש תאריכים משפחתיים נוספים שתרצו שנזכור?</p>
               {draft.specialDates.map((event) => (

@@ -11,6 +11,11 @@ import {
   validateParentOnboardingStep
 } from "../lib/onboarding/parent-questionnaire";
 import {
+  parentShowsPartnerDateOfBirth,
+  parentShowsWeddingAnniversary,
+  parentSpouseDateFieldsForStatus
+} from "../lib/onboarding/parent-options";
+import {
   buildSitterOnboardingCorePayload,
   buildSitterOnboardingExtendedPayload,
   emptySitterOnboardingDraft,
@@ -101,6 +106,70 @@ assert.equal((parentPayload.address as { city: string }).city, "חיפה");
 assert.equal(parentPayload.children_count, 2);
 assert.equal(parentPayload.has_pets, false);
 assert.equal(parentPayload.child_special_or_medical_details, null);
+
+assert.equal(parentShowsPartnerDateOfBirth("married"), true);
+assert.equal(parentShowsWeddingAnniversary("married"), true);
+assert.equal(parentShowsPartnerDateOfBirth("partnered"), true);
+assert.equal(parentShowsWeddingAnniversary("partnered"), false);
+for (const status of ["divorced", "widowed", "single", "separated", "prefer_not_to_say", ""]) {
+  assert.equal(parentShowsPartnerDateOfBirth(status), false, status);
+  assert.equal(parentShowsWeddingAnniversary(status), false, status);
+}
+
+const staleSpouseDates = {
+  weddingAnniversary: "2015-06-20",
+  partnerDateOfBirth: "1988-04-12"
+};
+assert.deepEqual(parentSpouseDateFieldsForStatus("married", staleSpouseDates), staleSpouseDates);
+assert.deepEqual(parentSpouseDateFieldsForStatus("partnered", staleSpouseDates), {
+  weddingAnniversary: "",
+  partnerDateOfBirth: "1988-04-12"
+});
+assert.deepEqual(parentSpouseDateFieldsForStatus("divorced", staleSpouseDates), {
+  weddingAnniversary: "",
+  partnerDateOfBirth: ""
+});
+
+const marriedParent = {
+  ...validParent,
+  maritalStatus: "married" as const,
+  weddingAnniversary: "2015-06-20",
+  partnerDateOfBirth: "1988-04-12"
+};
+const marriedPayload = buildParentOnboardingSavePayload(marriedParent, "2026-09-02T00:00:00.000Z");
+assert.equal(marriedPayload.wedding_date, "2015-06-20");
+assert.equal(marriedPayload.spouse_birthday, "1988-04-12");
+assert.equal(validateParentOnboardingStep(3, marriedParent), null);
+
+const partneredParent = { ...marriedParent, maritalStatus: "partnered" as const };
+const partneredPayload = buildParentOnboardingSavePayload(partneredParent, "2026-09-02T00:00:00.000Z");
+assert.equal(partneredPayload.wedding_date, null);
+assert.equal(partneredPayload.spouse_birthday, "1988-04-12");
+
+for (const status of ["divorced", "widowed", "single"] as const) {
+  const hiddenPayload = buildParentOnboardingSavePayload(
+    { ...marriedParent, maritalStatus: status },
+    "2026-09-02T00:00:00.000Z"
+  );
+  assert.equal(hiddenPayload.wedding_date, null, status);
+  assert.equal(hiddenPayload.spouse_birthday, null, status);
+  assert.equal(
+    validateParentOnboardingStep(3, {
+      ...marriedParent,
+      maritalStatus: status,
+      weddingAnniversary: "not-a-date",
+      partnerDateOfBirth: "not-a-date"
+    }),
+    null,
+    status
+  );
+}
+
+assert.match(parentWizard, /parentShowsWeddingAnniversary/);
+assert.match(parentWizard, /parentShowsPartnerDateOfBirth/);
+assert.match(parentWizard, /parentSpouseDateFieldsForStatus/);
+assert.match(parentWizard, /id="wedding-anniversary"/);
+assert.match(parentWizard, /id="partner-dob"/);
 
 const medicalParent = {
   ...validParent,

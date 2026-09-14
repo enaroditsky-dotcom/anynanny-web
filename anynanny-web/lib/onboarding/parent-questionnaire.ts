@@ -15,6 +15,7 @@ import {
   isParentReminderPreference,
   isParentTypicalNeed,
   isParentTypicalReason,
+  parentSpouseDateFieldsForStatus,
   parseParentChildrenCount,
   type ParentBabysitterFrequency,
   type ParentChildrenCount,
@@ -151,11 +152,15 @@ export function validateParentOnboardingStep(
     return null;
   }
 
-  if (draft.weddingAnniversary && !optionalIsoDate(draft.weddingAnniversary)) {
+  const spouseDates = parentSpouseDateFieldsForStatus(draft.maritalStatus, {
+    weddingAnniversary: draft.weddingAnniversary,
+    partnerDateOfBirth: draft.partnerDateOfBirth
+  });
+  if (spouseDates.weddingAnniversary && !optionalIsoDate(spouseDates.weddingAnniversary)) {
     return "יום הנישואין אינו תקין.";
   }
-  if (draft.partnerDateOfBirth) {
-    if (!optionalIsoDate(draft.partnerDateOfBirth) || isFutureIsoDate(draft.partnerDateOfBirth)) {
+  if (spouseDates.partnerDateOfBirth) {
+    if (!optionalIsoDate(spouseDates.partnerDateOfBirth) || isFutureIsoDate(spouseDates.partnerDateOfBirth)) {
       return "תאריך הלידה של בן/בת הזוג אינו תקין.";
     }
   }
@@ -202,6 +207,10 @@ export function buildParentOnboardingSavePayload(
   };
 
   const phone = draft.phone.trim() ? normalizeIsraeliMobileForStorage(draft.phone) : null;
+  const spouseDates = parentSpouseDateFieldsForStatus(draft.maritalStatus, {
+    weddingAnniversary: draft.weddingAnniversary,
+    partnerDateOfBirth: draft.partnerDateOfBirth
+  });
 
   return {
     ...parentOnboardingNamePatch({
@@ -223,8 +232,8 @@ export function buildParentOnboardingSavePayload(
       ? optionalTrimmedText(draft.childSpecialOrMedicalDetails, ONBOARDING_DETAILS_MAX_LENGTH)
       : null,
     marital_status: draft.maritalStatus && isParentMaritalStatus(draft.maritalStatus) ? draft.maritalStatus : null,
-    wedding_date: optionalIsoDate(draft.weddingAnniversary),
-    spouse_birthday: optionalIsoDate(draft.partnerDateOfBirth),
+    wedding_date: optionalIsoDate(spouseDates.weddingAnniversary),
+    spouse_birthday: optionalIsoDate(spouseDates.partnerDateOfBirth),
     special_events: specialDates,
     estimated_babysitter_frequency:
       draft.estimatedBabysitterFrequency && isParentBabysitterFrequency(draft.estimatedBabysitterFrequency)
