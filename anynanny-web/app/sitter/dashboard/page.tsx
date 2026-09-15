@@ -1560,7 +1560,7 @@ export default function SitterDashboardPage() {
             </div>
             {onboardingPending ? (
               <div className="fixed inset-x-0 bottom-0 top-20 z-20 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
-                <div className="w-full max-w-sm my-auto">
+                <div className="w-full max-w-lg my-auto">
                   <SitterOnboardingWizard onSaved={handleOnboardingSaved} />
                 </div>
               </div>

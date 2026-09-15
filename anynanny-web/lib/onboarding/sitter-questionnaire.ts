@@ -105,47 +105,203 @@ export function parseSitterHourlyRate(value: string): number | null {
   return Math.round(n);
 }
 
+export type SitterQuestionnaireStepId =
+  | "about"
+  | "location"
+  | "experience"
+  | "skills"
+  | "expert-profile"
+  | "work-prefs"
+  | "who"
+  | "tasks";
+
+export const SITTER_REGULAR_QUESTIONNAIRE_STEP_IDS = [
+  "about",
+  "location",
+  "experience",
+  "skills",
+  "work-prefs",
+  "who",
+  "tasks"
+] as const satisfies readonly SitterQuestionnaireStepId[];
+
+export const SITTER_EXPERT_QUESTIONNAIRE_STEP_IDS = [
+  "about",
+  "location",
+  "expert-profile",
+  "work-prefs",
+  "who",
+  "tasks"
+] as const satisfies readonly SitterQuestionnaireStepId[];
+
+export function sitterQuestionnaireStepIds(isExpert: boolean): readonly SitterQuestionnaireStepId[] {
+  return isExpert ? SITTER_EXPERT_QUESTIONNAIRE_STEP_IDS : SITTER_REGULAR_QUESTIONNAIRE_STEP_IDS;
+}
+
+export function sitterQuestionnaireStepCount(isExpert: boolean): number {
+  return sitterQuestionnaireStepIds(isExpert).length;
+}
+
+export function sitterQuestionnaireStepIdAt(step: number, isExpert: boolean): SitterQuestionnaireStepId {
+  const ids = sitterQuestionnaireStepIds(isExpert);
+  return ids[Math.min(Math.max(step, 1), ids.length) - 1];
+}
+
+export function sitterQuestionnaireProgressLabel(step: number, isExpert: boolean): string {
+  return `${step}/${sitterQuestionnaireStepCount(isExpert)}`;
+}
+
+export const SITTER_QUESTIONNAIRE_STEP_TITLES: Record<SitterQuestionnaireStepId, string> = {
+  about: "קצת עליך",
+  location: "איפה תרצי לעבוד?",
+  experience: "ניסיון ותעריף",
+  skills: "כישורים",
+  "expert-profile": "הפרופיל המקצועי",
+  "work-prefs": "איך את רוצה לעבוד?",
+  who: "עם מי נוח לך לעבוד?",
+  tasks: "משימות והכשרות"
+};
+
+export const SITTER_QUESTIONNAIRE_STEP_DESCRIPTIONS: Record<SitterQuestionnaireStepId, string> = {
+  about: "נשלים כמה פרטים חיוניים כדי שההורים יוכלו למצוא אותך.",
+  location: "עיר מגורים ואזורי העבודה שבהם תרצי לקבל משמרות.",
+  experience: "ניסיון ותעריף עוזרים להורים להבין אם זה מתאים.",
+  skills: "עוד כמה פרטים על ניסיון וכישורים. אפשר לדלג על שאלות שאינן רלוונטיות.",
+  "expert-profile": "נשלים את הפרופיל המקצועי.",
+  "work-prefs": "עוד כמה שאלות שיעזרו לנו להתאים עבורך את AnyNanny. אפשר לדלג על שאלות שאינן רלוונטיות.",
+  who: "עם אילו ילדים נוח לך לעבוד. אפשר לדלג על שאלות שאינן רלוונטיות.",
+  tasks: "משימות והכשרות. אפשר לדלג על שאלות שאינן רלוונטיות."
+};
+
+function validateSitterAbout(draft: SitterOnboardingDraft): string | null {
+  const firstError = validateOnboardingName(draft.firstName, "שם פרטי");
+  if (firstError) return firstError;
+  const lastError = validateOnboardingName(draft.lastName, "שם משפחה");
+  if (lastError) return lastError;
+  const dobError = getAccountDobEligibilityError("sitter", draft.birthDate);
+  if (dobError) return dobError;
+  if (draft.phone.trim()) {
+    const phoneError = validateContactPhoneInput(draft.phone);
+    if (phoneError) return phoneError;
+  }
+  if (normalizeSitterLanguages(draft.languages).length === 0) return "יש לבחור לפחות שפה אחת.";
+  return null;
+}
+
+function validateSitterLocation(draft: SitterOnboardingDraft): string | null {
+  if (!isIsraelCity(draft.homeCity)) return "יש לבחור עיר / אזור מגורים.";
+  if (normalizeWorkingCities(draft.preferredWorkArea).length === 0) {
+    return "יש לבחור אזור עבודה מועדף.";
+  }
+  return null;
+}
+
+function validateSitterExperience(draft: SitterOnboardingDraft): string | null {
+  if (!draft.yearsExperienceBand || !isSitterExperienceBand(draft.yearsExperienceBand)) {
+    return "יש לבחור שנות ניסיון.";
+  }
+  if (filterKnownValues(draft.experienceAgeGroups, isSitterAgeGroup).length === 0) {
+    return "יש לבחור עם אילו גילאים יש לך ניסיון.";
+  }
+  if (parseSitterHourlyRate(draft.hourlyRateNis) == null) {
+    return "יש להזין מחיר לשעה תקין.";
+  }
+  return null;
+}
+
+function validateSitterWorkPrefs(draft: SitterOnboardingDraft): string | null {
+  if (draft.desiredHoursPerWeek.trim() && parseDesiredHoursPerWeek(draft.desiredHoursPerWeek) == null) {
+    return "יש לבחור מספר שעות בין 1 ל-50.";
+  }
+  return null;
+}
+
+export function validateSitterQuestionnaireWizardStep(
+  stepId: SitterQuestionnaireStepId,
+  draft: SitterOnboardingDraft
+): string | null {
+  if (stepId === "about") return validateSitterAbout(draft);
+  if (stepId === "location") return validateSitterLocation(draft);
+  if (stepId === "experience") return validateSitterExperience(draft);
+  if (stepId === "work-prefs") return validateSitterWorkPrefs(draft);
+  return null;
+}
+
+export function firstInvalidSitterQuestionnaireFieldId(
+  stepId: SitterQuestionnaireStepId,
+  draft: SitterOnboardingDraft
+): string | null {
+  if (stepId === "about") {
+    if (validateOnboardingName(draft.firstName, "שם פרטי")) return "sitter-first-name";
+    if (validateOnboardingName(draft.lastName, "שם משפחה")) return "sitter-last-name";
+    if (getAccountDobEligibilityError("sitter", draft.birthDate)) return "sitter-birth-date";
+    if (draft.phone.trim() && validateContactPhoneInput(draft.phone)) return "sitter-phone";
+    if (normalizeSitterLanguages(draft.languages).length === 0) return "sitter-languages";
+    return null;
+  }
+  if (stepId === "location") {
+    if (!isIsraelCity(draft.homeCity)) return "sitter-home-city";
+    if (normalizeWorkingCities(draft.preferredWorkArea).length === 0) return "sitter-work-area";
+    return null;
+  }
+  if (stepId === "experience") {
+    if (!draft.yearsExperienceBand || !isSitterExperienceBand(draft.yearsExperienceBand)) {
+      return "years-experience";
+    }
+    if (filterKnownValues(draft.experienceAgeGroups, isSitterAgeGroup).length === 0) {
+      return "sitter-experience-ages";
+    }
+    if (parseSitterHourlyRate(draft.hourlyRateNis) == null) return "hourly-rate";
+    return null;
+  }
+  if (stepId === "work-prefs") {
+    if (draft.desiredHoursPerWeek.trim() && parseDesiredHoursPerWeek(draft.desiredHoursPerWeek) == null) {
+      return "desired-hours";
+    }
+    return null;
+  }
+  return null;
+}
+
+export function sitterQuestionnaireStepForRequiredError(message: string, isExpert: boolean): number {
+  let stepId: SitterQuestionnaireStepId = "about";
+  if (message.includes("עיר") || message.includes("אזור עבודה")) {
+    stepId = "location";
+  } else if (
+    message.includes("שנות ניסיון") ||
+    message.includes("גילאים") ||
+    message.includes("מחיר לשעה")
+  ) {
+    stepId = "experience";
+  } else if (message.includes("שעות")) {
+    stepId = "work-prefs";
+  }
+  const ids = sitterQuestionnaireStepIds(isExpert);
+  const index = ids.indexOf(stepId);
+  return index >= 0 ? index + 1 : 1;
+}
+
+export function sitterExpertProfileStep(isExpert: boolean): number {
+  const ids = sitterQuestionnaireStepIds(isExpert);
+  const index = ids.indexOf("expert-profile");
+  return index >= 0 ? index + 1 : 1;
+}
+
 export function validateSitterOnboardingStep(
   step: 1 | 2 | 3,
   draft: SitterOnboardingDraft,
   isExpert = false
 ): string | null {
   if (step === 1) {
-    const firstError = validateOnboardingName(draft.firstName, "שם פרטי");
-    if (firstError) return firstError;
-    const lastError = validateOnboardingName(draft.lastName, "שם משפחה");
-    if (lastError) return lastError;
-    const dobError = getAccountDobEligibilityError("sitter", draft.birthDate);
-    if (dobError) return dobError;
-    if (!isIsraelCity(draft.homeCity)) return "יש לבחור עיר / אזור מגורים.";
-    if (normalizeWorkingCities(draft.preferredWorkArea).length === 0) {
-      return "יש לבחור אזור עבודה מועדף.";
-    }
-    if (draft.phone.trim()) {
-      const phoneError = validateContactPhoneInput(draft.phone);
-      if (phoneError) return phoneError;
-    }
-    if (normalizeSitterLanguages(draft.languages).length === 0) return "יש לבחור לפחות שפה אחת.";
-    return null;
+    return validateSitterAbout(draft) || validateSitterLocation(draft);
   }
 
   if (step === 2 && !isExpert) {
-    if (!draft.yearsExperienceBand || !isSitterExperienceBand(draft.yearsExperienceBand)) {
-      return "יש לבחור שנות ניסיון.";
-    }
-    if (filterKnownValues(draft.experienceAgeGroups, isSitterAgeGroup).length === 0) {
-      return "יש לבחור עם אילו גילאים יש לך ניסיון.";
-    }
-    if (parseSitterHourlyRate(draft.hourlyRateNis) == null) {
-      return "יש להזין מחיר לשעה תקין.";
-    }
-    return null;
+    return validateSitterExperience(draft);
   }
 
   if (step === 3) {
-    if (draft.desiredHoursPerWeek.trim() && parseDesiredHoursPerWeek(draft.desiredHoursPerWeek) == null) {
-      return "יש לבחור מספר שעות בין 1 ל-50.";
-    }
+    return validateSitterWorkPrefs(draft);
   }
   return null;
 }

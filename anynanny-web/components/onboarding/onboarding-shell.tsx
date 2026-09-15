@@ -1,11 +1,11 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { ONBOARDING_STEP_COUNT, REQUIRED_FIELDS_NOTE } from "@/lib/onboarding/shared";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
 export function OnboardingPageShell({ children }: { children: ReactNode }) {
   return (
     <main
-      className="mx-auto flex min-h-[100dvh] w-full min-w-0 max-w-full flex-col items-center justify-center bg-[#FDFBF6] px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+      className="mx-auto flex min-h-[100dvh] w-full min-w-0 max-w-full flex-col items-center bg-[#FDFBF6] px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
       dir="rtl"
     >
       {children}
@@ -19,7 +19,14 @@ export function OnboardingCard({
   step,
   totalSteps = ONBOARDING_STEP_COUNT,
   error,
-  children
+  children,
+  innerProgress,
+  showStageLabel = true,
+  growContent = false,
+  wide = false,
+  showRequiredNote,
+  titleId = "onboarding-step-title",
+  titleRef
 }: {
   title: string;
   description?: string;
@@ -27,33 +34,67 @@ export function OnboardingCard({
   totalSteps?: number;
   error?: string | null;
   children: ReactNode;
+  innerProgress?: { current: number; total: number } | null;
+  showStageLabel?: boolean;
+  growContent?: boolean;
+  wide?: boolean;
+  showRequiredNote?: boolean;
+  titleId?: string;
+  titleRef?: Ref<HTMLHeadingElement>;
 }) {
-  const progress = Math.min(100, Math.max(0, (step / totalSteps) * 100));
+  const progressCurrent = innerProgress?.current ?? step;
+  const progressTotal = innerProgress?.total ?? totalSteps;
+  const progress = Math.min(100, Math.max(0, (progressCurrent / progressTotal) * 100));
+  const requiredNoteVisible = showRequiredNote ?? step === 1;
 
   return (
-    <section className="flex max-h-[min(85dvh,40rem)] w-full min-w-0 max-w-md flex-col overflow-hidden rounded-3xl border border-[#001F3F]/10 bg-white shadow-[0_16px_40px_-24px_rgba(0,31,63,0.35)]">
+    <section
+      className={`my-auto flex w-full min-w-0 flex-col overflow-hidden rounded-3xl border border-[#001F3F]/10 bg-white shadow-[0_16px_40px_-24px_rgba(0,31,63,0.35)] ${
+        growContent ? "" : "max-h-[min(85dvh,40rem)]"
+      } ${wide ? "max-w-lg" : "max-w-md"}`}
+    >
       <header className="shrink-0 border-b border-[#001F3F]/8 px-5 pb-4 pt-5">
         <div className="mb-3 flex justify-center">
           <AnyNannyLogo variant="header" decorative />
         </div>
-        <p className="text-center text-xs font-semibold text-teal-700">
-          שלב {step} מתוך {totalSteps}
-        </p>
+        {innerProgress ? (
+          <p
+            className="text-center text-sm font-bold text-[#001F3F]"
+            aria-live="polite"
+            aria-label={`חלק ${innerProgress.current} מתוך ${innerProgress.total} בשאלון`}
+          >
+            {innerProgress.current}/{innerProgress.total}
+          </p>
+        ) : null}
+        {showStageLabel ? (
+          <p className={`text-center font-semibold text-teal-700 ${innerProgress ? "mt-1 text-[11px]" : "text-xs"}`}>
+            שלב {step} מתוך {totalSteps}
+          </p>
+        ) : null}
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden>
           <div className="h-full rounded-full bg-teal-600 transition-all" style={{ width: `${progress}%` }} />
         </div>
-        <h1 className="mt-4 text-center text-xl font-bold text-[#001F3F]">{title}</h1>
+        <h1
+          id={titleId}
+          ref={titleRef}
+          tabIndex={-1}
+          className="mt-4 text-center text-xl font-bold text-[#001F3F] outline-none"
+        >
+          {title}
+        </h1>
         {description ? (
           <p className="mt-2 text-center text-sm leading-relaxed text-slate-600">{description}</p>
         ) : null}
-        {step === 1 ? <RequiredFieldsNote /> : null}
+        {requiredNoteVisible ? <RequiredFieldsNote /> : null}
         {error ? (
           <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">
             {error}
           </p>
         ) : null}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
+      <div className={`px-5 py-4 ${growContent ? "" : "min-h-0 flex-1 overflow-y-auto overscroll-contain"}`}>
+        {children}
+      </div>
     </section>
   );
 }
