@@ -67,13 +67,35 @@ const config: Config = {
         "fade-route": {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" }
+        },
+        "parent-wizard-in-forward": {
+          "0%": { transform: "translateX(100%)", opacity: "0.72" },
+          "100%": { transform: "translateX(0)", opacity: "1" }
+        },
+        "parent-wizard-out-forward": {
+          "0%": { transform: "translateX(0)", opacity: "1" },
+          "100%": { transform: "translateX(-100%)", opacity: "0.72" }
+        },
+        "parent-wizard-in-back": {
+          "0%": { transform: "translateX(-100%)", opacity: "0.72" },
+          "100%": { transform: "translateX(0)", opacity: "1" }
+        },
+        "parent-wizard-out-back": {
+          "0%": { transform: "translateX(0)", opacity: "1" },
+          "100%": { transform: "translateX(100%)", opacity: "0.72" }
         }
       },
       animation: {
         "session-pulse-navy": "session-pulse-navy 2.2s ease-in-out infinite",
         "session-pulse-green": "session-pulse-green 2.2s ease-in-out infinite",
         "session-pulse-salmon": "session-pulse-salmon 2.2s ease-in-out infinite",
-        "fade-route": "fade-route 0.48s cubic-bezier(0.22, 1, 0.36, 1) both"
+        "fade-route": "fade-route 0.48s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "parent-wizard-in-forward":
+          "parent-wizard-in-forward 280ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        "parent-wizard-out-forward":
+          "parent-wizard-out-forward 280ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        "parent-wizard-in-back": "parent-wizard-in-back 280ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        "parent-wizard-out-back": "parent-wizard-out-back 280ms cubic-bezier(0.22, 1, 0.36, 1) both"
       }
     }
   },

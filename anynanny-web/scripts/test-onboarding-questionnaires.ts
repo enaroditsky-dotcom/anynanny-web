@@ -82,13 +82,21 @@ assert.equal(REQUIRED_FIELDS_NOTE, "שדות המסומנים בכוכבית (*)
 assert.match(fields, /sr-only/);
 assert.match(fields, /\*/);
 
-// 5–7 children + dates + yes/no
+// 5–7 children + dates + add/remove
 assert.equal(childBlocksForCount(3, []).length, 3);
 assert.equal(childBlocksForCount(6, []).length, 6);
 assert.match(parentWizard, /ילד\/ה \{index \+ 1\}/);
 assert.match(parentWizard, /OnboardingDateInput/);
 assert.match(parentWizard, /disallowFuture/);
+assert.match(parentWizard, /label="מספר טלפון"/);
+assert.match(parentWizard, /label="שפה מועדפת"/);
 assert.match(parentWizard, /OnboardingYesNo/);
+assert.match(parentWizard, /PARENT_TYPICAL_NEED_OPTIONS/);
+assert.match(parentWizard, /PARENT_FREQUENCY_OPTIONS/);
+assert.match(parentWizard, /PARENT_REASON_OPTIONS/);
+assert.match(parentWizard, /PARENT_REMINDER_OPTIONS/);
+assert.match(parentWizard, /automaticBabysitterSuggestion/);
+assert.match(parentWizard, /הוספת ילד\/ה/);
 assert.doesNotMatch(parentWizard, /type="checkbox"/);
 
 // 8–11 optional business questions
@@ -168,19 +176,24 @@ for (const status of ["divorced", "widowed", "single"] as const) {
 assert.match(parentWizard, /parentShowsWeddingAnniversary/);
 assert.match(parentWizard, /parentShowsPartnerDateOfBirth/);
 assert.match(parentWizard, /parentSpouseDateFieldsForStatus/);
-assert.match(parentWizard, /id="wedding-anniversary"/);
-assert.match(parentWizard, /id="partner-dob"/);
+assert.match(parentWizard, /wedding-anniversary/);
+assert.match(parentWizard, /partner-dob/);
+
+assert.equal(validateParentOnboardingStep(2, { ...validParent, city: "" }), "יש לבחור עיר / אזור מגורים.");
+assert.equal(validateParentOnboardingStep(2, validParent), null);
 
 const medicalParent = {
   ...validParent,
   hasChildSpecialOrMedicalInformation: true,
   childSpecialOrMedicalDetails: ""
 };
-assert.match(validateParentOnboardingStep(2, medicalParent) ?? "", /פרטים שחשוב לדעת/);
+assert.match(validateParentOnboardingStep(5, medicalParent) ?? "", /פרטים שחשוב לדעת/);
 assert.equal(
-  validateParentOnboardingStep(2, { ...medicalParent, childSpecialOrMedicalDetails: "אלרגיה לבוטנים" }),
+  validateParentOnboardingStep(5, { ...medicalParent, childSpecialOrMedicalDetails: "אלרגיה לבוטנים" }),
   null
 );
+assert.match(validateParentOnboardingStep(4, { ...validParent, childrenCount: null }) ?? "", /כמה ילדים/);
+assert.equal(validateParentOnboardingStep(6, { ...validParent, preferredLanguage: "" }), "יש לבחור שפה מועדפת.");
 
 // 12 removed matching/personality questions
 for (const banned of [
@@ -286,8 +299,8 @@ assert.match(sitterWizard, /ONBOARDING_STEP_COUNT/);
 assert.match(shell, /overflow-hidden/);
 assert.match(shell, /min-w-0/);
 assert.match(shell, /safe-area-inset-bottom/);
-assert.match(parentWizard, /onBack=\{\(\) => setStep/);
-assert.match(sitterWizard, /onBack=\{\(\) => setStep/);
+assert.match(parentWizard, /onBack=\{goBack\}/);
+assert.match(sitterWizard, /onBack=\{goBack\}/);
 assert.match(parentWizard, /useState<ParentOnboardingDraft>/);
 assert.match(sitterWizard, /useState<SitterOnboardingDraft>/);
 

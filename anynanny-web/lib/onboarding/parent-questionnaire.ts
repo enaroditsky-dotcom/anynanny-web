@@ -110,48 +110,68 @@ export function persistedChildrenCount(count: ParentChildrenCount, children: Par
   return count < 6 ? count : Math.max(6, children.length);
 }
 
-export function validateParentOnboardingStep(
-  step: 1 | 2 | 3,
-  draft: ParentOnboardingDraft
-): string | null {
-  if (step === 1) {
-    const firstError = validateOnboardingName(draft.firstName, "שם פרטי");
-    if (firstError) return firstError;
-    const lastError = validateOnboardingName(draft.lastName, "שם משפחה");
-    if (lastError) return lastError;
-    const dobError = getAccountDobEligibilityError("parent", draft.birthDate);
-    if (dobError) return dobError;
-    if (!isIsraelCity(draft.city)) return "יש לבחור עיר / אזור מגורים.";
-    if (draft.phone.trim()) {
-      const phoneError = validateContactPhoneInput(draft.phone);
-      if (phoneError) return phoneError;
-    }
-    if (!draft.preferredLanguage || !isParentPreferredLanguage(draft.preferredLanguage)) {
-      return "יש לבחור שפה מועדפת.";
-    }
-    return null;
-  }
+export const PARENT_QUESTIONNAIRE_STEP_COUNT = 7;
+export type ParentQuestionnaireStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-  if (step === 2) {
-    const count = parseParentChildrenCount(draft.childrenCount);
-    if (!count) return "יש לבחור כמה ילדים יש במשפחה.";
-    const children = childBlocksForCount(count, draft.children);
-    for (const [index, child] of children.entries()) {
-      const nameError = validateOnboardingName(child.name, `שם פרטי של ילד/ה ${index + 1}`);
-      if (nameError) return nameError;
-      if (!parseIsoDateOnly(child.birthDate)) return `יש לבחור תאריך לידה לילד/ה ${index + 1}.`;
-      if (isFutureIsoDate(child.birthDate)) return `תאריך הלידה של ילד/ה ${index + 1} לא יכול להיות בעתיד.`;
-    }
-    if (draft.hasPets == null) return "יש לבחור האם יש בעלי חיים בבית.";
-    if (draft.hasChildSpecialOrMedicalInformation == null) {
-      return "יש לבחור האם יש מידע רפואי או צורך מיוחד שחשוב לדעת.";
-    }
-    if (draft.hasChildSpecialOrMedicalInformation && !draft.childSpecialOrMedicalDetails.trim()) {
-      return "יש למלא פרטים שחשוב לדעת.";
-    }
-    return null;
-  }
+export const PARENT_QUESTIONNAIRE_STEP_TITLES: Record<ParentQuestionnaireStep, string> = {
+  1: "קצת עליך",
+  2: "איפה אתם גרים?",
+  3: "המשפחה שלך",
+  4: "הילדים שלכם",
+  5: "הבית שלכם",
+  6: "איך אתם משתמשים ב-AnyNanny?",
+  7: "תזכורות ותאריכים"
+};
 
+export const PARENT_QUESTIONNAIRE_STEP_DESCRIPTIONS: Record<ParentQuestionnaireStep, string> = {
+  1: "נשלים כמה פרטים חיוניים כדי שנוכל להתאים לכם את השירות.",
+  2: "כתובת המגורים עוזרת לנו להתאים בייביסיטר באזור שלכם.",
+  3: "מצב משפחתי עוזר ל-AnyNanny לזכור תאריכים חשובים בלי לשמור פרטים מיותרים.",
+  4: "פרטי הילדים עוזרים להתאים בייביסיטר ולזכור ימי הולדת.",
+  5: "מידע על הבית ועל הילדים שחשוב שבייביסיטר תדע.",
+  6: "כמה פרטים על איך אתם משתמשים ב-AnyNanny. אפשר לדלג על שאלות שאינן חובה.",
+  7: "תזכורות ותאריכים משפחתיים — אפשר גם להמשיך בלי."
+};
+
+export function parentQuestionnaireProgressLabel(step: ParentQuestionnaireStep): string {
+  return `${step}/${PARENT_QUESTIONNAIRE_STEP_COUNT}`;
+}
+
+export function parentChildrenDraftPatch(
+  children: ParentChild[]
+): Pick<ParentOnboardingDraft, "children" | "childrenCount"> {
+  const n = children.length;
+  return {
+    children,
+    childrenCount: n === 0 ? null : ((n >= 6 ? 6 : n) as ParentChildrenCount)
+  };
+}
+
+function validateParentChildren(draft: ParentOnboardingDraft): string | null {
+  const count = parseParentChildrenCount(draft.childrenCount);
+  if (!count) return "יש לבחור כמה ילדים יש במשפחה.";
+  const children = childBlocksForCount(count, draft.children);
+  for (const [index, child] of children.entries()) {
+    const nameError = validateOnboardingName(child.name, `שם פרטי של ילד/ה ${index + 1}`);
+    if (nameError) return nameError;
+    if (!parseIsoDateOnly(child.birthDate)) return `יש לבחור תאריך לידה לילד/ה ${index + 1}.`;
+    if (isFutureIsoDate(child.birthDate)) return `תאריך הלידה של ילד/ה ${index + 1} לא יכול להיות בעתיד.`;
+  }
+  return null;
+}
+
+function validateParentHousehold(draft: ParentOnboardingDraft): string | null {
+  if (draft.hasPets == null) return "יש לבחור האם יש בעלי חיים בבית.";
+  if (draft.hasChildSpecialOrMedicalInformation == null) {
+    return "יש לבחור האם יש מידע רפואי או צורך מיוחד שחשוב לדעת.";
+  }
+  if (draft.hasChildSpecialOrMedicalInformation && !draft.childSpecialOrMedicalDetails.trim()) {
+    return "יש למלא פרטים שחשוב לדעת.";
+  }
+  return null;
+}
+
+function validateParentSpouseDates(draft: ParentOnboardingDraft): string | null {
   const spouseDates = parentSpouseDateFieldsForStatus(draft.maritalStatus, {
     weddingAnniversary: draft.weddingAnniversary,
     partnerDateOfBirth: draft.partnerDateOfBirth
@@ -167,11 +187,134 @@ export function validateParentOnboardingStep(
   return null;
 }
 
+export function validateParentOnboardingStep(
+  step: ParentQuestionnaireStep,
+  draft: ParentOnboardingDraft
+): string | null {
+  if (step === 1) {
+    const firstError = validateOnboardingName(draft.firstName, "שם פרטי");
+    if (firstError) return firstError;
+    const lastError = validateOnboardingName(draft.lastName, "שם משפחה");
+    if (lastError) return lastError;
+    const dobError = getAccountDobEligibilityError("parent", draft.birthDate);
+    if (dobError) return dobError;
+    if (draft.phone.trim()) {
+      const phoneError = validateContactPhoneInput(draft.phone);
+      if (phoneError) return phoneError;
+    }
+    return null;
+  }
+
+  if (step === 2) {
+    if (!isIsraelCity(draft.city)) return "יש לבחור עיר / אזור מגורים.";
+    return null;
+  }
+
+  if (step === 3) {
+    return validateParentSpouseDates(draft);
+  }
+
+  if (step === 4) {
+    return validateParentChildren(draft);
+  }
+
+  if (step === 5) {
+    return validateParentHousehold(draft);
+  }
+
+  if (step === 6) {
+    if (!draft.preferredLanguage || !isParentPreferredLanguage(draft.preferredLanguage)) {
+      return "יש לבחור שפה מועדפת.";
+    }
+    return null;
+  }
+
+  return null;
+}
+
+export function firstInvalidParentOnboardingFieldId(
+  step: ParentQuestionnaireStep,
+  draft: ParentOnboardingDraft
+): string | null {
+  if (step === 1) {
+    if (validateOnboardingName(draft.firstName, "שם פרטי")) return "parent-first-name";
+    if (validateOnboardingName(draft.lastName, "שם משפחה")) return "parent-last-name";
+    if (getAccountDobEligibilityError("parent", draft.birthDate)) return "parent-birth-date";
+    if (draft.phone.trim() && validateContactPhoneInput(draft.phone)) return "parent-phone";
+    return null;
+  }
+
+  if (step === 2) {
+    return isIsraelCity(draft.city) ? null : "parent-city";
+  }
+
+  if (step === 3) {
+    const spouseDates = parentSpouseDateFieldsForStatus(draft.maritalStatus, {
+      weddingAnniversary: draft.weddingAnniversary,
+      partnerDateOfBirth: draft.partnerDateOfBirth
+    });
+    if (spouseDates.weddingAnniversary && !optionalIsoDate(spouseDates.weddingAnniversary)) {
+      return "wedding-anniversary";
+    }
+    if (
+      spouseDates.partnerDateOfBirth &&
+      (!optionalIsoDate(spouseDates.partnerDateOfBirth) || isFutureIsoDate(spouseDates.partnerDateOfBirth))
+    ) {
+      return "partner-dob";
+    }
+    return null;
+  }
+
+  if (step === 4) {
+    if (!parseParentChildrenCount(draft.childrenCount)) return "parent-children-count";
+    const children = childBlocksForCount(draft.childrenCount!, draft.children);
+    for (const [index, child] of children.entries()) {
+      if (validateOnboardingName(child.name, `שם פרטי של ילד/ה ${index + 1}`)) {
+        return `child-first-name-${child.id}`;
+      }
+      if (!parseIsoDateOnly(child.birthDate) || isFutureIsoDate(child.birthDate)) {
+        return `child-birth-date-${child.id}`;
+      }
+    }
+    return null;
+  }
+
+  if (step === 5) {
+    if (draft.hasPets == null) return "parent-has-pets";
+    if (draft.hasChildSpecialOrMedicalInformation == null) return "parent-has-medical";
+    if (draft.hasChildSpecialOrMedicalInformation && !draft.childSpecialOrMedicalDetails.trim()) {
+      return "medical-details";
+    }
+    return null;
+  }
+
+  if (step === 6) {
+    if (!draft.preferredLanguage || !isParentPreferredLanguage(draft.preferredLanguage)) {
+      return "parent-language";
+    }
+  }
+
+  return null;
+}
+
+export function parentQuestionnaireStepForRequiredError(error: string): ParentQuestionnaireStep {
+  if (error.includes("עיר")) return 2;
+  if (error.includes("נישואין") || error.includes("בן/בת הזוג")) return 3;
+  if (error.includes("ילד")) return 4;
+  if (error.includes("בעלי חיים") || error.includes("רפואי") || error.includes("פרטים שחשוב לדעת")) return 5;
+  if (error.includes("שפה")) return 6;
+  return 1;
+}
+
 export function validateParentOnboardingRequiredFields(draft: ParentOnboardingDraft): string | null {
   return (
     validateParentOnboardingStep(1, draft) ||
     validateParentOnboardingStep(2, draft) ||
-    validateParentOnboardingStep(3, draft)
+    validateParentOnboardingStep(3, draft) ||
+    validateParentOnboardingStep(4, draft) ||
+    validateParentOnboardingStep(5, draft) ||
+    validateParentOnboardingStep(6, draft) ||
+    validateParentOnboardingStep(7, draft)
   );
 }
 
@@ -192,6 +335,7 @@ export function buildParentOnboardingSavePayload(
     name: trimOnboardingName(child.name),
     birthDate: child.birthDate
   }));
+  const childrenCount = persistedChildrenCount(count, children);
   const specialDates = draft.specialDates
     .map((event) => ({
       id: event.id,
@@ -221,7 +365,7 @@ export function buildParentOnboardingSavePayload(
     city: address.city,
     address,
     phone,
-    children_count: persistedChildrenCount(count, children),
+    children_count: childrenCount,
     children,
     preferred_language: draft.preferredLanguage || null,
     typical_babysitting_need: uniqueStringList(draft.typicalBabysittingNeed.filter(isParentTypicalNeed)),

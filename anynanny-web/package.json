@@ -27,6 +27,8 @@
     "test:delete-account-avatar-cleanup": "npx --yes tsx scripts/test-delete-account-avatar-cleanup.ts",
     "test:privacy-policy-content-alignment": "npx --yes tsx scripts/test-privacy-policy-content-alignment.ts",
     "test:parent-onboarding-ux": "npx --yes tsx scripts/test-parent-onboarding-ux.ts",
+    "test:parent-onboarding-wizard": "npx --yes tsx scripts/test-parent-onboarding-wizard.ts",
+    "test:sitter-onboarding-wizard": "npx --yes tsx scripts/test-sitter-onboarding-wizard.ts",
     "test:parent-public-id-display": "npx --yes tsx scripts/test-parent-public-id-display.ts",
     "test:ugc-safety": "npx --yes tsx scripts/test-ugc-safety-moderation.ts",
     "test:release-stuck-shift-scope": "npx --yes tsx scripts/test-release-stuck-shift-scope.ts",

@@ -36,7 +36,9 @@ assert.match(wizard, /coalesceSignupNames/);
 assert.match(wizard, /buildParentOnboardingSavePayload/);
 assert.match(wizard, /validateParentOnboardingRequiredFields/);
 assert.match(wizard, /IsraelCitiesMultiSelect/);
-assert.doesNotMatch(wizard, /רחוב \*|מס' בית/);
+assert.match(wizard, /label="רחוב"/);
+assert.match(wizard, /label="מספר בית"/);
+assert.doesNotMatch(wizard, /רחוב \*/);
 
 const validDraft = {
   ...emptyParentOnboardingDraft(),

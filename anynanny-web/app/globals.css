@@ -131,3 +131,12 @@ button {
   color: #e11d48;
   vertical-align: -0.05em;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-parent-wizard-in-forward,
+  .animate-parent-wizard-out-forward,
+  .animate-parent-wizard-in-back,
+  .animate-parent-wizard-out-back {
+    animation: none !important;
+  }
+}

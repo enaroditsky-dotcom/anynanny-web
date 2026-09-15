@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
@@ -44,13 +44,23 @@ import {
   childBlocksForCount,
   createEmptyParentSpecialDate,
   emptyParentOnboardingDraft,
+  firstInvalidParentOnboardingFieldId,
+  PARENT_QUESTIONNAIRE_STEP_COUNT,
+  PARENT_QUESTIONNAIRE_STEP_DESCRIPTIONS,
+  PARENT_QUESTIONNAIRE_STEP_TITLES,
+  parentQuestionnaireStepForRequiredError,
   validateParentOnboardingRequiredFields,
   validateParentOnboardingStep,
-  type ParentOnboardingDraft
+  type ParentOnboardingDraft,
+  type ParentQuestionnaireStep
 } from "@/lib/onboarding/parent-questionnaire";
 import { replaceUserSpecialOccasions, updateRowStrippingUnknownColumns } from "@/lib/onboarding/persist";
 import { ONBOARDING_NAME_MAX_LENGTH, ONBOARDING_STEP_COUNT } from "@/lib/onboarding/shared";
-import { parseParentAddress, parseParentChildren, parseParentSpecialEvents } from "@/lib/parent/parent-profile";
+import {
+  parseParentAddress,
+  parseParentChildren,
+  parseParentSpecialEvents
+} from "@/lib/parent/parent-profile";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
@@ -58,13 +68,61 @@ type Props = {
   onSaved?: () => void | Promise<void>;
 };
 
+type SlideDirection = "forward" | "back";
+
+const SLIDE_MS = 280;
+const QUESTIONNAIRE_TITLE_ID = "parent-questionnaire-step-title";
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduced(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return reduced;
+}
+
+function focusStepTarget(fieldId: string | null) {
+  const heading = document.getElementById(QUESTIONNAIRE_TITLE_ID);
+  if (!fieldId) {
+    heading?.focus();
+    return;
+  }
+  const field = document.getElementById(fieldId);
+  if (field instanceof HTMLElement) {
+    field.focus();
+    return;
+  }
+  if (fieldId === "parent-city") {
+    document.querySelector<HTMLElement>("#parent-city input")?.focus();
+    return;
+  }
+  const wrapper = document.getElementById(fieldId);
+  if (wrapper) {
+    wrapper.querySelector<HTMLElement>("button, input, select")?.focus();
+    return;
+  }
+  heading?.focus();
+}
+
 export function ParentOnboardingWizard({ onSaved }: Props) {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const [questionnaireStep, setQuestionnaireStep] = useState<ParentQuestionnaireStep>(1);
+  const [showIdentity, setShowIdentity] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ParentOnboardingDraft>(emptyParentOnboardingDraft);
   const [verifyFormOpen, setVerifyFormOpen] = useState(false);
+  const [direction, setDirection] = useState<SlideDirection>("forward");
+  const [renderedStep, setRenderedStep] = useState<ParentQuestionnaireStep>(1);
+  const [leavingStep, setLeavingStep] = useState<ParentQuestionnaireStep | null>(null);
+  const reduceMotion = usePrefersReducedMotion();
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const skipNextFocusRef = useRef(false);
+  const hasNavigatedRef = useRef(false);
 
   const updateDraft = (patch: Partial<ParentOnboardingDraft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
@@ -122,15 +180,65 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
     })();
   }, []);
 
+  useEffect(() => {
+    if (showIdentity) return;
+    if (questionnaireStep === renderedStep) return;
+
+    if (reduceMotion) {
+      setLeavingStep(null);
+      setRenderedStep(questionnaireStep);
+      return;
+    }
+
+    setLeavingStep(renderedStep);
+    const timer = window.setTimeout(() => {
+      setRenderedStep(questionnaireStep);
+      setLeavingStep(null);
+    }, SLIDE_MS);
+    return () => window.clearTimeout(timer);
+  }, [questionnaireStep, renderedStep, reduceMotion, showIdentity]);
+
+  useEffect(() => {
+    if (showIdentity || leavingStep != null) return;
+    if (skipNextFocusRef.current) {
+      skipNextFocusRef.current = false;
+      return;
+    }
+    titleRef.current?.focus();
+  }, [renderedStep, showIdentity, leavingStep]);
+
   const goNext = () => {
-    const current = step as 1 | 2 | 3;
-    const stepError = current <= 3 ? validateParentOnboardingStep(current, draft) : null;
+    const stepError = validateParentOnboardingStep(questionnaireStep, draft);
     if (stepError) {
       setError(stepError);
+      skipNextFocusRef.current = true;
+      window.requestAnimationFrame(() => {
+        focusStepTarget(firstInvalidParentOnboardingFieldId(questionnaireStep, draft));
+      });
       return;
     }
     setError(null);
-    setStep((prev) => Math.min(ONBOARDING_STEP_COUNT, prev + 1));
+    if (questionnaireStep === PARENT_QUESTIONNAIRE_STEP_COUNT) {
+      setShowIdentity(true);
+      return;
+    }
+    hasNavigatedRef.current = true;
+    setDirection("forward");
+    setQuestionnaireStep((prev) => (prev + 1) as ParentQuestionnaireStep);
+  };
+
+  const goBack = () => {
+    setError(null);
+    if (showIdentity) {
+      setShowIdentity(false);
+      setDirection("back");
+      setQuestionnaireStep(PARENT_QUESTIONNAIRE_STEP_COUNT);
+      return;
+    }
+    if (questionnaireStep === 1) return;
+    hasNavigatedRef.current = true;
+    setDirection("back");
+    setQuestionnaireStep((prev) => (prev - 1) as ParentQuestionnaireStep);
   };
 
   const handleFinish = async () => {
@@ -138,7 +246,8 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
     const requiredError = validateParentOnboardingRequiredFields(draft);
     if (requiredError) {
       setError(requiredError);
-      setStep(requiredError.includes("ילד") || requiredError.includes("בעלי חיים") || requiredError.includes("רפואי") ? 2 : 1);
+      setShowIdentity(false);
+      setQuestionnaireStep(parentQuestionnaireStepForRequiredError(requiredError));
       return;
     }
 
@@ -182,317 +291,33 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
     }
   };
 
-  const selectedCity = isIsraelCity(draft.city) ? [draft.city] : [];
+  const innerProgress = showIdentity
+    ? null
+    : { current: questionnaireStep, total: PARENT_QUESTIONNAIRE_STEP_COUNT };
 
   return (
     <OnboardingPageShell>
       <OnboardingCard
-        title="השאלון של AnyNanny"
-        description={
-          step === 3
-            ? "עוד כמה פרטים שיעזרו ל-AnyNanny להתאים עבורכם תזכורות, הצעות ושירותים שימושיים. אפשר לדלג על שאלות שאינן רלוונטיות."
-            : "נשלים כמה פרטים חיוניים כדי שנוכל להתאים לכם את השירות."
+        title={
+          showIdentity ? "השאלון של AnyNanny" : PARENT_QUESTIONNAIRE_STEP_TITLES[questionnaireStep]
         }
-        step={step}
+        description={
+          showIdentity
+            ? "אפשר לאמת עכשיו או להשלים את זה מאוחר יותר מהאזור האישי."
+            : PARENT_QUESTIONNAIRE_STEP_DESCRIPTIONS[questionnaireStep]
+        }
+        step={showIdentity ? ONBOARDING_STEP_COUNT : 1}
+        totalSteps={ONBOARDING_STEP_COUNT}
+        innerProgress={innerProgress}
+        showStageLabel={showIdentity}
+        growContent
+        wide
+        showRequiredNote={!showIdentity && questionnaireStep === 1}
+        titleId={QUESTIONNAIRE_TITLE_ID}
+        titleRef={titleRef}
         error={error}
       >
-        {step === 1 ? (
-          <div className="space-y-4">
-            <OnboardingTextInput
-              id="parent-first-name"
-              label="שם פרטי"
-              required
-              value={draft.firstName}
-              onChange={(firstName) => updateDraft({ firstName })}
-              autoComplete="given-name"
-              maxLength={ONBOARDING_NAME_MAX_LENGTH}
-            />
-            <OnboardingTextInput
-              id="parent-last-name"
-              label="שם משפחה"
-              required
-              value={draft.lastName}
-              onChange={(lastName) => updateDraft({ lastName })}
-              autoComplete="family-name"
-              maxLength={ONBOARDING_NAME_MAX_LENGTH}
-            />
-            <OnboardingDateInput
-              id="parent-birth-date"
-              label="תאריך לידה"
-              required
-              value={draft.birthDate}
-              onChange={(birthDate) => updateDraft({ birthDate })}
-              disallowFuture
-            />
-            <div className="space-y-1.5 text-right">
-              <p className="text-sm font-semibold text-[#001F3F]">
-                עיר / אזור מגורים
-                <span className="ms-1 text-teal-700" aria-hidden>
-                  *
-                </span>
-                <span className="sr-only"> (שדה חובה)</span>
-              </p>
-              <IsraelCitiesMultiSelect
-                value={selectedCity}
-                onChange={(cities) => updateDraft({ city: cities.slice(-1)[0] ?? "" })}
-                disabled={busy}
-                label="בחרו עיר"
-              />
-            </div>
-            <OnboardingTextInput
-              id="parent-phone"
-              label="מספר טלפון"
-              value={draft.phone}
-              onChange={(phone) => updateDraft({ phone })}
-              autoComplete="tel"
-              inputMode="tel"
-            />
-            <OnboardingSelect
-              id="parent-language"
-              label="שפה מועדפת"
-              required
-              value={draft.preferredLanguage}
-              onChange={(preferredLanguage) =>
-                updateDraft({ preferredLanguage: preferredLanguage as ParentOnboardingDraft["preferredLanguage"] })
-              }
-              options={PARENT_LANGUAGE_OPTIONS.map((value) => ({ value, label: value }))}
-            />
-            <OnboardingActions showBack={false} onContinue={goNext} />
-          </div>
-        ) : null}
-
-        {step === 2 ? (
-          <div className="space-y-4">
-            <OnboardingChoiceRow
-              legend="כמה ילדים יש במשפחה?"
-              required
-              value={draft.childrenCount}
-              onChange={(childrenCount) =>
-                updateDraft({
-                  childrenCount,
-                  children: childBlocksForCount(childrenCount, draft.children)
-                })
-              }
-              options={PARENT_CHILDREN_COUNT_OPTIONS.map((value) => ({
-                value,
-                label: value === 6 ? "6+" : String(value)
-              }))}
-            />
-            {draft.childrenCount
-              ? childBlocksForCount(draft.childrenCount, draft.children).map((child, index) => (
-                  <div key={child.id} className="space-y-3 rounded-2xl border border-[#001F3F]/10 bg-[#FDFBF6] p-3">
-                    <p className="text-sm font-bold text-[#001F3F]">ילד/ה {index + 1}</p>
-                    <OnboardingTextInput
-                      id={`child-first-name-${child.id}`}
-                      label="שם פרטי"
-                      required
-                      value={child.name}
-                      onChange={(name) =>
-                        updateDraft({
-                          children: childBlocksForCount(draft.childrenCount!, draft.children).map((item) =>
-                            item.id === child.id ? { ...item, name } : item
-                          )
-                        })
-                      }
-                      maxLength={ONBOARDING_NAME_MAX_LENGTH}
-                    />
-                    <OnboardingDateInput
-                      id={`child-birth-date-${child.id}`}
-                      label="תאריך לידה"
-                      required
-                      value={child.birthDate}
-                      onChange={(birthDate) =>
-                        updateDraft({
-                          children: childBlocksForCount(draft.childrenCount!, draft.children).map((item) =>
-                            item.id === child.id ? { ...item, birthDate } : item
-                          )
-                        })
-                      }
-                      disallowFuture
-                    />
-                  </div>
-                ))
-              : null}
-            {draft.childrenCount === 6 ? (
-              <button
-                type="button"
-                onClick={() =>
-                  updateDraft({
-                    children: [
-                      ...childBlocksForCount(6, draft.children),
-                      { id: crypto.randomUUID(), name: "", birthDate: "" }
-                    ]
-                  })
-                }
-                className="min-h-11 w-full rounded-2xl border border-teal-700/30 text-sm font-bold text-teal-800"
-              >
-                + הוספת ילד/ה
-              </button>
-            ) : null}
-            <OnboardingYesNo
-              name="hasPets"
-              legend="האם יש בעלי חיים בבית?"
-              required
-              value={draft.hasPets}
-              onChange={(hasPets) => updateDraft({ hasPets, petDetails: hasPets ? draft.petDetails : "" })}
-            />
-            {draft.hasPets ? (
-              <OnboardingTextInput
-                id="pet-details"
-                label="איזה בעלי חיים?"
-                value={draft.petDetails}
-                onChange={(petDetails) => updateDraft({ petDetails })}
-              />
-            ) : null}
-            <OnboardingYesNo
-              name="hasMedical"
-              legend="האם יש לילד/ה אלרגיה, מצב רפואי, צורך מיוחד או מידע אחר שחשוב שבייביסיטר תדע?"
-              required
-              value={draft.hasChildSpecialOrMedicalInformation}
-              onChange={(hasChildSpecialOrMedicalInformation) =>
-                updateDraft({
-                  hasChildSpecialOrMedicalInformation,
-                  childSpecialOrMedicalDetails: hasChildSpecialOrMedicalInformation
-                    ? draft.childSpecialOrMedicalDetails
-                    : ""
-                })
-              }
-            />
-            {draft.hasChildSpecialOrMedicalInformation ? (
-              <OnboardingTextInput
-                id="medical-details"
-                label="פרטים שחשוב לדעת"
-                required
-                value={draft.childSpecialOrMedicalDetails}
-                onChange={(childSpecialOrMedicalDetails) => updateDraft({ childSpecialOrMedicalDetails })}
-              />
-            ) : null}
-            <OnboardingChips
-              legend="מתי בדרך כלל אתם עשויים להזדקק לבייביסיטר?"
-              options={PARENT_TYPICAL_NEED_OPTIONS}
-              value={draft.typicalBabysittingNeed}
-              onChange={(typicalBabysittingNeed) => updateDraft({ typicalBabysittingNeed })}
-            />
-            <OnboardingActions onBack={() => setStep(1)} onContinue={goNext} />
-          </div>
-        ) : null}
-
-        {step === 3 ? (
-          <div className="space-y-4">
-            <OnboardingSelect
-              id="marital-status"
-              label="מצב משפחתי"
-              value={draft.maritalStatus}
-              onChange={(maritalStatus) => {
-                const nextStatus = maritalStatus as ParentOnboardingDraft["maritalStatus"];
-                updateDraft({
-                  maritalStatus: nextStatus,
-                  ...parentSpouseDateFieldsForStatus(nextStatus, {
-                    weddingAnniversary: draft.weddingAnniversary,
-                    partnerDateOfBirth: draft.partnerDateOfBirth
-                  })
-                });
-              }}
-              options={PARENT_MARITAL_STATUS_OPTIONS}
-            />
-            {parentShowsWeddingAnniversary(draft.maritalStatus) ? (
-              <OnboardingDateInput
-                id="wedding-anniversary"
-                label="מתי יום הנישואין שלכם?"
-                value={draft.weddingAnniversary}
-                onChange={(weddingAnniversary) => updateDraft({ weddingAnniversary })}
-              />
-            ) : null}
-            {parentShowsPartnerDateOfBirth(draft.maritalStatus) ? (
-              <OnboardingDateInput
-                id="partner-dob"
-                label="תאריך הלידה של בן/בת הזוג"
-                value={draft.partnerDateOfBirth}
-                onChange={(partnerDateOfBirth) => updateDraft({ partnerDateOfBirth })}
-                disallowFuture
-              />
-            ) : null}
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-[#001F3F]">יש תאריכים משפחתיים נוספים שתרצו שנזכור?</p>
-              {draft.specialDates.map((event) => (
-                <div key={event.id} className="space-y-2 rounded-2xl border border-[#001F3F]/10 bg-[#FDFBF6] p-3">
-                  <OnboardingTextInput
-                    id={`event-title-${event.id}`}
-                    label="שם האירוע"
-                    value={event.title}
-                    onChange={(title) =>
-                      updateDraft({
-                        specialDates: draft.specialDates.map((item) =>
-                          item.id === event.id ? { ...item, title } : item
-                        )
-                      })
-                    }
-                  />
-                  <OnboardingDateInput
-                    id={`event-date-${event.id}`}
-                    label="תאריך"
-                    value={event.date}
-                    onChange={(date) =>
-                      updateDraft({
-                        specialDates: draft.specialDates.map((item) =>
-                          item.id === event.id ? { ...item, date } : item
-                        )
-                      })
-                    }
-                  />
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => updateDraft({ specialDates: [...draft.specialDates, createEmptyParentSpecialDate()] })}
-                className="min-h-11 w-full rounded-2xl border border-teal-700/30 text-sm font-bold text-teal-800"
-              >
-                + הוספת תאריך
-              </button>
-            </div>
-            <OnboardingSelect
-              id="frequency"
-              label="באיזו תדירות אתם מעריכים שתשתמשו בבייביסיטר?"
-              value={draft.estimatedBabysitterFrequency}
-              onChange={(estimatedBabysitterFrequency) =>
-                updateDraft({
-                  estimatedBabysitterFrequency:
-                    estimatedBabysitterFrequency as ParentOnboardingDraft["estimatedBabysitterFrequency"]
-                })
-              }
-              options={PARENT_FREQUENCY_OPTIONS}
-            />
-            <OnboardingChips
-              legend="לאילו צרכים אתם בדרך כלל מחפשים בייביסיטר?"
-              options={PARENT_REASON_OPTIONS}
-              value={draft.typicalReasons}
-              onChange={(typicalReasons) => updateDraft({ typicalReasons })}
-            />
-            {draft.typicalReasons.includes("other") ? (
-              <OnboardingTextInput
-                id="reason-other"
-                label="פירוט נוסף"
-                value={draft.typicalReasonsOther}
-                onChange={(typicalReasonsOther) => updateDraft({ typicalReasonsOther })}
-              />
-            ) : null}
-            <OnboardingChips
-              legend="על אילו אירועים תרצו ש-AnyNanny תזכיר לכם?"
-              options={PARENT_REMINDER_OPTIONS}
-              value={draft.reminderPreferences}
-              onChange={(reminderPreferences) => updateDraft({ reminderPreferences })}
-            />
-            <OnboardingYesNo
-              name="autoSuggest"
-              legend="האם תרצו ש-AnyNanny תציע לכם למצוא בייביסיטר לקראת אירועים חשובים?"
-              value={draft.automaticBabysitterSuggestion}
-              onChange={(automaticBabysitterSuggestion) => updateDraft({ automaticBabysitterSuggestion })}
-            />
-            <OnboardingActions onBack={() => setStep(2)} onContinue={goNext} />
-          </div>
-        ) : null}
-
-        {step === 4 ? (
+        {showIdentity ? (
           <div className="space-y-4">
             <IdentityOnboardingCard
               busy={busy}
@@ -500,13 +325,60 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
               onSkipLater={() => void handleFinish()}
             />
             <OnboardingActions
-              onBack={() => setStep(3)}
+              onBack={goBack}
               onContinue={() => void handleFinish()}
               continueLabel="סיום"
               busy={busy}
             />
           </div>
-        ) : null}
+        ) : (
+          <>
+          <div className="relative overflow-hidden">
+            {leavingStep != null && !reduceMotion ? (
+              <div
+                className={`pointer-events-none absolute inset-0 ${
+                  direction === "forward"
+                    ? "animate-parent-wizard-out-forward"
+                    : "animate-parent-wizard-out-back"
+                }`}
+                aria-hidden
+              >
+                <QuestionnaireStepFields
+                  step={leavingStep}
+                  draft={draft}
+                  updateDraft={updateDraft}
+                  idSuffix="-preview"
+                />
+              </div>
+            ) : null}
+            <div
+              className={
+                reduceMotion
+                  ? undefined
+                  : leavingStep != null
+                    ? "invisible"
+                    : !hasNavigatedRef.current
+                      ? undefined
+                      : direction === "forward"
+                        ? "animate-parent-wizard-in-forward"
+                        : "animate-parent-wizard-in-back"
+              }
+            >
+              <QuestionnaireStepFields
+                step={questionnaireStep}
+                draft={draft}
+                updateDraft={updateDraft}
+              />
+            </div>
+          </div>
+          <OnboardingActions
+            showBack={questionnaireStep > 1}
+            onBack={goBack}
+            onContinue={goNext}
+            busy={leavingStep != null}
+          />
+        </>
+        )}
 
         <IdentityVerificationForm
           open={verifyFormOpen}
@@ -520,5 +392,364 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
         />
       </OnboardingCard>
     </OnboardingPageShell>
+  );
+}
+
+function QuestionnaireStepFields({
+  step,
+  draft,
+  updateDraft,
+  idSuffix = ""
+}: {
+  step: ParentQuestionnaireStep;
+  draft: ParentOnboardingDraft;
+  updateDraft: (patch: Partial<ParentOnboardingDraft>) => void;
+  idSuffix?: string;
+}) {
+  const selectedCity = isIsraelCity(draft.city) ? [draft.city] : [];
+  const fieldId = (id: string) => `${id}${idSuffix}`;
+
+  if (step === 1) {
+    return (
+      <div className="space-y-4">
+        <OnboardingTextInput
+          id={fieldId("parent-first-name")}
+          label="שם פרטי"
+          required
+          value={draft.firstName}
+          onChange={(firstName) => updateDraft({ firstName })}
+          autoComplete="given-name"
+          maxLength={ONBOARDING_NAME_MAX_LENGTH}
+        />
+        <OnboardingTextInput
+          id={fieldId("parent-last-name")}
+          label="שם משפחה"
+          required
+          value={draft.lastName}
+          onChange={(lastName) => updateDraft({ lastName })}
+          autoComplete="family-name"
+          maxLength={ONBOARDING_NAME_MAX_LENGTH}
+        />
+        <OnboardingDateInput
+          id={fieldId("parent-birth-date")}
+          label="תאריך לידה"
+          required
+          value={draft.birthDate}
+          onChange={(birthDate) => updateDraft({ birthDate })}
+          disallowFuture
+        />
+        <OnboardingTextInput
+          id={fieldId("parent-phone")}
+          label="מספר טלפון"
+          value={draft.phone}
+          onChange={(phone) => updateDraft({ phone })}
+          autoComplete="tel"
+          inputMode="tel"
+        />
+      </div>
+    );
+  }
+
+  if (step === 2) {
+    return (
+      <div className="space-y-4">
+        <div id={idSuffix ? undefined : "parent-city"} className="space-y-1.5 text-right">
+          <p className="text-sm font-semibold text-[#001F3F]">
+            עיר / אזור מגורים
+            <span className="ms-1 text-teal-700" aria-hidden>
+              *
+            </span>
+            <span className="sr-only"> (שדה חובה)</span>
+          </p>
+          <IsraelCitiesMultiSelect
+            value={selectedCity}
+            onChange={(cities) => updateDraft({ city: cities.slice(-1)[0] ?? "" })}
+            label="בחרו עיר"
+          />
+        </div>
+        <OnboardingTextInput
+          id={fieldId("parent-street")}
+          label="רחוב"
+          value={draft.street}
+          onChange={(street) => updateDraft({ street })}
+          autoComplete="address-line1"
+        />
+        <OnboardingTextInput
+          id={fieldId("parent-house-number")}
+          label="מספר בית"
+          value={draft.houseNumber}
+          onChange={(houseNumber) => updateDraft({ houseNumber })}
+          autoComplete="address-line2"
+        />
+      </div>
+    );
+  }
+
+  if (step === 3) {
+    return (
+      <div className="space-y-4">
+        <OnboardingSelect
+          id={fieldId("marital-status")}
+          label="מצב משפחתי"
+          value={draft.maritalStatus}
+          onChange={(maritalStatus) => {
+            const nextStatus = maritalStatus as ParentOnboardingDraft["maritalStatus"];
+            updateDraft({
+              maritalStatus: nextStatus,
+              ...parentSpouseDateFieldsForStatus(nextStatus, {
+                weddingAnniversary: draft.weddingAnniversary,
+                partnerDateOfBirth: draft.partnerDateOfBirth
+              })
+            });
+          }}
+          options={PARENT_MARITAL_STATUS_OPTIONS}
+        />
+        {parentShowsWeddingAnniversary(draft.maritalStatus) ? (
+          <OnboardingDateInput
+            id={fieldId("wedding-anniversary")}
+            label="מתי יום הנישואין שלכם?"
+            value={draft.weddingAnniversary}
+            onChange={(weddingAnniversary) => updateDraft({ weddingAnniversary })}
+          />
+        ) : null}
+        {parentShowsPartnerDateOfBirth(draft.maritalStatus) ? (
+          <OnboardingDateInput
+            id={fieldId("partner-dob")}
+            label="תאריך הלידה של בן/בת הזוג"
+            value={draft.partnerDateOfBirth}
+            onChange={(partnerDateOfBirth) => updateDraft({ partnerDateOfBirth })}
+            disallowFuture
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  if (step === 4) {
+    return (
+      <div className="space-y-4">
+        <div id={idSuffix ? undefined : "parent-children-count"}>
+          <OnboardingChoiceRow
+            legend="כמה ילדים יש במשפחה?"
+            required
+            value={draft.childrenCount}
+            onChange={(childrenCount) =>
+              updateDraft({
+                childrenCount,
+                children: childBlocksForCount(childrenCount, draft.children)
+              })
+            }
+            options={PARENT_CHILDREN_COUNT_OPTIONS.map((value) => ({
+              value,
+              label: value === 6 ? "6+" : String(value)
+            }))}
+          />
+        </div>
+        {draft.childrenCount
+          ? childBlocksForCount(draft.childrenCount, draft.children).map((child, index) => (
+              <div key={child.id} className="space-y-3 rounded-2xl border border-[#001F3F]/10 bg-[#FDFBF6] p-3">
+                <p className="text-sm font-bold text-[#001F3F]">ילד/ה {index + 1}</p>
+                <OnboardingTextInput
+                  id={fieldId(`child-first-name-${child.id}`)}
+                  label="שם פרטי"
+                  required
+                  value={child.name}
+                  onChange={(name) =>
+                    updateDraft({
+                      children: childBlocksForCount(draft.childrenCount!, draft.children).map((item) =>
+                        item.id === child.id ? { ...item, name } : item
+                      )
+                    })
+                  }
+                  maxLength={ONBOARDING_NAME_MAX_LENGTH}
+                />
+                <OnboardingDateInput
+                  id={fieldId(`child-birth-date-${child.id}`)}
+                  label="תאריך לידה"
+                  required
+                  value={child.birthDate}
+                  onChange={(birthDate) =>
+                    updateDraft({
+                      children: childBlocksForCount(draft.childrenCount!, draft.children).map((item) =>
+                        item.id === child.id ? { ...item, birthDate } : item
+                      )
+                    })
+                  }
+                  disallowFuture
+                />
+              </div>
+            ))
+          : null}
+        {draft.childrenCount === 6 ? (
+          <button
+            type="button"
+            onClick={() =>
+              updateDraft({
+                children: [
+                  ...childBlocksForCount(6, draft.children),
+                  { id: crypto.randomUUID(), name: "", birthDate: "" }
+                ]
+              })
+            }
+            className="min-h-11 w-full rounded-2xl border border-teal-700/30 text-sm font-bold text-teal-800"
+          >
+            + הוספת ילד/ה
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (step === 5) {
+    return (
+      <div className="space-y-4">
+        <div id={idSuffix ? undefined : "parent-has-pets"}>
+          <OnboardingYesNo
+            name={fieldId("hasPets")}
+            legend="האם יש בעלי חיים בבית?"
+            required
+            value={draft.hasPets}
+            onChange={(hasPets) => updateDraft({ hasPets, petDetails: hasPets ? draft.petDetails : "" })}
+          />
+        </div>
+        {draft.hasPets ? (
+          <OnboardingTextInput
+            id={fieldId("pet-details")}
+            label="איזה בעלי חיים?"
+            value={draft.petDetails}
+            onChange={(petDetails) => updateDraft({ petDetails })}
+          />
+        ) : null}
+        <div id={idSuffix ? undefined : "parent-has-medical"}>
+          <OnboardingYesNo
+            name={fieldId("hasMedical")}
+            legend="האם יש לילד/ה אלרגיה, מצב רפואי, צורך מיוחד או מידע אחר שחשוב שבייביסיטר תדע?"
+            required
+            value={draft.hasChildSpecialOrMedicalInformation}
+            onChange={(hasChildSpecialOrMedicalInformation) =>
+              updateDraft({
+                hasChildSpecialOrMedicalInformation,
+                childSpecialOrMedicalDetails: hasChildSpecialOrMedicalInformation
+                  ? draft.childSpecialOrMedicalDetails
+                  : ""
+              })
+            }
+          />
+        </div>
+        {draft.hasChildSpecialOrMedicalInformation ? (
+          <OnboardingTextInput
+            id={fieldId("medical-details")}
+            label="פרטים שחשוב לדעת"
+            required
+            value={draft.childSpecialOrMedicalDetails}
+            onChange={(childSpecialOrMedicalDetails) => updateDraft({ childSpecialOrMedicalDetails })}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  if (step === 6) {
+    return (
+      <div className="space-y-4">
+        <OnboardingSelect
+          id={fieldId("parent-language")}
+          label="שפה מועדפת"
+          required
+          value={draft.preferredLanguage}
+          onChange={(preferredLanguage) =>
+            updateDraft({ preferredLanguage: preferredLanguage as ParentOnboardingDraft["preferredLanguage"] })
+          }
+          options={PARENT_LANGUAGE_OPTIONS.map((value) => ({ value, label: value }))}
+        />
+        <OnboardingChips
+          legend="מתי בדרך כלל אתם עשויים להזדקק לבייביסיטר?"
+          options={PARENT_TYPICAL_NEED_OPTIONS}
+          value={draft.typicalBabysittingNeed}
+          onChange={(typicalBabysittingNeed) => updateDraft({ typicalBabysittingNeed })}
+        />
+        <OnboardingSelect
+          id={fieldId("frequency")}
+          label="באיזו תדירות אתם מעריכים שתשתמשו בבייביסיטר?"
+          value={draft.estimatedBabysitterFrequency}
+          onChange={(estimatedBabysitterFrequency) =>
+            updateDraft({
+              estimatedBabysitterFrequency:
+                estimatedBabysitterFrequency as ParentOnboardingDraft["estimatedBabysitterFrequency"]
+            })
+          }
+          options={PARENT_FREQUENCY_OPTIONS}
+        />
+        <OnboardingChips
+          legend="לאילו צרכים אתם בדרך כלל מחפשים בייביסיטר?"
+          options={PARENT_REASON_OPTIONS}
+          value={draft.typicalReasons}
+          onChange={(typicalReasons) => updateDraft({ typicalReasons })}
+        />
+        {draft.typicalReasons.includes("other") ? (
+          <OnboardingTextInput
+            id={fieldId("reason-other")}
+            label="פירוט נוסף"
+            value={draft.typicalReasonsOther}
+            onChange={(typicalReasonsOther) => updateDraft({ typicalReasonsOther })}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <p className="text-sm font-semibold text-[#001F3F]">יש תאריכים משפחתיים נוספים שתרצו שנזכור?</p>
+        {draft.specialDates.map((event) => (
+          <div key={event.id} className="space-y-2 rounded-2xl border border-[#001F3F]/10 bg-[#FDFBF6] p-3">
+            <OnboardingTextInput
+              id={fieldId(`event-title-${event.id}`)}
+              label="שם האירוע"
+              value={event.title}
+              onChange={(title) =>
+                updateDraft({
+                  specialDates: draft.specialDates.map((item) =>
+                    item.id === event.id ? { ...item, title } : item
+                  )
+                })
+              }
+            />
+            <OnboardingDateInput
+              id={fieldId(`event-date-${event.id}`)}
+              label="תאריך"
+              value={event.date}
+              onChange={(date) =>
+                updateDraft({
+                  specialDates: draft.specialDates.map((item) =>
+                    item.id === event.id ? { ...item, date } : item
+                  )
+                })
+              }
+            />
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => updateDraft({ specialDates: [...draft.specialDates, createEmptyParentSpecialDate()] })}
+          className="min-h-11 w-full rounded-2xl border border-teal-700/30 text-sm font-bold text-teal-800"
+        >
+          + הוספת תאריך
+        </button>
+      </div>
+      <OnboardingChips
+        legend="על אילו אירועים תרצו ש-AnyNanny תזכיר לכם?"
+        options={PARENT_REMINDER_OPTIONS}
+        value={draft.reminderPreferences}
+        onChange={(reminderPreferences) => updateDraft({ reminderPreferences })}
+      />
+      <OnboardingYesNo
+        name={fieldId("autoSuggest")}
+        legend="האם תרצו ש-AnyNanny תציע לכם למצוא בייביסיטר לקראת אירועים חשובים?"
+        value={draft.automaticBabysitterSuggestion}
+        onChange={(automaticBabysitterSuggestion) => updateDraft({ automaticBabysitterSuggestion })}
+      />
+    </div>
   );
 }
