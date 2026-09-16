@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -11,8 +11,13 @@ import {
 } from "../lib/admin/broadcast-audience";
 import { isInternalBroadcastCtaRoute, normalizeBroadcastCtaRoute } from "../lib/admin/broadcast-cta";
 import {
+  BROADCAST_NEW_MESSAGE_CANCEL,
+  BROADCAST_NEW_MESSAGE_CONFIRM,
+  BROADCAST_NEW_MESSAGE_CONFIRM_ACTION,
+  BROADCAST_NEW_MESSAGE_LABEL,
   broadcastConfirmMessage,
   broadcastSendButtonLabel,
+  isBroadcastDraftDirty,
   validateBroadcastMessage
 } from "../lib/admin/broadcast-validation";
 import { isValidAdminSessionValue } from "../lib/admin/auth";
@@ -267,5 +272,49 @@ assert.match(read("lib/notifications/coordination.ts"), /admin_broadcast/);
 assert.doesNotMatch(sqlWithoutComments, /create policy \w+ on public.notifications/);
 assert.doesNotMatch(sqlWithoutComments, /grant insert on table public.notifications/);
 assert.doesNotMatch(sqlWithoutComments, /grant all on table public.notifications/);
+
+const emptyDraft = {
+  audience: "all_users" as const,
+  title: "",
+  body: "",
+  ctaLabel: "",
+  ctaRoute: ""
+};
+assert.equal(isBroadcastDraftDirty(emptyDraft), false);
+assert.equal(isBroadcastDraftDirty({ ...emptyDraft, title: "שלום" }), true);
+assert.equal(isBroadcastDraftDirty({ ...emptyDraft, audience: "parents" }), true);
+assert.equal(isBroadcastDraftDirty({ ...emptyDraft, ctaLabel: "לפרופיל", ctaRoute: "/parent/profile" }), true);
+assert.equal(BROADCAST_NEW_MESSAGE_LABEL, "הודעה חדשה");
+assert.equal(BROADCAST_NEW_MESSAGE_CONFIRM, "להתחיל הודעה חדשה? התוכן שכתבת יימחק.");
+assert.equal(BROADCAST_NEW_MESSAGE_CANCEL, "ביטול");
+assert.equal(BROADCAST_NEW_MESSAGE_CONFIRM_ACTION, "התחל הודעה חדשה");
+assert.match(form, /BROADCAST_NEW_MESSAGE_LABEL/);
+assert.match(form, /requestNewBroadcast/);
+assert.match(form, /isBroadcastDraftDirty/);
+assert.match(form, /resetForm/);
+assert.match(form, /setConfirmNew\(true\)/);
+assert.match(form, /setConfirmNew\(false\)/);
+assert.match(form, /setPreview\(null\)/);
+assert.match(form, /setError\(null\)/);
+assert.match(form, /setSuccess\(null\)/);
+assert.match(form, /DEFAULT_BROADCAST_AUDIENCE/);
+assert.match(form, /disabled=\{resetDisabled\}/);
+assert.match(form, /const resetDisabled = busy !== null/);
+assert.doesNotMatch(form, /window\.location|location\.reload|router\.refresh/);
+assert.doesNotMatch(form, /delete from|admin_broadcasts/);
+
+assert.match(sql, /create or replace function public\.admin_send_in_app_broadcast\(\s*p_audience text,/);
+assert.doesNotMatch(sql, /p_attachment/);
+assert.doesNotMatch(send, /p_attachment/);
+assert.doesNotMatch(api, /uploadBroadcastAttachmentFile|multipart\/form-data/);
+assert.doesNotMatch(form, /צירוף תמונה או קובץ|BroadcastAttachmentView|type="file"/);
+assert.doesNotMatch(read("components/notifications/global-coordination-notifications.tsx"), /BroadcastAttachmentView|broadcastAttachmentUrl/);
+assert.doesNotMatch(kinds, /attachment\?:/);
+assert.equal(existsSync(resolve(root, "supabase/migrations/20260916120000_admin_broadcast_attachments.sql")), false);
+assert.equal(existsSync(resolve(root, "lib/admin/broadcast-attachment.ts")), false);
+assert.equal(existsSync(resolve(root, "lib/admin/broadcast-attachment-storage.ts")), false);
+assert.equal(existsSync(resolve(root, "lib/notifications/broadcast-attachment.ts")), false);
+assert.equal(existsSync(resolve(root, "components/notifications/broadcast-attachment-view.tsx")), false);
+assert.equal(existsSync(resolve(root, "app/api/notifications/broadcast-attachment/route.ts")), false);
 
 console.log("admin broadcast messaging checks passed.");

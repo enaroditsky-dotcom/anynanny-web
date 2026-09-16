@@ -4,13 +4,19 @@ import { useMemo, useRef, useState } from "react";
 import {
   BROADCAST_AUDIENCE_LABELS,
   BROADCAST_AUDIENCE_TYPES,
+  DEFAULT_BROADCAST_AUDIENCE,
   type BroadcastAudienceType
 } from "@/lib/admin/broadcast-audience";
 import {
   BROADCAST_BODY_MAX_LENGTH,
+  BROADCAST_NEW_MESSAGE_CANCEL,
+  BROADCAST_NEW_MESSAGE_CONFIRM,
+  BROADCAST_NEW_MESSAGE_CONFIRM_ACTION,
+  BROADCAST_NEW_MESSAGE_LABEL,
   BROADCAST_TITLE_MAX_LENGTH,
   broadcastConfirmMessage,
-  broadcastSendButtonLabel
+  broadcastSendButtonLabel,
+  isBroadcastDraftDirty
 } from "@/lib/admin/broadcast-validation";
 import { BROADCAST_CTA_LABEL_MAX_LENGTH } from "@/lib/admin/broadcast-cta";
 
@@ -32,11 +38,12 @@ function newIdempotencyKey(): string {
 }
 
 export function AdminBroadcastForm() {
-  const [audience, setAudience] = useState<BroadcastAudienceType>("all_users");
+  const [audience, setAudience] = useState<BroadcastAudienceType>(DEFAULT_BROADCAST_AUDIENCE);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [ctaLabel, setCtaLabel] = useState("");
   const [ctaRoute, setCtaRoute] = useState("");
+  const [confirmNew, setConfirmNew] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [busy, setBusy] = useState<"preview" | "test" | "send" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +61,35 @@ export function AdminBroadcastForm() {
     }),
     [audience, title, body, ctaLabel, ctaRoute]
   );
+
+  const resetForm = () => {
+    setAudience(DEFAULT_BROADCAST_AUDIENCE);
+    setTitle("");
+    setBody("");
+    setCtaLabel("");
+    setCtaRoute("");
+    setPreview(null);
+    setError(null);
+    setSuccess(null);
+    setConfirmNew(false);
+    sendKeyRef.current = newIdempotencyKey();
+  };
+
+  const requestNewBroadcast = () => {
+    if (busy !== null) return;
+    const dirty = isBroadcastDraftDirty({
+      audience,
+      title,
+      body,
+      ctaLabel,
+      ctaRoute
+    });
+    if (!dirty) {
+      resetForm();
+      return;
+    }
+    setConfirmNew(true);
+  };
 
   const callApi = async (action: "preview" | "test" | "send", extra?: Record<string, unknown>) => {
     const response = await fetch("/api/admin/broadcast", {
@@ -146,6 +182,7 @@ export function AdminBroadcastForm() {
   };
 
   const sendDisabled = busy !== null || !preview;
+  const resetDisabled = busy !== null;
 
   return (
     <div className="space-y-5" dir="rtl">
@@ -250,6 +287,14 @@ export function AdminBroadcastForm() {
           >
             {busy === "test" ? "שולח בדיקה…" : "שליחת הודעת בדיקה לעצמי"}
           </button>
+          <button
+            className="rounded-xl border border-navy-200 bg-white px-4 py-2 text-sm font-semibold text-navy-800 disabled:cursor-not-allowed disabled:opacity-60"
+            type="button"
+            onClick={requestNewBroadcast}
+            disabled={resetDisabled}
+          >
+            {BROADCAST_NEW_MESSAGE_LABEL}
+          </button>
         </div>
       </div>
 
@@ -280,19 +325,60 @@ export function AdminBroadcastForm() {
           ) : (
             <p className="text-navy-600">אין CTA</p>
           )}
-          <button
-            className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={sendDisabled}
-          >
-            {busy === "send" ? "שולח…" : broadcastSendButtonLabel(preview.recipient_count)}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={sendDisabled}
+            >
+              {busy === "send" ? "שולח…" : broadcastSendButtonLabel(preview.recipient_count)}
+            </button>
+            <button
+              className="rounded-xl border border-navy-200 bg-white px-4 py-2 text-sm font-semibold text-navy-800 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+              onClick={requestNewBroadcast}
+              disabled={resetDisabled}
+            >
+              {BROADCAST_NEW_MESSAGE_LABEL}
+            </button>
+          </div>
         </section>
       ) : null}
 
       {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p> : null}
       {success ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{success}</p> : null}
+
+      {confirmNew ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="broadcastNewConfirmTitle"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 text-right shadow-lg">
+            <p id="broadcastNewConfirmTitle" className="text-sm font-medium text-navy-900">
+              {BROADCAST_NEW_MESSAGE_CONFIRM}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-xl border border-navy-200 bg-white px-4 py-2 text-sm font-semibold text-navy-800"
+                onClick={() => setConfirmNew(false)}
+              >
+                {BROADCAST_NEW_MESSAGE_CANCEL}
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-navy-800 px-4 py-2 text-sm font-semibold text-white"
+                onClick={resetForm}
+              >
+                {BROADCAST_NEW_MESSAGE_CONFIRM_ACTION}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

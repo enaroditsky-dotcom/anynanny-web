@@ -6,6 +6,7 @@ import {
 } from "@/lib/admin/broadcast-cta";
 import {
   BROADCAST_AUDIENCE_LABELS,
+  DEFAULT_BROADCAST_AUDIENCE,
   isBroadcastAudienceType,
   type BroadcastAudienceType
 } from "@/lib/admin/broadcast-audience";
@@ -13,6 +14,10 @@ import {
 export const BROADCAST_TITLE_MAX_LENGTH = 80;
 export const BROADCAST_BODY_MAX_LENGTH = 2000;
 export const BROADCAST_IDEMPOTENCY_KEY_MAX_LENGTH = 80;
+export const BROADCAST_NEW_MESSAGE_LABEL = "הודעה חדשה";
+export const BROADCAST_NEW_MESSAGE_CONFIRM = "להתחיל הודעה חדשה? התוכן שכתבת יימחק.";
+export const BROADCAST_NEW_MESSAGE_CANCEL = "ביטול";
+export const BROADCAST_NEW_MESSAGE_CONFIRM_ACTION = "התחל הודעה חדשה";
 
 const HTML_OR_CONTROL = /[<>\u0000-\u0008\u000B\u000C\u000E-\u001F]/;
 
@@ -34,6 +39,24 @@ export type ValidatedBroadcastMessage = {
   ctaRoute: string | null;
   idempotencyKey: string | null;
 };
+
+export type BroadcastDraftState = {
+  audience: BroadcastAudienceType;
+  title: string;
+  body: string;
+  ctaLabel: string;
+  ctaRoute: string;
+};
+
+export function isBroadcastDraftDirty(draft: BroadcastDraftState): boolean {
+  return (
+    draft.audience !== DEFAULT_BROADCAST_AUDIENCE ||
+    draft.title.trim() !== "" ||
+    draft.body.trim() !== "" ||
+    draft.ctaLabel.trim() !== "" ||
+    draft.ctaRoute.trim() !== ""
+  );
+}
 
 function asPlainText(value: unknown, max: number, field: string): string | { error: string } {
   if (typeof value !== "string") return { error: `${field} is required.` };
