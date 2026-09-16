@@ -199,7 +199,7 @@ export function PaymentFactory({
                       />
                     </span>
                     <span className="min-w-0 flex-1 space-y-0.5 text-right">
-                      <span className="block text-[17px] leading-tight">{label}</span>
+                      <span className="block text-base leading-tight">{label}</span>
                       <span className="block text-[13px] font-medium leading-snug text-white/60">
                         {hint}
                       </span>

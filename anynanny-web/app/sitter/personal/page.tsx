@@ -12,7 +12,7 @@ export default function SitterPersonalRedirectPage() {
   }, [router]);
 
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-md items-center justify-center bg-[#FDFBF6] text-sm text-slate-500" dir="rtl">
+    <main className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-sm items-center justify-center bg-[#FDFBF6] text-sm text-slate-500" dir="rtl">
       מעביר לאזור האישי…
     </main>
   );

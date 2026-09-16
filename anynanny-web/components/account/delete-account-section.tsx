@@ -80,7 +80,7 @@ export function DeleteAccountSection() {
         >
           <div className="flex min-h-full justify-center">
             <div
-              className="my-auto w-full max-w-md rounded-2xl border border-navy-header/15 bg-white p-5 shadow-xl shadow-[#001F3F]/15"
+              className="my-auto w-full max-w-md rounded-2xl border border-navy-header/15 bg-white p-4 shadow-xl shadow-[#001F3F]/15"
               onClick={(e) => e.stopPropagation()}
             >
             <h2 id="delete-account-title" className="text-right text-lg font-bold text-rose-700">
@@ -96,12 +96,12 @@ export function DeleteAccountSection() {
               </p>
             ) : null}
 
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:justify-start">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse sm:justify-start">
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void handleConfirmDelete()}
-                className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
+                className="min-h-11 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
               >
                 {busy ? "מוחקים…" : "כן"}
               </button>
@@ -109,7 +109,7 @@ export function DeleteAccountSection() {
                 type="button"
                 disabled={busy}
                 onClick={closeDialog}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
               >
                 לא
               </button>

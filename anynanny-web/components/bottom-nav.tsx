@@ -108,7 +108,7 @@ function NavLink({
       onClick={() => {
         if (badgeKey === "wallet") clearWalletNotification();
       }}
-      className={`flex min-w-0 w-full flex-col items-center justify-center gap-1.5 rounded-xl px-1 py-1.5 text-[13px] font-semibold leading-tight transition ${
+      className={`flex min-h-[44px] min-w-0 w-full flex-col items-center justify-center gap-0 rounded-lg px-0.5 py-0.5 text-[11px] font-semibold leading-tight transition ${
         active ? "text-emerald-700" : "text-navy-header/70 hover:bg-slate-50 hover:text-navy-header"
       }`}
       aria-label={
@@ -120,7 +120,7 @@ function NavLink({
       }
     >
       <div className="relative">
-        <Icon className={`h-[26px] w-[26px] shrink-0 ${active ? "stroke-[2.25]" : "stroke-[1.85]"}`} aria-hidden />
+        <Icon className={`h-[18px] w-[18px] shrink-0 ${active ? "stroke-[2.25]" : "stroke-[1.85]"}`} aria-hidden />
         {showBadge ? (
           <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
         ) : null}
@@ -137,16 +137,16 @@ function SitterSurprisesFab({ active }: { active: boolean }) {
       href="/sitter/surprises"
       data-tour="sitter-surprises"
       aria-label="הפתעות"
-      className="group relative z-10 -mt-7 flex w-full flex-col items-center justify-end gap-1 outline-none"
+      className="group relative z-10 -mt-4 flex w-full flex-col items-center justify-end gap-0 outline-none"
     >
       <Image
         src="/sitter-surprises-button.png"
         alt=""
         width={1282}
         height={1227}
-        sizes="72px"
+        sizes="48px"
         priority
-        className="h-[72px] w-[72px] object-contain transition duration-200 group-active:scale-[0.96]"
+        className="h-12 w-12 object-contain transition duration-200 group-active:scale-[0.96]"
       />
       <span
         className={`max-w-[5.5rem] text-center text-[11px] font-bold leading-tight ${
@@ -166,17 +166,17 @@ function AnyNannyNowFab({ active }: { active: boolean }) {
       href="/parent/broadcast"
       data-tour="anynanny-now"
       aria-label="AnyNanny Now"
-      className="group relative z-10 -mt-7 flex w-full flex-col items-center justify-end gap-1 outline-none"
+      className="group relative z-10 -mt-4 flex w-full flex-col items-center justify-end gap-0 outline-none"
     >
       <span
-        className={`relative flex h-[3.85rem] w-[3.85rem] items-center justify-center rounded-full bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-[0_10px_24px_-4px_rgba(16,185,129,0.55),0_4px_10px_-2px_rgba(5,150,105,0.45)] ring-[3px] ring-white transition duration-200 group-hover:brightness-105 group-hover:shadow-[0_14px_28px_-4px_rgba(16,185,129,0.6)] group-active:scale-[0.96] ${
+        className={`relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-[0_10px_24px_-4px_rgba(16,185,129,0.55),0_4px_10px_-2px_rgba(5,150,105,0.45)] ring-[3px] ring-white transition duration-200 group-hover:brightness-105 group-hover:shadow-[0_14px_28px_-4px_rgba(16,185,129,0.6)] group-active:scale-[0.96] ${
           active ? "ring-emerald-200" : ""
         }`}
       >
         <span className="pointer-events-none absolute inset-[3px] rounded-full bg-gradient-to-b from-white/25 to-transparent" aria-hidden />
         <span className="relative flex flex-col items-center justify-center leading-none">
           <Zap className="mb-0.5 h-3.5 w-3.5 fill-white text-white drop-shadow-sm" aria-hidden />
-          <span className="text-[13px] font-black tracking-wide" dir="ltr">
+          <span className="text-[11px] font-black tracking-wide" dir="ltr">
             AN
           </span>
         </span>
@@ -193,7 +193,7 @@ function AnyNannyNowFab({ active }: { active: boolean }) {
 }
 
 const BOTTOM_NAV_SURFACE =
-  "fixed bottom-0 left-0 right-0 z-50 w-full border-t border-slate-200/80 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_-12px_rgba(15,23,42,0.12)] backdrop-blur-sm";
+  "fixed bottom-0 left-0 right-0 z-50 w-full border-t border-slate-200/80 bg-white/95 px-1.5 py-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_-12px_rgba(15,23,42,0.12)] backdrop-blur-sm";
 
 /** Fixed bottom navigation for authenticated parent/sitter routes. */
 export function BottomNav() {
@@ -229,7 +229,7 @@ export function BottomNav() {
         aria-hidden={chatComposerActive}
         className={navClassName}
       >
-        <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5">
+        <div className="mx-auto grid w-full max-w-sm grid-cols-5 items-end gap-0">
           {[leftA, leftB].map((item) => (
             <NavLink
               key={item.href}
@@ -263,7 +263,7 @@ export function BottomNav() {
       aria-hidden={chatComposerActive}
       className={navClassName}
     >
-      <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5">
+      <div className="mx-auto grid w-full max-w-sm grid-cols-5 items-end gap-0">
         {[leftA, leftB].map((item) => (
           <NavLink
             key={item.href}

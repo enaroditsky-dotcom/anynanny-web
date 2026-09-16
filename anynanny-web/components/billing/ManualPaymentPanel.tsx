@@ -141,7 +141,7 @@ export function ManualPaymentPanel({
                       } disabled:cursor-not-allowed disabled:opacity-45`}
                     >
                       <Banknote className="h-5 w-5 shrink-0" aria-hidden />
-                      <span className="min-w-0 flex-1 text-right text-[17px] leading-tight">
+                      <span className="min-w-0 flex-1 text-right text-base leading-tight">
                         {MANUAL_PAYMENT_METHOD_LABELS[id]}
                       </span>
                     </button>

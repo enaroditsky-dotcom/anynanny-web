@@ -142,7 +142,8 @@ function destinations(input: {
   assert.match(receiving, /sitterReceivingSetupState/);
   assert.match(receiving, /Bit לא הוגדר|statusLabel/);
   assert.match(sitterWallet, /sitterReceivingSetupState/);
-  assert.match(sitterWallet, /הוספת Bit|actionLabel/);
+  assert.match(sitterWallet, /SitterManualReceivingDestinationsSection/);
+  assert.match(receiving, /הוספת Bit|actionLabel|statusLabel/);
 }
 
 // 9. Inactive Sitter method is never exposed as Parent payment option

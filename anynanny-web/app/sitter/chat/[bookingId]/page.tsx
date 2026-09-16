@@ -16,14 +16,14 @@ export default function SitterChatPage() {
 
   if (!bookingId) {
     return (
-      <main className="mx-auto w-full max-w-md bg-[#FDFBF6] py-6 text-center text-sm text-slate-600" dir="rtl">
+      <main className="mx-auto w-full max-w-sm bg-[#FDFBF6] py-6 text-center text-sm text-slate-600" dir="rtl">
         מזהה משמרת לא תקין.
       </main>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
+    <main className="mx-auto w-full max-w-sm space-y-3 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
       <div data-tour="sitter-messages-chat">
         <BookingChatHeader bookingId={bookingId} backHref="/sitter/messages" />
         <BookingChat bookingId={bookingId} messagesHref="/sitter/messages" />

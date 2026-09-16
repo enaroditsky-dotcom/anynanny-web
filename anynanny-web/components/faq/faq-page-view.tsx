@@ -16,7 +16,7 @@ export function FaqPageView({ backHref, role }: { backHref: string; role: FaqRol
 
   return (
     <main
-      className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-md flex-col bg-[#FDFBF6] py-2 pb-8 px-3"
+      className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-sm flex-col bg-[#FDFBF6] py-2 pb-8 px-2"
       dir="rtl"
     >
       <header className="text-right">

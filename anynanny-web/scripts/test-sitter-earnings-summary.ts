@@ -112,5 +112,6 @@ assert.doesNotMatch(wallet, /finalizeHypPaymentSuccess/);
 
 const payoutCards = read("components/sitter/SitterPayoutWalletCards.tsx");
 assert.match(payoutCards, /אמצעי קבלת התשלום/);
+assert.match(payoutCards, /SitterManualReceivingDestinationsSection/);
 
 console.log("Sitter earnings summary checks passed.");

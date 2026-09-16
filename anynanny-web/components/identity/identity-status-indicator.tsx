@@ -73,7 +73,7 @@ export function IdentityStatusIndicator({
     <>
       <div className="inline-flex max-w-full items-center justify-end">
         {loading ? (
-          <span className="inline-block h-8 w-36 animate-pulse rounded-xl bg-slate-100" aria-hidden />
+            <span className="inline-block h-6 w-28 animate-pulse rounded-md bg-slate-100" aria-hidden />
         ) : verified ? (
           <VerifiedUserBadge size="lg" />
         ) : actionable ? (

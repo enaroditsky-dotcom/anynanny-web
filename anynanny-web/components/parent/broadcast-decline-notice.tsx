@@ -60,10 +60,10 @@ export const DeclineNoticeUnit = memo(function DeclineNoticeUnit({
       dir="rtl"
       className="fixed inset-x-0 z-[100] flex justify-center px-2.5"
       style={{
-        bottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px) + 0.75rem)"
+        bottom: "calc(4.75rem + env(safe-area-inset-bottom, 0px) + 0.75rem)"
       }}
     >
-      <div className="w-full max-w-md overflow-hidden rounded-2xl shadow-[0_10px_28px_-12px_rgba(0,31,63,0.45)]">
+      <div className="w-full max-w-sm overflow-hidden rounded-2xl shadow-[0_10px_28px_-12px_rgba(0,31,63,0.45)]">
         <div className="flex items-start gap-2 bg-[#001F3F] px-3 py-2.5 text-right">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold leading-snug text-white">

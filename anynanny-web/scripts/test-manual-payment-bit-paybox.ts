@@ -81,9 +81,10 @@ assert.match(panel, /canReportManualPayment/);
 assert.match(panel, /manualPaymentDestinationInstruction/);
 assert.match(parentDash, /\/api\/parent\/manual-payment-destinations/);
 
-// Sitter Personal Area configuration — optional, independent, Hebrew
-assert.match(personal, /SitterManualReceivingDestinationsSection/);
+// Sitter Wallet configuration — optional, independent, Hebrew
+assert.doesNotMatch(personal, /SitterManualReceivingDestinationsSection/);
 assert.doesNotMatch(personal, /SitterBankDetailsSection/);
+assert.match(walletPage, /SitterPayoutWalletCards/);
 assert.match(receiving, /title="בחירת דרך קבלת התשלום"/);
 assert.doesNotMatch(receiving, /קבלה ב-Bit וב-PayBox/);
 assert.match(receiving, /sitterReceivingSummary/);
@@ -285,7 +286,7 @@ assert.doesNotMatch(
   /payout_bit_phone|payout_paybox_phone|payout_paybox_link|"user_id"/
 );
 assert.match(personal, /\/api\/sitter\/profile/);
-assert.match(personal, /SitterManualReceivingDestinationsSection/);
+assert.doesNotMatch(personal, /SitterManualReceivingDestinationsSection/);
 assert.doesNotMatch(personal, /SitterBankDetailsSection/);
 
 // 5–7. Method-specific report + sitter prompt
@@ -330,6 +331,7 @@ assert.match(read("lib/ratings/submit-session-rating.ts"), /mark_manual_payment_
 assert.match(hypFinalize, /payment_status: "paid"/);
 assert.doesNotMatch(hypFinalize, /parent_manual_payment_destinations/);
 assert.match(walletPage, /SitterPayoutWalletCards/);
+assert.match(read("components/sitter/SitterPayoutWalletCards.tsx"), /SitterManualReceivingDestinationsSection/);
 assert.doesNotMatch(receiving, /hyp-register|PaymentFactory|כרטיס אשראי/);
 
 // PayBox personal payment link

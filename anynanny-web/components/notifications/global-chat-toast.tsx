@@ -13,9 +13,9 @@ const TOAST_SURFACE =
   "pointer-events-auto fixed z-[70] w-[min(92vw,22rem)] rounded-2xl border border-slate-200/90 bg-white p-3 text-right shadow-[0_10px_28px_-12px_rgba(15,23,42,0.35)]";
 
 const TOAST_BOTTOM =
-  "bottom-[calc(5.5rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2";
+  "bottom-[calc(4.75rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2";
 
-const TOAST_TOP = "top-20 left-1/2 -translate-x-1/2";
+const TOAST_TOP = "top-12 left-1/2 -translate-x-1/2";
 
 export function GlobalChatToast({
   toast,

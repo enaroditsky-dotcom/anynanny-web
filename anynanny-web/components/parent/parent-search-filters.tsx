@@ -39,9 +39,9 @@ const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] 
 
 const FIELD_LABEL =
   "mb-1.5 block min-h-[1.5rem] text-right text-sm font-medium leading-snug text-[#001F3F]";
-const SECTION_HEADING = "text-[1.25rem] font-semibold leading-snug text-[#001F3F]";
+const SECTION_HEADING = "text-lg font-semibold leading-snug text-[#001F3F]";
 const SECTION_SURFACE =
-  "rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft";
+  "rounded-2xl border border-slate-200/60 bg-white p-3 shadow-soft";
 const FIELD_CONTROL =
   "box-border block h-11 min-h-[44px] w-full max-w-full rounded-xl border border-slate-200/80 bg-white px-3 text-base font-medium leading-none text-[#001F3F] transition placeholder:text-slate-400 focus:border-[#001F3F] focus:outline-none focus:ring-2 focus:ring-[#001F3F]/15 disabled:opacity-50 appearance-none";
 const FIELD_CONTROL_INVALID =

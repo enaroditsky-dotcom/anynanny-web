@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
-const CARD = "rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft";
-const TITLE = "text-[1.25rem] font-semibold leading-snug text-[#001F3F]";
+const CARD = "rounded-2xl border border-slate-200/60 bg-white p-3 shadow-soft";
+const TITLE = "text-lg font-semibold leading-snug text-[#001F3F]";
 const TOGGLE =
   "inline-flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-medium text-[#001F3F]";
 const CHECKBOX = "h-[18px] w-[18px] rounded border-slate-300 accent-[#001F3F]";

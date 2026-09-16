@@ -21,7 +21,7 @@ export function IdentityOnboardingCard({
     <div className="space-y-4 text-right" dir="rtl">
       <div className="rounded-2xl border-2 border-[#C5A059]/40 bg-white p-4 shadow-sm">
         <div className="mb-2 flex items-center justify-end gap-2">
-          <h3 className="text-[17px] font-extrabold leading-snug text-[#001F3F]">{TITLE}</h3>
+          <h3 className="text-base font-extrabold leading-snug text-[#001F3F]">{TITLE}</h3>
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/80">
             <ShieldCheck className="h-4 w-4" aria-hidden />
           </span>
@@ -36,7 +36,7 @@ export function IdentityOnboardingCard({
         type="button"
         disabled={busy}
         onClick={onVerifyNow}
-        className="w-full rounded-2xl bg-[#001F3F] py-3.5 font-bold text-white transition hover:bg-blue-900 disabled:opacity-60"
+        className="w-full min-h-12 rounded-2xl bg-[#001F3F] py-2.5 font-bold text-white transition hover:bg-blue-900 disabled:opacity-60"
       >
         אימות עכשיו
       </button>
@@ -44,7 +44,7 @@ export function IdentityOnboardingCard({
         type="button"
         disabled={busy}
         onClick={onSkipLater}
-        className="w-full rounded-2xl border-2 border-[#001F3F]/20 py-3.5 font-bold text-[#001F3F] transition hover:bg-white/60 disabled:opacity-60"
+        className="w-full min-h-12 rounded-2xl border-2 border-[#001F3F]/20 py-2.5 font-bold text-[#001F3F] transition hover:bg-white/60 disabled:opacity-60"
       >
         {busy ? "שומר..." : "אעשה זאת מאוחר יותר"}
       </button>

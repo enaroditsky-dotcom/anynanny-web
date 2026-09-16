@@ -50,7 +50,7 @@ const reportUi = read("components/safety/report-user-sheet.tsx");
 const reference = read("components/parent/release-stuck-shift-modal.tsx");
 const shell = read("components/app-shell-gate.tsx");
 
-assert.match(shell, /8rem\+var\(--anynanny-now-dock,0px\)\+env\(safe-area-inset-bottom,0px\)/);
+assert.match(shell, /6\.5rem\+var\(--anynanny-now-dock,0px\)\+env\(safe-area-inset-bottom,0px\)/);
 overlayContract(reference, "release-stuck-shift");
 overlayContract(deleteUi, "delete-account");
 overlayContract(safetyUi, "safety-chooser");

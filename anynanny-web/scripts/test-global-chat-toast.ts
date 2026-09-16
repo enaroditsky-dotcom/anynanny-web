@@ -144,7 +144,7 @@ const toastUi = read("components/notifications/global-chat-toast.tsx");
 assert.match(toastUi, /z-\[70\]/);
 assert.match(toastUi, /pointer-events-auto/);
 assert.doesNotMatch(toastUi, /pointer-events-none/);
-assert.match(toastUi, /5\.5rem\+var\(--anynanny-now-dock/);
+assert.match(toastUi, /4\.75rem\+var\(--anynanny-now-dock/);
 assert.match(toastUi, /CHAT_COMPOSER_ACTIVE_EVENT/);
 assert.doesNotMatch(toastUi, /markBookingMessagesRead|mark_booking_messages_read/);
 assert.doesNotMatch(toastUi, /ActionToast/);

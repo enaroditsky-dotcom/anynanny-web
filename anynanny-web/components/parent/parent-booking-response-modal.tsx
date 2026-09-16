@@ -30,7 +30,7 @@ export function ParentBookingResponseModal({
       aria-describedby="parent-booking-response-body"
     >
       <div
-        className={`relative w-full max-w-sm rounded-3xl border-2 bg-[#FDFBF6] p-6 text-right shadow-2xl shadow-navy-header/15 ${
+        className={`relative w-full max-w-sm rounded-2xl border-2 bg-[#FDFBF6] p-4 text-right shadow-2xl shadow-navy-header/15 ${
           isSuccess ? "border-emerald-300/80" : "border-rose-300/80"
         }`}
       >
@@ -62,7 +62,7 @@ export function ParentBookingResponseModal({
           <div className="min-w-0 flex-1 pl-8">
             <h2
               id="parent-booking-response-title"
-              className={`text-lg font-bold leading-snug ${
+              className={`text-base font-bold leading-snug ${
                 isSuccess ? "text-emerald-950" : "text-rose-950"
               }`}
             >

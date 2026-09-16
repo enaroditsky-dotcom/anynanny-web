@@ -1090,7 +1090,7 @@ export default function ParentHistoryPage() {
 
   return (
     <div
-      className="mx-auto w-full min-w-0 max-w-md space-y-5 pb-4 pt-1"
+      className="mx-auto w-full min-w-0 max-w-sm space-y-3 pb-3 pt-1"
       dir="rtl"
     >
       <div className="flex items-center justify-between gap-3" dir="ltr">
@@ -1121,10 +1121,10 @@ export default function ParentHistoryPage() {
       </div>
 
       <header className="text-center">
-        <h1 className="text-2xl font-semibold tracking-tight text-navy-header">
+        <h1 className="text-xl font-semibold tracking-tight text-navy-header">
           היסטוריית משמרות
         </h1>
-        <p className="mx-auto mt-2 max-w-[22rem] text-sm font-normal leading-relaxed text-slate-500">
+        <p className="mx-auto mt-1 max-w-[22rem] text-sm font-normal leading-relaxed text-slate-500">
           צפו בכל המשמרות שלכם, סננו לפי תאריכים
           <br />
           וגלו כל פרט במקום אחד.

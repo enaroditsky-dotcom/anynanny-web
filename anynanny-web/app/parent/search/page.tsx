@@ -77,7 +77,7 @@ function ParentSearchContent() {
 
   return (
     <MainLayout showBrandHeader={false}>
-      <div className="mx-auto w-full max-w-md overflow-x-hidden bg-[#FDFBF6] pb-8" dir="rtl">
+      <div className="mx-auto w-full max-w-sm overflow-x-hidden bg-[#FDFBF6] pb-8" dir="rtl">
         {showWait ? (
           <p className="text-right text-sm text-slate-600">טוען…</p>
         ) : redirectingToLogin ? (
@@ -87,17 +87,17 @@ function ParentSearchContent() {
         ) : null}
 
         {showContent ? (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <header className="text-right">
-              <h1 className="text-2xl font-bold leading-snug text-[#001F3F]">
+              <h1 className="text-xl font-bold leading-snug text-[#001F3F]">
                 חיפוש מהיר באפליקציה
               </h1>
-              <p className="mt-1 inline-flex items-center gap-1.5 text-[15px] font-medium text-slate-500">
+              <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500">
                 <RequiredFieldMark />
                 <span>שדה חובה</span>
               </p>
               {parentPublicId ? (
-                <p className="mt-2 text-[15px] font-medium text-slate-500">
+                <p className="mt-1.5 text-sm font-medium text-slate-500">
                   מזהה: {parentPublicId}
                 </p>
               ) : null}

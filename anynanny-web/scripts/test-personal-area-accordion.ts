@@ -77,6 +77,11 @@ for (const title of [
   assert.match(sitterPersonal, new RegExp(`title="${title}"`));
 }
 
+assert.match(sitterPersonal, /IdentityPersonalSection/);
+assert.doesNotMatch(sitterPersonal, /SitterManualReceivingDestinationsSection/);
+assert.doesNotMatch(sitterPersonal, /data-tour="sitter-payment-methods"/);
+assert.doesNotMatch(sitterPersonal, /זמינות כללית|generic availability|availability_notes/);
+
 assert.match(identity, /title="אימות זהות"/);
 assert.match(identity, /summary=/);
 assert.match(receiving, /title="בחירת דרך קבלת התשלום"/);
@@ -85,8 +90,6 @@ assert.match(receiving, /sitterReceivingSummary/);
 assert.match(bank, /title="פרטי בנק"/);
 assert.match(bank, /sitterBankSummary/);
 assert.match(parentPersonal, /IdentityPersonalSection/);
-assert.match(sitterPersonal, /IdentityPersonalSection/);
-assert.doesNotMatch(sitterPersonal, /זמינות כללית|generic availability|availability_notes/);
 
 assert.equal(joinPersonalAreaSummary(["", "  "]), PERSONAL_AREA_EMPTY_SUMMARY);
 assert.equal(parentPersonalDetailsSummary("אדי", "נרודיצקי", "עברית"), "אדי נרודיצקי · עברית");

@@ -61,7 +61,7 @@ export function ReleaseStuckShiftModal({
     >
       <div className="flex min-h-full justify-center">
         <div
-          className="my-auto w-full max-w-sm rounded-3xl border border-slate-200 bg-[#FDFBF6] p-5 text-right shadow-2xl"
+          className="my-auto w-full max-w-sm rounded-2xl border border-slate-200 bg-[#FDFBF6] p-4 text-right shadow-2xl"
           dir="rtl"
           onClick={(event) => event.stopPropagation()}
         >

@@ -13,6 +13,13 @@ import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wi
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
 import { useSitterBroadcastPause } from "@/components/sitter/SitterBroadcastAlertHost";
 import { LogoutButton } from "@/components/account/logout-button";
+import {
+  APP_CONTENT_MAX_W,
+  DASHBOARD_SHORTCUT_ICON,
+  DASHBOARD_SHORTCUT_ICON_WRAP,
+  DASHBOARD_SHORTCUT_LABEL,
+  DASHBOARD_SHORTCUT_TILE
+} from "@/lib/ui/app-shell";
 import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import { hasSitterCompletedOnboarding, SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -1260,7 +1267,7 @@ export default function SitterDashboardPage() {
 
   if (showLoading) {
     return (
-      <main className="mx-auto flex min-h-[12rem] w-full max-w-md items-center justify-center bg-[#FDFBF6] py-10" dir="rtl">
+      <main className={`mx-auto flex min-h-[12rem] w-full ${APP_CONTENT_MAX_W} items-center justify-center bg-[#FDFBF6] py-10`} dir="rtl">
         <p className="text-right text-sm text-slate-600 animate-pulse">בודק הרשאות גישה ומאמת פרופיל…</p>
       </main>
     );
@@ -1397,8 +1404,8 @@ export default function SitterDashboardPage() {
   );
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-md flex-col bg-[#FDFBF6]" dir="rtl">
-      <div className="flex flex-col gap-3 py-2">
+    <main className={`mx-auto flex w-full min-w-0 ${APP_CONTENT_MAX_W} flex-col bg-[#FDFBF6]`} dir="rtl">
+      <div className="flex flex-col gap-1.5 py-1">
         <div className="shrink-0">
           <SitterDashboardHeader
             firstName={firstName}
@@ -1477,43 +1484,43 @@ export default function SitterDashboardPage() {
               aria-hidden={onboardingPending}
             >
               {onboardingPending ? (
-                <section id="sitter-profile-details" className="shrink-0 rounded-3xl border-2 border-amber-300/80 bg-white p-4 shadow-soft ring-1 ring-amber-200/60 sm:p-5">
+                <section id="sitter-profile-details" className="shrink-0 rounded-2xl border-2 border-amber-300/80 bg-white p-3 shadow-soft ring-1 ring-amber-200/60 sm:p-4">
                   <h2 className="text-right text-base font-bold text-navy-header">השלמת פרופיל מקצועי (חובה)</h2>
                   <p className="mt-1 text-right text-xs leading-relaxed text-slate-600">יש להשלים את הטופס לפני שימוש ביומן, ארנק ומשמרות. מספר הנני האישי יופיע בראש המסך לאחר השמירה.</p>
                 </section>
               ) : null}
               {!shouldHideDashboardActions ? (
-                <section className="shrink-0 rounded-3xl bg-white p-3 shadow-soft sm:p-4">
-                  <div className="grid min-w-0 grid-cols-3 gap-2.5">
+                <section className="shrink-0 rounded-xl bg-white p-1.5 shadow-soft">
+                  <div className="grid min-w-0 grid-cols-3 gap-1">
                     <Link
                       href="/sitter/availability"
                       data-tour="sitter-work-schedule"
                       aria-label="סידור עבודה"
-                      className="group flex min-h-[6.5rem] min-w-0 flex-col items-end justify-between gap-2 rounded-2xl border border-emerald-600/15 bg-emerald-50/40 p-3 text-right text-navy-header shadow-sm transition hover:border-emerald-600/30 hover:shadow-md active:scale-[0.98]"
+                      className={`${DASHBOARD_SHORTCUT_TILE} border border-emerald-600/15 bg-emerald-50/40 text-navy-header hover:border-emerald-600/30 hover:shadow-md`}
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
-                        <Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                      <span className={`${DASHBOARD_SHORTCUT_ICON_WRAP} text-emerald-600 ring-1 ring-emerald-600/10`}>
+                        <Calendar className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
                       </span>
-                      <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">סידור עבודה</span>
+                      <span className={DASHBOARD_SHORTCUT_LABEL}>סידור עבודה</span>
                     </Link>
                     <Link
                       href="/sitter/wallet"
                       data-tour="sitter-wallet"
-                      className="group flex min-h-[6.5rem] min-w-0 flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+                      className={`${DASHBOARD_SHORTCUT_TILE} border border-navy-header/10 bg-[#FDFBF6]/80 text-navy-header hover:border-navy-header/25 hover:shadow-md`}
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-                        <Wallet className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                      <span className={`${DASHBOARD_SHORTCUT_ICON_WRAP} ring-1 ring-navy-header/10`}>
+                        <Wallet className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
                       </span>
-                      <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">הארנק שלי</span>
+                      <span className={DASHBOARD_SHORTCUT_LABEL}>הארנק שלי</span>
                     </Link>
                     <Link
                       href="/sitter/shifts"
                       data-tour="sitter-shifts"
                       aria-label={cancellationAttention.showDot ? "המשמרות שלי — יש עדכון ביטול" : pendingBookingCount > 0 ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות` : "המשמרות שלי"}
-                      className="group flex min-h-[6.5rem] min-w-0 flex-col items-end justify-between gap-2 rounded-2xl border border-navy-header/10 bg-[#FDFBF6]/80 p-3 text-right text-navy-header shadow-sm transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.98]"
+                      className={`${DASHBOARD_SHORTCUT_TILE} border border-navy-header/10 bg-[#FDFBF6]/80 text-navy-header hover:border-navy-header/25 hover:shadow-md`}
                     >
-                      <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-                        <History className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                      <span className={`relative ${DASHBOARD_SHORTCUT_ICON_WRAP} ring-1 ring-navy-header/10`}>
+                        <History className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
                         <CancellationAttentionDot visible={cancellationAttention.showDot} />
                         {pendingBookingCount > 0 ? (
                           <span className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white" aria-hidden>
@@ -1521,7 +1528,7 @@ export default function SitterDashboardPage() {
                           </span>
                         ) : null}
                       </span>
-                      <span className="w-full text-right text-xs font-semibold leading-snug sm:text-sm">המשמרות שלי</span>
+                      <span className={DASHBOARD_SHORTCUT_LABEL}>המשמרות שלי</span>
                     </Link>
                   </div>
                 </section>
@@ -1559,7 +1566,7 @@ export default function SitterDashboardPage() {
               ) : null}
             </div>
             {onboardingPending ? (
-              <div className="fixed inset-x-0 bottom-0 top-20 z-20 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
+              <div className="fixed inset-x-0 bottom-0 top-12 z-20 flex items-start justify-center overflow-y-auto px-2 py-4 bg-[#FDFBF6]/95 backdrop-blur-sm">
                 <div className="w-full max-w-sm my-auto">
                   <SitterOnboardingWizard onSaved={handleOnboardingSaved} />
                 </div>
@@ -1567,7 +1574,7 @@ export default function SitterDashboardPage() {
             ) : null}
           </div>
           {!shouldHideDashboardActions && sitterBootstrapComplete && sitterId && !onboardingPending ? (
-            <div className="flex w-full shrink-0 flex-col gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3 rounded-b-3xl">
+            <div className="flex w-full shrink-0 flex-col gap-2 border-t border-slate-100 bg-slate-50/50 px-3 py-2 rounded-b-2xl">
               {showReleaseStuckShiftButton ? (
                 <button
                   type="button"

@@ -5,6 +5,18 @@ export const RESET_PASSWORD_PATH = "/auth/reset-password";
 export const FORGOT_PASSWORD_PATH = "/auth/forgot-password";
 export const LOGIN_PATH = "/login";
 
+/** `/login` shows the full app entry landing unless credentials/auth params are present. */
+export function isAppLoginLandingRequest(
+  params: Record<string, string | string[] | undefined>
+): boolean {
+  for (const [key, value] of Object.entries(params)) {
+    if (key === "manual") continue;
+    if (typeof value === "string" && value !== "") return false;
+    if (Array.isArray(value) && value.some((item) => item !== "")) return false;
+  }
+  return true;
+}
+
 export const RESET_EMAIL_SENT_MESSAGE =
   "אם קיים חשבון עם כתובת האימייל הזו, נשלח אליך קישור לאיפוס הסיסמה.";
 

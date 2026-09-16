@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
+import { APP_CONTENT_MAX_W } from "@/lib/ui/app-shell";
 
 type MainLayoutProps = {
   children: ReactNode;
@@ -17,18 +18,18 @@ export function MainLayout({
   showBrandHeader = true
 }: MainLayoutProps) {
   return (
-    <div className="mx-auto flex w-full min-w-0 max-w-md flex-col bg-[#FDFBF6] md:rounded-[2rem] md:shadow-soft">
+    <div className={`mx-auto flex w-full min-w-0 ${APP_CONTENT_MAX_W} flex-col bg-[#FDFBF6] md:rounded-2xl md:shadow-soft`}>
       {showBrandHeader ? (
-        <header className="relative sticky top-0 z-20 flex h-[5.25rem] shrink-0 items-center justify-center bg-white px-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)] sm:h-[5.5rem]">
+        <header className="relative sticky top-0 z-20 flex h-12 shrink-0 items-center justify-center bg-white px-2 shadow-[0_4px_16px_rgba(15,23,42,0.06)]">
           <div className="flex min-w-0 flex-row-reverse items-center gap-1">
-            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-100 sm:h-[3.25rem] sm:w-[3.25rem]">
+            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-100">
               <Image
                 src="/anynanny_clean.jpg"
                 alt=""
                 fill
                 aria-hidden
                 className="object-cover object-center"
-                sizes="52px"
+                sizes="32px"
                 priority
               />
             </div>
@@ -41,7 +42,7 @@ export function MainLayout({
 
       {/* Breathing room only — app shell already clears the fixed BottomNav. */}
       <main
-        className={`px-4 ${showBrandHeader ? "py-3" : "pt-1"} pb-4 ${mainClassName ?? ""}`.trim()}
+        className={`px-2 ${showBrandHeader ? "py-1.5" : "pt-1"} pb-2 ${mainClassName ?? ""}`.trim()}
       >
         {children}
       </main>

@@ -134,7 +134,7 @@ export function CityAutocomplete({
                 <li key={city} role="option" aria-selected={selected}>
                   <button
                     type="button"
-                    className={`flex min-h-11 w-full items-center px-3 py-2 text-right text-[17px] font-medium transition ${
+                    className={`flex min-h-11 w-full items-center px-3 py-2 text-right text-base font-medium transition ${
                       selected
                         ? "bg-[#001F3F]/10 font-bold text-navy-header"
                         : "text-slate-800 hover:bg-slate-50"

@@ -1015,7 +1015,7 @@ function BroadcastRadarContent() {
   return (
     <div
       dir="rtl"
-      className="mx-auto max-w-md space-y-6 px-2 pt-4"
+      className="mx-auto max-w-sm space-y-4 px-2 pt-3"
     >
       {isExpired && visibleResponderList.length === 0 ? (
         <div className="animate-fadeIn space-y-4 rounded-3xl border border-slate-100 bg-white p-6 text-center shadow-soft">

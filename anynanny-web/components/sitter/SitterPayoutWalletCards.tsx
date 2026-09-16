@@ -3,13 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, ChevronLeft, Loader2, ShieldCheck, X } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
+import { SitterManualReceivingDestinationsSection } from "@/components/sitter/SitterManualReceivingDestinationsSection";
 import {
   WalletMethodCardRow,
   WalletMethodVisualCard
 } from "@/components/wallet/wallet-method-brand";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
+  AUTH_MODAL_BODY_SCROLL,
+  AUTH_MODAL_CARD_SHELL_MD,
   AUTH_MODAL_CENTER_WRAP,
+  AUTH_MODAL_HEADER,
   AUTH_MODAL_OVERLAY_SCROLL
 } from "@/lib/ui/auth-modal-overlay";
 import {
@@ -20,6 +24,7 @@ import {
   EMPTY_SITTER_PAYOUT_METHODS,
   fetchSitterPayoutMethods,
   payoutMethodConfigured,
+  preferredReceivingMethodLabel,
   type SitterPayoutMethodKind,
   type SitterPayoutMethods,
   validateBitPhone,
@@ -34,7 +39,7 @@ type SitterPayoutWalletCardsProps = {
 };
 
 const fieldClassName =
-  "w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#0B3C5D]/40 focus:bg-white focus:ring-2 focus:ring-[#0B3C5D]/15 disabled:opacity-60";
+  "w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-base font-semibold text-slate-800 outline-none transition focus:border-[#0B3C5D]/40 focus:bg-white focus:ring-2 focus:ring-[#0B3C5D]/15 disabled:opacity-60";
 
 function methodReady(methods: SitterPayoutMethods, kind: SitterPayoutMethodKind): boolean {
   if (kind === "bit" || kind === "paybox") {
@@ -111,11 +116,7 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen, editing, viewing]);
 
-  const rows: Array<{ kind: SitterPayoutMethodKind }> = [
-    { kind: "card" },
-    { kind: "bit" },
-    { kind: "paybox" }
-  ];
+  const rows: Array<{ kind: SitterPayoutMethodKind }> = [{ kind: "card" }];
 
   const closeMenu = () => {
     if (editing) return;
@@ -123,17 +124,29 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
     setMenuOpen(false);
   };
 
+  const preferredLabel = preferredReceivingMethodLabel(methods.preferred);
+
   return (
     <section dir="rtl">
       <button
         type="button"
         disabled={loading}
         onClick={() => setMenuOpen(true)}
+        data-tour="sitter-payment-methods"
         className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FF8A8A] px-4 py-3.5 text-xs font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
       >
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         אמצעי קבלת התשלום
       </button>
+      <p
+        data-tour="sitter-preferred-payment"
+        className="mt-2 px-1 text-center text-[13px] text-slate-500"
+      >
+        מועדף:{" "}
+        <span className={preferredLabel ? "font-bold text-[#001F3F]" : "italic text-slate-400"}>
+          {preferredLabel || "לא הוגדר"}
+        </span>
+      </p>
 
       {menuOpen ? (
         <div
@@ -146,10 +159,10 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
         >
           <div className={AUTH_MODAL_CENTER_WRAP}>
           <div
-            className="my-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl"
+            className={`${AUTH_MODAL_CARD_SHELL_MD} my-auto border border-slate-100`}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div className={AUTH_MODAL_HEADER}>
               {viewing ? (
                 <button
                   type="button"
@@ -176,28 +189,31 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
             </div>
 
             {viewing ? (
-              <SitterMethodDetails
-                kind={viewing}
-                methods={methods}
-                onUpdate={() => setEditing(viewing)}
-              />
+              <div className={AUTH_MODAL_BODY_SCROLL}>
+                <SitterMethodDetails
+                  kind={viewing}
+                  methods={methods}
+                  onUpdate={() => setEditing(viewing)}
+                />
+              </div>
             ) : (
-              <>
-                <div className="space-y-3 px-3 py-3">
+              <div className={`${AUTH_MODAL_BODY_SCROLL} space-y-4`}>
+                <SitterManualReceivingDestinationsSection
+                  key={reloadToken}
+                  sitterId={sitterId}
+                  onMethodsChange={setMethods}
+                />
+                <div className="space-y-3">
                   {rows.map((row) => {
                     const ready = methodReady(methods, row.kind);
-                    const updateLabel =
-                      row.kind === "bit" || row.kind === "paybox"
-                        ? sitterReceivingSetupState(methods, row.kind).actionLabel
-                        : ready
-                          ? "עדכון"
-                          : "הוספה";
+                    const updateLabel = ready ? "עדכון" : "הוספה";
                     return (
                       <WalletMethodCardRow
                         key={row.kind}
                         kind={row.kind}
                         status={statusLabel(methods, row.kind)}
                         ready={ready}
+                        preferred={methods.preferred === row.kind}
                         cardTitle={methodTitle(row.kind)}
                         updateLabel={updateLabel}
                         onOpen={() => {
@@ -209,10 +225,10 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
                     );
                   })}
                 </div>
-                <p className="border-t border-slate-100 px-4 py-3 text-center text-[13px] text-slate-500">
+                <p className="border-t border-slate-100 pt-3 text-center text-[13px] text-slate-500">
                   Bit ו-PayBox הם אמצעי קבלה מההורים. כרטיס שמור משמש למשיכה בלבד ואינו אמצעי תשלום להורה.
                 </p>
-              </>
+              </div>
             )}
           </div>
           </div>
@@ -253,6 +269,7 @@ function SitterMethodDetails({
         kind={kind}
         status={statusLabel(methods, kind)}
         ready={methodReady(methods, kind)}
+        preferred={methods.preferred === kind}
         compact={false}
         cardTitle={methodTitle(kind)}
       />

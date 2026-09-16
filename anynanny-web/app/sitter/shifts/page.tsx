@@ -1679,7 +1679,7 @@ export default function SitterShiftsPage() {
     >
       <div
         data-tour="sitter-shift-board"
-        className="mx-auto flex w-full max-w-md flex-col text-right"
+        className="mx-auto flex w-full max-w-sm flex-col text-right"
         dir="rtl"
       >
         <div className="mb-4 shrink-0">
