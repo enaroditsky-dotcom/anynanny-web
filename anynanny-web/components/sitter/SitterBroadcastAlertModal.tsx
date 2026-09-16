@@ -11,7 +11,9 @@ import { areSoundAlertsEnabled } from "@/lib/settings/notification-preferences";
 import { ACCOUNT_SUSPENDED_MESSAGE, BLOCKED_PAIR_MESSAGE } from "@/lib/safety/constants";
 import { assertMarketplacePairAllowed, fetchIsAccountSuspended } from "@/lib/safety/enforcement";
 import {
+  ACTIVE_SITTER_BROADCAST_RELEVANCE_MS,
   isActiveSitterBroadcastStatus,
+  isSitterBroadcastCreatedAtRelevant,
   isTerminalSitterBroadcastStatus,
   recoverActiveSitterBroadcast
 } from "@/lib/broadcast/sitter-broadcast-recovery";
@@ -34,8 +36,10 @@ type ActiveAlert = {
 const DISMISSED_STORAGE_KEY = "anynanny_broadcast_dismissed_v1";
 
 /**
- * Database status is the source of truth.
- * Polling recovers currently active rows even if Realtime missed the INSERT.
+ * Database status is the source of truth for lifecycle.
+ * Polling recovers currently active, still-relevant NOW rows if Realtime
+ * missed the INSERT. Abandoned `active` rows outside the relevance window
+ * must not reopen the overlay.
  */
 const FALLBACK_POLL_MS = 10_000;
 
@@ -142,9 +146,10 @@ function playAlertSound(): void {
 /**
  * Incoming AnyNanny Now broadcast modal.
  *
- * Source of truth: broadcast_alerts.status = 'active' in the database.
- * Realtime INSERT is an optimization. Catch-up polling recovers every
- * currently active, city-eligible request regardless of created_at age.
+ * Source of truth: broadcast_alerts.status = 'active' in the database
+ * AND created_at within ACTIVE_SITTER_BROADCAST_RELEVANCE_MS.
+ * Realtime INSERT is an optimization. Catch-up polling recovers a live
+ * city-eligible request; stale abandoned actives must not open.
  *
  * Dismissed alerts persist across component remounts in sessionStorage.
  */
@@ -249,6 +254,15 @@ export function SitterBroadcastAlertModal({
     if (
       dismissedAlertIdsRef.current.has(
         alert.id
+      )
+    ) {
+      return;
+    }
+
+    if (
+      alert.created_at &&
+      !isSitterBroadcastCreatedAtRelevant(
+        alert.created_at
       )
     ) {
       return;
@@ -368,6 +382,10 @@ export function SitterBroadcastAlertModal({
           return;
         }
 
+        const since = new Date(
+          Date.now() - ACTIVE_SITTER_BROADCAST_RELEVANCE_MS
+        ).toISOString();
+
         const {
           data: alertsData,
           error
@@ -383,6 +401,10 @@ export function SitterBroadcastAlertModal({
           .eq(
             "status",
             "active"
+          )
+          .gte(
+            "created_at",
+            since
           )
           .order(
             "created_at",

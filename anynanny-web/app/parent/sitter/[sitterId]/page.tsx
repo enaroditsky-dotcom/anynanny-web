@@ -14,7 +14,7 @@ import { publicSitterDisplayName, formatPublicSitterAgeLabel } from "@/lib/sitte
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
 import { UserSafetyActions } from "@/components/safety/user-safety-actions";
 import {
-  VERIFIED_SITTER_IDENTITY_LABEL,
+  VERIFIED_IDENTITY_LABEL,
   VerifiedUserBadge
 } from "@/components/identity/verified-user-badge";
 import {
@@ -207,7 +207,7 @@ export default function ParentSitterProfileView() {
             ) : null}
             {profile.identity_verified ? (
               <div className="mt-2 flex justify-center">
-                <VerifiedUserBadge size="xl" label={VERIFIED_SITTER_IDENTITY_LABEL} />
+                <VerifiedUserBadge size="xl" label={VERIFIED_IDENTITY_LABEL} />
               </div>
             ) : null}
             <div className="mt-2">

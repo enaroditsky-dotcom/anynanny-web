@@ -715,6 +715,9 @@ export type PublicSitterSearchCard = {
   /** From `auth.users` metadata via RPC — not a sitter_profiles column. */
   avatar_url?: string | null;
 
+  /** Display-only: profiles.identity_verification_status = verified. */
+  identity_verified?: boolean;
+
   /** Service specialties offered (`babysitter`, consultants, doula). */
   service_types?: string[] | null;
 

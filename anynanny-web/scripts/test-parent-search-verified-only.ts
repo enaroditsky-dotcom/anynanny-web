@@ -21,7 +21,7 @@ function read(relativePath: string): string {
   return readFileSync(resolve(root, relativePath), "utf8");
 }
 
-const MIGRATION = "supabase/migrations/20260906180000_list_public_sitters_search_verified_only.sql";
+const MIGRATION = "supabase/migrations/20260917013000_public_sitter_identity_verified_badge.sql";
 const sql = read(MIGRATION);
 const searchFn = sql.slice(sql.lastIndexOf("create or replace function public.list_public_sitters_search("));
 const searchProjection = searchFn.slice(
@@ -146,7 +146,7 @@ assert.match(
   /grant execute on function public\.list_public_sitters_search\(\s*text,\s*timestamptz,\s*timestamptz,\s*int,\s*numeric,\s*text,\s*numeric,\s*text,\s*text,\s*boolean\s*\) to authenticated/
 );
 assert.match(
-  sql,
+  read("supabase/migrations/20260906180000_list_public_sitters_search_verified_only.sql"),
   /drop function if exists public\.list_public_sitters_search\(\s*text,\s*timestamptz,\s*timestamptz,\s*int,\s*numeric,\s*text,\s*numeric,\s*text,\s*text\s*\)/
 );
 assert.doesNotMatch(searchFn, /p_parent_lat/);
@@ -157,12 +157,17 @@ assert.match(resultsPage, /לא נמצאו בייביסיטרים פנויים �
 for (const field of PRIVATE_KYC_FIELDS) {
   assert.doesNotMatch(searchProjection, new RegExp(`'${field}'`), `search JSON must not expose ${field}`);
 }
-assert.doesNotMatch(searchProjection, /'identity_verified'/);
+assert.doesNotMatch(searchProjection, /'identity_verification_status'/);
+assert.match(searchProjection, /'identity_verified'/);
+assert.match(
+  searchProjection,
+  /'identity_verified',\s*\(coalesce\(p\.identity_verification_status, 'unverified'\) = 'verified'\)/
+);
 assert.doesNotMatch(searchFn, /identity_id_number/);
 assert.doesNotMatch(searchFn, /didit_sessions/);
 assert.doesNotMatch(sql, /drop policy/i);
 assert.doesNotMatch(sql, /create policy/i);
-assert.match(sql, /Does not expose identity documents/);
+assert.match(sql, /Does not expose identity documents|does not expose identity documents/);
 
 // 10. RTL/UI label text is correct
 assert.equal(PARENT_SEARCH_VERIFIED_ONLY_LABEL, "זהות מאומתת בלבד");
@@ -189,9 +194,9 @@ const laterSearchCreates = readdirSync(resolve(root, "supabase/migrations"))
     )
   );
 assert.ok(
-  laterSearchCreates.includes("20260906180000_list_public_sitters_search_verified_only.sql"),
-  "verified-only search migration must be the latest list_public_sitters_search recreate"
+  laterSearchCreates.includes("20260917013000_public_sitter_identity_verified_badge.sql"),
+  "identity badge search migration must be the latest list_public_sitters_search recreate"
 );
-assert.equal(laterSearchCreates.sort().at(-1), "20260906180000_list_public_sitters_search_verified_only.sql");
+assert.equal(laterSearchCreates.sort().at(-1), "20260917013000_public_sitter_identity_verified_badge.sql");
 
 console.log("Parent search verified-only filter checks passed.");

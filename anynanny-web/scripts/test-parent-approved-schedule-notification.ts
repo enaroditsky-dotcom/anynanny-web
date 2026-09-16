@@ -40,7 +40,6 @@ function isoDate(d: Date): string {
 
 const nowDate = new Date();
 const now = nowDate.getTime();
-const today = isoDate(nowDate);
 const future = new Date(nowDate);
 future.setDate(future.getDate() + 5);
 const futureDay = isoDate(future);
@@ -70,13 +69,6 @@ const futureApprovedOther = booking({
   start_time: `${futureDay2}T18:00:00.000Z`,
   end_time: `${futureDay2}T22:00:00.000Z`
 });
-const todayApproved = booking({
-  id: "approved-today",
-  status: "approved",
-  booking_date: today,
-  start_time: `${today}T18:00:00.000Z`,
-  end_time: `${today}T22:00:00.000Z`
-});
 const futurePending = booking({
   id: "pending-future",
   status: "pending",
@@ -92,8 +84,30 @@ assert.equal(
   shouldShowApprovedScheduleNotification(futureApproved, new Set(["approved-future-1"]), now),
   false
 );
-assert.equal(shouldShowApprovedScheduleNotification(todayApproved, undefined, now), false);
 assert.equal(shouldShowApprovedScheduleNotification(futurePending, undefined, now), false);
+
+const morningMs = Date.parse("2026-09-17T08:00:00.000Z");
+const sameDayEveningApproved = booking({
+  id: "approved-same-day-evening",
+  status: "approved",
+  booking_date: "2026-09-17",
+  start_time: "2026-09-17T18:00:00.000Z",
+  end_time: "2026-09-17T22:00:00.000Z"
+});
+assert.equal(isFutureConfirmedScheduleBooking(sameDayEveningApproved, morningMs), true);
+assert.equal(
+  shouldShowApprovedScheduleNotification(sameDayEveningApproved, undefined, morningMs),
+  true,
+  "same-day confirmed shift hours before start is a schedule notification, not arrival wait"
+);
+
+const arrivalWindowMs = Date.parse("2026-09-17T17:40:00.000Z");
+assert.equal(isFutureConfirmedScheduleBooking(sameDayEveningApproved, arrivalWindowMs), false);
+assert.equal(
+  shouldShowApprovedScheduleNotification(sameDayEveningApproved, undefined, arrivalWindowMs),
+  false,
+  "inside the 30-minute arrival window the success card must not replace waiting UI"
+);
 
 assert.equal(
   findUnacknowledgedFutureConfirmedBooking(

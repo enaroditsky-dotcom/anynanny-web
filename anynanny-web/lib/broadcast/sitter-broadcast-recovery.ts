@@ -1,12 +1,18 @@
 /**
  * Sitter AnyNanny NOW recovery.
  *
- * Database `broadcast_alerts.status` is the source of truth.
- * Realtime is only an optimization. Catch-up must recover every currently
- * active, city-eligible request regardless of `created_at` age.
+ * Database `broadcast_alerts.status` is the source of truth for lifecycle.
+ * Realtime is only an optimization. Catch-up recovers currently active,
+ * city-eligible requests that are still relevant as an urgent NOW call.
  */
 
 export const ACTIVE_SITTER_BROADCAST_STATUS = "active";
+
+/** Urgent NOW calls stay recoverable for this long after `created_at`. */
+export const ACTIVE_SITTER_BROADCAST_RELEVANCE_MS = 2 * 60 * 60 * 1000;
+
+/** Tolerate small client/server clock skew when comparing `created_at`. */
+const CREATED_AT_CLOCK_SKEW_MS = 2 * 60 * 1000;
 
 export const TERMINAL_SITTER_BROADCAST_STATUSES = [
   "expired",
@@ -64,12 +70,25 @@ export function broadcastCityMatchesSitter(
   return sitterCities.some((candidate) => candidate.trim() === needle);
 }
 
+export function isSitterBroadcastCreatedAtRelevant(
+  createdAt: string | null | undefined,
+  nowMs = Date.now()
+): boolean {
+  const createdMs = new Date(String(createdAt ?? "")).getTime();
+  if (!Number.isFinite(createdMs)) return false;
+  const ageMs = nowMs - createdMs;
+  if (ageMs < -CREATED_AT_CLOCK_SKEW_MS) return false;
+  return ageMs <= ACTIVE_SITTER_BROADCAST_RELEVANCE_MS;
+}
+
 export function toRecoverableSitterBroadcast(
-  row: SitterBroadcastRow
+  row: SitterBroadcastRow,
+  nowMs = Date.now()
 ): RecoverableSitterBroadcast | null {
   const id = String(row.id ?? "").trim();
   if (!id) return null;
   if (!isActiveSitterBroadcastStatus(row.status)) return null;
+  if (!isSitterBroadcastCreatedAtRelevant(row.created_at, nowMs)) return null;
 
   return {
     id,
@@ -81,7 +100,7 @@ export function toRecoverableSitterBroadcast(
 
 /**
  * Decide what the sitter overlay should do after a DB catch-up poll.
- * Age of `created_at` is intentionally ignored.
+ * Abandoned/stale `active` rows outside the NOW relevance window must not open.
  */
 export function recoverActiveSitterBroadcast(input: {
   rows: readonly SitterBroadcastRow[];
@@ -89,9 +108,11 @@ export function recoverActiveSitterBroadcast(input: {
   dismissedIds: ReadonlySet<string>;
   paused: boolean;
   currentId: string | null;
+  nowMs?: number;
 }): SitterBroadcastRecoveryResult {
+  const nowMs = input.nowMs ?? Date.now();
   const eligible = input.rows
-    .map(toRecoverableSitterBroadcast)
+    .map((row) => toRecoverableSitterBroadcast(row, nowMs))
     .filter((row): row is RecoverableSitterBroadcast => {
       if (!row) return false;
       return broadcastCityMatchesSitter(row.city, input.sitterCities);
