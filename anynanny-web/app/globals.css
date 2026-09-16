@@ -18,9 +18,9 @@ body {
   background: #f7f2ea;
   color: #165b73;
   font-family: var(--font-varela-round), "Varela Round", system-ui, "Segoe UI", Arial, sans-serif;
-  font-size: 1.1875rem;
-  line-height: 1.55;
-  letter-spacing: 0.01em;
+  font-size: 1rem;
+  line-height: 1.45;
+  letter-spacing: 0.005em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -36,7 +36,7 @@ h3,
 h4,
 h5,
 h6 {
-  letter-spacing: 0.015em;
+  letter-spacing: 0.01em;
 }
 
 input,
@@ -52,8 +52,8 @@ button {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 8px;
-  margin-block: 10px 4px;
+  height: 6px;
+  margin-block: 8px 2px;
   border-radius: 999px;
   touch-action: manipulation;
   background: linear-gradient(
@@ -65,7 +65,7 @@ button {
 }
 
 .anynanny-search-slider::-webkit-slider-runnable-track {
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: transparent;
 }
@@ -73,8 +73,8 @@ button {
 .anynanny-search-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   margin-top: -7px;
   border-radius: 999px;
   background: #001f3f;
@@ -84,20 +84,20 @@ button {
 }
 
 .anynanny-search-slider::-moz-range-track {
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: #e6e1d6;
 }
 
 .anynanny-search-slider::-moz-range-progress {
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: #001f3f;
 }
 
 .anynanny-search-slider::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
   background: #001f3f;
   border: 3px solid #fff;
@@ -125,7 +125,7 @@ button {
 /* Six-spoke required marker — size only; do not inherit bold from labels. */
 .anynanny-required-mark {
   display: inline-block;
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 400;
   line-height: 1;
   color: #e11d48;
