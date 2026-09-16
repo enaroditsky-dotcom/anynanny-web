@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  ACTIVE_SITTER_BROADCAST_RELEVANCE_MS,
   recoverActiveSitterBroadcast,
   isActiveSitterBroadcastStatus,
+  isSitterBroadcastCreatedAtRelevant,
   isTerminalSitterBroadcastStatus,
   type SitterBroadcastRow
 } from "../lib/broadcast/sitter-broadcast-recovery";
@@ -16,9 +18,10 @@ function read(relativePath: string): string {
 
 const CITY = "חיפה";
 const OTHER_CITY = "תל אביב-יפו";
+const NOW = Date.parse("2026-09-17T12:00:00.000Z");
 
 function isoAgo(ms: number): string {
-  return new Date(Date.now() - ms).toISOString();
+  return new Date(NOW - ms).toISOString();
 }
 
 function activeRow(
@@ -44,6 +47,7 @@ function recover(
     dismissedIds: new Set(),
     paused: false,
     currentId: null,
+    nowMs: NOW,
     ...overrides
   });
 }
@@ -58,13 +62,43 @@ function assertOpens(
   assert.equal(result.clearCurrent, false, `${label}: should not clear`);
 }
 
-// 1–4. Age of created_at must not hide an active matching broadcast.
+assert.equal(ACTIVE_SITTER_BROADCAST_RELEVANCE_MS, 2 * 60 * 60 * 1000);
+
+// Live / recently created actives still recover (including after a short offline window).
 assertOpens("T+30s", [activeRow({ created_at: isoAgo(30 * 1000) })]);
 assertOpens("T+2min", [activeRow({ created_at: isoAgo(2 * 60 * 1000) })]);
 assertOpens("T+5min", [activeRow({ created_at: isoAgo(5 * 60 * 1000) })]);
 assertOpens("T+11min", [activeRow({ created_at: isoAgo(11 * 60 * 1000) })]);
+assertOpens("T+90min", [activeRow({ created_at: isoAgo(90 * 60 * 1000) })]);
 
-// 5. Sitter opens after being offline — catch-up with no current overlay.
+// Abandoned/stale active rows must not reopen for every sitter.
+{
+  const stale = recover({
+    rows: [activeRow({ created_at: isoAgo(3 * 60 * 60 * 1000) })]
+  });
+  assert.equal(stale.open, null, "3h-old active must not open");
+  assert.equal(stale.clearCurrent, false);
+}
+
+{
+  const missingCreatedAt = recover({
+    rows: [activeRow({ created_at: undefined })]
+  });
+  assert.equal(missingCreatedAt.open, null, "active without created_at must not open");
+}
+
+{
+  const empty = recover({ rows: [] });
+  assert.equal(empty.open, null, "empty catch-up must not invent an alert");
+  assert.equal(empty.clearCurrent, false);
+}
+
+assert.equal(isSitterBroadcastCreatedAtRelevant(isoAgo(30 * 1000), NOW), true);
+assert.equal(isSitterBroadcastCreatedAtRelevant(isoAgo(3 * 60 * 60 * 1000), NOW), false);
+assert.equal(isSitterBroadcastCreatedAtRelevant("", NOW), false);
+assert.equal(isSitterBroadcastCreatedAtRelevant(null, NOW), false);
+
+// Sitter opens after being offline — catch-up with no current overlay.
 {
   const result = recover({
     rows: [activeRow({ created_at: isoAgo(4 * 60 * 1000) })],
@@ -74,7 +108,7 @@ assertOpens("T+11min", [activeRow({ created_at: isoAgo(11 * 60 * 1000) })]);
   assert.equal(result.clearCurrent, false);
 }
 
-// 6. Parent closed the app — row stays active, sitter keeps / recovers it.
+// Parent closed the app — row stays active within the relevance window.
 {
   const result = recover({
     rows: [activeRow({ created_at: isoAgo(3 * 60 * 1000) })],
@@ -84,7 +118,17 @@ assertOpens("T+11min", [activeRow({ created_at: isoAgo(11 * 60 * 1000) })]);
   assert.equal(result.clearCurrent, false);
 }
 
-// 7. Parent pauses — next poll no longer returns an active row.
+// Stale current overlay is cleared even if status is still active.
+{
+  const result = recover({
+    rows: [activeRow({ created_at: isoAgo(5 * 60 * 60 * 1000) })],
+    currentId: "alert-1"
+  });
+  assert.equal(result.open, null);
+  assert.equal(result.clearCurrent, true);
+}
+
+// Parent pauses — next poll no longer returns an active row.
 {
   const fromEmptyQuery = recover({
     rows: [],
@@ -101,7 +145,7 @@ assertOpens("T+11min", [activeRow({ created_at: isoAgo(11 * 60 * 1000) })]);
   assert.equal(fromPausedRow.clearCurrent, true);
 }
 
-// 8. Parent fills.
+// Parent fills.
 {
   const result = recover({
     rows: [activeRow({ status: "filled" })],
@@ -111,7 +155,7 @@ assertOpens("T+11min", [activeRow({ created_at: isoAgo(11 * 60 * 1000) })]);
   assert.equal(result.clearCurrent, true);
 }
 
-// 9. Parent cancels.
+// Parent cancels.
 {
   const result = recover({
     rows: [activeRow({ status: "cancelled" })],
@@ -121,7 +165,7 @@ assertOpens("T+11min", [activeRow({ created_at: isoAgo(11 * 60 * 1000) })]);
   assert.equal(result.clearCurrent, true);
 }
 
-// 10. Different city — never opens.
+// Different city — never opens.
 {
   const result = recover({
     rows: [activeRow({ city: OTHER_CITY, created_at: isoAgo(30 * 1000) })],
@@ -131,7 +175,7 @@ assertOpens("T+11min", [activeRow({ created_at: isoAgo(11 * 60 * 1000) })]);
   assert.equal(result.clearCurrent, false);
 }
 
-// 11. Dismissed stays dismissed for this session.
+// Dismissed stays dismissed for this session.
 {
   const result = recover({
     rows: [activeRow({ created_at: isoAgo(2 * 60 * 1000) })],
@@ -141,7 +185,7 @@ assertOpens("T+11min", [activeRow({ created_at: isoAgo(11 * 60 * 1000) })]);
   assert.equal(result.clearCurrent, false);
 }
 
-// 12. Booking-approval pause hides overlay without treating the row as terminal.
+// Booking-approval pause hides overlay without treating the row as terminal.
 {
   const result = recover({
     rows: [activeRow({ created_at: isoAgo(2 * 60 * 1000) })],
@@ -161,16 +205,20 @@ const dashboard = read("app/sitter/dashboard/page.tsx");
 const recovery = read("lib/broadcast/sitter-broadcast-recovery.ts");
 
 assert.match(modal, /recoverActiveSitterBroadcast/);
+assert.match(modal, /ACTIVE_SITTER_BROADCAST_RELEVANCE_MS/);
+assert.match(modal, /isSitterBroadcastCreatedAtRelevant/);
+assert.match(modal, /\.gte\(\s*"created_at"/);
 assert.match(host, /useSitterBroadcastPause/);
 assert.match(dashboard, /useSitterBroadcastPause\(showSitterBookingApproval\)/);
 assert.match(modal, /dismissedAlertIdsRef/);
 assert.match(modal, /pausedRef\.current/);
 
+assert.match(recovery, /ACTIVE_SITTER_BROADCAST_RELEVANCE_MS/);
 assert.doesNotMatch(recovery, /FRESH_EVENT_MAX_AGE_MS/);
 assert.doesNotMatch(recovery, /ALERT_MAX_AGE_MS/);
-assert.doesNotMatch(recovery, /created_at.*maxAge|maxAge.*created_at/);
 assert.doesNotMatch(modal, /FRESH_EVENT_MAX_AGE_MS/);
 assert.doesNotMatch(modal, /ALERT_MAX_AGE_MS/);
-assert.doesNotMatch(modal, /\.gte\(\s*"created_at"/);
+assert.doesNotMatch(modal, /isFreshIso/);
+assert.doesNotMatch(modal, /90 \* 1000/);
 
 console.log("sitter broadcast recovery visibility checks passed");

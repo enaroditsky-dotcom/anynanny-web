@@ -1,14 +1,14 @@
 import type { BookingRow, BookingStatus } from "@/lib/bookings/constants";
 import { bookingRequiresAdminReview } from "@/lib/bookings/stuck-shift-review";
 import { isBookingDateToday, scheduledEndHasPassed } from "@/lib/bookings/booking-date-utils";
-import { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
+import { SHIFT_ACTIVATION_LEAD_MS, WAITING_FOR_SITTER_ARRIVAL_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
 import { isMissedShiftLifecycleStatus } from "@/lib/bookings/missed-shift-lifecycle";
 import {
   normalizeBookingStatus,
   type BookingStatusInput
 } from "@/lib/bookings/booking-status-normalize";
 
-export { SHIFT_ACTIVATION_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
+export { SHIFT_ACTIVATION_LEAD_MS, WAITING_FOR_SITTER_ARRIVAL_LEAD_MS } from "@/lib/bookings/booking-shift-constants";
 
 /** Booking row is closed — never show live shift / Double-Shake controls. */
 export const BOOKING_TERMINAL_STATUSES: readonly BookingStatus[] = [
@@ -84,6 +84,22 @@ export function isNowWithinShiftActivationWindow(
 }
 
 /**
+ * Whether the parent "waiting for sitter arrival" alert should show.
+ * Uses the same timestamptz epoch-ms comparison as the Double-Shake window:
+ *
+ *   now >= start_time - 30 minutes AND now <= end_time
+ */
+export function isNowWithinWaitingForSitterArrivalWindow(
+  booking: Pick<BookingRow, "start_time" | "end_time">,
+  nowMs = new Date().getTime()
+): boolean {
+  const startMs = new Date(booking.start_time).getTime();
+  const endMs = new Date(booking.end_time).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return false;
+  return nowMs >= startMs - WAITING_FOR_SITTER_ARRIVAL_LEAD_MS && nowMs <= endMs;
+}
+
+/**
  * Whether today's linked booking should drive Double-Shake / live timer UI.
  * Live statuses use DB status only. Pending-start rows are included for the whole
  * calendar day so the circle can show a pre-window countdown; button activation
@@ -118,9 +134,10 @@ type ParentShiftScheduleFields = Pick<
 
 /**
  * Parent dashboard active-shift card (arrival wait / confirm / timer).
- * In-progress statuses always qualify. Pending/approved only qualify on the
- * booking's calendar day (or inside the activation window when date is missing).
- * Future/long-term approved bookings must NOT open arrival/timer UI.
+ * In-progress statuses always qualify. Pending qualifies on the booking's
+ * calendar day (or inside the activation window when date is missing).
+ * Approved/confirmed bookings qualify only inside the 30-minute arrival
+ * window (`now >= start_time - 30 minutes` and `now <= end_time`).
  */
 export function isBookingDueForParentActiveShiftUi(
   booking: ParentShiftScheduleFields & { requires_admin_review?: boolean | null },
@@ -140,7 +157,7 @@ export function isBookingDueForParentActiveShiftUi(
     return true;
   }
 
-  if (status === "pending" || status === "approved") {
+  if (status === "pending") {
     if (scheduledEndHasPassed(booking, nowMs)) return false;
     const date = booking.booking_date ? String(booking.booking_date) : "";
     if (date && isBookingDateToday(date)) return true;
@@ -148,7 +165,23 @@ export function isBookingDueForParentActiveShiftUi(
     return isNowWithinShiftActivationWindow(booking, nowMs);
   }
 
+  if (status === "approved") {
+    if (scheduledEndHasPassed(booking, nowMs)) return false;
+    return isNowWithinWaitingForSitterArrivalWindow(booking, nowMs);
+  }
+
   return false;
+}
+
+/** Confirmed shift, sitter has not marked arrived, and arrival window is open. */
+export function isWaitingForSitterArrival(
+  booking: (ParentShiftScheduleFields & { requires_admin_review?: boolean | null }) | null | undefined,
+  nowMs = Date.now()
+): boolean {
+  if (!booking) return false;
+  if (isMissedShiftLifecycleStatus(booking.status)) return false;
+  if (normalizeBookingStatus(booking.status) !== "approved") return false;
+  return isNowWithinWaitingForSitterArrivalWindow(booking, nowMs);
 }
 
 /** Pending/approved booking scheduled beyond today — calendar/schedule, not live shift. */

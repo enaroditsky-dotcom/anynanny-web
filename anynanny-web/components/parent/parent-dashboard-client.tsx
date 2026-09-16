@@ -19,7 +19,8 @@ import { isParentArrivalConfirmableStatus } from "@/lib/bookings/booking-realtim
 import {
   isBookingDueForParentActiveShiftUi,
   isFutureConfirmedScheduleBooking,
-  isFutureScheduledBooking
+  isFutureScheduledBooking,
+  isWaitingForSitterArrival
 } from "@/lib/bookings/booking-shift-ui";
 import { BookingScheduleLabel } from "@/components/bookings/booking-schedule-label";
 import { MissedShiftClarificationCard } from "@/components/bookings/missed-shift-clarification-card";
@@ -292,9 +293,12 @@ function pickParentDashboardBooking(
     dismissedRejectedIds?: Set<string>;
     dismissedApprovedIds?: Set<string>;
     stickyApprovedNotificationId?: string | null;
+    nowMs?: number;
   }
 ): BookingRow | null {
   if (!rows.length) return null;
+
+  const nowMs = opts?.nowMs ?? Date.now();
 
   const preferId = opts?.preferBookingId
     ? String(opts.preferBookingId)
@@ -310,7 +314,8 @@ function pickParentDashboardBooking(
     isApprovedScheduleNotificationCandidate(
       b,
       dismissedApprovedIds,
-      stickyApprovedNotificationId
+      stickyApprovedNotificationId,
+      nowMs
     );
 
   // בזמן Settlement אסור לעבור להזמנה אחרת.
@@ -336,7 +341,7 @@ function pickParentDashboardBooking(
 
   const dueLive = rows.filter(
     (b) =>
-      isBookingDueForParentActiveShiftUi(b) &&
+      isBookingDueForParentActiveShiftUi(b, nowMs) &&
       !bookingRequiresAdminReview(b) &&
       !isMissedShiftLifecycleStatus(b.status)
   );
@@ -358,7 +363,7 @@ function pickParentDashboardBooking(
       preferred &&
       !bookingRequiresAdminReview(preferred) &&
       (
-        isBookingDueForParentActiveShiftUi(preferred) ||
+        isBookingDueForParentActiveShiftUi(preferred, nowMs) ||
         isUnpaidCompletedBooking(preferred) ||
         pendingRejectedNotification(preferred) ||
         pendingApprovedNotification(preferred)
@@ -388,8 +393,14 @@ function pickParentDashboardBooking(
     return futureConfirmed;
   }
 
+  const confirmedSchedule = rows.find((b) => isFutureConfirmedScheduleBooking(b, nowMs));
+
+  if (confirmedSchedule) {
+    return confirmedSchedule;
+  }
+
   const futurePending = rows.find(
-    (b) => isFutureScheduledBooking(b) && !isFutureConfirmedScheduleBooking(b)
+    (b) => isFutureScheduledBooking(b, nowMs) && !isFutureConfirmedScheduleBooking(b, nowMs)
   );
 
   if (futurePending) {
@@ -429,15 +440,6 @@ function isTerminalSessionStatus(status: unknown): boolean {
 
 function isConfirmableBooking(status: unknown): boolean {
   return isParentArrivalConfirmableStatus(status as BookingRow["status"]);
-}
-
-function isWaitingForSitterArrival(booking: BookingRow | null | undefined): boolean {
-  if (!booking) return false;
-  if (isMissedShiftLifecycleStatus(booking.status)) return false;
-  return (
-    normalizeStatus(booking.status) === "approved" &&
-    isBookingDueForParentActiveShiftUi(booking)
-  );
 }
 
 function sessionRequestsEnd(session: SupabaseSessionRow | null): boolean {
@@ -838,7 +840,8 @@ export function ParentDashboardClient({
           settlementLocked: settlementIsLocked(),
           dismissedRejectedIds,
           dismissedApprovedIds,
-          stickyApprovedNotificationId: stickyApprovedNotificationIdRef.current
+          stickyApprovedNotificationId: stickyApprovedNotificationIdRef.current,
+          nowMs: Date.now()
         });
         setStuckShiftReviewNotice(bookingRows.some((row) => bookingRequiresAdminReview(row)));
         const bookingSitterId =
@@ -859,9 +862,9 @@ export function ParentDashboardClient({
           continue;
         }
         const dueForActiveShift = Boolean(
-          booking && isBookingDueForParentActiveShiftUi(booking)
+          booking && isBookingDueForParentActiveShiftUi(booking, Date.now())
         );
-        const futureScheduled = Boolean(booking && isFutureScheduledBooking(booking));
+        const futureScheduled = Boolean(booking && isFutureScheduledBooking(booking, Date.now()));
         const hasLiveBooking = Boolean(
           booking && isLiveInFlightBooking(bookingStatus) && dueForActiveShift
         );
@@ -1920,7 +1923,7 @@ export function ParentDashboardClient({
   const dueForActiveShiftUi = Boolean(
     hasHydrated &&
       activeBooking &&
-      isBookingDueForParentActiveShiftUi(activeBooking) &&
+      isBookingDueForParentActiveShiftUi(activeBooking, nowMs) &&
       !isMissedShiftLifecycleStatus(activeBooking.status)
   );
   const clarificationBooking =
@@ -1935,15 +1938,15 @@ export function ParentDashboardClient({
   const isScheduledConfirmed = Boolean(
     hasHydrated &&
       activeBooking &&
-      isFutureConfirmedScheduleBooking(activeBooking) &&
+      isFutureConfirmedScheduleBooking(activeBooking, nowMs) &&
       (isStickyApprovedNotification ||
-        shouldShowApprovedScheduleNotification(activeBooking, dismissedApprovedBookingIds))
+        shouldShowApprovedScheduleNotification(activeBooking, dismissedApprovedBookingIds, nowMs))
   );
   const isScheduledPending = Boolean(
     hasHydrated &&
       activeBooking &&
-      isFutureScheduledBooking(activeBooking) &&
-      !isFutureConfirmedScheduleBooking(activeBooking)
+      isFutureScheduledBooking(activeBooking, nowMs) &&
+      !isFutureConfirmedScheduleBooking(activeBooking, nowMs)
   );
   const isRejectedBooking = shouldShowRejectedNotification(
     activeBooking,
@@ -2209,7 +2212,7 @@ export function ParentDashboardClient({
               ? "בקשה עתידית ממתינה — לחצו להרחבה"
               : showMissedShiftClarification
                 ? "המשמרת לא התקיימה"
-                : isWaitingForSitterArrival(activeBooking)
+                : isWaitingForSitterArrival(activeBooking, nowMs)
                 ? "ממתינים להגעת הבייביסיטר"
                 : "סטטוס משמרת — לחצו להרחבה";
 
@@ -2220,7 +2223,7 @@ export function ParentDashboardClient({
       ? "rose"
       : showMissedShiftClarification
         ? "rose"
-        : isScheduledPending || isWaitingForSitterArrival(activeBooking)
+        : isScheduledPending || isWaitingForSitterArrival(activeBooking, nowMs)
         ? "amber"
         : "emerald";
 
@@ -2528,7 +2531,7 @@ export function ParentDashboardClient({
                     onClick={handleParentConfirmStart}
                   />
                 </div>
-              ) : isWaitingForSitterArrival(activeBooking) ? (
+              ) : isWaitingForSitterArrival(activeBooking, nowMs) ? (
                 <div className="flex flex-col items-center gap-2">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700">
                     <Clock className="h-5 w-5" />

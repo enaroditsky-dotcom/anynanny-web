@@ -52,15 +52,18 @@ assert.match(modal, /createPortal/);
 assert.match(modal, /document\.body/);
 assert.match(modal, /z-\[9999\]/);
 assert.match(modal, /recoverActiveSitterBroadcast/);
+assert.match(modal, /ACTIVE_SITTER_BROADCAST_RELEVANCE_MS/);
+assert.match(modal, /isSitterBroadcastCreatedAtRelevant/);
 assert.match(modal, /\.eq\(\s*"status",\s*"active"/);
+assert.match(modal, /\.gte\(\s*"created_at"/);
 
-// Visibility must follow DB status, not client-side age TTLs.
+// Visibility follows DB status plus a NOW relevance window. Do not restore
+// the old 90s poll-only gate that blocked offline recovery.
 assert.doesNotMatch(modal, /FRESH_EVENT_MAX_AGE_MS/);
 assert.doesNotMatch(modal, /ALERT_MAX_AGE_MS/);
 assert.doesNotMatch(modal, /isFreshIso/);
 assert.doesNotMatch(modal, /90 \* 1000/);
 assert.doesNotMatch(modal, /10 \* 60 \* 1000/);
-assert.doesNotMatch(modal, /\.gte\(\s*"created_at"/);
 assert.doesNotMatch(
   modal,
   /eligible for recovery for up to 10 minutes/

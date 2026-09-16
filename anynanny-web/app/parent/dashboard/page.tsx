@@ -179,6 +179,7 @@ export default async function ParentDashboardPage() {
       actionableMissed ??
       rows.find((b) => isBookingDueForParentActiveShiftUi(b)) ??
       rows.find((b) => shouldShowApprovedScheduleNotification(b)) ??
+      rows.find((b) => isFutureConfirmedScheduleBooking(b)) ??
       rows.find(
         (b) => isFutureScheduledBooking(b) && !isFutureConfirmedScheduleBooking(b)
       ) ??

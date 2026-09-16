@@ -11,6 +11,7 @@ import {
   type BroadcastDeclineSitterSnapshot
 } from "@/components/parent/broadcast-decline-notice";
 import { parentSitterProfilePathFromBroadcast } from "@/components/sitter/public-sitter-search-card";
+import { VerifiedUserBadge, VERIFIED_IDENTITY_LABEL } from "@/components/identity/verified-user-badge";
 import { rememberActiveBroadcast } from "@/lib/broadcast/broadcast-active-snapshot";
 import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
 import { requestBroadcastStatusChange } from "@/lib/broadcast/broadcast-status-change";
@@ -50,12 +51,14 @@ interface RespondingSitter {
   experience: number;
   hourlyRate: number | null;
   avatarUrl: string | null;
+  identityVerified: boolean;
 }
 
 type ResponderIdentity = {
   name: string;
   avatarUrl: string | null;
   rating: number | null;
+  identityVerified: boolean;
 };
 
 const BROADCAST_DECLINE_TITLE = "דחתה את הבקשה";
@@ -479,7 +482,8 @@ function BroadcastRadarContent() {
       responderIdentityRef.current.set(sitterId, {
         name: displayName,
         avatarUrl,
-        rating
+        rating,
+        identityVerified: sitterProfile.identity_verified === true
       });
 
       if (declinedSitterIdsRef.current.includes(sitterId)) {
@@ -502,7 +506,8 @@ function BroadcastRadarContent() {
             rating,
             experience,
             hourlyRate,
-            avatarUrl
+            avatarUrl,
+            identityVerified: sitterProfile.identity_verified === true
           }
         ];
       });
@@ -1174,6 +1179,12 @@ function BroadcastRadarContent() {
                               </span>
                             )}
                           </h3>
+
+                          {sitter.identityVerified ? (
+                            <div className="pt-0.5">
+                              <VerifiedUserBadge size="sm" label={VERIFIED_IDENTITY_LABEL} />
+                            </div>
+                          ) : null}
 
                           <p className="text-[13px] font-medium text-slate-500">
                             {sitter.experience} שנות ניסיון

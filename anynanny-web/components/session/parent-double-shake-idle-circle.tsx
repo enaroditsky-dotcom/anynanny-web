@@ -22,6 +22,7 @@ import {
   SHIFT_COMPLETED_CIRCLE_LABEL,
   shouldHardLockShiftBooking
 } from "@/lib/session/dismissed-shift-lock";
+import { isWaitingForSitterArrival } from "@/lib/bookings/booking-shift-ui";
 import {
   SESSION_ACTION_CIRCLE_STYLE,
   SESSION_CIRCLE_INNER_CLASS,
@@ -220,13 +221,16 @@ function ParentDoubleShakeIdleCircleInner({
   }
 
   if (status === "approved") {
-    return (
-      <DoubleShakeCircleButton
-        label="ממתינים להגעת הבייביסיטר"
-        variant="waiting-navy"
-        presentational
-      />
-    );
+    if (isWaitingForSitterArrival(booking)) {
+      return (
+        <DoubleShakeCircleButton
+          label="ממתינים להגעת הבייביסיטר"
+          variant="waiting-navy"
+          presentational
+        />
+      );
+    }
+    return <DoubleShakeDisabledCircleState label={DOUBLE_SHAKE_NO_SHIFT_TODAY_LABEL} variant="disabled" />;
   }
 
   return <DoubleShakeDisabledCircleState label={DOUBLE_SHAKE_NO_SHIFT_TODAY_LABEL} variant="disabled" />;
