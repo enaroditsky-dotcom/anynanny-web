@@ -15,15 +15,18 @@ const config: Config = {
         ]
       },
       fontSize: {
-        /** Mobile-first readable scale. Weights are unchanged — size only. */
-        xs: ["0.875rem", { lineHeight: "1.4" }],
-        sm: ["1.0625rem", { lineHeight: "1.5" }],
-        base: ["1.1875rem", { lineHeight: "1.55" }],
-        lg: ["1.375rem", { lineHeight: "1.5" }],
-        xl: ["1.5rem", { lineHeight: "1.4" }],
-        "2xl": ["1.75rem", { lineHeight: "1.35" }],
-        "3xl": ["2.125rem", { lineHeight: "1.3" }],
-        "4xl": ["2.5rem", { lineHeight: "1.25" }]
+        /**
+         * Compact mobile-app scale. Previous sizes were ~18–25% above Tailwind
+         * defaults and made 100% zoom feel oversized. Weights unchanged.
+         */
+        xs: ["0.75rem", { lineHeight: "1.35" }],
+        sm: ["0.875rem", { lineHeight: "1.4" }],
+        base: ["1rem", { lineHeight: "1.45" }],
+        lg: ["1.125rem", { lineHeight: "1.4" }],
+        xl: ["1.25rem", { lineHeight: "1.35" }],
+        "2xl": ["1.375rem", { lineHeight: "1.3" }],
+        "3xl": ["1.625rem", { lineHeight: "1.25" }],
+        "4xl": ["1.875rem", { lineHeight: "1.2" }]
       },
       colors: {
         navy: {
