@@ -14,6 +14,8 @@ export const BROADCAST_AUDIENCE_TYPES = [
 
 export type BroadcastAudienceType = (typeof BROADCAST_AUDIENCE_TYPES)[number];
 
+export const DEFAULT_BROADCAST_AUDIENCE: BroadcastAudienceType = "all_users";
+
 export const BROADCAST_AUDIENCE_LABELS: Record<BroadcastAudienceType, string> = {
   all_users: "כל המשתמשים",
   parents: "הורים בלבד",
