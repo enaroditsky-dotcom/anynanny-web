@@ -25,7 +25,6 @@ import { ACCOUNT_TYPE_ENTRY_HREF } from "../lib/auth/age-eligibility";
 import { shouldForwardRootAuthCallback } from "../lib/auth/root-auth-callback";
 import { computeChapterScrollTop } from "../lib/marketing/chapter-scroll";
 import { prepareMarketingAnalyticsUrl } from "../lib/marketing/analytics";
-import { isAppLoginLandingRequest } from "../lib/auth/password-reset";
 import {
   APP_ENTRY_HREF,
   COMING_SOON_LABEL,
@@ -98,20 +97,12 @@ assert.doesNotMatch(client, /\/login\?role=parent/);
 assert.doesNotMatch(client, /\/login\?role=sitter/);
 assert.match(client, /welcomeSignupHref\(profileRole/);
 assert.match(client, /track: "babysitter"/);
-assert.equal(ACCOUNT_TYPE_ENTRY_HREF, "/login?manual=true");
+assert.equal(ACCOUNT_TYPE_ENTRY_HREF, "/?manual=true");
 assert.match(read("components/marketing/marketing-header.tsx"), /href="\/login"/);
 assert.match(read("components/marketing/marketing-header.tsx"), /MARKETING_TOGETHER\.loginLabel/);
 assert.doesNotMatch(read("components/marketing/marketing-header.tsx"), /registerLabel/);
 assert.match(home, /href="\/login"/);
 assert.match(home, /MARKETING_TOGETHER\.registerLabel/);
-assert.match(read("components/auth/app-login-landing.tsx"), /HomepageWelcomeVideo/);
-assert.match(read("components/auth/app-login-landing.tsx"), /כניסת \{path\.title\}/);
-assert.match(read("app/login/page.tsx"), /isAppLoginLandingRequest/);
-assert.match(read("app/login/page.tsx"), /AppLoginLanding/);
-assert.equal(isAppLoginLandingRequest({}), true);
-assert.equal(isAppLoginLandingRequest({ manual: "true" }), true);
-assert.equal(isAppLoginLandingRequest({ role: "parent" }), false);
-assert.equal(isAppLoginLandingRequest({ next: "/parent/calendar" }), false);
 assert.equal(
   shouldForwardRootAuthCallback("/", { get: (name) => (name === "type" ? "recovery" : null) }),
   true

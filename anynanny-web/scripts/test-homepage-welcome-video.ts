@@ -13,7 +13,9 @@ function read(relativePath: string): string {
   return readFileSync(resolve(root, relativePath), "utf8");
 }
 
-const landing = read("app/page.tsx");
+const page = read("app/page.tsx");
+const marketingHome = read("components/marketing/marketing-home.tsx");
+const client = read("components/marketing/home-page-client.tsx");
 const homepageVideo = read("components/welcome/homepage-welcome-video.tsx");
 const welcomePlayer = read("components/welcome/welcome-video-player.tsx");
 const welcomeFlow = read("components/welcome/welcome-flow-page.tsx");
@@ -23,12 +25,16 @@ assert.equal(existsSync(videoPath), true);
 assert.ok(statSync(videoPath).size > 1_000_000);
 assert.equal(WELCOME_VIDEO_SRC, "/welcome/anynanny-welcome.mp4");
 
-assert.match(landing, /HomepageWelcomeVideo/);
-assert.match(landing, /AnyNannyLogo/);
-assert.match(landing, /variant="hero"/);
-assert.match(landing, /פשוט למצוא זמן לחיים/);
-assert.doesNotMatch(landing, /AnyNannyWordmark/);
-assert.doesNotMatch(landing, /צפו בסרטון קצר שמסביר איך AnyNanny/);
+assert.match(page, /HomePageClient/);
+assert.match(page, /פשוט למצוא זמן לחיים/);
+assert.match(marketingHome, /HomepageWelcomeVideo/);
+assert.match(marketingHome, /AnyNannyLogo/);
+assert.match(marketingHome, /variant="hero"/);
+assert.match(marketingHome, /MARKETING_SLOGAN/);
+assert.doesNotMatch(marketingHome, /AnyNannyWordmark/);
+assert.doesNotMatch(marketingHome, /צפו בסרטון קצר שמסביר איך AnyNanny/);
+assert.doesNotMatch(page, /AppLoginLanding/);
+assert.equal(existsSync(resolve(root, "components/auth/app-login-landing.tsx")), false);
 
 const wordmarkPath = resolve(root, "public/brand/anynanny-official-wordmark.png");
 assert.equal(existsSync(wordmarkPath), true);
@@ -79,9 +85,9 @@ assert.doesNotMatch(welcomeFlow, /text-\[#B8860B\]">AnyNanny/);
 const nowHero = read("components/parent/anynanny-now-hero.tsx");
 assert.match(nowHero, /AnyNannyLogo/);
 assert.doesNotMatch(nowHero, /text-\[#00A86B\]">Nanny/);
-assert.match(landing, /welcomeSignupHref\(profileRole/);
-assert.match(landing, /action === "register"/);
-assert.match(landing, /router\.push\(`\/login\?\$\{qs\.toString\(\)\}`\)/);
+assert.match(client, /welcomeSignupHref\(profileRole/);
+assert.match(client, /action === "register"/);
+assert.match(client, /router\.push\(`\/login\?\$\{qs\.toString\(\)\}`\)/);
 
 assert.match(homepageVideo, /הכירו את AnyNanny ב־10 שניות/);
 assert.doesNotMatch(homepageVideo, /צפו בסרטון קצר שמסביר איך AnyNanny/);
