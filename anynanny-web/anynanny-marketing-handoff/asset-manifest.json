@@ -1,0 +1,92 @@
+[
+  {
+    "filename": "sitter-wallet-demo.png",
+    "width": 1017,
+    "height": 1547,
+    "alt": "הכנסה לדוגמה של 900 ₪ מחמש משמרות",
+    "placement": "app: demo-income paragraph",
+    "caption": "מסכים להמחשה · נתונים לדוגמה",
+    "sha256": "e9aa52f292e1ca346c3a0c144b038124158289a55128e28a1db45d2f75c7222d"
+  },
+  {
+    "filename": "sitter-history-demo.png",
+    "width": 967,
+    "height": 1626,
+    "alt": "חמש משמרות לדוגמה באורך שעתיים עד ארבע שעות",
+    "placement": "app: beside wallet",
+    "caption": "מסכים להמחשה · נתונים לדוגמה",
+    "sha256": "90b682eccbed18e471cfda29294e203eca919ff9dc01fb9b346332defec8d49d"
+  },
+  {
+    "filename": "now-parent-results-demo.png",
+    "width": 865,
+    "height": 1819,
+    "alt": "תוצאות קריאת NOW לדוגמה עם בייביסיטריות שהביעו זמינות",
+    "placement": "parents: NOW paragraph",
+    "caption": "מסכים להמחשה · נתונים לדוגמה",
+    "sha256": "23ad67c66bfbbb9b7b96d594e5b7be4bfd6eb2847d71c5e157fad437b42f8cd5"
+  },
+  {
+    "filename": "chat-current.png",
+    "width": 522,
+    "height": 877,
+    "alt": "צ׳אט לתיאום בין ההורה לבייביסיטרית, כולל אימוג׳י",
+    "placement": "app",
+    "caption": "מסכים להמחשה",
+    "sha256": "17d44a787606ecb1b0d8a1a630d9f98b24f10f32de1b74d74d41d0632e2ec05d"
+  },
+  {
+    "filename": "sitter-availability-calendar.png",
+    "width": 500,
+    "height": 867,
+    "alt": "לוח סידור העבודה של הבייביסיטרית",
+    "placement": "sitters",
+    "caption": "מסכים להמחשה",
+    "sha256": "3cfdadcabbce92280a804c791bcbcff10d2a92efdc3f3a9839e458e0937af008"
+  },
+  {
+    "filename": "sitter-availability-hours.png",
+    "width": 496,
+    "height": 867,
+    "alt": "עריכת שעות הזמינות ביום שנבחר",
+    "placement": "app: optional gallery image",
+    "caption": "מסכים להמחשה",
+    "sha256": "b8942b8c3f2f282aca84901debba998c1d9378c590ddbcf272ee4a85969c228e"
+  },
+  {
+    "filename": "now-sitter-call.png",
+    "width": 470,
+    "height": 877,
+    "alt": "קריאת NOW לבייביסיטרית ואפשרות להביע זמינות",
+    "placement": "parents: optional second image",
+    "caption": "מסכים להמחשה",
+    "sha256": "00d7d560cb5ab977be7c60e5a9c2fbcb555c0a3200a65dd49c5d23bdadff61b5"
+  },
+  {
+    "filename": "sitter-payment-confirmation.png",
+    "width": 610,
+    "height": 870,
+    "alt": "אישור הבייביסיטרית אם קיבלה את התשלום במזומן",
+    "placement": "app",
+    "caption": "מסכים להמחשה",
+    "sha256": "41c9da4734b94c1964cdf3ba6b337740e6a00b5bedd0215902e4b83c84ffc270"
+  },
+  {
+    "filename": "report-and-block.png",
+    "width": 517,
+    "height": 857,
+    "alt": "אפשרויות לדיווח ולחסימת משתמש",
+    "placement": "respect",
+    "caption": "מסכים להמחשה",
+    "sha256": "5ffb3283cc42df95ad3e18cc5fb4d4f692fd84cea32d3f8c342608de8b27fcdc"
+  },
+  {
+    "filename": "sitter-rates-family.png",
+    "width": 547,
+    "height": 862,
+    "alt": "דירוג המשפחה וחוות דעת לאחר המשמרת",
+    "placement": "respect: optional second image",
+    "caption": "מסכים להמחשה",
+    "sha256": "1ee3aefd4f549040b33aa2e1056adb46c151a1e7b5eeee60d403ea28a3b3c046"
+  }
+]
