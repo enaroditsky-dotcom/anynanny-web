@@ -58,13 +58,13 @@ export function PersonalAreaSection({
 
   if (!collapsible) {
     return (
-      <section className={`rounded-2xl border p-4 sm:p-5 ${cardToneClass}`} dir="rtl">
-        <div className="mb-3 flex items-start justify-between gap-3 text-right">
-          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+      <section className={`rounded-2xl border p-3 sm:p-4 ${cardToneClass}`} dir="rtl">
+        <div className="mb-2.5 flex items-start justify-between gap-3 text-right">
+          <div className="flex min-w-0 flex-1 items-start gap-2">
             {icon ? <span className="mt-0.5 shrink-0">{icon}</span> : null}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center justify-start gap-2">
-                <h2 className={`text-[17px] ${titleWeightClass}`}>{title}</h2>
+                <h2 className={`text-base ${titleWeightClass}`}>{title}</h2>
                 {headerAccessory}
               </div>
               {description ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{description}</p> : null}
@@ -80,10 +80,10 @@ export function PersonalAreaSection({
   return (
     <section
       data-personal-area-accordion
-      className={`min-w-0 w-full rounded-2xl border px-3.5 py-2.5 sm:px-5 sm:py-3 ${cardToneClass}`}
+      className={`min-w-0 w-full rounded-2xl border px-3 py-2 sm:px-4 sm:py-2.5 ${cardToneClass}`}
       dir="rtl"
     >
-      <h2 className={`m-0 text-right text-[17px] ${titleWeightClass}`}>
+      <h2 className={`m-0 text-right text-base ${titleWeightClass}`}>
         <button
           type="button"
           id={headerId}
@@ -131,7 +131,7 @@ export function PersonalAreaSection({
         }`}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="border-t border-[#001F3F]/8 pt-3">
+          <div className="border-t border-[#001F3F]/8 pt-2.5">
             {action ? <div className="mb-2 flex justify-end">{action}</div> : null}
             {children}
           </div>
@@ -205,11 +205,11 @@ export function PersonalStaticRow({
   const isEmpty = !trimmed;
 
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-[#001F3F]/8 py-3 last:border-b-0">
+    <div className="flex min-h-[44px] items-start justify-between gap-3 border-b border-[#001F3F]/8 py-2 last:border-b-0">
       <div className="min-w-0 flex-1 text-right">
-        <p className="text-[13px] font-semibold text-slate-500">{label}</p>
+        <p className="text-xs font-semibold text-slate-500">{label}</p>
         <p
-          className={`mt-1 text-[16px] leading-snug ${isEmpty ? "italic text-slate-400" : "font-medium text-[#001F3F]"}`}
+          className={`mt-0.5 text-sm leading-snug ${isEmpty ? "italic text-slate-400" : "font-medium text-[#001F3F]"}`}
           dir={dir}
         >
           {isEmpty ? emptyLabel : trimmed}
@@ -231,14 +231,14 @@ export function PersonalField({
 }) {
   return (
     <label className={`block text-right ${className}`}>
-      <span className="mb-1 block text-[13px] font-semibold text-slate-600">{label}</span>
+      <span className="mb-1 block text-xs font-semibold text-slate-600">{label}</span>
       {children}
     </label>
   );
 }
 
 export const personalInputClassName =
-  "w-full rounded-xl border border-[#001F3F]/15 bg-[#FDFBF6]/70 px-3 py-2.5 text-sm text-[#001F3F] outline-none transition focus:border-[#001F3F]/40 focus:bg-white";
+  "w-full min-h-11 rounded-xl border border-[#001F3F]/15 bg-[#FDFBF6]/70 px-3 py-2 text-base text-[#001F3F] outline-none transition focus:border-[#001F3F]/40 focus:bg-white";
 
 export const personalTextareaClassName = `${personalInputClassName} min-h-[6.5rem] resize-y leading-relaxed`;
 
@@ -254,13 +254,13 @@ export function PersonalCheckbox({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-right text-sm text-[#001F3F]">
+    <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-right text-sm text-[#001F3F]">
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+        className="h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
       />
       <span>{label}</span>
     </label>
@@ -355,24 +355,24 @@ export function PersonalEditModal({
     >
       <div className={AUTH_MODAL_CENTER_WRAP}>
       <div
-        className="my-auto w-full max-w-md rounded-2xl border border-[#001F3F]/12 bg-white p-5 shadow-xl shadow-[#001F3F]/15 animate-in fade-in zoom-in-95 duration-200"
+        className="my-auto w-full max-w-md rounded-2xl border border-[#001F3F]/12 bg-white p-4 shadow-xl shadow-[#001F3F]/15 animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="personal-edit-modal-title" className="text-right text-base font-bold text-[#001F3F]">
           {title}
         </h2>
-        <div className="mt-4 space-y-3">{children}</div>
+        <div className="mt-3 space-y-2.5">{children}</div>
         {error ? (
-          <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          <p className="mt-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
             {error}
           </p>
         ) : null}
-        <div className="mt-5 flex gap-2">
+        <div className="mt-4 flex gap-2">
           <button
             type="button"
             disabled={saving}
             onClick={onClose}
-            className="flex-1 rounded-xl border border-[#001F3F]/15 bg-white px-3 py-2.5 text-sm font-bold text-[#001F3F] transition hover:bg-[#FDFBF6] disabled:opacity-60"
+            className="flex-1 min-h-11 rounded-xl border border-[#001F3F]/15 bg-white px-3 py-2 text-sm font-bold text-[#001F3F] transition hover:bg-[#FDFBF6] disabled:opacity-60"
           >
             ביטול
           </button>
@@ -380,7 +380,7 @@ export function PersonalEditModal({
             type="button"
             disabled={saving}
             onClick={() => void onSave()}
-            className="flex-[1.4] inline-flex items-center justify-center gap-2 rounded-xl bg-[#001F3F] px-3 py-2.5 text-sm font-bold text-white transition hover:bg-[#003366] disabled:opacity-60"
+            className="flex-[1.4] inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#001F3F] px-3 py-2 text-sm font-bold text-white transition hover:bg-[#003366] disabled:opacity-60"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {saving ? savingLabel : saveLabel}

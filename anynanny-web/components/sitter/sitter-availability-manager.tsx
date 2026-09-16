@@ -470,7 +470,7 @@ export function SitterAvailabilityManager() {
               </button>
             </div>
 
-            <div className={`${AUTH_MODAL_BODY_SCROLL} space-y-5`}>
+            <div className={`${AUTH_MODAL_BODY_SCROLL} space-y-3`}>
               {loadingDay ? (
                 <p className="text-center text-xs text-slate-500">טוען זמינות ליום…</p>
               ) : (

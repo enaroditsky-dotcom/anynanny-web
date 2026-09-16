@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Banknote, HelpCircle, Loader2, Smartphone } from "lucide-react";
+import { HelpCircle, Loader2 } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
 import { sitterReceivingSummary } from "@/components/personal-area/personal-area-summaries";
-import { PersonalAreaSection } from "@/components/personal-area/personal-area-ui";
+import { WalletMethodVisualCard } from "@/components/wallet/wallet-method-brand";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { sitterReceivingSetupState } from "@/lib/billing/payment-method-availability";
 import {
@@ -22,10 +22,11 @@ import { validateOptionalPayboxPaymentLink } from "@/lib/billing/paybox-payment-
 
 type SitterManualReceivingDestinationsSectionProps = {
   sitterId: string;
+  onMethodsChange?: (methods: SitterPayoutMethods) => void;
 };
 
 const fieldClassName =
-  "mt-1.5 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#0B3C5D]/40 focus:bg-white focus:ring-2 focus:ring-[#0B3C5D]/15 disabled:opacity-60";
+  "mt-1.5 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-base font-semibold text-slate-800 outline-none transition focus:border-[#0B3C5D]/40 focus:bg-white focus:ring-2 focus:ring-[#0B3C5D]/15 disabled:opacity-60";
 
 export const PAYBOX_PERSONAL_LINK_HELP_TOGGLE = "הסבר";
 export const PAYBOX_PERSONAL_LINK_HELP_BUSINESS = [
@@ -106,7 +107,8 @@ async function saveReceivingPhone(input: {
  * Same canonical columns as wallet payout destinations. Never copies the contact phone.
  */
 export function SitterManualReceivingDestinationsSection({
-  sitterId
+  sitterId,
+  onMethodsChange
 }: SitterManualReceivingDestinationsSectionProps) {
   const [methods, setMethods] = useState<SitterPayoutMethods>({ ...EMPTY_SITTER_PAYOUT_METHODS });
   const [bitPhone, setBitPhone] = useState("");
@@ -138,8 +140,9 @@ export function SitterManualReceivingDestinationsSection({
     setBitPhone(result.methods.bitPhone);
     setPayboxPhone(result.methods.payboxPhone);
     setPayboxLink(result.methods.payboxLink);
+    onMethodsChange?.(result.methods);
     setLoading(false);
-  }, [sitterId]);
+  }, [sitterId, onMethodsChange]);
 
   useEffect(() => {
     void reload();
@@ -156,6 +159,7 @@ export function SitterManualReceivingDestinationsSection({
     }
     setMethods(result.methods);
     const label = preferredReceivingMethodLabel(kind) || kind;
+    onMethodsChange?.(result.methods);
     setToast(`${label} נבחר כדרך קבלת התשלום.`);
   };
 
@@ -192,6 +196,7 @@ export function SitterManualReceivingDestinationsSection({
     }
     setMethods(result.methods);
     setBitPhone(result.methods.bitPhone);
+    onMethodsChange?.(result.methods);
     setToast(
       result.methods.bitPhone.trim()
         ? "מספר Bit נשמר. ההורים יראו אותו רק בתשלום ידני."
@@ -216,6 +221,7 @@ export function SitterManualReceivingDestinationsSection({
     setMethods(result.methods);
     setPayboxPhone(result.methods.payboxPhone);
     setPayboxLink(result.methods.payboxLink);
+    onMethodsChange?.(result.methods);
     setToast(
       result.methods.payboxPhone.trim()
         ? "מספר PayBox נשמר. ההורים יראו אותו רק בתשלום ידני."
@@ -239,6 +245,7 @@ export function SitterManualReceivingDestinationsSection({
     }
     setMethods(result.methods);
     setPayboxLink(result.methods.payboxLink);
+    onMethodsChange?.(result.methods);
     setToast(
       result.methods.payboxLink.trim()
         ? "לינק PayBox נשמר. ההורים יפתחו אותו רק בתשלום ידני."
@@ -257,24 +264,41 @@ export function SitterManualReceivingDestinationsSection({
     }
     setMethods(result.methods);
     setPayboxLink("");
+    onMethodsChange?.(result.methods);
     setToast("לינק PayBox הוסר.");
   };
 
+  const bitReady = sitterReceivingSetupState(methods, "bit").configured;
+  const payboxReady = sitterReceivingSetupState(methods, "paybox").configured;
+  const receivingSummary = loading
+    ? "טוען…"
+    : sitterReceivingSummary(bitReady, payboxReady);
+
   return (
     <>
-      <PersonalAreaSection
-        title="בחירת דרך קבלת התשלום"
-        accent="emerald"
-        description="מספרים אופציונליים להורים אחרי המשמרת. התשלום מתבצע מחוץ ל-AnyNanny. לא מוצג בפרופיל הציבורי ולא מועתק ממספר הוואטסאפ."
-        summary={
-          loading
-            ? "טוען…"
-            : sitterReceivingSummary(
-                sitterReceivingSetupState(methods, "bit").configured,
-                sitterReceivingSetupState(methods, "paybox").configured
-              )
-        }
-      >
+      <section className="space-y-4 text-right" data-tour="sitter-payment-methods-panel">
+        <div
+          data-tour="sitter-preferred-payment"
+          className="rounded-xl border border-slate-200 bg-white px-3 py-3"
+        >
+          <p className="text-[13px] font-semibold text-slate-500" title="בחירת דרך קבלת התשלום">
+            בחירת דרך קבלת התשלום
+          </p>
+          <p
+            className={`mt-1 text-sm ${
+              preferredReceivingMethodLabel(methods.preferred)
+                ? "font-bold text-[#001F3F]"
+                : "italic text-slate-400"
+            }`}
+          >
+            {preferredReceivingMethodLabel(methods.preferred) || "לא הוגדר"}
+          </p>
+          <p className="mt-1 text-[12px] text-slate-400">{receivingSummary}</p>
+          {preferredError ? (
+            <p className="mt-1 text-xs font-medium text-rose-700">{preferredError}</p>
+          ) : null}
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-4 text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -282,80 +306,40 @@ export function SitterManualReceivingDestinationsSection({
           </div>
         ) : (
           <div className="space-y-4">
-            <div data-tour="sitter-preferred-payment" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-right">
-              <p className="text-[13px] font-semibold text-slate-500">בחירת דרך קבלת התשלום</p>
-              <p
-                className={`mt-1 text-sm ${
-                  preferredReceivingMethodLabel(methods.preferred)
-                    ? "font-bold text-[#001F3F]"
-                    : "italic text-slate-400"
-                }`}
-              >
-                {preferredReceivingMethodLabel(methods.preferred) || "לא הוגדר"}
-              </p>
-              {preferredError ? (
-                <p className="mt-1 text-xs font-medium text-rose-700">{preferredError}</p>
-              ) : null}
-            </div>
-            <div
-              className={`rounded-xl border p-3 ${
-                methods.preferred === "cash"
-                  ? "border-emerald-200 bg-emerald-50/70"
-                  : "border-slate-200 bg-slate-50/70"
-              }`}
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Banknote className="h-4 w-4 text-[#0B3C5D]" aria-hidden />
-                  <p className="text-sm font-bold text-[#001F3F]">מזומן</p>
-                </div>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                    methods.preferred === "cash"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-slate-200 text-slate-600"
-                  }`}
-                >
-                  {methods.preferred === "cash" ? "מועדף" : "לא נבחר"}
-                </span>
-              </div>
-              <p className="text-[13px] text-slate-500">
+            <div className="space-y-2">
+              <WalletMethodVisualCard
+                kind="cash"
+                ready
+                preferred={methods.preferred === "cash"}
+                status={methods.preferred === "cash" ? "מועדף" : "זמין"}
+                compact={false}
+                cardTitle="מזומן"
+              />
+              <p className="px-1 text-[13px] text-slate-500">
                 הצהרה בלבד — אין צורך במספר, לינק או פרטי חשבון.
               </p>
               {preferredButton("cash")}
             </div>
-            <div
-              className={`rounded-xl border p-3 ${
-                methods.preferred === "bit"
-                  ? "border-emerald-200 bg-emerald-50/70"
-                  : "border-slate-200 bg-slate-50/70"
-              }`}
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-[#0B3C5D]" aria-hidden />
-                  <p className="text-sm font-bold text-[#001F3F]">Bit</p>
-                </div>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                    methods.preferred === "bit"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : sitterReceivingSetupState(methods, "bit").configured
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-slate-200 text-slate-600"
-                  }`}
-                >
-                  {methods.preferred === "bit"
-                    ? "מועדף"
-                    : sitterReceivingSetupState(methods, "bit").statusLabel}
-                </span>
-              </div>
-              <p className="text-[13px] text-slate-500">
+
+            <div className="space-y-2">
+              <WalletMethodVisualCard
+                kind="bit"
+                ready={bitReady}
+                preferred={methods.preferred === "bit"}
+                status={
+                  payoutMethodConfigured(methods, "bit")
+                    ? formatIsraeliMobileDisplay(methods.bitPhone)
+                    : sitterReceivingSetupState(methods, "bit").statusLabel
+                }
+                compact={false}
+                cardTitle="Bit"
+              />
+              <p className="px-1 text-[13px] text-slate-500">
                 {payoutMethodConfigured(methods, "bit")
                   ? `שמור: ${formatIsraeliMobileDisplay(methods.bitPhone)}`
                   : "לא הוגדר — ההורים לא יראו אפשרות Bit."}
               </p>
-              <label className="mt-2 block text-right text-xs font-bold text-slate-600">
+              <label className="block text-right text-xs font-bold text-slate-600">
                 מספר נייד לקבלת Bit
                 <input
                   className={fieldClassName}
@@ -369,7 +353,7 @@ export function SitterManualReceivingDestinationsSection({
                 />
               </label>
               {bitError ? <p className="mt-1 text-xs font-medium text-rose-700">{bitError}</p> : null}
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => void saveBit()}
@@ -382,33 +366,27 @@ export function SitterManualReceivingDestinationsSection({
               </div>
             </div>
 
-            <div
-              className={`rounded-xl border p-3 ${
-                methods.preferred === "paybox"
-                  ? "border-emerald-200 bg-emerald-50/70"
-                  : "border-slate-200 bg-slate-50/70"
-              }`}
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-[#0B3C5D]" aria-hidden />
-                  <p className="text-sm font-bold text-[#001F3F]">PayBox</p>
-                </div>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                    methods.preferred === "paybox"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : sitterReceivingSetupState(methods, "paybox").configured
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-slate-200 text-slate-600"
-                  }`}
-                >
-                  {methods.preferred === "paybox"
-                    ? "מועדף"
-                    : sitterReceivingSetupState(methods, "paybox").statusLabel}
-                </span>
-              </div>
-              <p className="text-[13px] text-slate-500">
+            <div className="space-y-2">
+              <WalletMethodVisualCard
+                kind="paybox"
+                ready={payboxReady}
+                preferred={methods.preferred === "paybox"}
+                status={
+                  payboxManualReceivingConfigured(methods)
+                    ? [
+                        payoutMethodConfigured(methods, "paybox")
+                          ? formatIsraeliMobileDisplay(methods.payboxPhone)
+                          : null,
+                        methods.payboxLink.trim() ? "לינק אישי" : null
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : sitterReceivingSetupState(methods, "paybox").statusLabel
+                }
+                compact={false}
+                cardTitle="PayBox"
+              />
+              <p className="px-1 text-[13px] text-slate-500">
                 {payboxManualReceivingConfigured(methods)
                   ? [
                       payoutMethodConfigured(methods, "paybox")
@@ -420,7 +398,7 @@ export function SitterManualReceivingDestinationsSection({
                       .join(" · ")
                   : "לא הוגדר — ההורים לא יראו אפשרות PayBox."}
               </p>
-              <label className="mt-2 block text-right text-xs font-bold text-slate-600">
+              <label className="block text-right text-xs font-bold text-slate-600">
                 מספר נייד לקבלת PayBox
                 <input
                   className={fieldClassName}
@@ -436,7 +414,7 @@ export function SitterManualReceivingDestinationsSection({
               {payboxError ? (
                 <p className="mt-1 text-xs font-medium text-rose-700">{payboxError}</p>
               ) : null}
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => void savePaybox()}
@@ -447,7 +425,7 @@ export function SitterManualReceivingDestinationsSection({
                 </button>
                 {preferredButton("paybox")}
               </div>
-              <div className="mt-4 min-w-0">
+              <div className="min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                   <label
                     htmlFor="sitter-paybox-personal-link"
@@ -516,7 +494,7 @@ export function SitterManualReceivingDestinationsSection({
               {payboxLinkError ? (
                 <p className="mt-1 text-xs font-medium text-rose-700">{payboxLinkError}</p>
               ) : null}
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => void savePayboxLink()}
@@ -545,7 +523,7 @@ export function SitterManualReceivingDestinationsSection({
             </div>
           </div>
         )}
-      </PersonalAreaSection>
+      </section>
       <ActionToast message={toast} onDismiss={() => setToast(null)} />
     </>
   );

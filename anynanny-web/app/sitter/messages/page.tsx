@@ -102,7 +102,7 @@ function SitterMessagesInner() {
 
     return (
 
-      <section className="rounded-2xl border border-navy-header/10 bg-white p-6 text-center shadow-sm">
+      <section className="rounded-2xl border border-navy-header/10 bg-white p-4 text-center shadow-sm">
 
         <MessageCircle className="mx-auto h-8 w-8 text-navy-header" strokeWidth={1.75} />
 
@@ -144,7 +144,7 @@ export default function SitterMessagesPage() {
 
   return (
 
-    <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2" dir="rtl">
+    <main className="mx-auto w-full max-w-sm space-y-3 bg-[#FDFBF6] py-2" dir="rtl">
 
       <Suspense
 

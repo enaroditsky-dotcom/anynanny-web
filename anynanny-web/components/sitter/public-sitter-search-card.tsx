@@ -81,7 +81,7 @@ export function PublicSitterSearchCardLink({
   return (
     <Link
       href={profileHref}
-      className="block rounded-3xl border border-navy-header/12 bg-white p-4 shadow-soft transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.99]"
+      className="block rounded-2xl border border-navy-header/12 bg-white p-3 shadow-soft transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.99]"
     >
       <div className="flex flex-row-reverse items-start justify-between gap-3">
         <div className="min-w-0 flex-1 text-right">
@@ -89,7 +89,7 @@ export function PublicSitterSearchCardLink({
           {sitter.nanny_serial ? (
             <p className="mt-0.5 text-xs font-medium text-slate-500">{sitter.nanny_serial}</p>
           ) : null}
-          <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+          <div className="mt-1.5 flex flex-wrap justify-end gap-1.5">
             {serviceKinds.map((kind) => (
               <ExpertServiceBadge key={kind} kind={kind} />
             ))}
@@ -121,7 +121,7 @@ export function PublicSitterSearchCardLink({
           >
             {rateLabel}
           </p>
-          <p className="mt-2 line-clamp-3 text-sm leading-snug text-slate-700" dir="rtl">
+          <p className="mt-1.5 line-clamp-3 text-sm leading-snug text-slate-700" dir="rtl">
             {bioExcerpt(sitter.bio) || "—"}
           </p>
         </div>
@@ -132,7 +132,7 @@ export function PublicSitterSearchCardLink({
           </span>
         </div>
       </div>
-      <p className="mt-3 text-right text-xs font-semibold text-emerald-700">פרופיל וחוות דעת ←</p>
+      <p className="mt-2 text-right text-xs font-semibold text-emerald-700">פרופיל וחוות דעת ←</p>
     </Link>
   );
 }

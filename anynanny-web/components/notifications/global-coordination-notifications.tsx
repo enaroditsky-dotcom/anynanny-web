@@ -229,11 +229,11 @@ export function GlobalCoordinationNotifications() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 top-20 z-[60] px-3 pt-2 sm:px-4"
+      className="pointer-events-none fixed inset-x-0 top-12 z-[60] px-2 pt-1.5 sm:px-3"
       dir="rtl"
       aria-live="polite"
     >
-      <div className="pointer-events-none mx-auto flex max-h-[min(38vh,18rem)] w-full max-w-md flex-col gap-2 overflow-y-auto overscroll-y-contain sm:mx-0 sm:ms-4 sm:me-auto">
+      <div className="pointer-events-none mx-auto flex max-h-[min(38vh,18rem)] w-full max-w-sm flex-col gap-2 overflow-y-auto overscroll-y-contain sm:mx-0 sm:ms-4 sm:me-auto">
         {visibleItems.map((item) => {
           const tone = toneForKind(item.kind);
           const schedule = coordinationScheduleLabel(item.payload);

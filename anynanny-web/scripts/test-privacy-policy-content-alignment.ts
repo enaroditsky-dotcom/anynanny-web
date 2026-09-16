@@ -21,7 +21,7 @@ const parentSettings = read("app/parent/settings/page.tsx");
 const sitterSettings = read("app/sitter/settings/page.tsx");
 const deleteAccount = read("lib/account/delete-current-user.ts");
 const login = read("app/auth/login/page.tsx");
-const landing = read("app/page.tsx");
+const marketingHome = read("components/marketing/marketing-home.tsx");
 
 assert.match(page, /export default function PrivacyPage/);
 assert.match(page, /PrivacyPageView/);
@@ -29,7 +29,9 @@ assert.match(checkbox, /href="\/privacy"/);
 assert.match(parentSettings, /href="\/privacy"/);
 assert.match(sitterSettings, /href="\/privacy"/);
 assert.doesNotMatch(login, /href=["']\/privacy["']/);
-assert.doesNotMatch(landing, /href=["']\/privacy["']/);
+assert.match(marketingHome, /href="\/privacy"/);
+assert.match(marketingHome, /href="\/terms"/);
+assert.match(marketingHome, /href="\/delete-account"/);
 
 assert.match(policy, /שמות ילדים ותאריכי לידה/);
 assert.match(policy, /פרטי בן או בת זוג/);
@@ -46,6 +48,7 @@ assert.match(policy, /Hyp Pay \(HYP \/ SHVA\)/);
 assert.doesNotMatch(policy, /Stripe/);
 assert.doesNotMatch(policy, /Cardcom/);
 assert.doesNotMatch(policy, /שירותי אנליטיקה;/);
+assert.match(policy, /Vercel Web Analytics/);
 assert.match(policy, /אינה מפעילה כלי אנליטיקה של צד שלישי/);
 assert.match(policy, /אינה מציגה בפלטפורמה פרסומות של צדדים שלישיים/);
 

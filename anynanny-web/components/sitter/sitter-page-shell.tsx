@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
+import { APP_CONTENT_MAX_W } from "@/lib/ui/app-shell";
 
 type Props = {
   title: string;
@@ -10,7 +11,7 @@ type Props = {
 export function SitterPageShell({ title, subtitle, children }: Props) {
   return (
     <main
-      className="mx-auto flex w-full min-w-0 max-w-md flex-col space-y-4 bg-[#FDFBF6] py-2"
+      className={`mx-auto flex w-full min-w-0 ${APP_CONTENT_MAX_W} flex-col space-y-2 bg-[#FDFBF6] py-1`}
       dir="rtl"
     >
       <div className="space-y-2 px-1">

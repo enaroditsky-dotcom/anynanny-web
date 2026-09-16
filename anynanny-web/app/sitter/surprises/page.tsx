@@ -3,7 +3,7 @@ import { Gift, Heart, Sparkles } from "lucide-react";
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
 
 const CARD_CLASS =
-  "rounded-3xl border border-slate-200/60 bg-white p-4 text-right shadow-soft";
+  "rounded-2xl border border-slate-200/60 bg-white p-3 text-right shadow-soft";
 
 const ICON_WRAP_CLASS =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10";
@@ -18,8 +18,8 @@ function ComingSoonBadge() {
 export default function SitterSurprisesPage() {
   return (
     <SitterPageShell title="הפתעות">
-      <div className="space-y-5 pb-6">
-        <section className={`${CARD_CLASS} px-5 py-6`}>
+      <div className="space-y-3 pb-4">
+        <section className={`${CARD_CLASS} px-4 py-4`}>
           <div className="flex justify-center">
             <Image
               src="/sitter-surprises-button.png"

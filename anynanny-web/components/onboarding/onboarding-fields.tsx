@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { todayIsoDate } from "@/lib/onboarding/shared";
 
 const fieldClass =
-  "min-h-12 w-full min-w-0 rounded-2xl border border-[#001F3F]/15 bg-[#FDFBF6] px-3.5 text-sm text-[#001F3F] outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100";
+  "min-h-12 w-full min-w-0 rounded-xl border border-[#001F3F]/15 bg-[#FDFBF6] px-3 text-base text-[#001F3F] outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100";
 
 export function OnboardingField({
   id,

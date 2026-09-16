@@ -117,7 +117,7 @@ export default function SitterWalletPage() {
     <div className="min-h-screen bg-slate-50 pb-12">
       <div
         data-tour="sitter-wallet-container"
-        className="mx-auto w-full max-w-md space-y-5 px-4 pt-4"
+        className="mx-auto w-full max-w-sm space-y-3 px-2 pt-2"
         dir="rtl"
       >
         <div className="flex w-full items-center justify-between gap-3 px-1" dir="ltr">
@@ -138,12 +138,12 @@ export default function SitterWalletPage() {
           <p className="mt-0.5 text-[13px] text-slate-500">עיבוד מאובטח דרך שער התשלומים HYP</p>
         </header>
 
-        <section className="relative overflow-hidden rounded-3xl bg-[#0B3C5D] p-6 text-white shadow-soft">
+        <section className="relative overflow-hidden rounded-2xl bg-[#0B3C5D] p-4 text-white shadow-soft">
           <p className="text-xs font-medium text-white/70">הכנסות החודש</p>
-          <p className="mt-2 min-w-0 truncate text-4xl font-extrabold tracking-tight tabular-nums">
+          <p className="mt-1.5 min-w-0 truncate text-3xl font-extrabold tracking-tight tabular-nums">
             {formatNis(monthEarnings)}
           </p>
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/15 pt-4">
+          <div className="mt-3 grid grid-cols-2 gap-3 border-t border-white/15 pt-3">
             <div className="min-w-0">
               <p className="text-[11px] font-medium text-white/70">סה״כ מתחילת השנה</p>
               <p className="mt-1 truncate text-lg font-bold tabular-nums">{formatNis(yearEarnings)}</p>

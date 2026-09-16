@@ -75,7 +75,7 @@ assert.doesNotMatch(
   personal,
   /editKey !== "avatar" && \(!draft\.first_name\.trim\(\) \|\| !draft\.last_name\.trim\(\)\)/
 );
-assert.match(personal, /SitterManualReceivingDestinationsSection/);
+assert.doesNotMatch(personal, /SitterManualReceivingDestinationsSection/);
 assert.doesNotMatch(personal, /SitterBankDetailsSection/);
 assert.doesNotMatch(personal, /פרטי בנק|הוספת פרטי בנק/);
 assert.match(personal, /אזור עבודה מועדף/);

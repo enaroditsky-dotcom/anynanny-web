@@ -268,17 +268,17 @@ export default function ParentCalendarPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full min-w-0 max-w-md flex-col pt-1" dir="rtl">
-      <div className="shrink-0 space-y-4 pb-4">
+    <div className="mx-auto flex w-full min-w-0 max-w-sm flex-col pt-1" dir="rtl">
+      <div className="shrink-0 space-y-3 pb-3">
         <PageBackRow>
           <PageBackLink href="/parent/dashboard" />
         </PageBackRow>
 
         <header className="text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-navy-header">
+          <h1 className="text-xl font-semibold tracking-tight text-navy-header">
             יומן המשמרות
           </h1>
-          <p className="mx-auto mt-2 max-w-[22rem] text-sm font-normal leading-relaxed text-slate-500">
+          <p className="mx-auto mt-1 max-w-[22rem] text-sm font-normal leading-relaxed text-slate-500">
             כל המשמרות שלכם במקום אחד
           </p>
         </header>

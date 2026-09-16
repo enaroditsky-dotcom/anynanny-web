@@ -214,7 +214,7 @@ assert.equal(
 
 const toast = read("components/notifications/global-chat-toast.tsx");
 assert.match(toast, /z-\[70\]/);
-assert.match(toast, /5\.5rem\+var\(--anynanny-now-dock/);
+assert.match(toast, /4\.75rem\+var\(--anynanny-now-dock/);
 assert.match(toast, /CHAT_COMPOSER_ACTIVE_EVENT/);
 assert.doesNotMatch(toast, /isOperationalCardsSuppressedRoute|\/parent\/dashboard/);
 

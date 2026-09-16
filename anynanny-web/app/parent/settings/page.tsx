@@ -11,7 +11,7 @@ import { FileText, Shield, ExternalLink } from "lucide-react";
 export default function ParentSettingsPage() {
   return (
     <main
-      className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-md flex-col bg-[#FDFBF6] py-2 pb-8 px-3"
+      className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-sm flex-col bg-[#FDFBF6] py-2 pb-8 px-2"
       dir="rtl"
     >
       <header className="text-right">
@@ -36,7 +36,7 @@ export default function ParentSettingsPage() {
       <CommunityResourcesSection role="parent" />
 
       {/* מידע משפטי ותקנון - דרישת חנויות Apple ו-Google */}
-      <div className="mt-6 rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft space-y-3 text-right">
+      <div className="mt-4 rounded-2xl border border-slate-200/60 bg-white p-3 shadow-soft space-y-2.5 text-right">
         <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">משפטי ותנאי שימוש</h2>
 
         <a

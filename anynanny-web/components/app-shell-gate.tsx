@@ -62,7 +62,7 @@ export function isMainLayoutPath(pathname: string): boolean {
  * + optional AnyNanny Now dock + iOS safe-area.
  */
 const SHELL_BOTTOM_NAV_PADDING =
-  "pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]";
+  "pb-[calc(6.5rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]";
 
 /**
  * Keep BottomNav identity stable across route/layout changes
@@ -121,7 +121,7 @@ export function AppShellGate({
               className={[
                 "min-w-0",
                 "flex-1",
-                mainLayout ? "" : "px-4 pt-4",
+                mainLayout ? "" : "px-2 pt-2",
                 SHELL_BOTTOM_NAV_PADDING
               ]
                 .filter(Boolean)

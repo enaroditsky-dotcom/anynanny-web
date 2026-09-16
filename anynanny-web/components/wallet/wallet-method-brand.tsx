@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { Banknote } from "lucide-react";
 
 export type WalletMethodKind =
   | "credit_card"
@@ -9,10 +10,11 @@ export type WalletMethodKind =
   | "paybox"
   | "apple_pay"
   | "google_pay"
-  | "card";
+  | "card"
+  | "cash";
 
 export const WALLET_METHOD_ACCENT: Record<
-  "credit_card" | "bit" | "paybox" | "apple_pay" | "google_pay" | "card",
+  "credit_card" | "bit" | "paybox" | "apple_pay" | "google_pay" | "card" | "cash",
   string
 > = {
   credit_card: "border-[#0B3C5D]/20 bg-transparent",
@@ -20,7 +22,8 @@ export const WALLET_METHOD_ACCENT: Record<
   bit: "border-[#0A7FA8]/25 bg-transparent",
   paybox: "border-[#1E8FD6]/25 bg-transparent",
   apple_pay: "border-slate-900/20 bg-transparent",
-  google_pay: "border-[#4A90E2]/20 bg-transparent"
+  google_pay: "border-[#4A90E2]/20 bg-transparent",
+  cash: "border-emerald-700/20 bg-transparent"
 };
 
 export const EMPTY_METHOD_HINT = "לחצו על עדכון להגדרה מאובטחת";
@@ -73,7 +76,45 @@ export function WalletMethodLogo({
   if (kind === "google_pay") {
     return <WalletBrandIcon src="/wallet/google-pay-logo.png" alt="Google Pay" size={size} fit="contain" />;
   }
+  if (kind === "cash") {
+    return <CashBanknoteMark size={size} />;
+  }
   return <AnyNannyCardMark size={size} />;
+}
+
+/** Paper-money mark so Cash is never icon-only. */
+export function CashBanknoteMark({ size = 48 }: { size?: number }) {
+  return (
+    <div
+      className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-md ring-2 ring-white/40"
+      style={{
+        width: size,
+        height: size,
+        background: "linear-gradient(145deg, #047857 0%, #059669 55%, #34D399 100%)"
+      }}
+      aria-hidden
+    >
+      <svg viewBox="0 0 48 32" className="h-[72%] w-[86%]" aria-hidden>
+        <rect x="3" y="8" width="42" height="22" rx="3" fill="#A7F3D0" opacity="0.7" />
+        <rect x="1" y="3" width="42" height="22" rx="3" fill="#ECFDF5" />
+        <rect x="1" y="3" width="42" height="22" rx="3" fill="none" stroke="#047857" strokeWidth="1.4" />
+        <circle cx="22" cy="14" r="6.2" fill="#6EE7B7" />
+        <circle cx="22" cy="14" r="3.8" fill="#059669" />
+        <text
+          x="22"
+          y="16.2"
+          textAnchor="middle"
+          fontSize="6.5"
+          fontWeight="700"
+          fill="#ECFDF5"
+        >
+          ₪
+        </text>
+        <rect x="5" y="7" width="5" height="3" rx="0.8" fill="#059669" opacity="0.35" />
+        <rect x="34" y="18" width="5" height="3" rx="0.8" fill="#059669" opacity="0.35" />
+      </svg>
+    </div>
+  );
 }
 
 function AnyNannyCardMark({ size }: { size: number }) {
@@ -109,6 +150,7 @@ function CardChip({ className = "" }: { className?: string }) {
 type VisualCardProps = {
   status?: string;
   ready?: boolean;
+  preferred?: boolean;
   compact?: boolean;
   className?: string;
 };
@@ -117,11 +159,26 @@ function walletCardTone(ready?: boolean): string {
   return ready ? "" : "grayscale-[0.45] opacity-80";
 }
 
-function WalletCardStateBadge({ ready }: { ready?: boolean }) {
+function WalletCardStateBadge({
+  ready,
+  preferred,
+  readyLabel = "מחובר"
+}: {
+  ready?: boolean;
+  preferred?: boolean;
+  readyLabel?: string;
+}) {
+  if (preferred) {
+    return (
+      <span className="shrink-0 rounded-full bg-amber-300/30 px-2 py-0.5 text-[11px] font-bold text-amber-50 ring-1 ring-amber-200/40 backdrop-blur-sm">
+        מועדף
+      </span>
+    );
+  }
   if (ready) {
     return (
       <span className="shrink-0 rounded-full bg-emerald-400/25 px-2 py-0.5 text-[11px] font-bold text-emerald-100 ring-1 ring-emerald-300/30 backdrop-blur-sm">
-        מחובר
+        {readyLabel}
       </span>
     );
   }
@@ -133,11 +190,17 @@ function WalletCardStateBadge({ ready }: { ready?: boolean }) {
 }
 
 /** Official Bit brand card — blue→teal gradient + bit logo. */
-export function BitWalletCard({ status, ready, compact, className = "" }: VisualCardProps) {
+export function BitWalletCard({
+  status,
+  ready,
+  preferred,
+  compact,
+  className = ""
+}: VisualCardProps) {
   return (
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(10,79,140,0.55)] ring-1 ring-white/20 ${
-        compact ? "h-[4.75rem]" : "h-[5.5rem]"
+        compact ? "h-[3.65rem]" : "h-[4.25rem]"
       } ${walletCardTone(ready)} ${className}`}
       style={{
         background: "linear-gradient(135deg, #0A4F8C 0%, #0B7FA8 48%, #00B4C8 100%)"
@@ -152,8 +215,8 @@ export function BitWalletCard({ status, ready, compact, className = "" }: Visual
         aria-hidden
       />
       <div className="relative flex h-full items-center gap-3 px-3.5 py-2.5">
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl shadow-md ring-2 ring-white/35">
-          <Image src="/wallet/bit-logo.png" alt="Bit" fill className="object-cover" sizes="48px" />
+        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl shadow-md ring-2 ring-white/35">
+          <Image src="/wallet/bit-logo.png" alt="Bit" fill className="object-cover" sizes="40px" />
         </div>
         <div className="min-w-0 flex-1 text-right">
           <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/75">bit</p>
@@ -164,18 +227,24 @@ export function BitWalletCard({ status, ready, compact, className = "" }: Visual
             </p>
           ) : null}
         </div>
-        <WalletCardStateBadge ready={ready} />
+        <WalletCardStateBadge ready={ready} preferred={preferred} />
       </div>
     </div>
   );
 }
 
 /** Official PayBox brand card — signature blue + PayBox logo. */
-export function PayboxWalletCard({ status, ready, compact, className = "" }: VisualCardProps) {
+export function PayboxWalletCard({
+  status,
+  ready,
+  preferred,
+  compact,
+  className = ""
+}: VisualCardProps) {
   return (
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(30,143,214,0.5)] ring-1 ring-white/20 ${
-        compact ? "h-[4.75rem]" : "h-[5.5rem]"
+        compact ? "h-[3.65rem]" : "h-[4.25rem]"
       } ${walletCardTone(ready)} ${className}`}
       style={{
         background: "linear-gradient(135deg, #0E7CC0 0%, #1E8FD6 55%, #4BB4F0 100%)"
@@ -190,13 +259,13 @@ export function PayboxWalletCard({ status, ready, compact, className = "" }: Vis
         aria-hidden
       />
       <div className="relative flex h-full items-center gap-3 px-3.5 py-2.5">
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl shadow-md ring-2 ring-white/35">
+        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl shadow-md ring-2 ring-white/35">
           <Image
             src="/wallet/paybox-logo.png"
             alt="PayBox"
             fill
             className="object-cover"
-            sizes="48px"
+            sizes="40px"
           />
         </div>
         <div className="min-w-0 flex-1 text-right">
@@ -210,7 +279,57 @@ export function PayboxWalletCard({ status, ready, compact, className = "" }: Vis
             </p>
           ) : null}
         </div>
-        <WalletCardStateBadge ready={ready} />
+        <WalletCardStateBadge ready={ready} preferred={preferred} />
+      </div>
+    </div>
+  );
+}
+
+/** Cash receiving card — banknote illustration plus the visible Hebrew label מזומן. */
+export function CashWalletCard({
+  status,
+  ready,
+  preferred,
+  compact,
+  className = ""
+}: VisualCardProps) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(4,120,87,0.5)] ring-1 ring-white/20 ${
+        compact ? "h-[3.65rem]" : "h-[4.25rem]"
+      } ${walletCardTone(ready)} ${className}`}
+      style={{
+        background: "linear-gradient(135deg, #065F46 0%, #047857 48%, #10B981 100%)"
+      }}
+      aria-label="מזומן"
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-25"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(115deg, transparent, transparent 9px, rgba(255,255,255,0.22) 9px, rgba(255,255,255,0.22) 10px)"
+        }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -left-8 -top-8 h-28 w-28 rounded-full bg-emerald-200/25 blur-2xl"
+        aria-hidden
+      />
+      <div className="relative flex h-full items-center gap-3 px-3.5 py-2.5">
+        <CashBanknoteMark size={40} />
+        <div className="min-w-0 flex-1 text-right">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/75">
+            Cash
+          </p>
+          <p className="flex items-center justify-end gap-1.5 text-sm font-extrabold tracking-tight">
+            <span>מזומן</span>
+            <Banknote className="h-4 w-4 shrink-0 text-emerald-100" aria-hidden />
+          </p>
+          {status ? (
+            <p className="mt-0.5 truncate text-[12px] font-medium text-white/85">{status}</p>
+          ) : null}
+        </div>
+        <WalletCardStateBadge ready={ready} preferred={preferred} readyLabel="זמין" />
       </div>
     </div>
   );
@@ -219,13 +338,14 @@ export function PayboxWalletCard({ status, ready, compact, className = "" }: Vis
 function ApplePayWalletCard({
   status,
   ready,
+  preferred,
   compact,
   className = ""
 }: VisualCardProps) {
   return (
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(11,60,93,0.55)] ring-1 ring-white/20 ${
-        compact ? "h-[4.75rem]" : "h-[5.5rem]"
+        compact ? "h-[3.65rem]" : "h-[4.25rem]"
       } ${walletCardTone(ready)} ${className}`}
       style={{
         background:
@@ -237,13 +357,13 @@ function ApplePayWalletCard({
         aria-hidden
       />
       <div className="relative flex h-full items-center gap-3 px-3.5 py-2.5">
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/95 shadow-md ring-2 ring-white/25">
+        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white/95 shadow-md ring-2 ring-white/25">
           <Image
             src="/wallet/apple-pay-logo.png"
             alt="Apple Pay"
             fill
             className="object-contain p-2"
-            sizes="48px"
+            sizes="40px"
           />
         </div>
         <div className="min-w-0 flex-1 text-right">
@@ -257,7 +377,7 @@ function ApplePayWalletCard({
             </p>
           ) : null}
         </div>
-        <WalletCardStateBadge ready={ready} />
+        <WalletCardStateBadge ready={ready} preferred={preferred} />
       </div>
     </div>
   );
@@ -266,13 +386,14 @@ function ApplePayWalletCard({
 function GooglePayWalletCard({
   status,
   ready,
+  preferred,
   compact,
   className = ""
 }: VisualCardProps) {
   return (
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_10px_28px_-12px_rgba(74,144,226,0.35)] ring-1 ring-white/20 ${
-        compact ? "h-[4.75rem]" : "h-[5.5rem]"
+        compact ? "h-[3.65rem]" : "h-[4.25rem]"
       } ${walletCardTone(ready)} ${className}`}
       style={{
         background:
@@ -284,13 +405,13 @@ function GooglePayWalletCard({
         aria-hidden
       />
       <div className="relative flex h-full items-center gap-3 px-3.5 py-2.5">
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/95 shadow-md ring-2 ring-white/25">
+        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white/95 shadow-md ring-2 ring-white/25">
           <Image
             src="/wallet/google-pay-logo.png"
             alt="Google Pay"
             fill
             className="object-contain p-2"
-            sizes="48px"
+            sizes="40px"
           />
         </div>
         <div className="min-w-0 flex-1 text-right">
@@ -304,7 +425,7 @@ function GooglePayWalletCard({
             </p>
           ) : null}
         </div>
-        <WalletCardStateBadge ready={ready} />
+        <WalletCardStateBadge ready={ready} preferred={preferred} />
       </div>
     </div>
   );
@@ -314,6 +435,7 @@ function GooglePayWalletCard({
 export function AnyNannyCreditCard({
   status,
   ready,
+  preferred,
   compact,
   className = "",
   title = "כרטיס אשראי"
@@ -321,7 +443,7 @@ export function AnyNannyCreditCard({
   return (
     <div
       className={`relative overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_-12px_rgba(11,60,93,0.65)] ring-1 ring-white/15 ${
-        compact ? "h-[4.75rem]" : "h-[5.5rem]"
+        compact ? "h-[3.65rem]" : "h-[4.25rem]"
       } ${walletCardTone(ready)} ${className}`}
       style={{
         background:
@@ -372,7 +494,7 @@ export function AnyNannyCreditCard({
           )}
         </div>
 
-        <WalletCardStateBadge ready={ready} />
+        <WalletCardStateBadge ready={ready} preferred={preferred} />
       </div>
     </div>
   );
@@ -382,6 +504,7 @@ export function WalletMethodVisualCard({
   kind,
   status,
   ready,
+  preferred,
   compact = true,
   className = "",
   cardTitle
@@ -389,12 +512,37 @@ export function WalletMethodVisualCard({
   kind: WalletMethodKind;
   cardTitle?: string;
 }) {
+  if (kind === "cash") {
+    return (
+      <CashWalletCard
+        status={status}
+        ready={ready}
+        preferred={preferred}
+        compact={compact}
+        className={className}
+      />
+    );
+  }
   if (kind === "bit") {
-    return <BitWalletCard status={status} ready={ready} compact={compact} className={className} />;
+    return (
+      <BitWalletCard
+        status={status}
+        ready={ready}
+        preferred={preferred}
+        compact={compact}
+        className={className}
+      />
+    );
   }
   if (kind === "paybox") {
     return (
-      <PayboxWalletCard status={status} ready={ready} compact={compact} className={className} />
+      <PayboxWalletCard
+        status={status}
+        ready={ready}
+        preferred={preferred}
+        compact={compact}
+        className={className}
+      />
     );
   }
   if (kind === "apple_pay") {
@@ -402,6 +550,7 @@ export function WalletMethodVisualCard({
       <ApplePayWalletCard
         status={status}
         ready={ready}
+        preferred={preferred}
         compact={compact}
         className={className}
       />
@@ -412,6 +561,7 @@ export function WalletMethodVisualCard({
       <GooglePayWalletCard
         status={status}
         ready={ready}
+        preferred={preferred}
         compact={compact}
         className={className}
       />
@@ -421,6 +571,7 @@ export function WalletMethodVisualCard({
     <AnyNannyCreditCard
       status={status}
       ready={ready}
+      preferred={preferred}
       compact={compact}
       className={className}
       title={cardTitle ?? "כרטיס אשראי"}
@@ -433,6 +584,7 @@ export function WalletMethodCardRow({
   kind,
   status,
   ready,
+  preferred,
   updating,
   onOpen,
   onUpdate,
@@ -443,6 +595,7 @@ export function WalletMethodCardRow({
   kind: WalletMethodKind;
   status: string;
   ready: boolean;
+  preferred?: boolean;
   updating?: boolean;
   onOpen: () => void;
   onUpdate: () => void;
@@ -462,6 +615,7 @@ export function WalletMethodCardRow({
           kind={kind}
           status={status}
           ready={ready}
+          preferred={preferred}
           compact
           cardTitle={cardTitle}
           className="transition group-hover:brightness-[1.03]"

@@ -13,6 +13,7 @@ import {
   SITTER_TOUR_PROFILE_PATH,
   SITTER_TOUR_SCHEDULE_PATH,
   SITTER_TOUR_SELECTORS,
+  SITTER_TOUR_WALLET_PATH,
   USER_PRODUCT_TOURS_TABLE
 } from "../lib/product-tour/constants";
 import {
@@ -65,6 +66,7 @@ const personal = read("components/sitter/sitter-personal-area.tsx");
 const parentPersonal = read("components/parent/parent-personal-area.tsx");
 const paymentSection = read("components/sitter/SitterManualReceivingDestinationsSection.tsx");
 const walletPage = read("app/sitter/wallet/page.tsx");
+const walletCards = read("components/sitter/SitterPayoutWalletCards.tsx");
 const persistence = read("lib/product-tour/persistence.ts");
 const eligibility = read("lib/product-tour/eligibility.ts");
 const inboxUi = read("components/chat/booking-chat-inbox.tsx");
@@ -132,9 +134,9 @@ const EXPECTED_STEP_IDS = [
   "sitter-after-shift",
   "sitter-personal-area",
   "sitter-identity-verification",
+  "sitter-wallet",
   "sitter-payment-methods",
   "sitter-preferred-payment",
-  "sitter-wallet",
   "sitter-surprises",
   "sitter-settings"
 ];
@@ -296,20 +298,25 @@ assert.doesNotMatch(read("lib/product-tour/sitter-steps.ts"), /window\.open|wa\.
 assert.doesNotMatch(provider, /window\.open|wa\.me/);
 assert.match(engine, /if \(step\.preserveTargetState \|\| step\.blockTargetAction\)/);
 
-// 14. payment receiving explanation works
+// 14. payment receiving explanation works from Wallet
 const paymentStep = SITTER_TOUR_STEPS.find((step) => step.id === "sitter-payment-methods");
 assert.equal(paymentStep?.targetSelector, SITTER_TOUR_SELECTORS.paymentMethods);
+assert.equal(paymentStep?.route, SITTER_TOUR_WALLET_PATH);
 assert.equal(paymentStep?.advanceMode, "next-button");
 assert.equal(paymentStep?.blockTargetAction, true);
-assert.match(personal, /data-tour="sitter-payment-methods"/);
-assert.match(personal, /SitterManualReceivingDestinationsSection/);
+assert.doesNotMatch(personal, /data-tour="sitter-payment-methods"/);
+assert.doesNotMatch(personal, /SitterManualReceivingDestinationsSection/);
+assert.match(walletCards, /data-tour="sitter-payment-methods"/);
+assert.match(walletCards, /SitterManualReceivingDestinationsSection/);
 
 // 15. preferred payment explanation works without changing preference
 const preferredStep = SITTER_TOUR_STEPS.find((step) => step.id === "sitter-preferred-payment");
 assert.equal(preferredStep?.targetSelector, SITTER_TOUR_SELECTORS.preferredPayment);
 assert.equal(preferredStep?.fallbackSelector, SITTER_TOUR_SELECTORS.paymentMethods);
+assert.equal(preferredStep?.route, SITTER_TOUR_WALLET_PATH);
 assert.equal(preferredStep?.advanceMode, "next-button");
 assert.equal(preferredStep?.blockTargetAction, true);
+assert.match(walletCards, /data-tour="sitter-preferred-payment"/);
 assert.match(paymentSection, /data-tour="sitter-preferred-payment"/);
 assert.doesNotMatch(read("lib/product-tour/sitter-steps.ts"), /selectPreferred/);
 assert.doesNotMatch(provider, /selectPreferred/);

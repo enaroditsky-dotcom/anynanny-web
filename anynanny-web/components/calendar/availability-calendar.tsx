@@ -243,7 +243,7 @@ export function AvailabilityCalendar({ sitterId, mode, parentName = "Parent" }: 
   );
 
   return (
-    <div className="rounded-2xl border border-navy-200 bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-navy-200 bg-white p-4 shadow-sm">
       {legend}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">

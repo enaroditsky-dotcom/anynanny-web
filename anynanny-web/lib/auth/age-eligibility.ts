@@ -5,8 +5,8 @@ export type AgeEligibilityRole = ProfileRole;
 export const PARENT_MIN_AGE = 18;
 export const SITTER_MIN_AGE = 16;
 
-/** Landing page with parent/sitter login + registration. `manual=true` skips dashboard auto-redirect. */
-export const ACCOUNT_TYPE_ENTRY_HREF = "/?manual=true";
+/** App login landing with parent/sitter login + registration. `manual=true` skips dashboard auto-redirect. */
+export const ACCOUNT_TYPE_ENTRY_HREF = "/login?manual=true";
 
 export const AGE_GATE_COPY = {
   parent: {

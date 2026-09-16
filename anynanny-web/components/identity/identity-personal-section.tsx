@@ -98,7 +98,7 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
           <div className="space-y-2 text-right">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <p
-                className={`text-[16px] font-semibold ${
+                className={`text-sm font-semibold ${
                   record.status === "failed"
                     ? "text-rose-700"
                     : record.status === "pending"

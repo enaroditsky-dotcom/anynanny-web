@@ -245,10 +245,10 @@ export function BookShiftModal({
     >
       <div className={AUTH_MODAL_CENTER_WRAP}>
       <div
-        className="my-auto w-full max-w-md rounded-3xl border border-navy-header/12 bg-white p-5 shadow-2xl shadow-[#001F3F]/20"
+        className="my-auto w-full max-w-md rounded-2xl border border-navy-header/12 bg-white p-4 shadow-2xl shadow-[#001F3F]/20"
         onClick={(ev) => ev.stopPropagation()}
       >
-        <div className="flex flex-row-reverse items-start justify-between gap-3 border-b border-navy-header/8 pb-4">
+        <div className="flex flex-row-reverse items-start justify-between gap-3 border-b border-navy-header/8 pb-3">
           <button
             type="button"
             onClick={handleClose}
@@ -260,7 +260,7 @@ export function BookShiftModal({
           </button>
 
           <div className="min-w-0 flex-1 text-right">
-            <h2 id="book-shift-title" className="text-xl font-bold text-[#001F3F]">
+            <h2 id="book-shift-title" className="text-lg font-bold text-[#001F3F]">
               תיאום משמרת
             </h2>
             <p className="mt-1 text-sm text-slate-600">
@@ -294,7 +294,7 @@ export function BookShiftModal({
             </p>
           </div>
         ) : (
-          <form className="mt-5 space-y-4" onSubmit={(e) => void handleSubmit(e)}>
+          <form className="mt-4 space-y-3" onSubmit={(e) => void handleSubmit(e)}>
             {lockedShift ? (
               <div className="space-y-3 rounded-2xl border border-navy-header/10 bg-[#FDFBF6] px-4 py-4 text-right">
                 <div className="flex flex-row-reverse items-start gap-3">
@@ -349,7 +349,7 @@ export function BookShiftModal({
                         value={startHour}
                         disabled={busy}
                         onChange={(ev) => setStartHour(ev.target.value)}
-                        className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
+                        className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-base tabular-nums"
                       >
                         <option value="">שעה</option>
                         {PARENT_SEARCH_HOUR_OPTIONS.map((h) => (
@@ -364,7 +364,7 @@ export function BookShiftModal({
                         value={startMinute}
                         disabled={busy}
                         onChange={(ev) => setStartMinute(ev.target.value)}
-                        className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
+                        className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-base tabular-nums"
                       >
                         <option value="">דק׳</option>
                         {BOOK_SHIFT_MINUTE_OPTIONS.map((m) => (
@@ -402,7 +402,7 @@ export function BookShiftModal({
                         value={endHour}
                         disabled={busy}
                         onChange={(ev) => setEndHour(ev.target.value)}
-                        className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
+                        className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-base tabular-nums"
                       >
                         <option value="">שעה</option>
                         {PARENT_SEARCH_HOUR_OPTIONS.map((h) => (
@@ -417,7 +417,7 @@ export function BookShiftModal({
                         value={endMinute}
                         disabled={busy}
                         onChange={(ev) => setEndMinute(ev.target.value)}
-                        className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-sm tabular-nums"
+                        className="min-h-11 w-full rounded-xl border border-navy-header/15 bg-white px-2 py-2 text-base tabular-nums"
                       >
                         <option value="">דק׳</option>
                         {BOOK_SHIFT_MINUTE_OPTIONS.map((m) => (

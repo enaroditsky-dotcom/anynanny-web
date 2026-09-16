@@ -24,7 +24,7 @@ export function PasswordPeekField({ id, value, onChange, autoComplete, disabled,
         disabled={disabled}
         autoComplete={autoComplete}
         suppressHydrationWarning
-        className="block min-w-0 w-full rounded-lg border border-navy-header/20 py-2 pl-2 pr-10"
+        className="block min-h-11 min-w-0 w-full rounded-lg border border-navy-header/20 py-2 pl-2 pr-10 text-base"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

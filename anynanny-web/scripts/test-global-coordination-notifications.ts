@@ -171,7 +171,7 @@ assert.match(ui, /markNotificationsReadBestEffort/);
 assert.match(ui, /dismissPopup/);
 assert.doesNotMatch(ui, /hideForSession|minimizeForSession|הסתר כרגע/);
 assert.match(ui, /isGlobalOperationalNotificationKind/);
-assert.match(ui, /pointer-events-none fixed inset-x-0 top-20 z-\[60\]/);
+assert.match(ui, /pointer-events-none fixed inset-x-0 top-12 z-\[60\]/);
 assert.match(ui, /max-h-\[min\(38vh,18rem\)\]/);
 assert.match(ui, /h-11 w-11/);
 assert.doesNotMatch(ui, /backdrop|bg-black\//);

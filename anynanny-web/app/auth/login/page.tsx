@@ -187,17 +187,17 @@ function LoginInner() {
         </PageBackRow>
       </div>
 
-      <section className="w-full min-w-0 max-w-md rounded-3xl bg-white p-6 shadow-soft" suppressHydrationWarning>
-        <div className="mb-4 flex justify-center">
+      <section className="w-full min-w-0 max-w-md rounded-2xl bg-white p-4 shadow-soft" suppressHydrationWarning>
+        <div className="mb-3 flex justify-center">
           <AnyNannyLogo variant="header" />
         </div>
-        <h1 className="text-center text-2xl font-bold text-navy-header">{loginHeadline}</h1>
+        <h1 className="text-center text-xl font-bold text-navy-header">{loginHeadline}</h1>
         {roleFromQuery === "sitter" && trackFromQuery === "expert" ? (
           <p className="mt-1 text-center text-xs text-slate-500">הנקה · שינה · דולה</p>
         ) : null}
-        <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }} noValidate>
+        <form className="mt-4 space-y-2.5" onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }} noValidate>
           <label className="block text-sm">אימייל
-            <input type="email" className="mt-1 block w-full rounded-lg border p-2" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
+            <input type="email" className="mt-1 block min-h-11 w-full rounded-lg border p-2 text-base" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
           </label>
           <label className="block text-sm">סיסמה
             <PasswordPeekField value={password} onChange={setPassword} disabled={busy} />

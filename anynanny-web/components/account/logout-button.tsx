@@ -9,7 +9,7 @@ export const LOGOUT_BUTTON_LABEL = "התנתקות";
 
 /** Canonical destructive logout surface — matches the parent dashboard button. */
 export const LOGOUT_BUTTON_CLASS =
-  "flex w-full items-center justify-center rounded-xl border border-rose-200 bg-rose-50/30 py-2.5 text-sm font-semibold text-rose-700 shadow-2xs transition hover:bg-rose-50 disabled:opacity-60";
+  "flex w-full min-h-11 items-center justify-center rounded-xl border border-rose-200 bg-rose-50/30 py-1.5 text-sm font-semibold text-rose-700 shadow-2xs transition hover:bg-rose-50 disabled:opacity-60";
 
 const LOGOUT_LABEL_CLUSTER_CLASS = "inline-flex flex-row items-center gap-[0.5em]";
 

@@ -124,7 +124,7 @@ function ParentSearchResultsInner() {
   const redirectingToLogin = authSettled && !signedIn;
 
   return (
-    <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
+    <main className="mx-auto w-full max-w-sm space-y-3 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
       <div className="px-1">
         <Link
           href={parentSearchFiltersPath(filters)}
@@ -171,7 +171,7 @@ function ParentSearchResultsInner() {
               ) : null}
 
               {sitters.length === 0 && !visibleSearchError ? (
-                <p className="rounded-3xl border border-navy-header/10 bg-white p-6 text-center text-sm text-slate-600 shadow-soft">
+                <p className="rounded-2xl border border-navy-header/10 bg-white p-4 text-center text-sm text-slate-600 shadow-soft">
                   {serialLookupActive
                     ? "לא נמצאה בייביסיטר פנויה עם מספר אישי זה לשעות שבחרת."
                     : "לא נמצאו בייביסיטרים פנויים לשעות שבחרת. נסו שעות אחרות או בייביסיטר אחרת."}
@@ -193,7 +193,7 @@ export default function ParentSearchResultsPage() {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto w-full max-w-md bg-[#FDFBF6] px-1 py-6 text-right text-sm text-slate-600" dir="rtl">
+        <main className="mx-auto w-full max-w-sm bg-[#FDFBF6] px-1 py-6 text-right text-sm text-slate-600" dir="rtl">
           טוען תוצאות…
         </main>
       }

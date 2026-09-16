@@ -174,7 +174,7 @@ export default function ParentSitterProfileView() {
   const ageLabel = formatPublicSitterAgeLabel(profile?.age_years);
 
   return (
-    <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-4 pb-24 px-2" dir="rtl">
+    <main className="mx-auto w-full max-w-sm space-y-3 bg-[#FDFBF6] py-3 pb-24 px-2" dir="rtl">
       <div className="px-1">
         <Link
           href={backHref}
@@ -190,9 +190,9 @@ export default function ParentSitterProfileView() {
       ) : errorMsg ? (
         <p className="text-right text-sm text-rose-700 px-1">{errorMsg}</p>
       ) : profile ? (
-        <div className="rounded-3xl border border-navy-header/12 bg-white p-5 shadow-soft space-y-4">
+        <div className="rounded-2xl border border-navy-header/12 bg-white p-3.5 shadow-soft space-y-3">
           <div className="flex flex-col items-center text-center">
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
+            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
               {profile.avatar_url ? (
                 <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />
               ) : (
@@ -201,7 +201,7 @@ export default function ParentSitterProfileView() {
                 </div>
               )}
             </div>
-            <h1 className="mt-3 max-w-full truncate text-xl font-bold text-[#001F3F]">{displayName}</h1>
+            <h1 className="mt-2 max-w-full truncate text-lg font-bold text-[#001F3F]">{displayName}</h1>
             {serialDisplay ? (
               <p className="mt-0.5 text-xs font-semibold text-violet-600">מזהה: {serialDisplay}</p>
             ) : null}

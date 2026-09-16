@@ -272,7 +272,7 @@ export default function ParentWalletClient() {
 
   return (
     <MainLayout showBrandHeader={false}>
-      <div className="mx-auto w-full max-w-md space-y-5" dir="rtl">
+      <div className="mx-auto w-full max-w-sm space-y-3" dir="rtl">
         <div className="flex w-full items-center justify-between gap-3 px-1 pt-2" dir="ltr">
           <PageBackLink href="/parent/dashboard" />
           <button
@@ -291,14 +291,14 @@ export default function ParentWalletClient() {
           <p className="mt-0.5 text-[13px] text-slate-500">עיבוד מאובטח דרך שער התשלומים HYP</p>
         </header>
 
-        <section className="rounded-3xl bg-[#001F3F] p-6 text-white shadow-soft relative overflow-hidden">
+        <section className="rounded-2xl bg-[#001F3F] p-4 text-white shadow-soft relative overflow-hidden">
           <p className="text-xs font-medium text-white/70">תשלום אחרון</p>
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
             {isPageLoading ? (
-              <span className="text-4xl font-extrabold tracking-tight tabular-nums">₪—</span>
+              <span className="text-3xl font-extrabold tracking-tight tabular-nums">₪—</span>
             ) : lastPayment ? (
               <>
-                <span className="text-4xl font-extrabold tracking-tight tabular-nums">
+                <span className="text-3xl font-extrabold tracking-tight tabular-nums">
                   ₪{lastPayment.amount.toFixed(2)}
                 </span>
                 {lastPaymentDateLabel ? (
@@ -323,7 +323,7 @@ export default function ParentWalletClient() {
             type="button"
             disabled={isPageLoading}
             onClick={() => setMethodsMenuOpen(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FF8A8A] px-4 py-3.5 text-xs font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
+            className="flex w-full min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#FF8A8A] px-4 py-2.5 text-xs font-bold text-white shadow-soft transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
           >
             <CreditCard className="h-4 w-4" />
             אמצעי תשלום שלי
@@ -405,7 +405,7 @@ export default function ParentWalletClient() {
         >
           <div className={AUTH_MODAL_CENTER_WRAP}>
           <div
-            className="my-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl"
+            className="my-auto w-full max-w-md overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">

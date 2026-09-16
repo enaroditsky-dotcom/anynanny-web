@@ -33,11 +33,11 @@ function TourModalShell({
     >
       <div className={AUTH_MODAL_CENTER_WRAP}>
         <div
-          className="my-auto w-full max-w-sm overflow-hidden rounded-3xl border border-[#001F3F]/10 bg-[#FDFBF6] text-right shadow-2xl"
+          className="my-auto w-full max-w-sm overflow-hidden rounded-2xl border border-[#001F3F]/10 bg-[#FDFBF6] text-right shadow-2xl"
           dir="rtl"
         >
-          <div className="p-5">
-            <h2 id={titleId} className="text-lg font-bold text-[#001F3F]">
+          <div className="p-4">
+            <h2 id={titleId} className="text-base font-bold text-[#001F3F]">
               {title}
             </h2>
             {children}

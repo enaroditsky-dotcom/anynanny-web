@@ -185,7 +185,7 @@ function BookingChatInbox({
       {loadingInbox ? (
         <p className="text-right text-sm text-slate-600">טוען שיחות…</p>
       ) : inbox.length === 0 ? (
-        <section className="rounded-2xl border border-navy-header/10 bg-white p-6 text-center shadow-sm">
+        <section className="rounded-2xl border border-navy-header/10 bg-white p-4 text-center shadow-sm">
           <MessageCircle className="mx-auto h-8 w-8 text-navy-header" strokeWidth={1.75} />
           <p className="mt-3 text-base font-semibold text-navy-900">אין שיחות עדיין</p>
           <p className="mt-1 text-sm text-navy-700">{emptyDescription}</p>
@@ -196,7 +196,7 @@ function BookingChatInbox({
           ) : null}
         </section>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-3">
           <ConversationSection
             title="שיחות פתוחות"
             rows={grouped.active}

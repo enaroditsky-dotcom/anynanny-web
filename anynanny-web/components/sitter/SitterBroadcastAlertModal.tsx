@@ -740,7 +740,7 @@ export function SitterBroadcastAlertModal({
       aria-modal="true"
       aria-label="קריאת ברק"
     >
-      <div className="w-full max-w-sm rounded-3xl border border-red-100 bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-sm rounded-2xl border border-red-100 bg-white p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         <div className="flex flex-col items-center space-y-4 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500 text-white shadow-md animate-pulse">
             <Zap className="h-6 w-6 fill-white" />

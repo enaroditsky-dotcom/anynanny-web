@@ -81,7 +81,7 @@ export function ReportUserSheet({ open, reportedUserId, reportedName, onClose }:
     >
       <div className="flex min-h-full justify-center">
         <div
-          className="my-auto w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl"
+          className="my-auto w-full max-w-sm rounded-2xl bg-white p-4 shadow-2xl"
           onClick={(event) => event.stopPropagation()}
         >
         {done ? (

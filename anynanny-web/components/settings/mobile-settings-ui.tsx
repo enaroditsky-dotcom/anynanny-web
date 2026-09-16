@@ -13,7 +13,7 @@ const APP_VERSION = "v0.1.0";
 
 export function SettingsProfileHeader() {
   return (
-    <header className="shrink-0 px-1 pb-5 pt-2 text-right">
+    <header className="shrink-0 px-1 pb-3 pt-1.5 text-right">
       <h1 className="text-lg font-bold text-[#001F3F]">הגדרות</h1>
       <p className="mt-1 text-xs leading-relaxed text-slate-500">ניהול חשבון, פרטיות והתראות</p>
     </header>
@@ -44,10 +44,10 @@ export function SettingsNavRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 px-4 py-3.5 text-right transition active:bg-[#001F3F]/[0.03]"
+      className="flex min-h-[44px] w-full items-center gap-3 px-3 py-2.5 text-right transition active:bg-[#001F3F]/[0.03]"
     >
       <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 shadow-[0_3px_10px_-4px_rgba(0,31,63,0.2)] ${iconClass}`}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 shadow-[0_3px_10px_-4px_rgba(0,31,63,0.2)] ${iconClass}`}
       >
         <Icon className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
       </span>
@@ -122,14 +122,14 @@ export function SettingsSubRow({
       <button
         type="button"
         onClick={onClick}
-        className="flex w-full items-center gap-3 px-4 py-3.5 transition active:bg-[#001F3F]/[0.03]"
+        className="flex min-h-[44px] w-full items-center gap-3 px-3 py-2.5 transition active:bg-[#001F3F]/[0.03]"
       >
         {body}
       </button>
     );
   }
 
-  return <div className="flex items-center gap-3 px-4 py-3.5">{body}</div>;
+  return <div className="flex min-h-[44px] items-center gap-3 px-3 py-2.5">{body}</div>;
 }
 
 export function RetroToggle({

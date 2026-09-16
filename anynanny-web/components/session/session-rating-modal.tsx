@@ -208,9 +208,9 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
       aria-labelledby="rating-modal-title"
       dir="rtl"
     >
-      <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-navy-header/15 bg-white p-5 shadow-xl shadow-[#001F3F]/15">
+      <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-navy-header/15 bg-white p-4 shadow-xl shadow-[#001F3F]/15">
         <form className="space-y-0" onSubmit={handleSubmit}>
-          <h2 id="rating-modal-title" className="text-right text-lg font-bold text-[#001F3F]">
+          <h2 id="rating-modal-title" className="text-right text-base font-bold text-[#001F3F]">
             {headline}
           </h2>
           <p className="mt-1 text-right text-xs text-slate-500">הדירוג נשמר באופן מאובטח ומסייע לקהילה.</p>
@@ -236,7 +236,7 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
             })}
           </div>
 
-          <label className="mt-5 block text-right text-sm font-medium text-navy-header">
+          <label className="mt-4 block text-right text-sm font-medium text-navy-header">
             הוספת הערה (אופציונלי)
             <textarea
               className="mt-1 min-h-[5rem] w-full rounded-xl border border-navy-header/15 bg-[#FDFBF6]/50 p-2 text-right text-sm text-navy-900"
@@ -247,11 +247,11 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
             />
           </label>
 
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:justify-start">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse sm:justify-start">
             <button
               type="submit"
               disabled={busy}
-              className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+              className="min-h-11 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
             >
               {busy ? "שולחים…" : "שליחה"}
             </button>
@@ -263,7 +263,7 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
                 ev.stopPropagation();
                 onResolved();
               }}
-              className="rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
+              className="min-h-11 rounded-xl border border-navy-header/20 px-4 py-2.5 text-sm font-semibold text-navy-header transition hover:bg-slate-50"
             >
               דילוג
             </button>

@@ -45,7 +45,7 @@ export function BookingChat({ bookingId, messagesHref }: BookingChatProps) {
 
   if (loadState === "denied") {
     return (
-      <section className="rounded-2xl border border-navy-header/10 bg-white p-6 text-center shadow-sm">
+      <section className="rounded-2xl border border-navy-header/10 bg-white p-4 text-center shadow-sm">
         <p className="text-sm font-semibold text-navy-900">השיחה לא נמצאה או שאין גישה.</p>
         <Link href={messagesHref} className="mt-3 inline-block text-sm font-semibold text-emerald-800 underline">
           חזרה להודעות
