@@ -61,7 +61,14 @@ export function normalizePublicSearchCard(raw: unknown): PublicSitterSearchCard 
         ? row.serviceTypes.map((v) => String(v).trim()).filter(Boolean)
         : null,
     languages: formatSitterLanguagesDisplay(row.languages) || null,
-    certifications: pickString(row, "certifications")
+    certifications: pickString(row, "certifications"),
+    identity_verified:
+      row.identity_verified === true ||
+      row.identity_verified === "true" ||
+      row.identityVerified === true ||
+      String(row.identity_verification_status ?? row.identityVerificationStatus ?? "")
+        .trim()
+        .toLowerCase() === "verified"
   };
 }
 

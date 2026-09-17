@@ -8,12 +8,19 @@ import {
   isIdentityVerified
 } from "@/lib/identity/identity-verification";
 
-export type VerifiedUserBadgeSize = "sm" | "md" | "lg" | "xl";
+export type VerifiedUserBadgeSize = "xs" | "sm" | "md" | "lg" | "xl";
 
 const SIZE_CLASS: Record<
   VerifiedUserBadgeSize,
   { root: string; mark: string; icon: string; label: string }
 > = {
+  /** Search-result cards: two-line label + shield, scaled to the rating chip. */
+  xs: {
+    root: "gap-1.5 rounded-2xl px-3 py-2",
+    mark: "h-9 w-9",
+    icon: "h-5 w-5",
+    label: "flex flex-col text-sm font-bold leading-tight"
+  },
   sm: {
     root: "gap-1 rounded-lg px-2 py-0.5",
     mark: "h-4 w-4",
@@ -84,23 +91,41 @@ export const VERIFIED_IDENTITY_LABEL = "זהות מאומתת";
 export const VERIFIED_PARENT_IDENTITY_LABEL = "זהות ההורה אומתה";
 export const VERIFIED_SITTER_IDENTITY_LABEL = "זהות הבייביסיטר אומתה";
 
+function splitBadgeLabelLines(label: string): string[] {
+  const lines = label.trim().split(/\s+/).filter(Boolean);
+  return lines.length > 0 ? lines : [label];
+}
+
 export function VerifiedUserBadge({
   className = "",
   size = "md",
   showMark = true,
+  stacked = false,
   label = VERIFIED_IDENTITY_LABEL
 }: {
   className?: string;
   size?: VerifiedUserBadgeSize;
   showMark?: boolean;
+  stacked?: boolean;
   label?: string;
 }) {
   const spec = SIZE_CLASS[size];
   const surface = size === "xl" ? GOLD_BADGE_SURFACE_XL : GOLD_BADGE_SURFACE;
+  const labelLines = stacked ? splitBadgeLabelLines(label) : null;
   return (
     <span dir="rtl" className={`${surface} ${spec.root} ${className}`} aria-label={label}>
       {showMark ? <IdentityShieldMark size={size} /> : null}
-      <span className={spec.label}>{label}</span>
+      {labelLines ? (
+        <span className={spec.label}>
+          {labelLines.map((line) => (
+            <span key={line} className="whitespace-nowrap">
+              {line}
+            </span>
+          ))}
+        </span>
+      ) : (
+        <span className={spec.label}>{label}</span>
+      )}
     </span>
   );
 }

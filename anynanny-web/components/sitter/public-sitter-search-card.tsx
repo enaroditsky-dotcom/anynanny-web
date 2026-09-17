@@ -17,6 +17,7 @@ import {
   resolveSitterCardTitle,
   transportBadgeLabel
 } from "@/lib/sitter/public-search-card";
+import { VerifiedUserBadge, VERIFIED_IDENTITY_LABEL } from "@/components/identity/verified-user-badge";
 
 export function parentSitterProfilePath(sitterId: string, query?: string): string {
   const id = sitterId.trim();
@@ -84,8 +85,18 @@ export function PublicSitterSearchCardLink({
       className="block rounded-2xl border border-navy-header/12 bg-white p-3 shadow-soft transition hover:border-navy-header/25 hover:shadow-md active:scale-[0.99]"
     >
       <div className="flex flex-row-reverse items-start justify-between gap-3">
+        {sitter.identity_verified ? (
+          <VerifiedUserBadge
+            size="xs"
+            stacked
+            className="shrink-0"
+            label={VERIFIED_IDENTITY_LABEL}
+          />
+        ) : null}
         <div className="min-w-0 flex-1 text-right">
-          <p className="text-base font-bold text-[#001F3F]">{title}</p>
+          <p className="min-w-0 max-w-full break-words text-[2rem] font-bold leading-tight text-[#001F3F]">
+            {title}
+          </p>
           {sitter.nanny_serial ? (
             <p className="mt-0.5 text-xs font-medium text-slate-500">{sitter.nanny_serial}</p>
           ) : null}

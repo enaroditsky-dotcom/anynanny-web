@@ -723,6 +723,9 @@ export type PublicSitterSearchCard = {
 
   /** Expert certifications / free-text professional experience. */
   certifications?: string | null;
+
+  /** Display-only: profiles.identity_verification_status = verified. */
+  identity_verified?: boolean;
 };
 
 /** One anonymized public review for parent-facing sitter profile screens. */
