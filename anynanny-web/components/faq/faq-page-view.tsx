@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FaqSponsorAdSlot } from "@/components/marketing/ad-surface-slots";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { SettingsFaqAccordion } from "@/components/settings/mobile-settings-ui";
 import {
@@ -35,6 +36,8 @@ export function FaqPageView({ backHref, role }: { backHref: string; role: FaqRol
           onToggle={(id) => setOpenId(id ? id : null)}
         />
       </div>
+
+      <FaqSponsorAdSlot />
     </main>
   );
 }

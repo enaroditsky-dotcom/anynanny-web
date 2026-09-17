@@ -40,6 +40,7 @@
     "test:sitter-personal-area-model": "npx --yes tsx scripts/test-sitter-personal-area-model.ts",
     "test:welcome-charter-flow": "npx --yes tsx scripts/test-welcome-charter-flow.ts",
     "test:homepage-welcome-video": "npx --yes tsx scripts/test-homepage-welcome-video.ts",
+    "test:ad-ready-infrastructure": "npx --yes tsx scripts/test-ad-ready-infrastructure.ts",
     "test:settings-legal-documents": "npx --yes tsx scripts/test-settings-legal-documents.ts",
     "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts",
     "test:parent-search-verified-only": "npx --yes tsx scripts/test-parent-search-verified-only.ts",

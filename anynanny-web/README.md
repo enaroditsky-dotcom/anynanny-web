@@ -22,6 +22,24 @@ Mobile-responsive web MVP scaffold for:
 - Accent: `#2A5DBC`
 - Neutral bg: `#F4F7FC`
 
+## Advertising Infrastructure — Ad Ready
+
+The public website is prepared for future advertising without showing ads now.
+
+- First-party ad slot infrastructure is in place (`components/marketing/ad-slot.tsx`).
+- Placement IDs live in `lib/marketing/ad-slots.ts` and are **disabled by default**.
+- Activation is deferred until meaningful traffic exists.
+- No ad network, pixel, cookie, or tracking integration is connected.
+
+Future possibilities, after traffic and a privacy review:
+
+- Direct sponsorships
+- Family-oriented advertisers
+- Sponsored Marketplace placements
+- Ad networks, if appropriate later
+
+See `docs/advertising-infrastructure.md` for placement IDs, allowed surfaces, and advertising rules.
+
 ## Next Step
 
 Install dependencies and run:
