@@ -6,6 +6,7 @@ import { SettingsFaqEntry } from "@/components/settings/settings-faq-entry";
 import { SitterTourSettingsEntry } from "@/components/product-tour/sitter-tour-settings-entry";
 import { BlockedUsersSection } from "@/components/safety/blocked-users-section";
 import { CommunityResourcesSection } from "@/components/settings/community-resources-section";
+import { WebsiteSettingsEntry } from "@/components/settings/website-settings-entry";
 import { FileText, Shield, ExternalLink } from "lucide-react";
 
 export default function SitterSettingsPage() {
@@ -22,6 +23,8 @@ export default function SitterSettingsPage() {
       <PageBackRow className="mt-4">
         <PageBackLink href="/sitter/dashboard" />
       </PageBackRow>
+
+      <WebsiteSettingsEntry />
 
       <div className="mt-6">
         <NotificationSettingsSection />

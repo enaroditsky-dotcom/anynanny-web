@@ -48,6 +48,7 @@
     "test:parent-search-filter-restore": "npx --yes tsx scripts/test-parent-search-filter-restore.ts",
     "test:long-primary-cta": "npx --yes tsx scripts/test-long-primary-cta.ts",
     "test:logout-button-unplug": "npx --yes tsx scripts/test-logout-button-unplug.ts",
+    "test:website-settings-entry": "npx --yes tsx scripts/test-website-settings-entry.ts",
     "test:parent-product-tour": "npx --yes tsx scripts/test-parent-product-tour.ts",
     "test:sitter-product-tour": "npx --yes tsx scripts/test-sitter-product-tour.ts",
     "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts",

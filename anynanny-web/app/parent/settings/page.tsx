@@ -6,6 +6,7 @@ import { NotificationSettingsSection } from "@/components/settings/notification-
 import { SettingsFaqEntry } from "@/components/settings/settings-faq-entry";
 import { BlockedUsersSection } from "@/components/safety/blocked-users-section";
 import { CommunityResourcesSection } from "@/components/settings/community-resources-section";
+import { WebsiteSettingsEntry } from "@/components/settings/website-settings-entry";
 import { FileText, Shield, ExternalLink } from "lucide-react";
 
 export default function ParentSettingsPage() {
@@ -22,6 +23,8 @@ export default function ParentSettingsPage() {
       <PageBackRow className="mt-4">
         <PageBackLink href="/parent/dashboard" />
       </PageBackRow>
+
+      <WebsiteSettingsEntry />
 
       <div className="mt-6">
         <NotificationSettingsSection />
