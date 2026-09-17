@@ -726,6 +726,7 @@ export type PublicSitterSearchCard = {
 
   /** Expert certifications / free-text professional experience. */
   certifications?: string | null;
+
 };
 
 /** One anonymized public review for parent-facing sitter profile screens. */

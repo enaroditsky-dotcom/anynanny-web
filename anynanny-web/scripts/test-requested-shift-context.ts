@@ -287,6 +287,14 @@ assert.match(searchPage, /parseFiltersFromSearchParams/);
 
 const searchCard = read("components/sitter/public-sitter-search-card.tsx");
 assert.match(searchCard, /parentSitterProfilePath\(sitter\.id, query\)/);
+assert.match(searchCard, /text-\[2rem\] font-bold leading-tight text-\[#001F3F\]/);
+assert.match(searchCard, /VerifiedUserBadge/);
+assert.match(searchCard, /size="xs"/);
+assert.match(searchCard, /stacked/);
+assert.match(
+  searchCard,
+  /flex shrink-0 flex-col items-center gap-0\.5 rounded-2xl bg-amber-50 px-3 py-2 ring-1 ring-amber-200\/80/
+);
 
 const profilePage = read("app/parent/sitter/[sitterId]/page.tsx");
 assert.match(profilePage, /requestedShiftFromSearchParams/);
