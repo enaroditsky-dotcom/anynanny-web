@@ -188,9 +188,70 @@ for (const [index, chapter] of MARKETING_CHAPTERS.entries()) {
 
 assert.doesNotMatch(sidebar, /navLabel: "/);
 assert.match(sidebar, /data-org-chapters/);
-assert.match(sidebar, /sidebarSearchToggle/);
+assert.doesNotMatch(sidebar, /sidebarSearchToggle/);
+assert.doesNotMatch(sidebar, /Smartphone/);
+assert.match(css, /--marketing-sidebar-width: 16\.75rem/);
+assert.match(css, /\.sidebarBrandRow \{[\s\S]*direction: ltr/);
+assert.match(css, /\.sidebarBrandRow \{[\s\S]*gap: 0\.15rem/);
+assert.match(css, /\.sidebarLogoLink :global\(span\) \{[\s\S]*width: 12rem/);
+assert.match(css, /\.sidebarMascot \{[\s\S]*height: 3\.45rem/);
+assert.doesNotMatch(css, /width: 6\.4rem/);
+assert.doesNotMatch(css, /width: 10\.5rem/);
+assert.match(css, /\.sidebarFolder,\s*\.sidebarTopItem \{[\s\S]*color: #111111/);
+assert.match(css, /\.sidebarFolder,\s*\.sidebarTopItem \{[\s\S]*font-size: 17px/);
+assert.match(css, /\.sidebarFolder,\s*\.sidebarTopItem \{[\s\S]*font-weight: 800/);
+assert.match(css, /\.sidebarChild \{[\s\S]*color: var\(--marketing-navy\)/);
+assert.match(css, /\.sidebarChild \{[\s\S]*font-size: 15px/);
+assert.match(css, /\.sidebarChild \{[\s\S]*font-weight: 400/);
+assert.match(css, /\.sidebarLink\[aria-current="location"\] \{[\s\S]*font-weight: 400/);
+assert.match(css, /\.sidebarPanel \{[\s\S]*padding-inline-start: 1\.125rem/);
+assert.match(css, /border-inline-start: 2px solid rgba\(22, 91, 115/);
+assert.match(css, /--font-sidebar-heebo/);
+assert.match(sidebar, /sidebarHeebo/);
+assert.match(sidebar, /sidebarTopItem/);
+assert.match(read("components/marketing/sidebar-heebo.ts"), /from "next\/font\/google"/);
+assert.match(read("components/marketing/sidebar-heebo.ts"), /Heebo\(/);
+assert.doesNotMatch(read("app/layout.tsx"), /Heebo/);
+assert.doesNotMatch(css, /\.page \{[^}]*Heebo/);
+assert.match(sidebar, /function AppleMark/);
+assert.match(sidebar, /function AndroidMark/);
+assert.match(sidebar, /function DownloadRow/);
+assert.match(sidebar, /Android להורדה/);
+assert.match(sidebar, /iPhone להורדה/);
+assert.match(sidebar, /M16\.365 12\.84/);
+assert.match(sidebar, /M17\.6 9\.48/);
+assert.match(sidebar, /<Download /);
+assert.match(css, /\.sidebarDownload \{[\s\S]*direction: ltr/);
+assert.match(css, /pointer-events: none/);
+assert.equal(
+  SITE_NAV_ITEMS.map((item) => item.id).join(","),
+  "org,app,community,info"
+);
+assert.match(sidebar, /data-sidebar-search/);
+assert.match(sidebar, /sidebarLabel\}>חיפוש</);
+
+const brandJsx = sidebar.slice(
+  sidebar.indexOf("styles.sidebarBrand"),
+  sidebar.indexOf("styles.sidebarScroll")
+);
+assert.match(brandJsx, /dir="ltr"/);
+assert.match(brandJsx, /AnyNannyLogo/);
+assert.match(brandJsx, /AnynannyMascotPortrait/);
+assert.ok(brandJsx.indexOf("AnyNannyLogo") < brandJsx.indexOf("AnynannyMascotPortrait"));
+assert.doesNotMatch(brandJsx, /<Search/);
+assert.doesNotMatch(brandJsx, /חיפוש/);
+assert.doesNotMatch(brandJsx, /sidebarFolder/);
+
+const beforeSearchIdx = sidebar.indexOf("itemsBeforeSearch.map");
+const searchControlsIdx = sidebar.indexOf("{searchControls}");
+const fromInfoIdx = sidebar.indexOf("itemsFromInfo.map");
+assert.ok(beforeSearchIdx > 0);
+assert.ok(searchControlsIdx > beforeSearchIdx);
+assert.ok(fromInfoIdx > searchControlsIdx);
+assert.match(sidebar, /aria-expanded=\{showSearchField\}/);
+assert.match(sidebar, /toggleSearch/);
 assert.match(css, /sidebarOrgPanel/);
-assert.match(css, /border-right: 2px solid rgba\(22, 91, 115/);
+assert.match(css, /border-inline-start: 2px solid rgba\(22, 91, 115/);
 assert.doesNotMatch(sidebar, /play\.google\.com|apps\.apple\.com/);
 assert.doesNotMatch(home, /play\.google\.com|apps\.apple\.com/);
 

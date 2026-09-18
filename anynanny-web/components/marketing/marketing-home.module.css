@@ -134,6 +134,7 @@ a.joinButton {
   width: min(var(--marketing-sidebar-width), 92vw);
   background: #fff;
   color: var(--marketing-navy);
+  font-family: var(--font-sidebar-heebo), Heebo, Arial, sans-serif;
   border-left: 0;
   border-right: 1px solid rgba(0, 31, 63, 0.08);
   box-shadow: 12px 0 24px rgba(15, 23, 42, 0.06);
@@ -153,8 +154,7 @@ a.joinButton {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.45rem;
-  padding: 0.65rem 0.7rem 0.55rem;
+  padding: 0.35rem 0.4rem 0.3rem;
   background: var(--marketing-cream);
   border-bottom: 1px solid rgba(0, 31, 63, 0.08);
 }
@@ -162,34 +162,46 @@ a.joinButton {
 .sidebarBrandRow {
   display: flex;
   width: 100%;
+  min-width: 0;
+  direction: ltr;
   flex-direction: row;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.15rem;
 }
 
 .sidebarLogoLink {
   display: flex;
   min-width: 0;
+  flex: 0 1 auto;
 }
 
 .sidebarLogoLink :global(span) {
-  width: 6.4rem !important;
+  width: 12rem !important;
   max-width: 100%;
+  height: auto;
+}
+
+.sidebarLogoLink :global(img) {
+  width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
 }
 
 .sidebarMascot {
-  height: 2.15rem;
-  width: 2.15rem;
+  height: 3.45rem;
+  width: 3.45rem;
   flex-shrink: 0;
+  object-fit: contain;
 }
 
-.sidebarSearchToggle,
 .sidebarClose {
   appearance: none;
   display: grid;
   place-items: center;
-  width: 2.35rem;
-  height: 2.35rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin-left: auto;
   flex-shrink: 0;
   border: 1px solid rgba(0, 31, 63, 0.14);
   border-radius: 999px;
@@ -198,19 +210,21 @@ a.joinButton {
   cursor: pointer;
 }
 
-.sidebarSearchToggle {
-  margin-inline-start: auto;
+.sidebarSearchBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
-.sidebarSearchToggle[aria-expanded="true"] {
+.sidebarSearchBlock > [aria-expanded="true"] {
   background: var(--marketing-cream-alt);
-  border-color: rgba(22, 91, 115, 0.35);
 }
 
 .sidebarSearch {
   display: flex;
   width: 100%;
   align-items: center;
+  padding: 0 0.15rem 0.25rem;
 }
 
 .sidebarSearch input {
@@ -220,8 +234,10 @@ a.joinButton {
   border-radius: 999px;
   background: #fff;
   color: var(--marketing-navy);
-  font: inherit;
-  font-size: 0.92rem;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
   padding: 0.3rem 0.85rem;
 }
 
@@ -247,8 +263,10 @@ a.joinButton {
   border-radius: 999px;
   background: transparent;
   color: var(--marketing-navy);
-  font: inherit;
-  font-size: 0.92rem;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
   text-align: right;
   text-decoration: none;
 }
@@ -266,7 +284,31 @@ a.joinButton {
 .sidebarLink[aria-current="location"] {
   background: rgba(43, 126, 150, 0.14);
   color: var(--marketing-navy);
-  font-weight: 700;
+  font-weight: 400;
+}
+
+.sidebarFolder,
+.sidebarTopItem {
+  color: #111111;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.sidebarFolder .sidebarLabel,
+.sidebarTopItem .sidebarLabel {
+  font-weight: 800;
+}
+
+.sidebarChild {
+  color: var(--marketing-navy);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.sidebarChild .sidebarLabel {
+  font-weight: 400;
 }
 
 .sidebarSoon {
@@ -284,7 +326,8 @@ a.joinButton {
 .sidebarLabel {
   flex: 1 1 auto;
   min-width: 0;
-  line-height: 1.3;
+  overflow-wrap: anywhere;
+  line-height: inherit;
 }
 
 .sidebarChevron {
@@ -299,13 +342,18 @@ a.joinButton {
 }
 
 .sidebarPanel {
-  padding-right: 0.35rem;
+  padding-inline-start: 1.125rem;
+  padding-inline-end: 0.1rem;
 }
 
 .sidebarOrgPanel {
-  margin: 0.1rem 0.85rem 0.35rem 0.2rem;
-  padding: 0.15rem 0.45rem 0.2rem 0.15rem;
-  border-right: 2px solid rgba(22, 91, 115, 0.38);
+  margin-block: 0.1rem 0.35rem;
+  margin-inline-start: 0.55rem;
+  margin-inline-end: 0.15rem;
+  padding-block: 0.15rem 0.2rem;
+  padding-inline-start: 0.7rem;
+  padding-inline-end: 0.15rem;
+  border-inline-start: 2px solid rgba(22, 91, 115, 0.38);
 }
 
 .sidebarOrgPanel .sidebarLink,
@@ -313,11 +361,12 @@ a.joinButton {
   min-height: 2.05rem;
   margin: 0.02rem 0;
   padding: 0.22rem 0.7rem;
-  font-size: 0.84rem;
+  font-size: 15px;
+  font-weight: 400;
 }
 
 .sidebarNested {
-  margin-right: 0.2rem;
+  margin-inline-start: 0;
 }
 
 .sidebarDownloads {
@@ -326,12 +375,49 @@ a.joinButton {
   border-top: 1px solid rgba(0, 31, 63, 0.08);
 }
 
+.sidebarDownload {
+  display: flex;
+  direction: ltr;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 2.5rem;
+  margin: 0.12rem 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--marketing-navy);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+  opacity: 0.78;
+  cursor: default;
+  pointer-events: none;
+}
+
+.sidebarDownloadGlyph {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+  color: var(--marketing-teal);
+}
+
+.sidebarDownloadLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: inherit;
+  text-align: right;
+  font-weight: 400;
+}
+
 .soonBadge {
   flex-shrink: 0;
   border-radius: 999px;
   background: rgba(22, 91, 115, 0.1);
   color: var(--marketing-teal);
-  font-size: 0.72rem;
+  font-family: inherit;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   padding: 0.28rem 0.45rem;
