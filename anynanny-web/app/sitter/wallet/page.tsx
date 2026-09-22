@@ -114,10 +114,10 @@ export default function SitterWalletPage() {
   const monthShiftCount = isPageLoading ? 0 : earnings.monthShiftCount;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-12">
+    <div className="pb-2">
       <div
         data-tour="sitter-wallet-container"
-        className="mx-auto w-full max-w-md space-y-5 px-4 pt-4"
+        className="mx-auto w-full max-w-sm space-y-4 px-3 pt-3"
         dir="rtl"
       >
         <div className="flex w-full items-center justify-between gap-3 px-1" dir="ltr">
@@ -135,23 +135,29 @@ export default function SitterWalletPage() {
 
         <header className="px-1 text-right">
           <h1 className="text-lg font-extrabold text-navy-header">הארנק שלי</h1>
-          <p className="mt-0.5 text-[13px] text-slate-500">עיבוד מאובטח דרך שער התשלומים HYP</p>
         </header>
 
-        <section className="relative overflow-hidden rounded-3xl bg-[#0B3C5D] p-6 text-white shadow-soft">
-          <p className="text-xs font-medium text-white/70">הכנסות החודש</p>
-          <p className="mt-2 min-w-0 truncate text-4xl font-extrabold tracking-tight tabular-nums">
-            {formatNis(monthEarnings)}
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/15 pt-4">
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium text-white/70">סה״כ מתחילת השנה</p>
-              <p className="mt-1 truncate text-lg font-bold tabular-nums">{formatNis(yearEarnings)}</p>
+        <section className="relative overflow-hidden rounded-3xl bg-[#0B3C5D] p-5 text-white shadow-[0_16px_36px_-18px_rgba(11,60,93,0.7)]">
+          <div className="pointer-events-none absolute -left-10 -top-12 h-36 w-36 rounded-full bg-white/10" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-14 right-6 h-28 w-28 rounded-full bg-[#F4C7A1]/25" aria-hidden />
+          <div className="relative">
+            <p className="text-xs font-medium text-white/75">הכנסות החודש</p>
+            <p className="mt-1.5 min-w-0 truncate text-3xl font-extrabold tracking-tight tabular-nums">
+              {formatNis(monthEarnings)}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/15 pt-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-white/70">סה״כ מתחילת השנה</p>
+                <p className="mt-1 truncate text-lg font-bold tabular-nums">{formatNis(yearEarnings)}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-white/70">משמרות החודש</p>
+                <p className="mt-1 text-lg font-bold tabular-nums">{monthShiftCount}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium text-white/70">משמרות החודש</p>
-              <p className="mt-1 text-lg font-bold tabular-nums">{monthShiftCount}</p>
-            </div>
+            <p className="mt-3 text-[11px] leading-relaxed text-white/65">
+              עיבוד מאובטח דרך שער התשלומים HYP
+            </p>
           </div>
         </section>
 
@@ -159,7 +165,7 @@ export default function SitterWalletPage() {
           <SitterPayoutWalletCards sitterId={user.id} reloadToken={payoutReloadToken} />
         ) : null}
 
-        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
+        <section className="rounded-3xl border border-[#0B3C5D]/10 bg-white p-4 shadow-soft">
           <button
             type="button"
             onClick={() => setHistoryOpen((open) => !open)}
@@ -167,9 +173,20 @@ export default function SitterWalletPage() {
             aria-controls="sitter-earnings-history"
             className="flex w-full items-center justify-between gap-3 text-right"
           >
-            <h2 className="text-sm font-bold text-navy-header">הכנסות ותשלומים</h2>
+            <span className="min-w-0">
+              <h2 className="text-sm font-bold text-navy-header">הכנסות ותשלומים</h2>
+              <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
+                {isPageLoading
+                  ? "טוען תנועות…"
+                  : transactions.length === 0
+                    ? "עדיין אין תנועות להצגה"
+                    : transactions.length === 1
+                      ? "תנועה אחת"
+                      : `${transactions.length} תנועות`}
+              </p>
+            </span>
             <ChevronDown
-              className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${
+              className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 ${
                 historyOpen ? "rotate-180" : ""
               }`}
               aria-hidden
