@@ -16,10 +16,10 @@ const SIZE_CLASS: Record<
 > = {
   /** Search-result cards: two-line label + shield, scaled to the rating chip. */
   xs: {
-    root: "gap-1.5 rounded-2xl px-3 py-2",
-    mark: "h-9 w-9",
-    icon: "h-5 w-5",
-    label: "flex flex-col text-sm font-bold leading-tight"
+    root: "gap-1 rounded-2xl px-2 py-1.5",
+    mark: "h-7 w-7",
+    icon: "h-4 w-4",
+    label: "flex flex-col text-[11px] font-bold leading-tight"
   },
   sm: {
     root: "gap-1 rounded-lg px-2 py-0.5",
