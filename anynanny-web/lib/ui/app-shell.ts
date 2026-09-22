@@ -8,6 +8,14 @@
 /** Primary content column — 24rem. Narrower than max-w-md so desktop preview feels phone-like. */
 export const APP_CONTENT_MAX_W = "max-w-sm";
 
+/** Scrollable region between the fixed app header and bottom navigation. */
+export const APP_SHELL_SCROLL_ID = "app-shell-scroll";
+
+export function appShellScrollElement(): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  return document.getElementById(APP_SHELL_SCROLL_ID);
+}
+
 /** Dashboard shortcut tile (the whole card is the tap target). */
 export const DASHBOARD_SHORTCUT_TILE =
   "group flex min-h-[3.5rem] min-w-0 flex-col items-end justify-between gap-0.5 rounded-xl p-1.5 text-right shadow-sm transition active:scale-[0.98]";

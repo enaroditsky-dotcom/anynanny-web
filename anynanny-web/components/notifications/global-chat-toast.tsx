@@ -15,7 +15,8 @@ const TOAST_SURFACE =
 const TOAST_BOTTOM =
   "bottom-[calc(4.75rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2";
 
-const TOAST_TOP = "top-12 left-1/2 -translate-x-1/2";
+const TOAST_TOP =
+  "top-[calc(3rem+env(safe-area-inset-top,0px))] left-1/2 -translate-x-1/2";
 
 export function GlobalChatToast({
   toast,

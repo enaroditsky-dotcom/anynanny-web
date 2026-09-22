@@ -462,7 +462,9 @@ export function SitterPersonalArea({ userId }: Props) {
     (key: EditKey) => {
       setModalError(null);
       setSuccess(null);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      const scroller = document.getElementById("app-shell-scroll");
+      if (scroller) scroller.scrollTo({ top: 0, behavior: "smooth" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
       setDraft({
         ...form,
         working_cities: [...form.working_cities],

@@ -230,6 +230,7 @@ export function GlobalCoordinationNotifications() {
   return (
     <div
       className="pointer-events-none fixed inset-x-0 top-12 z-[60] px-2 pt-1.5 sm:px-3"
+      style={{ top: "calc(3rem + env(safe-area-inset-top, 0px))" }}
       dir="rtl"
       aria-live="polite"
     >

@@ -16,7 +16,7 @@ export function AppShellHeader() {
   const showUi = mounted && !isLoading;
 
   return (
-    <header className="w-full shrink-0 border-b border-navy-header/10 bg-white/80 backdrop-blur-md supports-[backdrop-filter]:bg-white/80">
+    <header className="z-40 w-full shrink-0 border-b border-navy-header/10 bg-white pt-[env(safe-area-inset-top,0px)] shadow-[0_4px_16px_rgba(15,23,42,0.06)]">
       <div className="flex h-12 items-center justify-center px-2" dir="rtl">
         {showUi ? (
           <div className="flex min-w-0 items-center gap-1">

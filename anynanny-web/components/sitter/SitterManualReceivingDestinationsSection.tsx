@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { HelpCircle, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import Image from "next/image";
+import { ChevronDown, HelpCircle, Loader2 } from "lucide-react";
 import { ActionToast } from "@/components/ui/action-toast";
 import { sitterReceivingSummary } from "@/components/personal-area/personal-area-summaries";
-import { WalletMethodVisualCard } from "@/components/wallet/wallet-method-brand";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { sitterReceivingSetupState } from "@/lib/billing/payment-method-availability";
 import {
@@ -27,6 +27,43 @@ type SitterManualReceivingDestinationsSectionProps = {
 
 const fieldClassName =
   "mt-1.5 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-base font-semibold text-slate-800 outline-none transition focus:border-[#0B3C5D]/40 focus:bg-white focus:ring-2 focus:ring-[#0B3C5D]/15 disabled:opacity-60";
+
+const accordionShellClass =
+  "min-w-0 overflow-hidden rounded-2xl shadow-[0_10px_18px_-14px_rgba(122,86,24,0.85),0_1px_0_rgba(255,255,255,0.65)]";
+const accordionHeaderClass =
+  "relative flex h-14 w-full min-w-0 items-center gap-3 overflow-hidden bg-gradient-to-b from-[#FBF6E6] via-[#F0D48C] to-[#E4BE6A] px-3 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-2px_0_rgba(154,110,36,0.28)] transition-[filter] active:brightness-[0.98]";
+const accordionIconClass =
+  "relative z-[1] h-11 w-11 shrink-0 overflow-hidden rounded-[13px] shadow-[0_2px_5px_rgba(92,62,12,0.22),inset_0_0_0_1px_rgba(255,255,255,0.28)]";
+const accordionChevronClass =
+  "relative z-[1] h-5 w-5 shrink-0 text-[#7A5720] transition-transform";
+const accordionPanelClass =
+  "space-y-2 border-t border-[#E4C98A] bg-white px-3 py-3 scroll-mb-[calc(7rem+env(safe-area-inset-bottom,0px))]";
+
+function MethodName({ cardTitle }: { cardTitle: string }) {
+  return <span className="sr-only">{cardTitle}</span>;
+}
+
+function GoldSheen() {
+  return (
+    <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      <span className="wallet-gold-sheen absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+    </span>
+  );
+}
+
+function ReceivingMethodShell({
+  kind,
+  children
+}: {
+  kind: "cash" | "bit" | "paybox";
+  children: ReactNode;
+}) {
+  return (
+    <div data-receiving-method={kind} className={accordionShellClass}>
+      {children}
+    </div>
+  );
+}
 
 export const PAYBOX_PERSONAL_LINK_HELP_TOGGLE = "הסבר";
 export const PAYBOX_PERSONAL_LINK_HELP_BUSINESS = [
@@ -126,6 +163,9 @@ export function SitterManualReceivingDestinationsSection({
   const [payboxError, setPayboxError] = useState<string | null>(null);
   const [payboxLinkError, setPayboxLinkError] = useState<string | null>(null);
   const [payboxLinkHelpOpen, setPayboxLinkHelpOpen] = useState(false);
+  const [cashOpen, setCashOpen] = useState(false);
+  const [bitOpen, setBitOpen] = useState(false);
+  const [payboxOpen, setPayboxOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -171,9 +211,7 @@ export function SitterManualReceivingDestinationsSection({
         type="button"
         onClick={() => void selectPreferred(kind)}
         disabled={savingPreferred !== null || selected}
-        className={`inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50 ${
-          kind === "cash" ? "mt-2" : ""
-        }`}
+        className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : PREFERRED_SELECT_BUTTON_LABEL}
       </button>
@@ -274,119 +312,171 @@ export function SitterManualReceivingDestinationsSection({
     ? "טוען…"
     : sitterReceivingSummary(bitReady, payboxReady);
 
+  const preferredMark = (kind: "cash" | "bit" | "paybox") =>
+    methods.preferred === kind ? (
+      <span className="relative z-[1] inline-flex items-center rounded-full bg-white/60 px-2 py-0.5 text-[11px] font-semibold text-[#6A4B16] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
+        מועדף
+      </span>
+    ) : null;
+
   return (
     <>
-      <section className="space-y-4 text-right" data-tour="sitter-payment-methods-panel">
-        <div
-          data-tour="sitter-preferred-payment"
-          className="rounded-xl border border-slate-200 bg-white px-3 py-3"
-        >
-          <p className="text-[13px] font-semibold text-slate-500" title="בחירת דרך קבלת התשלום">
-            בחירת דרך קבלת התשלום
-          </p>
-          <p
-            className={`mt-1 text-sm ${
-              preferredReceivingMethodLabel(methods.preferred)
-                ? "font-bold text-[#001F3F]"
-                : "italic text-slate-400"
-            }`}
-          >
-            {preferredReceivingMethodLabel(methods.preferred) || "לא הוגדר"}
-          </p>
-          <p className="mt-1 text-[12px] text-slate-400">{receivingSummary}</p>
-          {preferredError ? (
-            <p className="mt-1 text-xs font-medium text-rose-700">{preferredError}</p>
-          ) : null}
-        </div>
+      <section
+        className="min-w-0 space-y-2 text-right"
+        data-tour="sitter-payment-methods-panel"
+      >
+        <p className="sr-only" data-tour="sitter-preferred-payment" title="בחירת דרך קבלת התשלום">
+          {preferredReceivingMethodLabel(methods.preferred) || "לא הוגדר"}
+          {" · "}
+          {receivingSummary}
+        </p>
+        {preferredError ? (
+          <p className="text-xs font-medium text-rose-700">{preferredError}</p>
+        ) : null}
 
+        <style>{`
+          @keyframes wallet-gold-sheen {
+            0%, 68% { transform: translateX(-150%) skewX(-18deg); opacity: 0; }
+            76% { opacity: 0.85; }
+            90% { transform: translateX(340%) skewX(-18deg); opacity: 0; }
+            100% { transform: translateX(340%) skewX(-18deg); opacity: 0; }
+          }
+          .wallet-gold-sheen { animation: wallet-gold-sheen 7.5s ease-in-out infinite; }
+          @media (prefers-reduced-motion: reduce) {
+            .wallet-gold-sheen { animation: none; opacity: 0.45; transform: translateX(70%) skewX(-18deg); }
+          }
+        `}</style>
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-4 text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span className="text-xs">טוען מספרי קבלה…</span>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <WalletMethodVisualCard
-                kind="cash"
-                ready
-                preferred={methods.preferred === "cash"}
-                status={methods.preferred === "cash" ? "מועדף" : "זמין"}
-                compact={false}
-                cardTitle="מזומן"
-              />
-              <p className="px-1 text-[13px] text-slate-500">
-                הצהרה בלבד — אין צורך במספר, לינק או פרטי חשבון.
-              </p>
-              {preferredButton("cash")}
-            </div>
-
-            <div className="space-y-2">
-              <WalletMethodVisualCard
-                kind="bit"
-                ready={bitReady}
-                preferred={methods.preferred === "bit"}
-                status={
-                  payoutMethodConfigured(methods, "bit")
-                    ? formatIsraeliMobileDisplay(methods.bitPhone)
-                    : sitterReceivingSetupState(methods, "bit").statusLabel
-                }
-                compact={false}
-                cardTitle="Bit"
-              />
-              <p className="px-1 text-[13px] text-slate-500">
-                {payoutMethodConfigured(methods, "bit")
-                  ? `שמור: ${formatIsraeliMobileDisplay(methods.bitPhone)}`
-                  : "לא הוגדר — ההורים לא יראו אפשרות Bit."}
-              </p>
-              <label className="block text-right text-xs font-bold text-slate-600">
-                מספר נייד לקבלת Bit
-                <input
-                  className={fieldClassName}
-                  dir="ltr"
-                  inputMode="tel"
-                  autoComplete="off"
-                  placeholder="05X-XXX-XXXX"
-                  value={bitPhone}
-                  onChange={(e) => setBitPhone(e.target.value)}
-                  disabled={savingBit}
+          <div className="space-y-2">
+            <ReceivingMethodShell kind="cash">
+              <button
+                type="button"
+                aria-expanded={cashOpen}
+                aria-controls="sitter-cash-receiving-panel"
+                onClick={() => setCashOpen((open) => !open)}
+                className={accordionHeaderClass}
+              >
+                <GoldSheen />
+                <span className={accordionIconClass} aria-hidden>
+                  <span className="flex h-full w-full items-center justify-center bg-gradient-to-b from-[#FFF9EC] to-[#F4E2B4] text-[1.7rem] font-extrabold leading-none text-[#6A4B16]">
+                    ₪
+                  </span>
+                </span>
+                <MethodName cardTitle="מזומן" />
+                <span className="min-w-0 flex-1">{preferredMark("cash")}</span>
+                <ChevronDown
+                  className={`${accordionChevronClass} ${cashOpen ? "rotate-180" : ""}`}
+                  aria-hidden
                 />
-              </label>
-              {bitError ? <p className="mt-1 text-xs font-medium text-rose-700">{bitError}</p> : null}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void saveBit()}
-                  disabled={savingBit}
-                  className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-                >
-                  {savingBit ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת Bit"}
-                </button>
-                {preferredButton("bit")}
-              </div>
-            </div>
+              </button>
+              {cashOpen ? (
+                <div id="sitter-cash-receiving-panel" className={accordionPanelClass}>
+                  <p className="text-[13px] leading-relaxed text-slate-500">
+                    הצהרה בלבד — אין צורך במספר, לינק או פרטי חשבון.
+                  </p>
+                  {methods.preferred === "cash" ? (
+                    <p className="text-[12px] font-medium text-slate-500">זו דרך הקבלה המועדפת.</p>
+                  ) : null}
+                  {preferredButton("cash")}
+                </div>
+              ) : null}
+            </ReceivingMethodShell>
 
-            <div className="space-y-2">
-              <WalletMethodVisualCard
-                kind="paybox"
-                ready={payboxReady}
-                preferred={methods.preferred === "paybox"}
-                status={
-                  payboxManualReceivingConfigured(methods)
-                    ? [
-                        payoutMethodConfigured(methods, "paybox")
-                          ? formatIsraeliMobileDisplay(methods.payboxPhone)
-                          : null,
-                        methods.payboxLink.trim() ? "לינק אישי" : null
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : sitterReceivingSetupState(methods, "paybox").statusLabel
-                }
-                compact={false}
-                cardTitle="PayBox"
-              />
-              <p className="px-1 text-[13px] text-slate-500">
+            <ReceivingMethodShell kind="bit">
+              <button
+                type="button"
+                aria-expanded={bitOpen}
+                aria-controls="sitter-bit-receiving-panel"
+                onClick={() => setBitOpen((open) => !open)}
+                className={accordionHeaderClass}
+              >
+                <GoldSheen />
+                <span className={accordionIconClass}>
+                  <Image
+                    src="/wallet/bit-logo.png"
+                    alt=""
+                    fill
+                    sizes="44px"
+                    className="origin-center scale-[1.26] object-cover"
+                    style={{ objectPosition: "41% 50%" }}
+                  />
+                </span>
+                <MethodName cardTitle="Bit" />
+                <span className="min-w-0 flex-1">{preferredMark("bit")}</span>
+                <ChevronDown
+                  className={`${accordionChevronClass} ${bitOpen ? "rotate-180" : ""}`}
+                  aria-hidden
+                />
+              </button>
+              {bitOpen ? (
+                <div id="sitter-bit-receiving-panel" className={accordionPanelClass}>
+                  <p className="text-[12px] leading-relaxed text-slate-500">
+                    {payoutMethodConfigured(methods, "bit")
+                      ? `שמור: ${formatIsraeliMobileDisplay(methods.bitPhone)}`
+                      : sitterReceivingSetupState(methods, "bit").statusLabel}
+                  </p>
+                  <label className="block text-right text-xs font-bold text-slate-600">
+                    מספר נייד לקבלת Bit
+                    <input
+                      className={fieldClassName}
+                      dir="ltr"
+                      inputMode="tel"
+                      autoComplete="off"
+                      placeholder="05X-XXX-XXXX"
+                      value={bitPhone}
+                      onChange={(e) => setBitPhone(e.target.value)}
+                      disabled={savingBit}
+                    />
+                  </label>
+                  {bitError ? <p className="mt-1 text-xs font-medium text-rose-700">{bitError}</p> : null}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void saveBit()}
+                      disabled={savingBit}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                    >
+                      {savingBit ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת Bit"}
+                    </button>
+                    {preferredButton("bit")}
+                  </div>
+                </div>
+              ) : null}
+            </ReceivingMethodShell>
+
+            <ReceivingMethodShell kind="paybox">
+              <button
+                type="button"
+                aria-expanded={payboxOpen}
+                aria-controls="sitter-paybox-receiving-panel"
+                onClick={() => setPayboxOpen((open) => !open)}
+                className={accordionHeaderClass}
+              >
+                <GoldSheen />
+                <span className={accordionIconClass}>
+                  <Image
+                    src="/wallet/paybox-logo.png"
+                    alt=""
+                    fill
+                    sizes="44px"
+                    className="object-cover"
+                  />
+                </span>
+                <MethodName cardTitle="PayBox" />
+                <span className="min-w-0 flex-1">{preferredMark("paybox")}</span>
+                <ChevronDown
+                  className={`${accordionChevronClass} ${payboxOpen ? "rotate-180" : ""}`}
+                  aria-hidden
+                />
+              </button>
+              {payboxOpen ? (
+                <div id="sitter-paybox-receiving-panel" className={accordionPanelClass}>
+              <p className="text-[12px] leading-relaxed text-slate-500">
                 {payboxManualReceivingConfigured(methods)
                   ? [
                       payoutMethodConfigured(methods, "paybox")
@@ -396,7 +486,7 @@ export function SitterManualReceivingDestinationsSection({
                     ]
                       .filter(Boolean)
                       .join(" · ")
-                  : "לא הוגדר — ההורים לא יראו אפשרות PayBox."}
+                  : sitterReceivingSetupState(methods, "paybox").statusLabel}
               </p>
               <label className="block text-right text-xs font-bold text-slate-600">
                 מספר נייד לקבלת PayBox
@@ -419,7 +509,7 @@ export function SitterManualReceivingDestinationsSection({
                   type="button"
                   onClick={() => void savePaybox()}
                   disabled={savingPaybox}
-                  className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                 >
                   {savingPaybox ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת PayBox"}
                 </button>
@@ -520,7 +610,9 @@ export function SitterManualReceivingDestinationsSection({
                   </button>
                 ) : null}
               </div>
-            </div>
+                </div>
+              ) : null}
+            </ReceivingMethodShell>
           </div>
         )}
       </section>

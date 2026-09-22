@@ -82,37 +82,20 @@ export function WalletMethodLogo({
   return <AnyNannyCardMark size={size} />;
 }
 
-/** Paper-money mark so Cash is never icon-only. */
+/** Cash icon: the shekel symbol, with the Hebrew label rendered beside it. */
 export function CashBanknoteMark({ size = 48 }: { size?: number }) {
   return (
     <div
-      className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-md ring-2 ring-white/40"
+      className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl text-white shadow-md ring-2 ring-white/40"
       style={{
         width: size,
         height: size,
-        background: "linear-gradient(145deg, #047857 0%, #059669 55%, #34D399 100%)"
+        background: "linear-gradient(145deg, #047857 0%, #059669 55%, #34D399 100%)",
+        fontSize: Math.max(18, Math.round(size * 0.52))
       }}
       aria-hidden
     >
-      <svg viewBox="0 0 48 32" className="h-[72%] w-[86%]" aria-hidden>
-        <rect x="3" y="8" width="42" height="22" rx="3" fill="#A7F3D0" opacity="0.7" />
-        <rect x="1" y="3" width="42" height="22" rx="3" fill="#ECFDF5" />
-        <rect x="1" y="3" width="42" height="22" rx="3" fill="none" stroke="#047857" strokeWidth="1.4" />
-        <circle cx="22" cy="14" r="6.2" fill="#6EE7B7" />
-        <circle cx="22" cy="14" r="3.8" fill="#059669" />
-        <text
-          x="22"
-          y="16.2"
-          textAnchor="middle"
-          fontSize="6.5"
-          fontWeight="700"
-          fill="#ECFDF5"
-        >
-          ₪
-        </text>
-        <rect x="5" y="7" width="5" height="3" rx="0.8" fill="#059669" opacity="0.35" />
-        <rect x="34" y="18" width="5" height="3" rx="0.8" fill="#059669" opacity="0.35" />
-      </svg>
+      <span className="font-extrabold leading-none">₪</span>
     </div>
   );
 }

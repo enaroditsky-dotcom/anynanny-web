@@ -84,7 +84,6 @@ assert.match(reportUi, /שלח דיווח/);
 const modified = {
   "book-shift": read("components/parent/book-shift-modal.tsx"),
   "parent-wallet": read("app/parent/wallet/wallet-client.tsx"),
-  "sitter-payout": read("components/sitter/SitterPayoutWalletCards.tsx"),
   "personal-area": read("components/personal-area/personal-area-ui.tsx"),
   "session-rating": read("components/session/session-rating-modal.tsx"),
   "bank-details": read("components/sitter/SitterBankDetailsModal.tsx"),

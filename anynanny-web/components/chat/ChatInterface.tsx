@@ -201,14 +201,16 @@ export default function ChatInterface({
   }, [composerFocused, revealComposer]);
 
   useEffect(() => {
+    const scrolling = (document.getElementById("app-shell-scroll") ??
+      document.scrollingElement ??
+      document.documentElement) as HTMLElement;
     const onWindowScroll = () => {
       const list = messageListRef.current;
       if (list && list.scrollHeight > list.clientHeight + 4) return;
-      const scrolling = (document.scrollingElement ?? document.documentElement) as HTMLElement;
       stickToBottomRef.current = isNearScrollBottom(scrolling, 120);
     };
-    window.addEventListener("scroll", onWindowScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onWindowScroll);
+    scrolling.addEventListener("scroll", onWindowScroll, { passive: true });
+    return () => scrolling.removeEventListener("scroll", onWindowScroll);
   }, []);
 
   useEffect(() => {
@@ -220,7 +222,9 @@ export default function ChatInterface({
       list.scrollTop = list.scrollHeight;
       return;
     }
-    const scrolling = (document.scrollingElement ?? document.documentElement) as HTMLElement;
+    const scrolling = (document.getElementById("app-shell-scroll") ??
+      document.scrollingElement ??
+      document.documentElement) as HTMLElement;
     scrolling.scrollTop = scrolling.scrollHeight;
   }, [messages, composerFocused]);
 

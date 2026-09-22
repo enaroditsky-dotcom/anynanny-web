@@ -89,9 +89,16 @@ assert.match(payoutLib, /payboxPhone: String\(row\.payout_paybox_phone/);
 assert.match(payoutLib, /payboxLink: parseAuthorizedPayboxPaymentLink/);
 assert.doesNotMatch(payoutLib, /create table|alter table/i);
 
-// 11. Mobile-first Wallet modal
-assert.match(walletCards, /AUTH_MODAL_CARD_SHELL_MD/);
-assert.match(walletCards, /AUTH_MODAL_BODY_SCROLL/);
+// 11. Receiving editor scrolls with the app shell — not a nested wallet modal
+const shell = read("components/app-shell-gate.tsx");
+assert.match(shell, /APP_SHELL_SCROLL_ID/);
+assert.match(shell, /overflow-y-auto/);
+assert.match(shell, /h-dvh/);
+assert.match(receiving, /aria-expanded=\{bitOpen\}/);
+assert.match(receiving, /aria-expanded=\{payboxOpen\}/);
+assert.match(receiving, /useState\(false\)/);
+assert.doesNotMatch(walletCards, /AUTH_MODAL_BODY_SCROLL/);
+assert.doesNotMatch(walletCards, /fixed inset-0/);
 
 // 12. Sitter Product Tour teaches receiving methods from Wallet
 assert.match(tourSteps, /SITTER_TOUR_WALLET_PATH/);
