@@ -5,7 +5,8 @@ import {
   SITTER_TOUR_PROFILE_PATH,
   SITTER_TOUR_SCHEDULE_PATH,
   SITTER_TOUR_SELECTORS,
-  SITTER_TOUR_SHIFTS_PATH
+  SITTER_TOUR_SHIFTS_PATH,
+  SITTER_TOUR_WALLET_PATH
 } from "@/lib/product-tour/constants";
 import type { ProductTourStep } from "@/lib/product-tour/types";
 
@@ -136,27 +137,6 @@ export const SITTER_TOUR_STEPS: readonly ProductTourStep[] = [
     blockTargetAction: true
   },
   {
-    id: "sitter-payment-methods",
-    route: SITTER_TOUR_PROFILE_PATH,
-    targetSelector: SITTER_TOUR_SELECTORS.paymentMethods,
-    title: "אמצעי קבלת תשלום",
-    description: "כאן את מגדירה איך תקבלי תשלום על המשמרות שלך.",
-    advanceMode: "next-button",
-    placement: "bottom",
-    blockTargetAction: true
-  },
-  {
-    id: "sitter-preferred-payment",
-    route: SITTER_TOUR_PROFILE_PATH,
-    targetSelector: SITTER_TOUR_SELECTORS.preferredPayment,
-    fallbackSelector: SITTER_TOUR_SELECTORS.paymentMethods,
-    title: "אמצעי תשלום מועדף",
-    description: "אפשר לבחור אמצעי תשלום מועדף — וההורים יראו את ההעדפה שלך.",
-    advanceMode: "next-button",
-    placement: "bottom",
-    blockTargetAction: true
-  },
-  {
     id: "sitter-wallet",
     route: SITTER_TOUR_DASHBOARD_PATH,
     routeExact: true,
@@ -165,6 +145,27 @@ export const SITTER_TOUR_STEPS: readonly ProductTourStep[] = [
     description: "כאן תוכלי לראות את ההכנסות שלך ואת פירוט התשלומים שהתקבלו או ממתינים לאישור.",
     advanceMode: "click-target",
     placement: "top"
+  },
+  {
+    id: "sitter-payment-methods",
+    route: SITTER_TOUR_WALLET_PATH,
+    targetSelector: SITTER_TOUR_SELECTORS.paymentMethods,
+    title: "אמצעי קבלת תשלום",
+    description: "כאן בארנק את מגדירה איך תקבלי תשלום על המשמרות שלך.",
+    advanceMode: "next-button",
+    placement: "bottom",
+    blockTargetAction: true
+  },
+  {
+    id: "sitter-preferred-payment",
+    route: SITTER_TOUR_WALLET_PATH,
+    targetSelector: SITTER_TOUR_SELECTORS.preferredPayment,
+    fallbackSelector: SITTER_TOUR_SELECTORS.paymentMethods,
+    title: "אמצעי תשלום מועדף",
+    description: "אפשר לבחור אמצעי תשלום מועדף — וההורים יראו את ההעדפה שלך.",
+    advanceMode: "next-button",
+    placement: "bottom",
+    blockTargetAction: true
   },
   {
     id: "sitter-surprises",

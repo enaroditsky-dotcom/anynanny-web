@@ -19,8 +19,7 @@ import { isParentArrivalConfirmableStatus } from "@/lib/bookings/booking-realtim
 import {
   isBookingDueForParentActiveShiftUi,
   isFutureConfirmedScheduleBooking,
-  isFutureScheduledBooking,
-  isWaitingForSitterArrival
+  isFutureScheduledBooking
 } from "@/lib/bookings/booking-shift-ui";
 import { BookingScheduleLabel } from "@/components/bookings/booking-schedule-label";
 import { MissedShiftClarificationCard } from "@/components/bookings/missed-shift-clarification-card";
@@ -144,6 +143,13 @@ import {
   LONG_PRIMARY_CTA_ICON_CLASS,
   PARENT_SITTER_SEARCH_CTA_LABEL
 } from "@/lib/ui/long-primary-cta";
+import {
+  APP_CONTENT_MAX_W,
+  DASHBOARD_SHORTCUT_ICON,
+  DASHBOARD_SHORTCUT_ICON_WRAP,
+  DASHBOARD_SHORTCUT_LABEL,
+  DASHBOARD_SHORTCUT_TILE
+} from "@/lib/ui/app-shell";
 import { Calendar, Wallet, History, Search, CheckCircle2, Clock, Star, User, X, Loader2 } from "lucide-react";
 import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
@@ -293,12 +299,9 @@ function pickParentDashboardBooking(
     dismissedRejectedIds?: Set<string>;
     dismissedApprovedIds?: Set<string>;
     stickyApprovedNotificationId?: string | null;
-    nowMs?: number;
   }
 ): BookingRow | null {
   if (!rows.length) return null;
-
-  const nowMs = opts?.nowMs ?? Date.now();
 
   const preferId = opts?.preferBookingId
     ? String(opts.preferBookingId)
@@ -314,8 +317,7 @@ function pickParentDashboardBooking(
     isApprovedScheduleNotificationCandidate(
       b,
       dismissedApprovedIds,
-      stickyApprovedNotificationId,
-      nowMs
+      stickyApprovedNotificationId
     );
 
   // בזמן Settlement אסור לעבור להזמנה אחרת.
@@ -341,7 +343,7 @@ function pickParentDashboardBooking(
 
   const dueLive = rows.filter(
     (b) =>
-      isBookingDueForParentActiveShiftUi(b, nowMs) &&
+      isBookingDueForParentActiveShiftUi(b) &&
       !bookingRequiresAdminReview(b) &&
       !isMissedShiftLifecycleStatus(b.status)
   );
@@ -363,7 +365,7 @@ function pickParentDashboardBooking(
       preferred &&
       !bookingRequiresAdminReview(preferred) &&
       (
-        isBookingDueForParentActiveShiftUi(preferred, nowMs) ||
+        isBookingDueForParentActiveShiftUi(preferred) ||
         isUnpaidCompletedBooking(preferred) ||
         pendingRejectedNotification(preferred) ||
         pendingApprovedNotification(preferred)
@@ -393,14 +395,8 @@ function pickParentDashboardBooking(
     return futureConfirmed;
   }
 
-  const confirmedSchedule = rows.find((b) => isFutureConfirmedScheduleBooking(b, nowMs));
-
-  if (confirmedSchedule) {
-    return confirmedSchedule;
-  }
-
   const futurePending = rows.find(
-    (b) => isFutureScheduledBooking(b, nowMs) && !isFutureConfirmedScheduleBooking(b, nowMs)
+    (b) => isFutureScheduledBooking(b) && !isFutureConfirmedScheduleBooking(b)
   );
 
   if (futurePending) {
@@ -440,6 +436,15 @@ function isTerminalSessionStatus(status: unknown): boolean {
 
 function isConfirmableBooking(status: unknown): boolean {
   return isParentArrivalConfirmableStatus(status as BookingRow["status"]);
+}
+
+function isWaitingForSitterArrival(booking: BookingRow | null | undefined): boolean {
+  if (!booking) return false;
+  if (isMissedShiftLifecycleStatus(booking.status)) return false;
+  return (
+    normalizeStatus(booking.status) === "approved" &&
+    isBookingDueForParentActiveShiftUi(booking)
+  );
 }
 
 function sessionRequestsEnd(session: SupabaseSessionRow | null): boolean {
@@ -840,8 +845,7 @@ export function ParentDashboardClient({
           settlementLocked: settlementIsLocked(),
           dismissedRejectedIds,
           dismissedApprovedIds,
-          stickyApprovedNotificationId: stickyApprovedNotificationIdRef.current,
-          nowMs: Date.now()
+          stickyApprovedNotificationId: stickyApprovedNotificationIdRef.current
         });
         setStuckShiftReviewNotice(bookingRows.some((row) => bookingRequiresAdminReview(row)));
         const bookingSitterId =
@@ -862,9 +866,9 @@ export function ParentDashboardClient({
           continue;
         }
         const dueForActiveShift = Boolean(
-          booking && isBookingDueForParentActiveShiftUi(booking, Date.now())
+          booking && isBookingDueForParentActiveShiftUi(booking)
         );
-        const futureScheduled = Boolean(booking && isFutureScheduledBooking(booking, Date.now()));
+        const futureScheduled = Boolean(booking && isFutureScheduledBooking(booking));
         const hasLiveBooking = Boolean(
           booking && isLiveInFlightBooking(bookingStatus) && dueForActiveShift
         );
@@ -1923,7 +1927,7 @@ export function ParentDashboardClient({
   const dueForActiveShiftUi = Boolean(
     hasHydrated &&
       activeBooking &&
-      isBookingDueForParentActiveShiftUi(activeBooking, nowMs) &&
+      isBookingDueForParentActiveShiftUi(activeBooking) &&
       !isMissedShiftLifecycleStatus(activeBooking.status)
   );
   const clarificationBooking =
@@ -1938,15 +1942,15 @@ export function ParentDashboardClient({
   const isScheduledConfirmed = Boolean(
     hasHydrated &&
       activeBooking &&
-      isFutureConfirmedScheduleBooking(activeBooking, nowMs) &&
+      isFutureConfirmedScheduleBooking(activeBooking) &&
       (isStickyApprovedNotification ||
-        shouldShowApprovedScheduleNotification(activeBooking, dismissedApprovedBookingIds, nowMs))
+        shouldShowApprovedScheduleNotification(activeBooking, dismissedApprovedBookingIds))
   );
   const isScheduledPending = Boolean(
     hasHydrated &&
       activeBooking &&
-      isFutureScheduledBooking(activeBooking, nowMs) &&
-      !isFutureConfirmedScheduleBooking(activeBooking, nowMs)
+      isFutureScheduledBooking(activeBooking) &&
+      !isFutureConfirmedScheduleBooking(activeBooking)
   );
   const isRejectedBooking = shouldShowRejectedNotification(
     activeBooking,
@@ -2212,7 +2216,7 @@ export function ParentDashboardClient({
               ? "בקשה עתידית ממתינה — לחצו להרחבה"
               : showMissedShiftClarification
                 ? "המשמרת לא התקיימה"
-                : isWaitingForSitterArrival(activeBooking, nowMs)
+                : isWaitingForSitterArrival(activeBooking)
                 ? "ממתינים להגעת הבייביסיטר"
                 : "סטטוס משמרת — לחצו להרחבה";
 
@@ -2223,7 +2227,7 @@ export function ParentDashboardClient({
       ? "rose"
       : showMissedShiftClarification
         ? "rose"
-        : isScheduledPending || isWaitingForSitterArrival(activeBooking, nowMs)
+        : isScheduledPending || isWaitingForSitterArrival(activeBooking)
         ? "amber"
         : "emerald";
 
@@ -2232,7 +2236,7 @@ export function ParentDashboardClient({
   }, [statusCardKey]);
 
   return (
-    <main className="relative mx-auto w-full min-w-0 max-w-md space-y-4" dir="rtl">
+    <main className={`relative mx-auto w-full min-w-0 ${APP_CONTENT_MAX_W} space-y-1.5`} dir="rtl">
       {rejectedDeclineNotice ? (
         <DeclineNoticeUnit
           notice={rejectedDeclineNotice}
@@ -2240,21 +2244,21 @@ export function ParentDashboardClient({
         />
       ) : null}
       {onboardingPending ? (
-        <div className="fixed inset-x-0 bottom-0 top-20 z-50 flex items-start justify-center overflow-y-auto px-4 py-8 bg-[#FDFBF6]/95 backdrop-blur-sm">
-          <div className="w-full max-w-lg my-auto">
+        <div className="fixed inset-x-0 bottom-0 top-[calc(3rem+env(safe-area-inset-top,0px))] z-50 flex items-start justify-center overflow-y-auto px-2 py-4 bg-[#FDFBF6]/95 backdrop-blur-sm">
+          <div className="w-full max-w-sm my-auto">
             <ParentOnboardingWizard onSaved={handleOnboardingSaved} />
           </div>
         </div>
       ) : null}
 
-      <div className={`space-y-4 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
+      <div className={`space-y-1.5 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
         <div
           data-tour="parent-home"
-          className="w-full min-w-0 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 space-y-3"
+          className="w-full min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-2 space-y-1.5"
         >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
                   {parentAvatarUrl ? (
                     <img
                       src={parentAvatarUrl}
@@ -2263,15 +2267,15 @@ export function ParentDashboardClient({
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-slate-400">
-                      <User className="h-6 w-6" />
+                      <User className="h-5 w-5" />
                     </div>
                   )}
                 </div>
-                <h1 className="min-w-0 text-lg font-bold leading-snug text-slate-900">שלום, {firstName}!</h1>
+                <h1 className="min-w-0 text-base font-bold leading-snug text-slate-900">שלום, {firstName}!</h1>
               </div>
               {parentSerialLabel ? (
                 <span
-                  className="inline-flex shrink-0 items-center gap-1 bg-purple-100 text-purple-800 text-[13px] font-bold px-2.5 py-0.5 rounded-md border border-purple-200"
+                  className="inline-flex shrink-0 items-center gap-1 bg-purple-100 text-purple-800 text-[12px] font-bold px-2 py-0.5 rounded-md border border-purple-200"
                   dir="ltr"
                 >
                   <span>{parentSerialLabel}</span>
@@ -2280,9 +2284,9 @@ export function ParentDashboardClient({
               ) : null}
             </div>
 
-            <div className="flex items-start justify-between gap-3">
-              <div className="inline-flex min-w-0 items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-md">
-                <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
+            <div className="flex items-start justify-between gap-2">
+              <div className="inline-flex min-w-0 items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-[11px] font-medium px-1.5 py-0.5 rounded-md">
+                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
                 <span>
                   {parentRatingSummary.average.toFixed(1)}
                 </span>
@@ -2293,7 +2297,7 @@ export function ParentDashboardClient({
                     : "חוות דעת"})
                 </span>
               </div>
-              <div className="flex min-w-0 max-w-[11.5rem] shrink-0 justify-end sm:max-w-[13rem]">
+              <div className="flex min-w-0 max-w-[10.5rem] shrink-0 justify-end sm:max-w-[12rem]">
                 <IdentityStatusIndicator
                   userId={parentId}
                   role="parent"
@@ -2336,7 +2340,7 @@ export function ParentDashboardClient({
         </div>
 
             {!shouldHideDashboardActions ? (
-              <div className="grid min-w-0 grid-cols-3 gap-2.5">
+              <div className="grid min-w-0 grid-cols-3 gap-1">
                 <Link
                   href="/parent/calendar"
                   onClick={dismissStatusBanner}
@@ -2347,10 +2351,10 @@ export function ParentDashboardClient({
                       ? `יומן תיאום המשמרות — ${pendingSitterApprovalCount} ממתינות לאישור בייביסיטר`
                       : "יומן תיאום המשמרות"
                   }
-                  className="group flex min-h-[6.5rem] min-w-0 flex-col items-end justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-3 text-right shadow-sm transition hover:bg-slate-50 hover:shadow-md active:scale-[0.98]"
+                  className={`${DASHBOARD_SHORTCUT_TILE} border border-slate-200/80 bg-white hover:bg-slate-50 hover:shadow-md`}
                 >
-                  <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
-                    <Calendar className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                  <span className={`relative ${DASHBOARD_SHORTCUT_ICON_WRAP} text-emerald-600 ring-1 ring-emerald-600/10`}>
+                    <Calendar className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
                     <CancellationAttentionDot visible={cancellationAttention.showDot} />
                     {pendingSitterApprovalCount > 0 ? (
                       <span
@@ -2361,29 +2365,29 @@ export function ParentDashboardClient({
                       </span>
                     ) : null}
                   </span>
-                  <span className="w-full text-right text-xs font-semibold leading-snug text-slate-800 sm:text-sm">
+                  <span className={`${DASHBOARD_SHORTCUT_LABEL} text-slate-800`}>
                     יומן תיאום המשמרות
                   </span>
                 </Link>
                 <Link
                   href="/parent/wallet"
-                  className="group flex min-h-[6.5rem] min-w-0 flex-col items-end justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-3 text-right shadow-sm transition hover:bg-slate-50 hover:shadow-md active:scale-[0.98]"
+                  className={`${DASHBOARD_SHORTCUT_TILE} border border-slate-200/80 bg-white hover:bg-slate-50 hover:shadow-md`}
                 >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-600/10">
-                    <Wallet className="h-6 w-6 stroke-[1.75]" aria-hidden />
+                  <span className={`${DASHBOARD_SHORTCUT_ICON_WRAP} text-emerald-600 ring-1 ring-emerald-600/10`}>
+                    <Wallet className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
                   </span>
-                  <span className="w-full text-right text-xs font-semibold leading-snug text-slate-800 sm:text-sm">
+                  <span className={`${DASHBOARD_SHORTCUT_LABEL} text-slate-800`}>
                     הארנק שלי
                   </span>
                 </Link>
                 <Link
                   href="/parent/history"
-                  className="group flex min-h-[6.5rem] min-w-0 flex-col items-end justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-3 text-right shadow-sm transition hover:bg-slate-50 hover:shadow-md active:scale-[0.98]"
+                  className={`${DASHBOARD_SHORTCUT_TILE} border border-slate-200/80 bg-white hover:bg-slate-50 hover:shadow-md`}
                 >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-navy-header/10">
-                    <History className="h-6 w-6 stroke-[1.75] text-[#001F3F]" aria-hidden />
+                  <span className={`${DASHBOARD_SHORTCUT_ICON_WRAP} ring-1 ring-navy-header/10`}>
+                    <History className={`${DASHBOARD_SHORTCUT_ICON} text-[#001F3F]`} aria-hidden />
                   </span>
-                  <span className="w-full text-right text-xs font-semibold leading-snug text-slate-800 sm:text-sm">
+                  <span className={`${DASHBOARD_SHORTCUT_LABEL} text-slate-800`}>
                     היסטוריית משמרות
                   </span>
                 </Link>
@@ -2531,7 +2535,7 @@ export function ParentDashboardClient({
                     onClick={handleParentConfirmStart}
                   />
                 </div>
-              ) : isWaitingForSitterArrival(activeBooking, nowMs) ? (
+              ) : isWaitingForSitterArrival(activeBooking) ? (
                 <div className="flex flex-col items-center gap-2">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700">
                     <Clock className="h-5 w-5" />
@@ -2624,7 +2628,7 @@ export function ParentDashboardClient({
 
           {!shouldHideDashboardActions ? (
             <>
-              <div className="space-y-2 pt-1">
+              <div className="space-y-2 pt-0.5">
                 <Link
                   href="/parent/search"
                   data-tour="parent-search"
@@ -2636,7 +2640,7 @@ export function ParentDashboardClient({
                 </Link>
               </div>
 
-              <div className="pt-2 flex flex-col gap-2">
+              <div className="pt-1 flex flex-col gap-1.5">
                 {showStuckShiftReleaseButton ? (
                   <button
                     type="button"

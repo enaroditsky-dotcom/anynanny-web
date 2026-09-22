@@ -69,6 +69,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ methods: saved.methods });
   }
 
+  const preferredOnly =
+    (kind === "bit" || kind === "paybox") &&
+    body.preferred === true &&
+    !Object.prototype.hasOwnProperty.call(body, "bitPhone") &&
+    !Object.prototype.hasOwnProperty.call(body, "payboxPhone") &&
+    !Object.prototype.hasOwnProperty.call(body, "payboxLink");
+  if (preferredOnly) {
+    const saved = await saveSitterPayoutMethods(supabase, user.id, { preferred: kind });
+    if (!saved.ok) {
+      return NextResponse.json(
+        { error: saved.error, missingSchema: saved.missingSchema === true },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ methods: saved.methods });
+  }
+
   const setPreferred = body.preferred !== false;
 
   if (kind === "bit") {

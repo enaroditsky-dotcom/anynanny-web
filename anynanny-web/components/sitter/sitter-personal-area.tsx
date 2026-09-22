@@ -34,7 +34,6 @@ import {
   personalTextareaClassName,
   yesNoLabel
 } from "@/components/personal-area/personal-area-ui";
-import { SitterManualReceivingDestinationsSection } from "@/components/sitter/SitterManualReceivingDestinationsSection";
 import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import { isIsraelCity, normalizeWorkingCities } from "@/lib/geo/israel-cities";
@@ -463,7 +462,9 @@ export function SitterPersonalArea({ userId }: Props) {
     (key: EditKey) => {
       setModalError(null);
       setSuccess(null);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      const scroller = document.getElementById("app-shell-scroll");
+      if (scroller) scroller.scrollTo({ top: 0, behavior: "smooth" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
       setDraft({
         ...form,
         working_cities: [...form.working_cities],
@@ -839,7 +840,7 @@ export function SitterPersonalArea({ userId }: Props) {
         summary={visibilityLabel}
         action={<PersonalChangeLink onClick={() => openEdit("visibility")} />}
       >
-        <p className="text-[16px] font-medium text-[#001F3F]">{visibilityLabel}</p>
+        <p className="text-sm font-medium text-[#001F3F]">{visibilityLabel}</p>
       </PersonalAreaSection>
 
       <PersonalAreaSection title="רקע מקצועי" accent="emerald" summary={professionalSummary}>
@@ -896,7 +897,7 @@ export function SitterPersonalArea({ userId }: Props) {
         summary={skillsSummary}
         action={<PersonalChangeLink onClick={() => openEdit("skills")} />}
       >
-        <p className={`text-[16px] ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
+        <p className={`text-sm ${skillsLabel ? "font-medium text-[#001F3F]" : "italic text-slate-400"}`}>
           {skillsLabel || "לא הוגדרו כישורים נוספים"}
         </p>
       </PersonalAreaSection>
@@ -909,7 +910,7 @@ export function SitterPersonalArea({ userId }: Props) {
         action={<PersonalChangeLink onClick={() => openEdit("bio")} />}
       >
         <p
-          className={`whitespace-pre-wrap text-[16px] leading-relaxed ${
+          className={`whitespace-pre-wrap text-sm leading-relaxed ${
             form.bio.trim() ? "font-medium text-[#001F3F]" : "italic text-slate-400"
           }`}
         >
@@ -924,7 +925,7 @@ export function SitterPersonalArea({ userId }: Props) {
         action={<PersonalChangeLink onClick={() => openEdit("working_cities")} />}
       >
         <p
-          className={`text-[16px] leading-relaxed ${
+          className={`text-sm leading-relaxed ${
             form.working_cities.length ? "font-medium text-[#001F3F]" : "italic text-slate-400"
           }`}
         >
@@ -997,16 +998,12 @@ export function SitterPersonalArea({ userId }: Props) {
         summary={legalSummary}
         action={<PersonalChangeLink onClick={() => openEdit("legal")} />}
       >
-        <p className="text-[16px] font-medium text-[#001F3F]">
+        <p className="text-sm font-medium text-[#001F3F]">
           {form.legal_no_criminal_declaration
             ? "הצהרת היעדר עבר פלילי רלוונטי אושרה"
             : "הצהרה טרם אושרה"}
         </p>
       </PersonalAreaSection>
-
-      <div data-tour="sitter-payment-methods">
-        <SitterManualReceivingDestinationsSection sitterId={userId} />
-      </div>
 
       <PersonalEditModal
         open={editKey != null}
