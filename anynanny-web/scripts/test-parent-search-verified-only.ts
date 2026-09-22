@@ -186,10 +186,10 @@ assert.match(badge, /export function IdentityShieldMark/);
 assert.match(badge, /GOLD_MARK_SURFACE/);
 assert.match(badge, /ShieldCheck/);
 assert.match(badge, /xs:\s*\{/);
-assert.match(badge, /root: "gap-1\.5 rounded-2xl px-3 py-2"/);
-assert.match(badge, /mark: "h-9 w-9"/);
+assert.match(badge, /root: "gap-1 rounded-2xl px-2 py-1\.5"/);
+assert.match(badge, /mark: "h-7 w-7"/);
 assert.match(badge, /icon: "h-5 w-5"/);
-assert.match(badge, /label: "flex flex-col text-sm font-bold leading-tight"/);
+assert.match(badge, /label: "flex flex-col text-\[11px\] font-bold leading-tight"/);
 
 const laterSearchCreates = readdirSync(resolve(root, "supabase/migrations"))
   .filter((name) => name.endsWith(".sql") && name > "20260823160000_ugc_safety_moderation.sql")
