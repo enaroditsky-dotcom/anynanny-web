@@ -23,6 +23,7 @@ export const CANONICAL_NOTIFICATION_KINDS = [
   "manual_payment_denied",
   "manual_payment_resolved_reported",
   "admin_broadcast",
+  "favorite_sitter_added",
 ] as const;
 
 export type CanonicalNotificationKind =
@@ -67,6 +68,8 @@ export type CanonicalNotificationPayload = {
   amount?: string | null;
   gateway?: string | null;
   payment_method?: string | null;
+  favorite_id?: string | null;
+  family_last_name?: string | null;
   cta_route?: string | null;
   cta_label?: string | null;
   is_test?: boolean | null;
@@ -87,6 +90,7 @@ export function notificationDedupeKey(
     sessionId?: string | null;
     hypApprovalId?: string | null;
     resolvedAt?: string | null;
+    favoriteId?: string | null;
   }
 ): string | null {
   if (kind === "chat_message") return ids.messageId?.trim() || null;
@@ -108,6 +112,8 @@ export function notificationDedupeKey(
     const stamp = ids.resolvedAt?.trim();
     return stamp ? `${bookingId}:${stamp}` : bookingId;
   }
+
+  if (kind === "favorite_sitter_added") return ids.favoriteId?.trim() || null;
 
   return ids.bookingId?.trim() || null;
 }
@@ -172,6 +178,8 @@ export function notificationHrefForKind(
   if (kind === "booking_withdrawn_by_parent") {
     return "/sitter/dashboard";
   }
+
+  if (kind === "favorite_sitter_added") return "/sitter/dashboard";
 
   if (kind === "shift_confirmed") {
     return calendarBookingHref("/sitter/shifts", bookingId);

@@ -12,6 +12,8 @@ import {
 } from "@/lib/sitter/sitter-profile";
 import { publicSitterDisplayName, formatPublicSitterAgeLabel } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
+import { ParentFavoriteSitterButton } from "@/components/parent/parent-favorite-sitter-button";
+import { PARENT_SITTER_CALENDAR_BUTTON_LABEL } from "@/lib/favorites/parent-favorite-rules";
 import { UserSafetyActions } from "@/components/safety/user-safety-actions";
 import {
   VERIFIED_IDENTITY_LABEL,
@@ -210,6 +212,9 @@ export default function ParentSitterProfileView() {
                 <VerifiedUserBadge size="xl" label={VERIFIED_IDENTITY_LABEL} />
               </div>
             ) : null}
+            <div className="mt-3 flex justify-center">
+              <ParentFavoriteSitterButton sitterId={sitterId} />
+            </div>
             <div className="mt-2">
               {hasPublishedRating ? (
                 <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">
@@ -320,6 +325,13 @@ export default function ParentSitterProfileView() {
 
           <div className="border-t border-slate-100 pt-3 space-y-2">
             <UserSafetyActions targetUserId={sitterId} targetName={displayName} />
+
+            <Link
+              href={`/parent/sitter/${encodeURIComponent(sitterId)}/calendar`}
+              className="flex min-h-11 w-full items-center justify-center rounded-2xl border border-[#001F3F]/15 bg-[#FDFBF6] px-3 py-2.5 text-sm font-bold text-[#001F3F] transition hover:bg-white"
+            >
+              {PARENT_SITTER_CALENDAR_BUTTON_LABEL}
+            </Link>
 
             <button
               type="button"

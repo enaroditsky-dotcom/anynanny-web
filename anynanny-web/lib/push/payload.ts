@@ -1,4 +1,5 @@
 import { parentReportedPaidByMethodCopy } from "@/lib/billing/manual-payment-ui";
+import { favoriteSitterNotificationBody } from "@/lib/favorites/parent-favorite-rules";
 import {
   isCanonicalNotificationKind,
   notificationHrefForKind,
@@ -47,6 +48,9 @@ export function privacySafeBodyForKind(
   if (kind === "manual_payment_reported") {
     const reported = parentReportedPaidByMethodCopy(payload?.payment_method);
     if (reported) return reported;
+  }
+  if (kind === "favorite_sitter_added") {
+    return favoriteSitterNotificationBody(payload?.family_last_name);
   }
   return KIND_BODY[kind] ?? "יש לכם עדכון חדש ב-AnyNanny";
 }

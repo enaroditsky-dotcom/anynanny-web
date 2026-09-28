@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, type ChangeEvent } from "react";
 import {
   PARENT_SEARCH_HOUR_OPTIONS,
   PARENT_SEARCH_MAX_HOURLY_SLIDER,
@@ -17,7 +18,6 @@ import {
   type ParentSearchMandatoryField
 } from "@/lib/sitter/parent-search-validation";
 import { CityAutocomplete } from "@/components/geo/city-autocomplete";
-import { IdentityShieldMark } from "@/components/identity/verified-user-badge";
 import {
   SEARCH_LIMIT_CLEAR_BUTTON,
   SEARCH_LIMIT_SLIDER_CLASS,
@@ -27,6 +27,7 @@ import {
   SearchLimitToggleCard,
   searchLimitSliderProgress
 } from "@/components/parent/search-limit-toggle-card";
+import { PARENT_SEARCH_FAVORITES_ONLY_LABEL as FAVORITES_ONLY_LABEL } from "@/lib/favorites/parent-favorite-rules";
 import { Search, Calendar, Award, Star, Coins } from "lucide-react";
 import { RequiredFieldMark } from "@/components/ui/required-field-mark";
 
@@ -57,6 +58,101 @@ const TIME_SELECT_INVALID =
 const FIELD_ICON =
   "pointer-events-none absolute right-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400";
 const PAIR_COL = "flex min-w-0 flex-col";
+
+const VERIFIED_QUICK_FILTER_LABEL = "הצג רק בייביסיטריות עם זהות מאומתת";
+const FAVORITES_QUICK_FILTER_HELP =
+  "יוצגו רק בייביסיטריות שהוספתם לרשימת המועדפות שלכם.";
+
+function SearchQuickFilterHelp({
+  content,
+  describedById
+}: {
+  content: string;
+  describedById?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <span
+      className="relative ms-2 inline-flex translate-y-[-1px] align-middle"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        aria-label="מידע נוסף"
+        aria-expanded={open}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+        className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-slate-300/80 bg-white font-serif text-[9px] font-normal italic leading-none text-slate-400 transition-colors hover:border-slate-400 hover:text-slate-500"
+      >
+        <span className="absolute -inset-2" aria-hidden />?
+      </button>
+      {describedById ? (
+        <span id={describedById} className="sr-only">
+          {content}
+        </span>
+      ) : null}
+      {open ? (
+        <span
+          role="tooltip"
+          dir="rtl"
+          className="absolute bottom-full left-0 z-50 mb-2 w-64 max-w-[70vw] rounded-lg border border-stone-700 bg-stone-900 p-3 text-right font-sans text-xs font-normal not-italic leading-relaxed text-stone-100 shadow-xl"
+        >
+          {content}
+          <span className="absolute top-full left-3 border-4 border-transparent border-t-stone-900" />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function SearchQuickFilterRow({
+  checked,
+  label,
+  lastWord,
+  help,
+  onChange,
+  headingId,
+  hintId
+}: {
+  checked: boolean;
+  label: string;
+  lastWord: string;
+  help: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  headingId?: string;
+  hintId?: string;
+}) {
+  const suffix = ` ${lastWord}`;
+  const labelBefore = label.endsWith(suffix) ? label.slice(0, -suffix.length) : label;
+  return (
+    <label className="flex min-h-11 cursor-pointer items-center gap-2.5 px-3 py-2 text-[15px] font-semibold leading-snug text-[#001F3F]">
+      <input
+        type="checkbox"
+        className="h-[18px] w-[18px] shrink-0 rounded border-slate-300 accent-[#001F3F]"
+        checked={checked}
+        aria-labelledby={headingId}
+        aria-describedby={hintId}
+        onChange={onChange}
+      />
+      <span id={headingId} className="min-w-0">
+        {labelBefore}{" "}
+        <span className="whitespace-nowrap">
+          {lastWord}
+          <SearchQuickFilterHelp content={help} describedById={hintId} />
+        </span>
+      </span>
+    </label>
+  );
+}
 
 function FieldLabel({
   children,
@@ -176,6 +272,29 @@ export function ParentSearchFiltersBar({
 
   return (
     <section data-tour="parent-search-filters" className="flex flex-col gap-4" dir="rtl">
+      <div className="overflow-visible rounded-2xl border border-slate-200/60 bg-white shadow-soft">
+        <div data-tour="verified-only">
+          <SearchQuickFilterRow
+            headingId="verified-only-heading"
+            hintId="verified-only-hint"
+            checked={Boolean(filters.verifiedOnly)}
+            label={VERIFIED_QUICK_FILTER_LABEL}
+            lastWord="מאומתת"
+            help={PARENT_SEARCH_VERIFIED_ONLY_HINT}
+            onChange={(e) => patch({ verifiedOnly: e.target.checked })}
+          />
+        </div>
+        <div className="border-t border-slate-100">
+          <SearchQuickFilterRow
+            checked={Boolean(filters.favoritesOnly)}
+            label={FAVORITES_ONLY_LABEL}
+            lastWord="מועדפות"
+            help={FAVORITES_QUICK_FILTER_HELP}
+            onChange={(e) => patch({ favoritesOnly: e.target.checked })}
+          />
+        </div>
+      </div>
+
       <div className={`${SECTION_SURFACE} grid grid-cols-2 items-start gap-3`}>
         <div className={PAIR_COL}>
           <FieldLabel>מספר ID</FieldLabel>
@@ -348,39 +467,6 @@ export function ParentSearchFiltersBar({
           </div>
         </div>
       </SearchLimitToggleCard>
-
-      <div
-        data-tour="verified-only"
-        className={`${SECTION_SURFACE} space-y-3 ${
-          filters.verifiedOnly
-            ? "border-[#C5A059]/70 ring-1 ring-[#C5A059]/30"
-            : ""
-        }`}
-      >
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
-          <IdentityShieldMark size="md" />
-          <span id="verified-only-heading" className={SECTION_HEADING}>
-            {PARENT_SEARCH_VERIFIED_ONLY_LABEL}
-          </span>
-        </div>
-        <p
-          id="verified-only-hint"
-          className="text-right text-[15px] font-medium leading-relaxed text-slate-500"
-        >
-          {PARENT_SEARCH_VERIFIED_ONLY_HINT}
-        </p>
-        <label className="inline-flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-medium text-[#001F3F]">
-          <input
-            type="checkbox"
-            className="h-[18px] w-[18px] rounded border-slate-300 accent-[#001F3F]"
-            checked={Boolean(filters.verifiedOnly)}
-            aria-labelledby="verified-only-heading"
-            aria-describedby="verified-only-hint"
-            onChange={(e) => patch({ verifiedOnly: e.target.checked })}
-          />
-          {PARENT_SEARCH_VERIFIED_ONLY_LABEL}
-        </label>
-      </div>
 
     </section>
   );

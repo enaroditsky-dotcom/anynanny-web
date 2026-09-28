@@ -10,6 +10,8 @@ import {
 } from "@/components/parent/broadcast-decline-notice";
 import { ParentSessionTimerCircle } from "@/components/session/parent-double-shake-idle-circle";
 import { ParentSessionRatingPanel } from "@/components/session/parent-session-rating-panel";
+import { AddFavoriteSitterPrompt } from "@/components/parent/add-favorite-sitter-prompt";
+import { resolvePostSettlementFavoritePrompt } from "@/lib/favorites/parent-favorites";
 import { DoubleShakeCircleButton } from "@/components/session/double-shake-circle-button";
 import { ManualPaymentPanel } from "@/components/billing/ManualPaymentPanel";
 import { useSession } from "@/context/SessionContext";
@@ -569,6 +571,10 @@ export function ParentDashboardClient({
   const [confirmPending, startConfirmTransition] = useTransition();
   const [confirmEndPending, startConfirmEndTransition] = useTransition();
   const [settlementStep, setSettlementStep] = useState<SettlementStep | null>(null);
+  const [favoritePrompt, setFavoritePrompt] = useState<{
+    sitterId: string;
+    sitterName: string;
+  } | null>(null);
   const [manualPaymentMethod, setManualPaymentMethod] = useState<ManualPaymentMethod | null>(
     null
   );
@@ -1598,6 +1604,20 @@ export function ParentDashboardClient({
     );
   }, [activeSession?.final_amount_nis, settlementElapsedSeconds, currentHourlyRate]);
 
+  const offerFavoriteAfterCompletedSettlement = useCallback((sitterId: string) => {
+    const id = sitterId.trim();
+    if (!id) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    void resolvePostSettlementFavoritePrompt(supabase, id)
+      .then((prompt) => {
+        if (prompt) setFavoritePrompt(prompt);
+      })
+      .catch(() => {
+        // The prompt must not change payment, rating, or navigation.
+      });
+  }, []);
+
   const handleReportManualPayment = useCallback(async () => {
     if (manualPaymentInFlightRef.current || manualPaymentBusy) return;
     if (!activeBooking?.id || !manualPaymentMethod) {
@@ -1654,6 +1674,10 @@ export function ParentDashboardClient({
         };
       }
       lockSettlement("waiting_sitter");
+      const ratedSitterId = String(
+        activeBookingRef.current?.sitter_id ?? activeBooking?.sitter_id ?? ""
+      ).trim();
+      if (ratedSitterId) offerFavoriteAfterCompletedSettlement(ratedSitterId);
     } catch (e) {
       console.error("[handleReportManualPayment]", e);
       setShiftError("שגיאה בדיווח התשלום. נסו שוב.");
@@ -1663,10 +1687,12 @@ export function ParentDashboardClient({
     }
   }, [
     activeBooking?.id,
+    activeBooking?.sitter_id,
     lockSettlement,
     manualPaymentBusy,
     manualPaymentDestinations,
-    manualPaymentMethod
+    manualPaymentMethod,
+    offerFavoriteAfterCompletedSettlement
   ]);
 
   const handleResolveManualPaymentDispute = useCallback(async () => {
@@ -1902,8 +1928,10 @@ export function ParentDashboardClient({
       }
 
       clearHypPendingCheckout();
+      const ratedSitterId = String(activeBookingRef.current?.sitter_id ?? "").trim();
       if (sessionId) clearParentSessionRatedLocally(String(sessionId));
       clearToIdleDashboard();
+      if (ratedSitterId) offerFavoriteAfterCompletedSettlement(ratedSitterId);
       if (parentId) await refreshLiveShiftState(parentId);
       cleanUrl();
     })();
@@ -1911,7 +1939,7 @@ export function ParentDashboardClient({
     return () => {
       cancelled = true;
     };
-  }, [parentId, refreshLiveShiftState, lockSettlement, clearToIdleDashboard]);
+  }, [parentId, refreshLiveShiftState, lockSettlement, clearToIdleDashboard, offerFavoriteAfterCompletedSettlement]);
 
   const awaitingEndApproval = isAwaitingEndApproval(activeBooking, activeSession);
   const inSettlement =
@@ -2678,6 +2706,13 @@ export function ParentDashboardClient({
         parentId={parentId}
         onWithdrawn={handlePendingWithdrawn}
       />
+      {favoritePrompt ? (
+        <AddFavoriteSitterPrompt
+          sitterId={favoritePrompt.sitterId}
+          sitterName={favoritePrompt.sitterName}
+          onClose={() => setFavoritePrompt(null)}
+        />
+      ) : null}
     </main>
   );
 }
