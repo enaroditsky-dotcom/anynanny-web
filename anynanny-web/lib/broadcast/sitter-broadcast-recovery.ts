@@ -24,6 +24,9 @@ export type SitterBroadcastRow = {
   service_type?: string | null;
   status?: string | null;
   created_at?: string | null;
+  location_label?: string | null;
+  timing_mode?: string | null;
+  requested_time?: string | null;
 };
 
 export type RecoverableSitterBroadcast = {
@@ -31,6 +34,9 @@ export type RecoverableSitterBroadcast = {
   city: string;
   service_type: string;
   created_at?: string;
+  location_label: string | null;
+  timing_mode: string | null;
+  requested_time: string | null;
 };
 
 export type SitterBroadcastRecoveryResult = {
@@ -64,6 +70,46 @@ export function broadcastCityMatchesSitter(
   return sitterCities.some((candidate) => candidate.trim() === needle);
 }
 
+function optionalBroadcastText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+/**
+ * Keep the open popup, and fill location/timing if a later payload has them.
+ * A null field on the incoming row does not erase a value already shown.
+ */
+export function mergeOpenSitterBroadcast(
+  previous: RecoverableSitterBroadcast | null,
+  next: RecoverableSitterBroadcast
+): RecoverableSitterBroadcast {
+  if (!previous || previous.id !== next.id) return next;
+
+  const merged: RecoverableSitterBroadcast = {
+    ...previous,
+    city: next.city || previous.city,
+    service_type: next.service_type || previous.service_type,
+    created_at: next.created_at ?? previous.created_at,
+    location_label: next.location_label ?? previous.location_label,
+    timing_mode: next.timing_mode ?? previous.timing_mode,
+    requested_time: next.requested_time ?? previous.requested_time
+  };
+
+  if (
+    merged.city === previous.city &&
+    merged.service_type === previous.service_type &&
+    merged.created_at === previous.created_at &&
+    merged.location_label === previous.location_label &&
+    merged.timing_mode === previous.timing_mode &&
+    merged.requested_time === previous.requested_time
+  ) {
+    return previous;
+  }
+
+  return merged;
+}
+
 export function toRecoverableSitterBroadcast(
   row: SitterBroadcastRow
 ): RecoverableSitterBroadcast | null {
@@ -75,7 +121,10 @@ export function toRecoverableSitterBroadcast(
     id,
     city: String(row.city ?? "").trim(),
     service_type: String(row.service_type ?? ""),
-    created_at: row.created_at ? String(row.created_at) : undefined
+    created_at: row.created_at ? String(row.created_at) : undefined,
+    location_label: optionalBroadcastText(row.location_label),
+    timing_mode: optionalBroadcastText(row.timing_mode),
+    requested_time: optionalBroadcastText(row.requested_time)
   };
 }
 
