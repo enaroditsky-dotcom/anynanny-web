@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBooking } from "@/lib/bookings/create-booking";
 import { BroadcastPanelControls } from "@/components/parent/broadcast-panel-controls";
+import { BroadcastResponderArrivalLine } from "@/components/parent/broadcast-responder-arrival-line";
 import {
   BroadcastDeclineNoticeUnit,
   type BroadcastDeclineNoticeState,
@@ -13,6 +14,14 @@ import {
 import { parentSitterProfilePathFromBroadcast } from "@/components/sitter/public-sitter-search-card";
 import { VerifiedUserBadge, VERIFIED_IDENTITY_LABEL } from "@/components/identity/verified-user-badge";
 import { rememberActiveBroadcast } from "@/lib/broadcast/broadcast-active-snapshot";
+import {
+  PARENT_BROADCAST_ALERT_SELECT,
+  PARENT_BROADCAST_ALERT_SELECT_LEGACY,
+  PARENT_BROADCAST_RESPONSE_SELECT,
+  PARENT_BROADCAST_RESPONSE_SELECT_LEGACY,
+  readNowArrivalRange,
+  type NowArrivalRange
+} from "@/lib/broadcast/now-request-details";
 import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
 import { requestBroadcastStatusChange } from "@/lib/broadcast/broadcast-status-change";
 import {
@@ -29,6 +38,7 @@ import {
   publicSitterDisplayName
 } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import {
   removeRealtimeChannel,
   subscribePostgresChanges
@@ -52,6 +62,7 @@ interface RespondingSitter {
   hourlyRate: number | null;
   avatarUrl: string | null;
   identityVerified: boolean;
+  arrivalRange: NowArrivalRange | null;
 }
 
 type ResponderIdentity = {
@@ -142,6 +153,7 @@ function BroadcastRadarContent() {
   const [declineNotice, setDeclineNotice] =
     useState<BroadcastDeclineNoticeState | null>(null);
   const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [requestTimingMode, setRequestTimingMode] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [parentId, setParentId] = useState<string | null>(null);
   const handledRejectionBookingIdsRef = useRef<Set<string>>(new Set());
@@ -254,6 +266,7 @@ function BroadcastRadarContent() {
     declinedSitterIdsRef.current = [];
     setDeclinedSitterIds([]);
     setResponders([]);
+    setRequestTimingMode(null);
     handledRejectionBookingIdsRef.current = new Set();
     rejectionMinimizeLockRef.current = false;
     responderIdentityRef.current = new Map();
@@ -333,11 +346,21 @@ function BroadcastRadarContent() {
         return;
       }
 
-      const { data, error } = await supabase
+      let alertQuery = await supabase
         .from("broadcast_alerts")
-        .select("id, parent_id, city, service_type, status, created_at")
+        .select(PARENT_BROADCAST_ALERT_SELECT)
         .eq("id", alertId)
         .maybeSingle();
+
+      if (alertQuery.error && isPostgrestSchemaDriftError(alertQuery.error.message)) {
+        alertQuery = await supabase
+          .from("broadcast_alerts")
+          .select(PARENT_BROADCAST_ALERT_SELECT_LEGACY)
+          .eq("id", alertId)
+          .maybeSingle();
+      }
+
+      const { data, error } = alertQuery;
 
       if (error) {
         console.warn("[broadcast radar] status:", error.message);
@@ -352,6 +375,11 @@ function BroadcastRadarContent() {
       if (typeof data.created_at === "string") {
         setStartedAt(data.created_at);
       }
+      const storedTiming =
+        data && typeof data === "object" && "timing_mode" in data
+          ? (data as { timing_mode?: unknown }).timing_mode
+          : null;
+      setRequestTimingMode(typeof storedTiming === "string" ? storedTiming : null);
       applyStatus(data.status);
 
       if (data.status === "cancelled") {
@@ -439,12 +467,26 @@ function BroadcastRadarContent() {
   /*
    * Add a sitter that responded to the Broadcast.
    */
-  const addSitterToResponders = async (sitterId: string) => {
+  const addSitterToResponders = async (
+    sitterId: string,
+    arrivalRange: NowArrivalRange | null = null
+  ) => {
     if (!sitterId || !supabase) {
       return;
     }
 
     if (declinedSitterIdsRef.current.includes(sitterId)) {
+      return;
+    }
+
+    if (respondersRef.current.some((sitter) => sitter.id === sitterId)) {
+      setResponders((previous) =>
+        previous.map((sitter) =>
+          sitter.id === sitterId && sitter.arrivalRange !== arrivalRange
+            ? { ...sitter, arrivalRange }
+            : sitter
+        )
+      );
       return;
     }
 
@@ -495,7 +537,11 @@ function BroadcastRadarContent() {
           return previous.filter((sitter) => sitter.id !== sitterId);
         }
         if (previous.some((responder) => responder.id === sitterId)) {
-          return previous;
+          return previous.map((sitter) =>
+            sitter.id === sitterId && sitter.arrivalRange !== arrivalRange
+              ? { ...sitter, arrivalRange }
+              : sitter
+          );
         }
 
         return [
@@ -507,7 +553,8 @@ function BroadcastRadarContent() {
             experience,
             hourlyRate,
             avatarUrl,
-            identityVerified: sitterProfile.identity_verified === true
+            identityVerified: sitterProfile.identity_verified === true,
+            arrivalRange
           }
         ];
       });
@@ -719,11 +766,26 @@ function BroadcastRadarContent() {
     let disposed = false;
 
     const fetchResponses = async () => {
-      const { data: existingResponses, error: responsesError } =
-        await supabase
-          .from("broadcast_responses")
-          .select("sitter_id")
-          .eq("alert_id", alertId);
+      const responseQuery = await supabase
+        .from("broadcast_responses")
+        .select(PARENT_BROADCAST_RESPONSE_SELECT)
+        .eq("alert_id", alertId);
+
+      const responseRows = (
+        responseQuery.error &&
+        isPostgrestSchemaDriftError(responseQuery.error.message)
+          ? await supabase
+              .from("broadcast_responses")
+              .select(PARENT_BROADCAST_RESPONSE_SELECT_LEGACY)
+              .eq("alert_id", alertId)
+          : responseQuery
+      ) as {
+        data: { sitter_id?: string | null; arrival_range?: unknown }[] | null;
+        error: { message: string } | null;
+      };
+
+      const existingResponses = responseRows.data;
+      const responsesError = responseRows.error;
 
       if (disposed) {
         return;
@@ -760,7 +822,7 @@ function BroadcastRadarContent() {
           continue;
         }
 
-        await addSitterToResponders(sitterId);
+        await addSitterToResponders(sitterId, readNowArrivalRange(response));
       }
     };
 
@@ -780,6 +842,7 @@ function BroadcastRadarContent() {
         handler: async (payload) => {
           const next = payload.new as {
             sitter_id?: string;
+            arrival_range?: unknown;
           };
           const sitterId = next?.sitter_id
             ? String(next.sitter_id).trim()
@@ -789,7 +852,7 @@ function BroadcastRadarContent() {
             return;
           }
 
-          await addSitterToResponders(sitterId);
+          await addSitterToResponders(sitterId, readNowArrivalRange(next));
         }
       }
     );
@@ -1154,15 +1217,15 @@ function BroadcastRadarContent() {
                   return (
                     <div
                       key={sitter.id}
-                      className="animate-fadeIn flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 shadow-soft"
+                      className="animate-fadeIn flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-slate-100 bg-white p-4 shadow-soft"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
                         <BroadcastSitterAvatar
                           name={sitter.name}
                           avatarUrl={sitter.avatarUrl}
                         />
 
-                        <div className="space-y-0.5 text-right">
+                        <div className="min-w-0 space-y-0.5 text-right">
                           <h3 className="flex items-center gap-1 text-sm font-bold text-slate-800">
                             {sitter.name}
 
@@ -1195,6 +1258,11 @@ function BroadcastRadarContent() {
                               : "תעריף לא זמין"}
                           </p>
 
+                          <BroadcastResponderArrivalLine
+                            timingMode={requestTimingMode}
+                            arrivalRange={sitter.arrivalRange}
+                          />
+
                           <Link
                             href={
                               alertId
@@ -1223,7 +1291,7 @@ function BroadcastRadarContent() {
                         onClick={() =>
                           void handleSelectSitter(sitter)
                         }
-                        className="rounded-xl bg-navy-header px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#001F3F]/90 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="shrink-0 rounded-xl bg-navy-header px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#001F3F]/90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {selecting
                           ? "שולח..."

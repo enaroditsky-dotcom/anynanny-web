@@ -15,8 +15,21 @@ import {
   isActiveSitterBroadcastStatus,
   isSitterBroadcastCreatedAtRelevant,
   isTerminalSitterBroadcastStatus,
-  recoverActiveSitterBroadcast
+  mergeOpenSitterBroadcast,
+  recoverActiveSitterBroadcast,
+  type RecoverableSitterBroadcast,
+  type SitterBroadcastRow
 } from "@/lib/broadcast/sitter-broadcast-recovery";
+import {
+  buildNowBroadcastResponseInsert,
+  legacyNowBroadcastResponseInsert,
+  parseNowRequestDetails,
+  SITTER_BROADCAST_ALERT_SELECT,
+  SITTER_BROADCAST_ALERT_SELECT_LEGACY,
+  type NowArrivalRange
+} from "@/lib/broadcast/now-request-details";
+import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
+import { NowBroadcastAlertBody } from "@/components/sitter/now-broadcast-alert-body";
 import { Zap } from "lucide-react";
 
 interface BroadcastAlertModalProps {
@@ -25,13 +38,6 @@ interface BroadcastAlertModalProps {
   /** Hide overlay without unmounting (preserves dismissed ids + channel). */
   paused?: boolean;
 }
-
-type ActiveAlert = {
-  id: string;
-  city: string;
-  service_type: string;
-  created_at?: string;
-};
 
 const DISMISSED_STORAGE_KEY = "anynanny_broadcast_dismissed_v1";
 
@@ -158,7 +164,16 @@ export function SitterBroadcastAlertModal({
   paused = false
 }: BroadcastAlertModalProps) {
   const [activeAlert, setActiveAlert] =
-    useState<ActiveAlert | null>(null);
+    useState<RecoverableSitterBroadcast | null>(null);
+
+  const [arrivalOpen, setArrivalOpen] =
+    useState(false);
+
+  const [selectedArrival, setSelectedArrival] =
+    useState<NowArrivalRange | null>(null);
+
+  const [arrivalAlertId, setArrivalAlertId] =
+    useState<string | null>(null);
 
   const [sitterCities, setSitterCities] =
     useState<string[]>([]);
@@ -240,7 +255,7 @@ export function SitterBroadcastAlertModal({
   };
 
   const tryOpenAlert = (
-    alert: ActiveAlert,
+    alert: RecoverableSitterBroadcast,
     {
       playSound
     }: {
@@ -272,13 +287,9 @@ export function SitterBroadcastAlertModal({
       return;
     }
 
-    setActiveAlert((previous) => {
-      if (previous?.id === alert.id) {
-        return previous;
-      }
-
-      return alert;
-    });
+    setActiveAlert((previous) =>
+      mergeOpenSitterBroadcast(previous, alert)
+    );
 
     if (playSound) {
       playAlertSound();
@@ -386,33 +397,53 @@ export function SitterBroadcastAlertModal({
           Date.now() - ACTIVE_SITTER_BROADCAST_RELEVANCE_MS
         ).toISOString();
 
-        const {
+        const loadAlerts = (
+          columns: string
+        ) =>
+          supabase
+            .from("broadcast_alerts")
+            .select(columns)
+            .in(
+              "city",
+              stableCities
+            )
+            .eq(
+              "status",
+              "active"
+            )
+            .gte(
+              "created_at",
+              since
+            )
+            .order(
+              "created_at",
+              {
+                ascending: false
+              }
+            )
+            .limit(5);
+
+        let {
           data: alertsData,
           error
-        } = await supabase
-          .from("broadcast_alerts")
-          .select(
-            "id, city, service_type, status, created_at"
+        } = await loadAlerts(
+          SITTER_BROADCAST_ALERT_SELECT
+        );
+
+        if (
+          error &&
+          isPostgrestSchemaDriftError(
+            error.message
           )
-          .in(
-            "city",
-            stableCities
-          )
-          .eq(
-            "status",
-            "active"
-          )
-          .gte(
-            "created_at",
-            since
-          )
-          .order(
-            "created_at",
-            {
-              ascending: false
-            }
-          )
-          .limit(5);
+        ) {
+          const fallback =
+            await loadAlerts(
+              SITTER_BROADCAST_ALERT_SELECT_LEGACY
+            );
+
+          alertsData = fallback.data;
+          error = fallback.error;
+        }
 
         if (
           disposed
@@ -435,8 +466,8 @@ export function SitterBroadcastAlertModal({
           recoverActiveSitterBroadcast(
             {
               rows:
-                alertsData ??
-                [],
+                (alertsData ??
+                  []) as SitterBroadcastRow[],
               sitterCities:
                 stableCities,
               dismissedIds:
@@ -514,6 +545,9 @@ export function SitterBroadcastAlertModal({
                         city?: string;
                         service_type?: string;
                         created_at?: string;
+                        location_label?: string | null;
+                        timing_mode?: string | null;
+                        requested_time?: string | null;
                       }
                     | null;
 
@@ -536,7 +570,16 @@ export function SitterBroadcastAlertModal({
                       next.service_type ??
                       "",
                     created_at:
-                      next.created_at
+                      next.created_at,
+                    location_label:
+                      next.location_label ??
+                      null,
+                    timing_mode:
+                      next.timing_mode ??
+                      null,
+                    requested_time:
+                      next.requested_time ??
+                      null
                   },
                   {
                     playSound: true
@@ -622,7 +665,9 @@ export function SitterBroadcastAlertModal({
   }, [paused]);
 
   const handleAccept =
-    async () => {
+    async (
+      arrivalRange: NowArrivalRange | null = null
+    ) => {
       if (!activeAlert) {
         return;
       }
@@ -681,20 +726,45 @@ export function SitterBroadcastAlertModal({
           }
         }
 
-        const {
+        const responseRow =
+          buildNowBroadcastResponseInsert({
+            alertId,
+            sitterId: user.id,
+            arrivalRange
+          });
+
+        let {
           error
         } = await supabase
           .from(
             "broadcast_responses"
           )
           .insert([
-            {
-              alert_id:
-                alertId,
-              sitter_id:
-                user.id
-            }
+            responseRow
           ]);
+
+        if (
+          error &&
+          arrivalRange &&
+          isPostgrestSchemaDriftError(
+            error.message
+          )
+        ) {
+          const fallback =
+            await supabase
+              .from(
+                "broadcast_responses"
+              )
+              .insert([
+                legacyNowBroadcastResponseInsert({
+                  alertId,
+                  sitterId:
+                    user.id
+                })
+              ]);
+
+          error = fallback.error;
+        }
 
         /*
          * 23505 = duplicate response.
@@ -736,11 +806,26 @@ export function SitterBroadcastAlertModal({
     };
 
   if (
+    activeAlert &&
+    arrivalAlertId !== activeAlert.id
+  ) {
+    setArrivalAlertId(activeAlert.id);
+    setArrivalOpen(false);
+    setSelectedArrival(null);
+  }
+
+  if (
     paused ||
     !activeAlert
   ) {
     return null;
   }
+
+  const arrivalMatches =
+    arrivalAlertId === activeAlert.id;
+
+  const requestDetails =
+    parseNowRequestDetails(activeAlert);
 
   const serviceName =
     activeAlert.service_type ===
@@ -760,9 +845,9 @@ export function SitterBroadcastAlertModal({
       dir="rtl"
       role="dialog"
       aria-modal="true"
-      aria-label="קריאת ברק"
+      aria-label="בייביסיטר זמינה בסביבה"
     >
-      <div className="w-full max-w-sm rounded-3xl border border-red-100 bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-x-hidden overflow-y-auto rounded-3xl border border-red-100 bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         <div className="flex flex-col items-center space-y-4 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500 text-white shadow-md animate-pulse">
             <Zap className="h-6 w-6 fill-white" />
@@ -770,7 +855,7 @@ export function SitterBroadcastAlertModal({
 
           <div className="space-y-1">
             <h3 className="text-base font-black text-slate-800">
-              ⚡ קריאת ברק מיידית בסביבה!
+              ⚡ בייביסיטר זמינה בסביבה
             </h3>
 
             <p className="text-xs font-semibold text-red-600">
@@ -787,31 +872,42 @@ export function SitterBroadcastAlertModal({
             </p>
           </div>
 
-          <div className="flex w-full flex-col gap-2 pt-2">
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() =>
-                void handleAccept()
-              }
-              className="w-full rounded-2xl bg-[#001F3F] py-3 text-xs font-bold text-white shadow-md transition hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading
-                ? "שולח מענה..."
-                : "אני פנויה, הציגו אותי להורה!"}
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={
-                handleDismiss
-              }
-              className="w-full rounded-2xl border border-slate-200 bg-white py-2 text-[13px] font-bold text-slate-400 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              התעלם / לא רלוונטי
-            </button>
-          </div>
+          <NowBroadcastAlertBody
+            details={requestDetails}
+            loading={loading}
+            arrivalOpen={
+              arrivalMatches &&
+              arrivalOpen
+            }
+            selectedArrival={
+              arrivalMatches
+                ? selectedArrival
+                : null
+            }
+            onToggleArrival={() =>
+              setArrivalOpen(
+                (open) => !open
+              )
+            }
+            onSelectArrival={(
+              value
+            ) => {
+              setSelectedArrival(
+                value
+              );
+              setArrivalOpen(false);
+              void handleAccept(
+                value
+              );
+            }}
+            onAcceptSpecific={() =>
+              void handleAccept(null)
+            }
+            onAcceptLegacy={() =>
+              void handleAccept(null)
+            }
+            onDismiss={handleDismiss}
+          />
         </div>
       </div>
     </div>
