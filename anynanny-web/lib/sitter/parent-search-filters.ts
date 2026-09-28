@@ -96,6 +96,12 @@ export type ParentSearchFilters = {
    * Default false — absent URL/RPC params must not exclude unverified sitters.
    */
   verifiedOnly: boolean;
+  /**
+   * When true, results are the intersection of the normal search and the
+   * logged-in parent's favorite sitters. Default false leaves search unchanged.
+   * This flag is not sent to `list_public_sitters_search`.
+   */
+  favoritesOnly: boolean;
 };
 
 export const PARENT_SEARCH_VERIFIED_ONLY_LABEL = "זהות מאומתת בלבד";
@@ -104,6 +110,12 @@ export const PARENT_SEARCH_VERIFIED_ONLY_HINT =
 
 /** Parse URL / form verified-only values. Absent or unknown → false. */
 export function parseParentSearchVerifiedOnly(raw: string | null | undefined): boolean {
+  const value = String(raw ?? "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+/** Parse URL / form favorites-only values. Absent or unknown → false. */
+export function parseParentSearchFavoritesOnly(raw: string | null | undefined): boolean {
   const value = String(raw ?? "").trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes" || value === "on";
 }
@@ -134,7 +146,8 @@ export const defaultParentSearchFilters = (): ParentSearchFilters => ({
   maxHourlyRate: null,
   selectedCity: "",
   serviceType: "babysitter",
-  verifiedOnly: false
+  verifiedOnly: false,
+  favoritesOnly: false
 });
 
 /** Map UI / URL role aliases to the RPC `p_service_type` value. */
@@ -194,7 +207,8 @@ export function normalizeParentSearchFilters(
         (partial as { roleType?: string }).roleType ??
         base.serviceType
     ),
-    verifiedOnly: partial.verifiedOnly === true
+    verifiedOnly: partial.verifiedOnly === true,
+    favoritesOnly: partial.favoritesOnly === true
   };
 }
 
@@ -410,7 +424,8 @@ export function parseFiltersFromSearchParams(params: Pick<URLSearchParams, "get"
     ),
     verifiedOnly: parseParentSearchVerifiedOnly(
       readSearchParam(params, ["verifiedOnly", "identityVerifiedOnly"])
-    )
+    ),
+    favoritesOnly: parseParentSearchFavoritesOnly(readSearchParam(params, ["favoritesOnly"]))
   });
 }
 
@@ -455,6 +470,10 @@ export function parentSearchFiltersToUrlSearchParams(filters: ParentSearchFilter
 
   if (safe.verifiedOnly) {
     params.set("verifiedOnly", "1");
+  }
+
+  if (safe.favoritesOnly) {
+    params.set("favoritesOnly", "1");
   }
 
   return params;

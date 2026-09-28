@@ -173,9 +173,12 @@ assert.equal(
 assert.match(searchUi, /dir="rtl"/);
 assert.match(searchUi, /PARENT_SEARCH_VERIFIED_ONLY_LABEL/);
 assert.match(searchUi, /PARENT_SEARCH_VERIFIED_ONLY_HINT/);
-assert.match(searchUi, /IdentityShieldMark/);
-assert.match(searchUi, /aria-labelledby="verified-only-heading"/);
-assert.match(searchUi, /aria-describedby="verified-only-hint"/);
+assert.match(searchUi, /SearchQuickFilterHelp/);
+assert.match(searchUi, /aria-label="מידע נוסף"/);
+assert.match(searchUi, /headingId="verified-only-heading"/);
+assert.match(searchUi, /hintId="verified-only-hint"/);
+assert.match(searchUi, /aria-labelledby=\{headingId\}/);
+assert.match(searchUi, /aria-describedby=\{hintId\}/);
 assert.match(searchUi, /type="checkbox"/);
 assert.match(badge, /export function IdentityShieldMark/);
 assert.match(badge, /GOLD_MARK_SURFACE/);

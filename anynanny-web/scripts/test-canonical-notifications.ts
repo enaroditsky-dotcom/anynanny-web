@@ -94,7 +94,8 @@ assert.deepEqual(
     "manual_payment_confirmed",
     "manual_payment_denied",
     "manual_payment_resolved_reported",
-    "admin_broadcast"
+    "admin_broadcast",
+    "favorite_sitter_added"
   ]
 );
 assert.equal(isCanonicalNotificationKind("admin_broadcast"), true);

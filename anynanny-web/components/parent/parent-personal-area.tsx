@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Loader2, Plus, Trash2, User, Wallet } from "lucide-react";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
+import { ParentFavoriteSittersSection } from "@/components/parent/parent-favorite-sitters-section";
 import { WelcomeReplayCard } from "@/components/welcome/welcome-replay-card";
 import { IdentityPersonalSection } from "@/components/identity/identity-personal-section";
 import { IdentityVerifiedBadgeLive } from "@/components/identity/verified-user-badge";
@@ -666,6 +667,8 @@ export function ParentPersonalArea() {
           </Link>
         </div>
       </section>
+
+      <ParentFavoriteSittersSection />
 
       <WelcomeReplayCard role="parent" />
 

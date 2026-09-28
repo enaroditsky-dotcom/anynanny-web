@@ -14,6 +14,8 @@ import {
 } from "@/lib/sitter/parent-search-filters";
 import { validateParentSearchCriteria } from "@/lib/sitter/parent-search-validation";
 import { runParentSitterSearch } from "@/lib/sitter/parent-sitter-search";
+import { applyFavoritesOnlyFilter, parentFavoritesSearchEmptyMessage } from "@/lib/favorites/parent-favorite-rules";
+import { listParentFavoriteSitterIds } from "@/lib/favorites/parent-favorites";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function normalizeParentSearchError(error: string | null): string | null {
@@ -95,8 +97,20 @@ function ParentSearchResultsInner() {
           return;
         }
 
+        let visible = cards;
+        if (normalized.favoritesOnly) {
+          const favorites = await listParentFavoriteSitterIds(supabase);
+          if (favorites.error) {
+            setSearchError(favorites.error);
+            setSitters([]);
+            loadedKeyRef.current = null;
+            return;
+          }
+          visible = applyFavoritesOnlyFilter(cards, favorites.ids, true);
+        }
+
         setSearchError(null);
-        setSitters(cards);
+        setSitters(visible);
         loadedKeyRef.current = searchKey;
       } catch (error) {
         console.warn("[parent/search/results] search threw:", error);
@@ -172,9 +186,10 @@ function ParentSearchResultsInner() {
 
               {sitters.length === 0 && !visibleSearchError ? (
                 <p className="rounded-2xl border border-navy-header/10 bg-white p-4 text-center text-sm text-slate-600 shadow-soft">
-                  {serialLookupActive
-                    ? "לא נמצאה בייביסיטר פנויה עם מספר אישי זה לשעות שבחרת."
-                    : "לא נמצאו בייביסיטרים פנויים לשעות שבחרת. נסו שעות אחרות או בייביסיטר אחרת."}
+                  {parentFavoritesSearchEmptyMessage(filters.favoritesOnly, sitters.length) ??
+                    (serialLookupActive
+                      ? "לא נמצאה בייביסיטר פנויה עם מספר אישי זה לשעות שבחרת."
+                      : "לא נמצאו בייביסיטרים פנויים לשעות שבחרת. נסו שעות אחרות או בייביסיטר אחרת.")}
                 </p>
               ) : null}
 
