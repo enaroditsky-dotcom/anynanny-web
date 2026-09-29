@@ -113,6 +113,7 @@ export function BookingCalendarPanel({
     <div className="relative">
       <select
         id={viewModeSelectId}
+        aria-label={compact ? "תצוגה" : undefined}
         value={viewMode}
         onChange={(e) => setViewMode(e.target.value as CalendarViewMode)}
         className={
@@ -182,9 +183,6 @@ export function BookingCalendarPanel({
         dir="rtl"
       >
         <div className="mb-2 shrink-0">
-          <label htmlFor={viewModeSelectId} className="mb-1 block text-xs font-semibold text-slate-500">
-            תצוגה
-          </label>
           {viewSelect(true)}
         </div>
         {viewMode === "month" ? (
