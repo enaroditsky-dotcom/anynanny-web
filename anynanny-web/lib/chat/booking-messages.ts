@@ -12,6 +12,11 @@ import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { getCachedWorkingSelect, setCachedWorkingSelect } from "@/lib/supabase/rpc-availability";
 import { getChatLifecycle } from "@/lib/chat/chat-lifecycle";
+import {
+  BOOKING_CHAT_HIDES_TABLE,
+  filterVisibleConversations,
+  isConversationHiddenForUser
+} from "@/lib/chat/chat-visibility";
 import { assertMarketplacePairAllowed } from "@/lib/safety/enforcement";
 
 export const CHAT_ELIGIBLE_BOOKING_STATUSES: BookingStatus[] = [
@@ -201,6 +206,62 @@ async function loadSessionEndTimesByBookingIds(
   return byId;
 }
 
+async function loadBookingChatHides(
+  supabase: SupabaseClient,
+  userId: string,
+  bookingIds: string[]
+): Promise<Map<string, string>> {
+  const hides = new Map<string, string>();
+  if (bookingIds.length === 0) return hides;
+
+  const { data, error } = await supabase
+    .from(BOOKING_CHAT_HIDES_TABLE)
+    .select("booking_id, hidden_at")
+    .eq("user_id", userId)
+    .in("booking_id", bookingIds);
+
+  if (error) {
+    if (!isPostgrestSchemaDriftError(error.message)) {
+      console.warn("[chat-inbox] booking chat hides:", error.message);
+    }
+    return hides;
+  }
+
+  for (const row of data ?? []) {
+    const bookingId = String((row as { booking_id?: string }).booking_id ?? "").trim();
+    const hiddenAt = String((row as { hidden_at?: string }).hidden_at ?? "").trim();
+    if (bookingId && hiddenAt) hides.set(bookingId, hiddenAt);
+  }
+  return hides;
+}
+
+/** Hide this booking conversation for the signed-in user. Messages stay in the database. */
+export async function hideBookingChatForUser(
+  supabase: SupabaseClient,
+  bookingId: string,
+  userId: string
+): Promise<{ error: string | null }> {
+  const id = bookingId.trim();
+  const uid = userId.trim();
+  if (!id || !uid) {
+    return { error: "לא הצלחנו להסתיר את השיחה. נסו שוב." };
+  }
+
+  const { error } = await supabase.from(BOOKING_CHAT_HIDES_TABLE).upsert(
+    {
+      user_id: uid,
+      booking_id: id,
+      hidden_at: new Date().toISOString()
+    },
+    { onConflict: "user_id,booking_id" }
+  );
+
+  if (error) {
+    return { error: "לא הצלחנו להסתיר את השיחה. נסו שוב." };
+  }
+  return { error: null };
+}
+
 async function fetchBookingsWithMessagesForUser(
   supabase: SupabaseClient,
   userId: string,
@@ -221,6 +282,7 @@ async function fetchBookingsWithMessagesForUser(
 
   const bookingIds = bookings.map((b) => String((b as { id: string }).id));
   const sessionEndTimes = await loadSessionEndTimesByBookingIds(supabase, bookingIds);
+  const hides = await loadBookingChatHides(supabase, userId, bookingIds);
   const { data: messages } = await supabase
     .from(MESSAGES_TABLE)
     .select("booking_id, created_at")
@@ -269,6 +331,10 @@ async function fetchBookingsWithMessagesForUser(
       if (!shouldIncludeBookingInChatInbox(bookingStatus, hasMessages)) {
         return null;
       }
+      const activityAt = lastMessageAt.get(bookingId) ?? row.updated_at;
+      if (isConversationHiddenForUser(hides.get(bookingId), activityAt)) {
+        return null;
+      }
       const partnerUserId = String(row[partnerColumn as keyof typeof row]);
       const details = partnerDetails.get(partnerUserId);
       const scheduledEndTime = String(row.end_time ?? "").trim() || null;
@@ -284,7 +350,7 @@ async function fetchBookingsWithMessagesForUser(
         partner_name: details?.name ?? null,
         partner_public_id: details?.publicId ?? null,
         schedule_label: formatBookingSchedule(row),
-        last_message_at: lastMessageAt.get(bookingId) ?? row.updated_at,
+        last_message_at: activityAt,
         booking_status: bookingStatus,
         cancelled_at: cancelledAt,
         actual_end_time: actualEndTime,
@@ -295,7 +361,7 @@ async function fetchBookingsWithMessagesForUser(
     .filter((row): row is BookingChatInboxRow => row !== null)
     .sort((a, b) => Date.parse(b.last_message_at) - Date.parse(a.last_message_at));
 
-  return { rows, error: null };
+  return { rows: filterVisibleConversations(rows, hides), error: null };
 }
 
 /** Most recent chat-eligible booking between a parent and sitter. */
