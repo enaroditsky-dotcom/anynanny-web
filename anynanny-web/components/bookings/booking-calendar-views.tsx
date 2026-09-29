@@ -261,6 +261,17 @@ function shiftAccentClass(status: BookingStatus): string {
   }
 }
 
+function shiftStartMs(shift: Pick<CalendarShift, "startTime">): number {
+  const ms = new Date(shift.startTime).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function formatFullIsraeliDate(dateStr: string): string {
+  const parts = dateStr.slice(0, 10).split("-");
+  if (parts.length !== 3) return dateStr;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
 function minutesFromDayStart(iso: string): number {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return 0;
@@ -497,17 +508,24 @@ function CalendarShell({
   titleControl,
   subtitle,
   children,
-  className = ""
+  className = "",
+  flush = false
 }: {
   title?: string;
   titleControl?: ReactNode;
   subtitle?: string;
   children: ReactNode;
   className?: string;
+  /** Parent already draws the board frame; keep the inner surface flat. */
+  flush?: boolean;
 }) {
   return (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft ${className}`.trim()}
+      className={
+        flush
+          ? `relative flex min-h-full flex-col bg-white ${className}`.trim()
+          : `relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft ${className}`.trim()
+      }
     >
       <div className="shrink-0 border-b border-slate-100 px-4 py-3 text-right">
         {titleControl ?? (title ? <p className="text-base font-semibold text-navy-header">{title}</p> : null)}
@@ -528,10 +546,46 @@ function SelectChevron() {
   );
 }
 
-export function TodayGridView({
+function TodayShiftList({
   shifts,
   ...actionContext
 }: CalendarViewsContext & { shifts: CalendarShift[] }) {
+  const today = todayDateISO();
+  const ordered = [...shifts].sort((a, b) => shiftStartMs(a) - shiftStartMs(b));
+
+  return (
+    <div data-day-presentation="shifts" className="flex min-h-full flex-col">
+      <p className="sticky top-0 z-10 border-b border-slate-100 bg-white px-3 py-2.5 text-right text-base font-semibold tabular-nums text-navy-header">
+        {formatFullIsraeliDate(today)}
+      </p>
+      {ordered.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center px-4 py-10">
+          <p className="text-center text-base font-semibold text-slate-500">אין משמרות להיום</p>
+        </div>
+      ) : (
+        <div className="space-y-2 px-3 py-3">
+          {ordered.map((shift) => (
+            <ShiftCard key={shift.id} shift={shift} {...actionContext} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function TodayGridView({
+  shifts,
+  presentation = "timeline",
+  ...actionContext
+}: CalendarViewsContext & {
+  shifts: CalendarShift[];
+  /** `shifts` lists only real bookings. The default timeline is unchanged. */
+  presentation?: "timeline" | "shifts";
+}) {
+  if (presentation === "shifts") {
+    return <TodayShiftList shifts={shifts} {...actionContext} />;
+  }
+
   const today = todayDateISO();
   const hasShifts = shifts.length > 0;
   const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, i) => DAY_START_HOUR + i);
@@ -602,8 +656,14 @@ export function TodayGridView({
 
 export function WeekGridView({
   shifts,
+  flush = false,
+  stickyDayStrip = false,
   ...actionContext
-}: CalendarViewsContext & { shifts: CalendarShift[] }) {
+}: CalendarViewsContext & {
+  shifts: CalendarShift[];
+  flush?: boolean;
+  stickyDayStrip?: boolean;
+}) {
   const { start } = getWeekRange();
   const startDate = new Date(`${start}T12:00:00`);
   const [selectedIso, setSelectedIso] = useState(todayDateISO());
@@ -631,12 +691,8 @@ export function WeekGridView({
   const selectedDay = days.find((d) => d.iso === selectedIso);
   const weekHasShifts = shifts.length > 0;
 
-  return (
-    <CalendarShell
-      className="h-full"
-      title="תצוגת שבוע"
-      subtitle={weekHasShifts ? `${shifts.length} משמרות השבוע` : embeddedEmptyHint("week")}
-    >
+  const dayStrip = (
+    <>
       <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-xs font-semibold text-slate-500">
         {HEBREW_WEEKDAYS.map((label) => (
           <div key={label}>{label}</div>
@@ -666,6 +722,17 @@ export function WeekGridView({
           </button>
         ))}
       </div>
+    </>
+  );
+
+  return (
+    <CalendarShell
+      flush={flush}
+      className="h-full"
+      title="תצוגת שבוע"
+      subtitle={weekHasShifts ? `${shifts.length} משמרות השבוע` : embeddedEmptyHint("week")}
+    >
+      {stickyDayStrip ? <div className="sticky top-0 z-10 bg-white">{dayStrip}</div> : dayStrip}
       <div className="border-t border-slate-100 px-3 py-3">
         <p className="mb-2 text-right text-sm">
           <span className={dateLabelClass(selectedShifts.length > 0)}>
@@ -691,6 +758,59 @@ export function WeekGridView({
   );
 }
 
+export function CalendarPeriodControls({
+  currentMonth,
+  currentYear,
+  onMonthChange,
+  onYearChange,
+  compact = false
+}: {
+  currentMonth: number;
+  currentYear: number;
+  onMonthChange: (month: number) => void;
+  onYearChange: (year: number) => void;
+  compact?: boolean;
+}) {
+  const selectClass = compact
+    ? "min-h-10 w-full min-w-0 cursor-pointer appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-right text-sm font-semibold text-navy-header"
+    : CALENDAR_PERIOD_SELECT_CLASS;
+
+  return (
+    <div className="flex flex-row-reverse items-center justify-center gap-2">
+      <div className="relative min-w-0 flex-1">
+        <select
+          aria-label="בחירת חודש"
+          value={currentMonth}
+          onChange={(e) => onMonthChange(Number(e.target.value))}
+          className={selectClass}
+        >
+          {HEBREW_MONTHS.map((label, index) => (
+            <option key={label} value={index + 1}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <SelectChevron />
+      </div>
+      <div className="relative w-[5.5rem] shrink-0">
+        <select
+          aria-label="בחירת שנה"
+          value={currentYear}
+          onChange={(e) => onYearChange(Number(e.target.value))}
+          className={selectClass}
+        >
+          {calendarYearOptions().map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
+        <SelectChevron />
+      </div>
+    </div>
+  );
+}
+
 export function MonthGridView({
   shifts,
   currentMonth,
@@ -698,6 +818,8 @@ export function MonthGridView({
   onMonthChange,
   onYearChange,
   focusDateIso = null,
+  flush = false,
+  hidePeriodControls = false,
   ...actionContext
 }: CalendarViewsContext & {
   shifts: CalendarShift[];
@@ -706,6 +828,8 @@ export function MonthGridView({
   onMonthChange: (month: number) => void;
   onYearChange: (year: number) => void;
   focusDateIso?: string | null;
+  flush?: boolean;
+  hidePeriodControls?: boolean;
 }) {
   const firstDay = new Date(currentYear, currentMonth - 1, 1);
   const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
@@ -739,45 +863,20 @@ export function MonthGridView({
 
   const selectedShifts = selectedIso ? (shiftsByDate.get(selectedIso) ?? []) : [];
 
-  const periodHeader = (
-    <div className="flex flex-row-reverse items-center justify-center gap-2">
-      <div className="relative min-w-0 flex-1">
-        <select
-          aria-label="בחירת חודש"
-          value={currentMonth}
-          onChange={(e) => onMonthChange(Number(e.target.value))}
-          className={CALENDAR_PERIOD_SELECT_CLASS}
-        >
-          {HEBREW_MONTHS.map((label, index) => (
-            <option key={label} value={index + 1}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <SelectChevron />
-      </div>
-      <div className="relative w-[5.5rem] shrink-0">
-        <select
-          aria-label="בחירת שנה"
-          value={currentYear}
-          onChange={(e) => onYearChange(Number(e.target.value))}
-          className={CALENDAR_PERIOD_SELECT_CLASS}
-        >
-          {calendarYearOptions().map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
-        <SelectChevron />
-      </div>
-    </div>
-  );
-
   return (
     <CalendarShell
+      flush={flush}
       className="h-full"
-      titleControl={periodHeader}
+      titleControl={
+        hidePeriodControls ? undefined : (
+          <CalendarPeriodControls
+            currentMonth={currentMonth}
+            currentYear={currentYear}
+            onMonthChange={onMonthChange}
+            onYearChange={onYearChange}
+          />
+        )
+      }
       subtitle={monthHasShifts ? `${shifts.length} משמרות החודש` : embeddedEmptyHint("month")}
     >
       <div className="shrink-0 grid grid-cols-7 gap-1 border-b border-slate-100 px-2 py-2 text-center text-xs font-semibold text-slate-500">
@@ -937,12 +1036,14 @@ export function AllShiftsListView({
   title = "כל המשמרות שנקבעו",
   emptyView = "all",
   sortDirection = "desc",
+  flush = false,
   ...actionContext
 }: CalendarViewsContext & {
   shifts: CalendarShift[];
   title?: string;
   emptyView?: CalendarViewMode;
   sortDirection?: "asc" | "desc";
+  flush?: boolean;
 }) {
   const hasShifts = shifts.length > 0;
   const emptyHint = embeddedEmptyHint(emptyView);
@@ -965,6 +1066,7 @@ export function AllShiftsListView({
 
   return (
     <CalendarShell
+      flush={flush}
       className="h-full"
       title={title}
       subtitle={hasShifts ? `${shifts.length} משמרות` : emptyHint}
