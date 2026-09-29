@@ -153,6 +153,7 @@ import {
   DASHBOARD_SHORTCUT_TILE
 } from "@/lib/ui/app-shell";
 import { Calendar, Wallet, History, Search, CheckCircle2, Clock, Star, User, X, Loader2 } from "lucide-react";
+import { ProfileImage } from "@/components/profile/profile-image";
 import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 const BOOKING_LIVE_SELECT =
@@ -2286,19 +2287,12 @@ export function ParentDashboardClient({
         >
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
-                  {parentAvatarUrl ? (
-                    <img
-                      src={parentAvatarUrl}
-                      alt="תמונת פרופיל"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-slate-400">
-                      <User className="h-5 w-5" />
-                    </div>
-                  )}
-                </div>
+                <ProfileImage
+                  src={parentAvatarUrl}
+                  name={firstName}
+                  className="h-9 w-9 border border-slate-200 bg-white text-slate-400 shadow-sm"
+                  fallback={<User className="h-5 w-5" />}
+                />
                 <h1 className="min-w-0 text-base font-bold leading-snug text-slate-900">שלום, {firstName}!</h1>
               </div>
               {parentSerialLabel ? (

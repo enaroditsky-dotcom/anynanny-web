@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { ChevronDown, ShieldAlert, Star, User, Users, X } from "lucide-react";
+import { ProfileImage } from "@/components/profile/profile-image";
 
 import {
   VERIFIED_PARENT_IDENTITY_LABEL,
@@ -133,19 +134,12 @@ function ParentDetailsBody({
   return (
     <div className="space-y-5">
       <div className="flex flex-col items-center text-center">
-        <div className="h-24 w-24 overflow-hidden rounded-full border-2 border-slate-200 bg-slate-100 shadow-sm">
-          {parent.avatar_url ? (
-            <img
-              src={parent.avatar_url}
-              alt={displayName}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-slate-400">
-              <User className="h-11 w-11" />
-            </div>
-          )}
-        </div>
+        <ProfileImage
+          src={parent.avatar_url}
+          name={displayName}
+          className="h-24 w-24 border-2 border-slate-200 bg-slate-100 text-slate-400 shadow-sm"
+          fallback={<User className="h-11 w-11" />}
+        />
 
         <h3 className="mt-3 text-lg font-extrabold text-[#001F3F]">{displayName}</h3>
 

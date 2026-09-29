@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Loader2, Plus, Trash2, User, Wallet } from "lucide-react";
+import { Loader2, Plus, Trash2, User, Wallet } from "lucide-react";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import { ParentFavoriteSittersSection } from "@/components/parent/parent-favorite-sitters-section";
 import { WelcomeReplayCard } from "@/components/welcome/welcome-replay-card";
@@ -37,6 +37,7 @@ import {
   personalTextareaClassName,
   yesNoLabel
 } from "@/components/personal-area/personal-area-ui";
+import { ProfileImage } from "@/components/profile/profile-image";
 import { getAccountDobEligibilityError } from "@/lib/auth/age-eligibility";
 import type { IsraelCity } from "@/lib/geo/israel-cities";
 import { replaceUserSpecialOccasions, updateRowStrippingUnknownColumns } from "@/lib/onboarding/persist";
@@ -623,23 +624,12 @@ export function ParentPersonalArea() {
       <section className="rounded-2xl border border-[#C5A059]/25 bg-gradient-to-l from-[#FFF8EA] to-white p-4 shadow-soft">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-4">
-            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-[#C5A059]/40 bg-slate-100 shadow-sm">
-              {form.avatar_url ? (
-                <img src={form.avatar_url} alt={displayName} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-400">
-                  <User className="h-8 w-8" />
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => openEdit("avatar")}
-                className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition hover:opacity-100"
-                title="שנה תמונה"
-              >
-                <Camera className="h-5 w-5" />
-              </button>
-            </div>
+            <ProfileImage
+              src={form.avatar_url}
+              name={displayName}
+              className="h-16 w-16 border-2 border-[#C5A059]/40 bg-slate-100 text-slate-400 shadow-sm"
+              fallback={<User className="h-8 w-8" />}
+            />
             <div className="text-right">
               <p className="text-xs font-semibold text-[#B8860B]">אזור אישי · הורה</p>
               <h2 className="mt-1 text-lg font-extrabold text-[#001F3F]">{displayName}</h2>
@@ -866,16 +856,16 @@ export function ParentPersonalArea() {
       >
         {editKey === "avatar" ? (
           <div className="flex flex-col items-center justify-center space-y-4 py-2">
-            <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-slate-200 bg-slate-100 shadow-inner">
-              {draftAvatarUrl ? (
-                <img src={draftAvatarUrl} alt="תמונת פרופיל" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-400">
-                  <User className="h-12 w-12" />
-                </div>
-              )}
+            <div className="relative">
+              <ProfileImage
+                src={draftAvatarUrl}
+                name={displayName}
+                zoomable={!uploadingAvatar}
+                className="h-28 w-28 border-2 border-slate-200 bg-slate-100 text-slate-400 shadow-inner"
+                fallback={<User className="h-12 w-12" />}
+              />
               {uploadingAvatar ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                <div className="absolute inset-0 flex items-center justify-center rounded-[15%] bg-white/70">
                   <Loader2 className="h-6 w-6 animate-spin text-[#001F3F]" />
                 </div>
               ) : null}

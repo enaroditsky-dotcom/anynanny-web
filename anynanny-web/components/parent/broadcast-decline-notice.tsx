@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { createPortal } from "react-dom";
 import { Star, X } from "lucide-react";
+import { ProfileImage } from "@/components/profile/profile-image";
 import type { RejectedSitterSnapshot } from "@/lib/sitter/fetch-rejected-sitter-snapshot";
 
 export type { RejectedSitterSnapshot };
@@ -28,13 +29,12 @@ function DeclineSitterAvatar({
   const initial = name.trim().charAt(0) || "נ";
 
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-purple-100 bg-purple-50 text-sm font-black text-purple-700">
-      {avatarUrl ? (
-        <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
-      ) : (
-        initial
-      )}
-    </div>
+    <ProfileImage
+      src={avatarUrl}
+      name={name}
+      className="h-10 w-10 border border-purple-100 bg-purple-50 text-sm font-black text-purple-700"
+      fallback={<span>{initial}</span>}
+    />
   );
 }
 

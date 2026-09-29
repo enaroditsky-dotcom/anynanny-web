@@ -38,6 +38,7 @@ import {
   publicSitterDisplayName
 } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { ProfileImage } from "@/components/profile/profile-image";
 import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import {
   removeRealtimeChannel,
@@ -92,36 +93,6 @@ function localDateKey(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
-}
-
-function BroadcastSitterAvatar({
-  name,
-  avatarUrl,
-  sizeClass = "h-11 w-11",
-  textClass = "text-sm"
-}: {
-  name: string;
-  avatarUrl: string | null;
-  sizeClass?: string;
-  textClass?: string;
-}) {
-  const initial = name.trim().charAt(0) || "נ";
-
-  return (
-    <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-purple-100 bg-purple-50 font-black text-purple-700 ${sizeClass} ${textClass}`}
-    >
-      {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt={name}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        initial
-      )}
-    </div>
-  );
 }
 
 function BroadcastRadarContent() {
@@ -1220,9 +1191,11 @@ function BroadcastRadarContent() {
                       className="animate-fadeIn flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-slate-100 bg-white p-4 shadow-soft"
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <BroadcastSitterAvatar
+                        <ProfileImage
+                          src={sitter.avatarUrl}
                           name={sitter.name}
-                          avatarUrl={sitter.avatarUrl}
+                          className="h-11 w-11 border border-purple-100 bg-purple-50 text-sm font-black text-purple-700"
+                          fallback={<span>{sitter.name.trim().charAt(0) || "נ"}</span>}
                         />
 
                         <div className="min-w-0 space-y-0.5 text-right">
