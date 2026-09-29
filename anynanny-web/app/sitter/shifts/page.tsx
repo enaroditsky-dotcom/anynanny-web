@@ -3,6 +3,7 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState
 } from "react";
@@ -21,6 +22,7 @@ import { CancellationAttentionModals } from "@/components/bookings/cancellation-
 import { ShiftCancellationApproveModal } from "@/components/bookings/shift-cancellation-approve-modal";
 import { ShiftCancellationRequestModal } from "@/components/bookings/shift-cancellation-request-modal";
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
+import { APP_SHELL_SCROLL_ID } from "@/lib/ui/app-shell";
 import { SitterParentProfilePreview } from "@/components/sitter/sitter-parent-profile-preview";
 
 import {
@@ -550,7 +552,75 @@ async function loadParentDetailsByIds(
   };
 }
 
+const SHIFT_BOARD_SCROLL_MIN_PAGE_PX = 240;
+
+/**
+ * Pins this page to the visible app-shell area and keeps the shell itself
+ * from scrolling, so only the schedule frame moves. Very short viewports
+ * fall back to that single page scroller.
+ */
+function useShiftBoardViewport() {
+  const [containScroll, setContainScroll] = useState(true);
+
+  useLayoutEffect(() => {
+    const page = document.getElementById("sitter-shift-board-page");
+    const scroller = document.getElementById(APP_SHELL_SCROLL_ID);
+    if (!page || !scroller) {
+      setContainScroll(false);
+      return;
+    }
+
+    const previousOverflow = scroller.style.overflowY;
+    let frame = 0;
+
+    const apply = () => {
+      const scrollerRect = scroller.getBoundingClientRect();
+      const pageRect = page.getBoundingClientRect();
+      const padBottom = Number.parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
+      const topOffset = pageRect.top - scrollerRect.top + scroller.scrollTop;
+      const available = Math.floor(scroller.clientHeight - topOffset - padBottom);
+
+      if (available < SHIFT_BOARD_SCROLL_MIN_PAGE_PX) {
+        setContainScroll(false);
+        scroller.style.overflowY = previousOverflow;
+        page.style.height = "";
+        page.style.maxHeight = "";
+        page.style.overflow = "";
+        return;
+      }
+
+      scroller.style.overflowY = "hidden";
+      if (scroller.scrollTop !== 0) scroller.scrollTop = 0;
+      page.style.height = `${available}px`;
+      page.style.maxHeight = `${available}px`;
+      page.style.overflow = "hidden";
+      setContainScroll(true);
+    };
+
+    apply();
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(apply);
+    });
+    observer.observe(scroller);
+    window.addEventListener("resize", apply);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", apply);
+      scroller.style.overflowY = previousOverflow;
+      page.style.height = "";
+      page.style.maxHeight = "";
+      page.style.overflow = "";
+    };
+  }, []);
+
+  return containScroll;
+}
+
 export default function SitterShiftsPage() {
+  const containScroll = useShiftBoardViewport();
   const searchParams = useSearchParams();
   const focusBookingId = parseFocusBookingId(
     searchParams.get("bookingId")
@@ -1672,17 +1742,18 @@ export default function SitterShiftsPage() {
     shifts.length > 0 &&
     visibleShifts.length === 0;
 
+  const listFrameClass = containScroll
+    ? "mt-2 flex min-h-0 min-w-0 flex-auto flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-y rounded-2xl border border-slate-200/80 bg-white shadow-soft"
+    : "mt-2 min-w-0 overflow-x-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft";
+
   return (
-    <SitterPageShell
-      title="לוח המשמרות שלי"
-      subtitle="בקשות ממתינות לאישור, יומן משמרות מאושרות והיסטוריית ביצוע בפועל."
-    >
+    <SitterPageShell title="לוח המשמרות שלי" board>
       <div
         data-tour="sitter-shift-board"
-        className="mx-auto flex w-full max-w-md flex-col text-right"
+        className="flex min-h-0 min-w-0 flex-auto flex-col overflow-hidden text-right"
         dir="rtl"
       >
-        <div className="mb-4 shrink-0">
+        <div className="mb-2 shrink-0">
           <label className="mb-2 mr-1 block text-xs font-bold uppercase text-gray-400">
             בחר סוג תצוגה
           </label>
@@ -1704,7 +1775,7 @@ export default function SitterShiftsPage() {
                   null
                 );
               }}
-              className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white p-3.5 text-base font-semibold text-gray-700 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="min-h-11 w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
               <option value="pending">
                 ⏳ ממתינות
@@ -1755,9 +1826,74 @@ export default function SitterShiftsPage() {
           </p>
         ) : null}
 
+        {viewType === "past" && !loading && !authLoading && shifts.length > 0 ? (
+          <div className="mb-2 shrink-0 rounded-2xl border border-slate-100 bg-white p-3">
+            <p className="mb-2 text-xs font-bold text-slate-600">סינון לפי תאריכים</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="min-w-0">
+                <label
+                  htmlFor="sitter-past-from-date"
+                  className="mb-1 block text-[12px] font-semibold text-slate-500"
+                >
+                  מתאריך
+                </label>
+                <input
+                  id="sitter-past-from-date"
+                  type="date"
+                  value={pastFromDate}
+                  onChange={(e) => setPastFromDate(e.target.value)}
+                  aria-invalid={pastRangeReversed}
+                  aria-describedby={pastRangeReversed ? "sitter-past-date-range-error" : undefined}
+                  className="min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-2 py-2 text-center text-sm text-navy-header"
+                  style={{ direction: "ltr" }}
+                />
+              </div>
+              <div className="min-w-0">
+                <label
+                  htmlFor="sitter-past-to-date"
+                  className="mb-1 block text-[12px] font-semibold text-slate-500"
+                >
+                  עד תאריך
+                </label>
+                <input
+                  id="sitter-past-to-date"
+                  type="date"
+                  value={pastToDate}
+                  onChange={(e) => setPastToDate(e.target.value)}
+                  aria-invalid={pastRangeReversed}
+                  aria-describedby={pastRangeReversed ? "sitter-past-date-range-error" : undefined}
+                  className="min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-2 py-2 text-center text-sm text-navy-header"
+                  style={{ direction: "ltr" }}
+                />
+              </div>
+            </div>
+            {pastRangeReversed ? (
+              <p
+                id="sitter-past-date-range-error"
+                role="alert"
+                className="mt-2 text-right text-[12px] font-semibold text-rose-700"
+              >
+                תאריך ההתחלה לא יכול להיות אחרי תאריך הסיום
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setPastFromDate("");
+                setPastToDate("");
+              }}
+              disabled={!pastFilterActive}
+              aria-label="נקה סינון"
+              className="mt-2 text-right text-[12px] font-bold text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-navy-header disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
+            >
+              נקה סינון
+            </button>
+          </div>
+        ) : null}
+
         {viewType ===
         "calendar" ? (
-          <div className="min-w-0">
+          <div className="mt-2 flex min-h-0 min-w-0 flex-auto flex-col">
             <BookingCalendarPanel
               shifts={
                 calendarShifts
@@ -1786,94 +1922,34 @@ export default function SitterShiftsPage() {
               onAcknowledgeCancellation={(shift) => {
                 void attention.acknowledgeApproved(shift.id);
               }}
-              className="h-full"
+              layout="board"
+              containScroll={containScroll}
+              className="min-h-0 flex-auto"
             />
           </div>
-        ) : loading ||
+        ) : (
+          <div data-shift-board-scroll="" className={listFrameClass}>
+        {loading ||
           authLoading ? (
-          <div className="py-10 text-center font-medium text-gray-400">
+          <div className="flex min-h-full flex-1 items-center justify-center py-10 text-center font-medium text-gray-400">
             מושך נתונים חיים
             מה-Database...
           </div>
         ) : shifts.length ===
           0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-10 text-center text-gray-400">
+          <div className="flex min-h-full flex-1 items-center justify-center px-4 py-10 text-center text-gray-400">
             אין משמרות
             רשומות בקטגוריה
             זו ב-Supabase.
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col">
-            {viewType === "past" ? (
-              <div className="mb-3 shrink-0 rounded-2xl border border-slate-100 bg-white p-3">
-                <p className="mb-2 text-xs font-bold text-slate-600">סינון לפי תאריכים</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="min-w-0">
-                    <label
-                      htmlFor="sitter-past-from-date"
-                      className="mb-1 block text-[12px] font-semibold text-slate-500"
-                    >
-                      מתאריך
-                    </label>
-                    <input
-                      id="sitter-past-from-date"
-                      type="date"
-                      value={pastFromDate}
-                      onChange={(e) => setPastFromDate(e.target.value)}
-                      aria-invalid={pastRangeReversed}
-                      aria-describedby={pastRangeReversed ? "sitter-past-date-range-error" : undefined}
-                      className="min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-2 py-2 text-center text-sm text-navy-header"
-                      style={{ direction: "ltr" }}
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <label
-                      htmlFor="sitter-past-to-date"
-                      className="mb-1 block text-[12px] font-semibold text-slate-500"
-                    >
-                      עד תאריך
-                    </label>
-                    <input
-                      id="sitter-past-to-date"
-                      type="date"
-                      value={pastToDate}
-                      onChange={(e) => setPastToDate(e.target.value)}
-                      aria-invalid={pastRangeReversed}
-                      aria-describedby={pastRangeReversed ? "sitter-past-date-range-error" : undefined}
-                      className="min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-2 py-2 text-center text-sm text-navy-header"
-                      style={{ direction: "ltr" }}
-                    />
-                  </div>
-                </div>
-                {pastRangeReversed ? (
-                  <p
-                    id="sitter-past-date-range-error"
-                    role="alert"
-                    className="mt-2 text-right text-[12px] font-semibold text-rose-700"
-                  >
-                    תאריך ההתחלה לא יכול להיות אחרי תאריך הסיום
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPastFromDate("");
-                    setPastToDate("");
-                  }}
-                  disabled={!pastFilterActive}
-                  aria-label="נקה סינון"
-                  className="mt-2 text-right text-[12px] font-bold text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-navy-header disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
-                >
-                  נקה סינון
-                </button>
-              </div>
-            ) : null}
+          <div className="min-w-0">
             {showPastNoMatch ? (
-              <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-10 text-center text-sm font-semibold text-slate-500">
+              <div className="flex min-h-full items-center justify-center px-4 py-10 text-center text-sm font-semibold text-slate-500">
                 לא נמצאו משמרות בטווח התאריכים שנבחר
               </div>
             ) : (
-          <div className="min-w-0 space-y-4">
+          <div className="min-w-0 space-y-3 p-3">
             {visibleShifts.map(
               (shift) => {
                 const badge =
@@ -2213,6 +2289,8 @@ export default function SitterShiftsPage() {
             )}
           </div>
             )}
+          </div>
+        )}
           </div>
         )}
       </div>
