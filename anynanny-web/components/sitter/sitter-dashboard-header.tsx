@@ -11,6 +11,7 @@ import {
   markRpcMissing
 } from "@/lib/supabase/rpc-availability";
 import { Star, User } from "lucide-react";
+import { ProfileImage } from "@/components/profile/profile-image";
 import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 type SitterDashboardStats = {
@@ -160,15 +161,12 @@ export function SitterDashboardHeader({
       <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="תמונת פרופיל" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-400">
-                  <User className="h-6 w-6" />
-                </div>
-              )}
-            </div>
+            <ProfileImage
+              src={avatarUrl}
+              name={firstName}
+              className="h-12 w-12 border border-slate-200 bg-white text-slate-400 shadow-sm"
+              fallback={<User className="h-6 w-6" />}
+            />
             <h1 className={`min-w-0 text-lg font-bold leading-snug text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}>
               {greeting}
             </h1>

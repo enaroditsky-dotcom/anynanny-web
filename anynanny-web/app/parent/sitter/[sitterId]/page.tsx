@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Calendar, ArrowRight, ChevronDown, Star, User, Wallet } from "lucide-react";
+import { ProfileImage } from "@/components/profile/profile-image";
 import {
   formatSitterLanguagesDisplay,
   type PublicSitterReview,
@@ -194,15 +195,12 @@ export default function ParentSitterProfileView() {
       ) : profile ? (
         <div className="rounded-3xl border border-navy-header/12 bg-white p-5 shadow-soft space-y-4">
           <div className="flex flex-col items-center text-center">
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
-              {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-400">
-                  <User className="h-10 w-10" />
-                </div>
-              )}
-            </div>
+            <ProfileImage
+              src={profile.avatar_url}
+              name={displayName}
+              className="h-20 w-20 border border-slate-200 bg-slate-100 text-slate-400 shadow-sm"
+              fallback={<User className="h-10 w-10" />}
+            />
             <h1 className="mt-3 max-w-full truncate text-xl font-bold text-[#001F3F]">{displayName}</h1>
             {serialDisplay ? (
               <p className="mt-0.5 text-xs font-semibold text-violet-600">מזהה: {serialDisplay}</p>
