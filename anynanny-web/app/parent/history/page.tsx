@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 
@@ -21,6 +22,7 @@ import {
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PageBackButton } from "@/components/navigation/page-back-link";
+import { APP_SHELL_SCROLL_ID } from "@/lib/ui/app-shell";
 
 import {
   removeRealtimeChannel,
@@ -1088,11 +1090,53 @@ export default function ParentHistoryPage() {
       ]
     );
 
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Pin this page to the shell scrollport's content box so the shell
+   * itself does not scroll. The shift list is the only scroller.
+   * Height matches AppShellGate: header (3rem + safe-area) + pt-2 +
+   * bottom-nav padding (6.5rem + dock + safe-area).
+   */
+  useEffect(() => {
+    const page = pageRef.current;
+    const scroller = document.getElementById(APP_SHELL_SCROLL_ID);
+    if (!page || !scroller) return;
+
+    const fit = () => {
+      const styles = getComputedStyle(scroller);
+      const padTop = Number.parseFloat(styles.paddingTop) || 0;
+      const padBottom = Number.parseFloat(styles.paddingBottom) || 0;
+      const contentTop = scroller.getBoundingClientRect().top + padTop;
+      const pageTop = page.getBoundingClientRect().top;
+      const offset = Math.max(0, pageTop - contentTop);
+      const available = scroller.clientHeight - padTop - padBottom - offset;
+      if (!Number.isFinite(available) || available < 160) {
+        page.style.height = "";
+        return;
+      }
+      page.style.height = `${Math.floor(available)}px`;
+      if (scroller.scrollTop !== 0) scroller.scrollTop = 0;
+    };
+
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(scroller);
+    window.addEventListener("resize", fit);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", fit);
+      page.style.height = "";
+    };
+  }, []);
+
   return (
     <div
-      className="mx-auto w-full min-w-0 max-w-md space-y-5 pb-4 pt-1"
+      ref={pageRef}
+      className="mx-auto flex h-[calc(100dvh-3rem-1px-env(safe-area-inset-top,0px)-0.5rem-6.5rem-var(--anynanny-now-dock,0px)-env(safe-area-inset-bottom,0px))] min-h-0 w-full min-w-0 max-w-md flex-col overflow-hidden"
       dir="rtl"
     >
+      <div className="max-h-[70%] min-h-0 shrink space-y-1.5 overflow-y-auto overscroll-y-contain pb-2">
       <div className="flex items-center justify-between gap-3" dir="ltr">
         <PageBackButton onClick={() => router.push("/parent/dashboard")} />
         <button
@@ -1124,28 +1168,23 @@ export default function ParentHistoryPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-navy-header">
           היסטוריית משמרות
         </h1>
-        <p className="mx-auto mt-2 max-w-[22rem] text-sm font-normal leading-relaxed text-slate-500">
-          צפו בכל המשמרות שלכם, סננו לפי תאריכים
-          <br />
-          וגלו כל פרט במקום אחד.
-        </p>
       </header>
 
-      <div className="w-full min-w-0 space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
+      <div className="w-full min-w-0 space-y-2 rounded-2xl border border-slate-200/80 bg-white px-3 py-3 shadow-soft">
         <div className="flex items-center gap-2 text-base font-semibold text-navy-header">
           <Filter className="h-4 w-4 shrink-0 text-navy-header/70" aria-hidden />
           <span>סינון לפי טווח תאריכים</span>
         </div>
 
-        <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <label
             htmlFor="history-date-filter"
-            className="block text-sm font-normal text-slate-600"
+            className="shrink-0 text-sm font-normal text-slate-600"
           >
             בחר/י טווח
           </label>
 
-          <div className="relative">
+          <div className="relative w-[12.5rem] max-w-full">
             <select
               id="history-date-filter"
               value={
@@ -1245,21 +1284,21 @@ export default function ParentHistoryPage() {
             </div>
           </div>
         ) : (
-          <p className="flex items-start gap-2 text-sm font-normal leading-relaxed text-slate-500">
+          <p className="flex items-center gap-1 whitespace-nowrap text-[12px] font-normal leading-none text-slate-500 min-[360px]:text-xs">
             <Calendar
-              className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
+              className="h-3.5 w-3.5 shrink-0 text-slate-400"
               aria-hidden
             />
             <span>
               מציג משמרות מ־
-              <span className="font-semibold tabular-nums text-emerald-600">
+              <span className="font-semibold tabular-nums text-emerald-600" dir="ltr">
                 {activeRange.start
                   .split("-")
                   .reverse()
                   .join("/")}
               </span>
-              {" "}עד{" "}
-              <span className="font-semibold tabular-nums text-emerald-600">
+              {" עד "}
+              <span className="font-semibold tabular-nums text-emerald-600" dir="ltr">
                 {activeRange.end
                   .split("-")
                   .reverse()
@@ -1269,10 +1308,13 @@ export default function ParentHistoryPage() {
           </p>
         )}
       </div>
+      </div>
 
-      <section className="w-full min-w-0">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain p-3 [-webkit-overflow-scrolling:touch]">
         {loadingData ? (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200/80 bg-white px-5 py-12 text-slate-500 shadow-soft">
+          <div className="flex flex-col items-center justify-center gap-3 px-5 py-12 text-slate-500">
             <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
             <p className="text-sm font-normal">
               טוען נתונים...
@@ -1280,7 +1322,7 @@ export default function ParentHistoryPage() {
           </div>
         ) : filteredShifts.length ===
           0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200/80 bg-white px-5 py-12 text-center shadow-soft">
+          <div className="flex flex-col items-center justify-center gap-3 px-5 py-12 text-center text-slate-500">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 text-slate-400">
               <FileSearch className="h-7 w-7" aria-hidden />
             </div>
@@ -1412,6 +1454,8 @@ export default function ParentHistoryPage() {
             )}
           </div>
         )}
+        </div>
+        </div>
       </section>
     </div>
   );
