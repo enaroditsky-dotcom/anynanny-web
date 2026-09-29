@@ -688,6 +688,7 @@ export default function SitterShiftsPage() {
 
   const [pastFromDate, setPastFromDate] = useState("");
   const [pastToDate, setPastToDate] = useState("");
+  const [pastDateFilterOpen, setPastDateFilterOpen] = useState(false);
 
   const fetchListShifts =
     useCallback(
@@ -1827,8 +1828,30 @@ export default function SitterShiftsPage() {
         ) : null}
 
         {viewType === "past" && !loading && !authLoading && shifts.length > 0 ? (
-          <div className="mb-2 shrink-0 rounded-2xl border border-slate-100 bg-white p-3">
-            <p className="mb-2 text-xs font-bold text-slate-600">סינון לפי תאריכים</p>
+          <div className="mb-2 shrink-0 overflow-hidden rounded-2xl border border-slate-100 bg-white">
+            <button
+              type="button"
+              aria-expanded={pastDateFilterOpen}
+              aria-controls="sitter-past-date-filter"
+              onClick={() => setPastDateFilterOpen((open) => !open)}
+              className="flex min-h-11 w-full items-center justify-between gap-3 px-3 text-right text-xs font-bold text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500"
+            >
+              <span>סינון לפי התאריכים</span>
+              <span aria-hidden="true" className="text-[11px] leading-none text-slate-500">
+                {pastDateFilterOpen ? "▲" : "▼"}
+              </span>
+            </button>
+            <div
+              id="sitter-past-date-filter"
+              role="region"
+              aria-label="סינון לפי התאריכים"
+              aria-hidden={!pastDateFilterOpen}
+              className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                pastDateFilterOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="min-h-0 overflow-hidden">
+                <div className="px-3 pb-3 pt-1" inert={!pastDateFilterOpen}>
             <div className="grid grid-cols-2 gap-2">
               <div className="min-w-0">
                 <label
@@ -1884,10 +1907,13 @@ export default function SitterShiftsPage() {
               }}
               disabled={!pastFilterActive}
               aria-label="נקה סינון"
-              className="mt-2 text-right text-[12px] font-bold text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-navy-header disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
+              className="mt-2 block w-full text-right text-[12px] font-bold text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-navy-header disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
             >
               נקה סינון
             </button>
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
 
