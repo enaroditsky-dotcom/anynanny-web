@@ -15,6 +15,11 @@ import {
 } from "@/lib/bookings/sitter-shift-overlap";
 import { PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE } from "@/lib/billing/manual-payment-lifecycle";
 import { assertMarketplacePairAllowed } from "@/lib/safety/enforcement";
+import { isSupabaseRpcUnavailableError } from "@/lib/supabase/postgrest-schema";
+import {
+  PARENT_MAY_REQUEST_SITTER_RPC,
+  SITTER_ACCEPTS_VERIFIED_PARENTS_ONLY_MESSAGE
+} from "@/lib/trust/request-recipient-filters";
 
 export { validateShiftWindow } from "@/lib/shift-requests/create-shift-request";
 
@@ -113,6 +118,19 @@ export async function createBooking(
     end_time: input.endIso
   });
 
+  const acceptance = await supabase.rpc(PARENT_MAY_REQUEST_SITTER_RPC, {
+    p_sitter_id: sitterIdTrimmed
+  });
+  if (!acceptance.error && acceptance.data === false) {
+    return {
+      booking: null,
+      error: SITTER_ACCEPTS_VERIFIED_PARENTS_ONLY_MESSAGE
+    };
+  }
+  if (acceptance.error && !isSupabaseRpcUnavailableError(acceptance.error)) {
+    console.warn("[createBooking] verified-parent preference:", acceptance.error.message);
+  }
+
   if (proposed) {
     const rpcAvailability = await sitterWindowIsAvailable(
       supabase,
@@ -180,6 +198,13 @@ export async function createBooking(
   if (error) {
     const message = error.message ?? "";
     const lower = message.toLowerCase();
+
+    if (message.includes(SITTER_ACCEPTS_VERIFIED_PARENTS_ONLY_MESSAGE)) {
+      return {
+        booking: null,
+        error: SITTER_ACCEPTS_VERIFIED_PARENTS_ONLY_MESSAGE
+      };
+    }
 
     if (message.includes("קיים תשלום שטרם אושר")) {
       return {

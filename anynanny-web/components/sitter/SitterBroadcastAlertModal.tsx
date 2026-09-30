@@ -29,6 +29,10 @@ import {
   type NowArrivalRange
 } from "@/lib/broadcast/now-request-details";
 import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
+import {
+  applyNowBroadcastEligibility,
+  filterNowBroadcastIdsForCurrentSitter
+} from "@/lib/broadcast/sitter-now-eligibility";
 import { NowBroadcastAlertBody } from "@/components/sitter/now-broadcast-alert-body";
 import { Zap } from "lucide-react";
 
@@ -459,15 +463,29 @@ export function SitterBroadcastAlertModal({
           return;
         }
 
+        const loadedRows =
+          (alertsData ??
+            []) as SitterBroadcastRow[];
+        const eligibility =
+          await filterNowBroadcastIdsForCurrentSitter(
+            supabase,
+            loadedRows.map((row) =>
+              String(row.id ?? "")
+            )
+          );
+        const visibleRows =
+          applyNowBroadcastEligibility(
+            loadedRows,
+            eligibility
+          );
+
         const currentId =
           activeAlertIdRef.current;
 
         const recovery =
           recoverActiveSitterBroadcast(
             {
-              rows:
-                (alertsData ??
-                  []) as SitterBroadcastRow[],
+              rows: visibleRows,
               sitterCities:
                 stableCities,
               dismissedIds:
@@ -560,31 +578,49 @@ export function SitterBroadcastAlertModal({
                   return;
                 }
 
-                tryOpenAlert(
-                  {
-                    id: next.id,
-                    city:
-                      next.city ??
-                      city,
-                    service_type:
-                      next.service_type ??
-                      "",
-                    created_at:
-                      next.created_at,
-                    location_label:
-                      next.location_label ??
-                      null,
-                    timing_mode:
-                      next.timing_mode ??
-                      null,
-                    requested_time:
-                      next.requested_time ??
-                      null
-                  },
-                  {
-                    playSound: true
+                const incoming = {
+                  id: next.id,
+                  city:
+                    next.city ??
+                    city,
+                  service_type:
+                    next.service_type ??
+                    "",
+                  created_at:
+                    next.created_at,
+                  location_label:
+                    next.location_label ??
+                    null,
+                  timing_mode:
+                    next.timing_mode ??
+                    null,
+                  requested_time:
+                    next.requested_time ??
+                    null
+                };
+
+                void (async () => {
+                  const eligibility =
+                    await filterNowBroadcastIdsForCurrentSitter(
+                      supabase,
+                      [incoming.id]
+                    );
+                  if (
+                    applyNowBroadcastEligibility(
+                      [incoming],
+                      eligibility
+                    ).length === 0
+                  ) {
+                    return;
                   }
-                );
+
+                  tryOpenAlert(
+                    incoming,
+                    {
+                      playSound: true
+                    }
+                  );
+                })();
               }
             },
             {
