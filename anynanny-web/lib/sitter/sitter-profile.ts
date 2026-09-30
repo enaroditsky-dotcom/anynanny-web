@@ -115,7 +115,8 @@ export const SITTER_PROFILE_PUT_COLUMNS = [
   "childcare_training_details",
   "is_public",
   "onboarding_completed_at",
-  "updated_at"
+  "updated_at",
+  "only_verified_parents"
 ] as const;
 
 export type SitterProfilePutColumn = (typeof SITTER_PROFILE_PUT_COLUMNS)[number];
@@ -188,7 +189,8 @@ export const SITTER_PROFILE_OWN_SELECT_COLUMNS = [
   "onboarding_completed_at",
   "updated_at",
   "avg_rating",
-  "rating_count"
+  "rating_count",
+  "only_verified_parents"
 ] as const;
 
 export function isSitterProfilePrivatePayoutColumn(column: string): boolean {
@@ -624,6 +626,9 @@ export type SitterProfileRow = {
   /** Average rating from `public.ratings` (maintained by DB trigger). */
   avg_rating?: number | null;
   rating_count?: number | null;
+
+  /** When true, new requests and NOW alerts come only from verified parents. */
+  only_verified_parents?: boolean;
 };
 
 /** Payload from `get_sitter_profile_public` RPC — never includes hidden admin fields. */

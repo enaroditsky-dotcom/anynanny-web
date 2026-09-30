@@ -18,7 +18,7 @@ import {
   SITTER_WORKING_CITIES_COLUMN,
   type SitterProfileRow
 } from "@/lib/sitter/sitter-profile";
-import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
+import { isPostgrestMissingColumnError, isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { pickSitterQuestionnairePutFields } from "@/lib/onboarding/sitter-questionnaire";
 import { normalizeWorkingCities } from "@/lib/geo/israel-cities";
@@ -233,7 +233,10 @@ export async function PUT(request: Request) {
         body.working_cities !== undefined
           ? normalizeWorkingCities(body.working_cities)
           : normalizeWorkingCities(prev.working_cities),
-      ...pickSitterQuestionnairePutFields(body, prev)
+      ...pickSitterQuestionnairePutFields(body, prev),
+      ...(typeof body.only_verified_parents === "boolean"
+        ? { only_verified_parents: body.only_verified_parents }
+        : {})
     };
 
     const isExpertProfile = normalizeExpertServiceTypes(merged.service_types).some((t) =>
@@ -336,31 +339,50 @@ export async function PATCH(request: Request) {
 
     const body = (await request.json()) as {
       working_cities?: unknown;
+      only_verified_parents?: unknown;
     };
+
+    const wantsCities = body.working_cities !== undefined;
+    const wantsVerifiedParents =
+      body.only_verified_parents === true || body.only_verified_parents === false;
+    if (!wantsCities && !wantsVerifiedParents) {
+      return NextResponse.json({ error: "אין מה לעדכן." }, { status: 400 });
+    }
 
     const fk = SITTER_PROFILES_USER_COLUMN;
     const table = getSitterProfilesTable() as typeof SITTER_PROFILES_TABLE;
-    const working_cities = normalizeWorkingCities(body.working_cities);
-    if (working_cities.length === 0) {
-      return NextResponse.json({ error: "יש לבחור לפחות עיר אחת." }, { status: 400 });
+    const patch: Record<string, unknown> = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (wantsCities) {
+      const working_cities = normalizeWorkingCities(body.working_cities);
+      if (working_cities.length === 0) {
+        return NextResponse.json({ error: "יש לבחור לפחות עיר אחת." }, { status: 400 });
+      }
+      patch[SITTER_WORKING_CITIES_COLUMN] = working_cities;
     }
 
-    const { error } = await supabase
-      .from(table)
-      .update({
-        [SITTER_WORKING_CITIES_COLUMN]: working_cities,
-        updated_at: new Date().toISOString()
-      })
-      .eq(fk, user.id);
+    if (wantsVerifiedParents) {
+      patch.only_verified_parents = body.only_verified_parents === true;
+    }
+
+    const { error } = await supabase.from(table).update(patch).eq(fk, user.id);
 
     if (error) {
       console.error("DB error:", error);
-      const message = formatSitterWorkingCitiesError(error.message);
-      console.error("[api/sitter/profile PATCH working_cities]", {
+      if (
+        wantsVerifiedParents &&
+        isPostgrestMissingColumnError(error.message, "only_verified_parents")
+      ) {
+        return NextResponse.json({ error: "שמירת ההעדפה נכשלה." }, { status: 400 });
+      }
+      const message = wantsCities
+        ? formatSitterWorkingCitiesError(error.message)
+        : "שמירת ההעדפה נכשלה.";
+      console.error("[api/sitter/profile PATCH]", {
         table,
-        column: SITTER_WORKING_CITIES_COLUMN,
         userId: user.id,
-        working_cities,
         message: error.message
       });
       return NextResponse.json({ error: message }, { status: 400 });

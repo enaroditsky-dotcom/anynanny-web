@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
 import { IdentityShieldMark, VerifiedUserBadge } from "@/components/identity/verified-user-badge";
@@ -15,6 +15,7 @@ import {
   maskIsraeliId,
   type IdentityVerificationRecord
 } from "@/lib/identity/identity-verification";
+import { PARENT_IDENTITY_VERIFICATION_QUERY } from "@/lib/trust/request-recipient-filters";
 
 type IdentityPersonalSectionProps = {
   role: "parent" | "sitter";
@@ -26,6 +27,7 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
   const [record, setRecord] = useState<IdentityVerificationRecord>(EMPTY_IDENTITY_VERIFICATION);
   const [missingSchema, setMissingSchema] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const autoOpenedVerification = useRef(false);
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -47,6 +49,14 @@ export function IdentityPersonalSection({ role, userId }: IdentityPersonalSectio
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (autoOpenedVerification.current || loading || !userId || role !== "parent") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(PARENT_IDENTITY_VERIFICATION_QUERY) !== "1") return;
+    autoOpenedVerification.current = true;
+    setFormOpen(true);
+  }, [loading, role, userId]);
 
   useEffect(() => {
     const onPageShow = () => {

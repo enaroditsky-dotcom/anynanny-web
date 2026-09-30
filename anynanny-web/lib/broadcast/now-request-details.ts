@@ -369,6 +369,10 @@ export function buildNowBroadcastAlertInsert(input: {
   timingMode: NowTimingMode;
   requestedTime: string | null;
   serviceType?: string;
+  /** Per request. False keeps the current city recipient pool. */
+  favoritesOnly?: boolean;
+  /** Per request. False keeps unverified sitters in the pool. */
+  verifiedSittersOnly?: boolean;
 }): Record<string, unknown> {
   const locationLabel = publicNowServiceLocation(input.address);
   const row: Record<string, unknown> = {
@@ -378,7 +382,9 @@ export function buildNowBroadcastAlertInsert(input: {
     service_type: input.serviceType ?? "sitter",
     timing_mode: input.timingMode,
     requested_time:
-      input.timingMode === NOW_TIMING_SPECIFIC ? input.requestedTime : null
+      input.timingMode === NOW_TIMING_SPECIFIC ? input.requestedTime : null,
+    favorites_only: input.favoritesOnly === true,
+    verified_sitters_only: input.verifiedSittersOnly === true
   };
 
   if (locationLabel) {
@@ -399,6 +405,16 @@ export function legacyNowBroadcastAlertInsert(input: {
     status: "active",
     service_type: input.serviceType ?? "sitter"
   };
+}
+
+/** Drop trust-filter columns when that migration is not applied yet. */
+export function omitNowBroadcastTrustFilterColumns(
+  row: Record<string, unknown>
+): Record<string, unknown> {
+  const next = { ...row };
+  delete next.favorites_only;
+  delete next.verified_sitters_only;
+  return next;
 }
 
 export function buildNowBroadcastResponseInsert(input: {

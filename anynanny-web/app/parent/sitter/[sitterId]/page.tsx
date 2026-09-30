@@ -13,6 +13,7 @@ import {
 } from "@/lib/sitter/sitter-profile";
 import { publicSitterDisplayName, formatPublicSitterAgeLabel } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { BookShiftModal } from "@/components/parent/book-shift-modal";
+import { VerifiedParentBookingBlockModal } from "@/components/parent/verified-parent-booking-block-modal";
 import { ParentFavoriteSitterButton } from "@/components/parent/parent-favorite-sitter-button";
 import { PARENT_SITTER_CALENDAR_BUTTON_LABEL } from "@/lib/favorites/parent-favorite-rules";
 import { UserSafetyActions } from "@/components/safety/user-safety-actions";
@@ -28,6 +29,8 @@ import {
 import { broadcastRadarHref } from "@/lib/broadcast/parent-active-broadcast";
 import { requestedShiftFromSearchParams } from "@/lib/bookings/requested-shift";
 import { preferredReceivingMethodLabel } from "@/lib/wallet/sitter-payout-methods";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isDirectBookingBlockedForUnverifiedParent } from "@/lib/trust/parent-booking-verified-gate";
 
 function formatReviewDate(iso: string): string {
   const t = Date.parse(iso);
@@ -51,6 +54,8 @@ export default function ParentSitterProfileView() {
   const [fetching, setFetching] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [verifiedParentBlockOpen, setVerifiedParentBlockOpen] = useState(false);
+  const [bookingGateBusy, setBookingGateBusy] = useState(false);
   const [reviewsOpen, setReviewsOpen] = useState(false);
 
   const fromBroadcast = searchParams.get("from") === "broadcast";
@@ -175,6 +180,24 @@ export default function ParentSitterProfileView() {
   const writtenReviews = reviews.filter((r) => String(r.comment ?? "").trim().length > 0);
   const preferredPaymentLabel = preferredReceivingMethodLabel(profile?.payout_preferred_method);
   const ageLabel = formatPublicSitterAgeLabel(profile?.age_years);
+
+  async function openBookingOrVerifiedParentBlock() {
+    if (bookingGateBusy || !sitterId) return;
+    setBookingGateBusy(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const blocked = supabase
+        ? await isDirectBookingBlockedForUnverifiedParent(supabase, sitterId)
+        : false;
+      if (blocked) {
+        setVerifiedParentBlockOpen(true);
+        return;
+      }
+      setIsBookingModalOpen(true);
+    } finally {
+      setBookingGateBusy(false);
+    }
+  }
 
   return (
     <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-4 pb-24 px-2" dir="rtl">
@@ -333,8 +356,10 @@ export default function ParentSitterProfileView() {
 
             <button
               type="button"
-              onClick={() => setIsBookingModalOpen(true)}
-              className="flex w-full items-center justify-between rounded-2xl bg-[#001F3F] p-3 text-white transition hover:bg-[#002b5c] active:scale-[0.99]"
+              disabled={bookingGateBusy}
+              aria-busy={bookingGateBusy}
+              onClick={() => void openBookingOrVerifiedParentBlock()}
+              className="flex w-full items-center justify-between rounded-2xl bg-[#001F3F] p-3 text-white transition hover:bg-[#002b5c] active:scale-[0.99] disabled:opacity-70"
             >
               <div className="text-right">
                 <p className="text-sm font-bold">תיאום משמרת</p>
@@ -350,6 +375,11 @@ export default function ParentSitterProfileView() {
         </div>
       ) : null}
 
+      <VerifiedParentBookingBlockModal
+        open={verifiedParentBlockOpen}
+        sitterName={displayName}
+        onClose={() => setVerifiedParentBlockOpen(false)}
+      />
       <BookShiftModal
         open={isBookingModalOpen}
         sitterId={sitterId}

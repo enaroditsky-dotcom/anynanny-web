@@ -11,6 +11,7 @@ import { SitterManualPaymentConfirmPanel } from "@/components/session/sitter-man
 import { ReleaseStuckShiftModal } from "@/components/parent/release-stuck-shift-modal";
 import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
+import { SitterVerifiedParentsPreference } from "@/components/sitter/sitter-verified-parents-preference";
 import { useSitterBroadcastPause } from "@/components/sitter/SitterBroadcastAlertHost";
 import { LogoutButton } from "@/components/account/logout-button";
 import {
@@ -1418,6 +1419,7 @@ export default function SitterDashboardPage() {
             avatarUrl={sitterAvatarUrl}
           />
         </div>
+        {sitterId ? <SitterVerifiedParentsPreference /> : null}
           {stuckShiftReviewNotice ? (
             <div
               role="status"
