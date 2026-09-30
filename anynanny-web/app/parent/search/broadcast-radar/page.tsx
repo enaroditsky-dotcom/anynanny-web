@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBooking } from "@/lib/bookings/create-booking";
 import { BroadcastPanelControls } from "@/components/parent/broadcast-panel-controls";
+import { UnverifiedParentNowNotice } from "@/components/parent/unverified-parent-now-notice";
 import { BroadcastResponderArrivalLine } from "@/components/parent/broadcast-responder-arrival-line";
 import {
   BroadcastDeclineNoticeUnit,
@@ -13,6 +14,10 @@ import {
 } from "@/components/parent/broadcast-decline-notice";
 import { parentSitterProfilePathFromBroadcast } from "@/components/sitter/public-sitter-search-card";
 import { VerifiedUserBadge, VERIFIED_IDENTITY_LABEL } from "@/components/identity/verified-user-badge";
+import {
+  isIdentityVerified,
+  parseIdentityVerificationStatus
+} from "@/lib/identity/identity-verification";
 import { rememberActiveBroadcast } from "@/lib/broadcast/broadcast-active-snapshot";
 import {
   PARENT_BROADCAST_ALERT_SELECT,
@@ -38,6 +43,11 @@ import {
   publicSitterDisplayName
 } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import {
+  shouldShowUnverifiedParentNowNotice,
+  unverifiedParentNowNoticeDismissKey
+} from "@/lib/trust/request-recipient-filters";
 import { ProfileImage } from "@/components/profile/profile-image";
 import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
 import {
@@ -127,6 +137,9 @@ function BroadcastRadarContent() {
   const [requestTimingMode, setRequestTimingMode] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [parentId, setParentId] = useState<string | null>(null);
+  const [nowBroadcastStatus, setNowBroadcastStatus] = useState<string | null>(null);
+  const [parentIdentityVerified, setParentIdentityVerified] = useState<boolean | null>(null);
+  const [unverifiedNoticeDismissed, setUnverifiedNoticeDismissed] = useState<boolean | null>(null);
   const handledRejectionBookingIdsRef = useRef<Set<string>>(new Set());
   const rejectionMinimizeLockRef = useRef(false);
   const declinedSitterIdsRef = useRef<string[]>([]);
@@ -272,6 +285,64 @@ function BroadcastRadarContent() {
     };
   }, [isExpired, isPaused, isFilled]);
 
+  useEffect(() => {
+    if (!supabase || !parentId) return;
+    let disposed = false;
+
+    const loadParentIdentity = async () => {
+      const { data, error } = await supabase
+        .from(PROFILES_TABLE)
+        .select("identity_verification_status")
+        .eq("id", parentId)
+        .maybeSingle();
+      if (disposed) return;
+      if (error) {
+        setParentIdentityVerified(null);
+        return;
+      }
+      const status = parseIdentityVerificationStatus(
+        data && typeof data === "object"
+          ? (data as { identity_verification_status?: unknown }).identity_verification_status
+          : null
+      );
+      setParentIdentityVerified(isIdentityVerified(status));
+    };
+
+    void loadParentIdentity();
+    const onPageShow = () => {
+      void loadParentIdentity();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      disposed = true;
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [parentId, supabase]);
+
+  useEffect(() => {
+    if (!alertId || alertId === "null" || alertId === "simulation-id") {
+      setUnverifiedNoticeDismissed(false);
+      return;
+    }
+    try {
+      setUnverifiedNoticeDismissed(
+        window.sessionStorage.getItem(unverifiedParentNowNoticeDismissKey(alertId)) === "1"
+      );
+    } catch {
+      setUnverifiedNoticeDismissed(false);
+    }
+  }, [alertId]);
+
+  function dismissUnverifiedNowNotice() {
+    setUnverifiedNoticeDismissed(true);
+    if (!alertId || alertId === "null" || alertId === "simulation-id") return;
+    try {
+      window.sessionStorage.setItem(unverifiedParentNowNoticeDismissKey(alertId), "1");
+    } catch {
+      // The in-memory hide still applies for this page view.
+    }
+  }
+
   /*
    * Restore the parent's existing active broadcast when the URL is incomplete,
    * then listen for status changes. Does not create a new broadcast.
@@ -284,6 +355,7 @@ function BroadcastRadarContent() {
     let disposed = false;
 
     const applyStatus = (status: string | undefined) => {
+      setNowBroadcastStatus(typeof status === "string" ? status : null);
       if (status === "expired" || status === "cancelled") {
         setIsExpired(true);
       } else if (status === "paused") {
@@ -1033,6 +1105,11 @@ function BroadcastRadarContent() {
   const elapsedLabel = startedAt
     ? formatBroadcastElapsed(startedAt, nowMs)
     : null;
+  const showUnverifiedNowNotice = shouldShowUnverifiedParentNowNotice({
+    broadcastStatus: nowBroadcastStatus,
+    parentIdentityVerified
+  });
+  const floatingUnverifiedNotice = showUnverifiedNowNotice && unverifiedNoticeDismissed === false;
 
   const serviceLabel =
     type === "lactation"
@@ -1086,16 +1163,23 @@ function BroadcastRadarContent() {
         </div>
       ) : (
         <>
-          <div className="relative space-y-3 overflow-hidden rounded-3xl border border-[#FF8A8A]/20 bg-gradient-to-br from-[#FFF5F5] to-[#FFF0F0] p-5 text-center shadow-sm">
+          <div className={`relative ${floatingUnverifiedNotice ? "pb-16" : ""}`}>
+          <div
+            className={`relative z-0 space-y-3 overflow-hidden rounded-3xl border border-[#FF8A8A]/20 bg-gradient-to-br from-[#FFF5F5] to-[#FFF0F0] p-5 text-center shadow-sm ${
+              floatingUnverifiedNotice ? "min-h-[26rem]" : ""
+            }`}
+          >
             <BroadcastPanelControls
               onMinimize={handleMinimize}
               onClose={isPaused ? () => void handleClosePaused() : undefined}
               closeDisabled={isClosing}
             />
 
+            {floatingUnverifiedNotice ? null : (
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#FF8A8A] text-white shadow-md">
               <Zap className="h-6 w-6 fill-white" />
             </div>
+            )}
 
             <div className="space-y-1">
               <h1 className="text-xl font-black text-navy-header">
@@ -1104,11 +1188,13 @@ function BroadcastRadarContent() {
                   : `השידור המיידי הופעל ב-${cityLabel}`}
               </h1>
 
+              {floatingUnverifiedNotice ? null : (
               <p className="text-xs font-medium text-slate-500">
                 {isPaused
                   ? "התוצאות נשמרו לפניך - בחר את המטפלת המועדפת"
                   : `מחפשים נני · ${serviceLabel} מעכשיו לעכשיו`}
               </p>
+              )}
             </div>
 
             {!isPaused && elapsedLabel ? (
@@ -1153,6 +1239,12 @@ function BroadcastRadarContent() {
                 </span>
               )}
             </div>
+          </div>
+          {floatingUnverifiedNotice ? (
+            <div className="absolute inset-x-2 top-[8.25rem] z-30">
+              <UnverifiedParentNowNotice onDismiss={dismissUnverifiedNowNotice} />
+            </div>
+          ) : null}
           </div>
 
           <div className="space-y-3">

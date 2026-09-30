@@ -6,8 +6,13 @@ import { shouldOpenVerifiedParentBookingBlock } from "../lib/trust/parent-bookin
 import {
   parentIdentityVerificationHref,
   selectNowBroadcastRecipients,
+  shouldShowUnverifiedParentNowNotice,
+  unverifiedParentNowNoticeDismissKey,
   sitterAcceptsParentRequest,
   sitterIsEligibleForNowBroadcast,
+  UNVERIFIED_PARENT_NOW_NOTICE_BODY,
+  UNVERIFIED_PARENT_NOW_NOTICE_FOLLOWUP,
+  UNVERIFIED_PARENT_NOW_NOTICE_HEADING,
   VERIFIED_IDENTITY_PHRASE,
   VERIFIED_PARENT_BOOKING_BLOCK_HELP,
   type NowBroadcastAudience,
@@ -267,5 +272,83 @@ assert.match(identitySection, /setFormOpen\(true\)/);
 assert.match(createBooking, /PARENT_MAY_REQUEST_SITTER_RPC/);
 assert.match(migration, /bookings_enforce_verified_parent_preference/);
 assert.match(migration, /parent_may_request_sitter/);
+
+assert.equal(UNVERIFIED_PARENT_NOW_NOTICE_HEADING, "שימו לב!");
+assert.equal(
+  UNVERIFIED_PARENT_NOW_NOTICE_BODY,
+  "ייתכן שחלק מהבייביסיטריות הזמינות באזור לא קיבלו את הבקשה הדחופה שלך, משום שהן בחרו לקבל בקשות רק מהורים עם זהות מאומתת."
+);
+assert.equal(
+  UNVERIFIED_PARENT_NOW_NOTICE_FOLLOWUP,
+  "מומלץ להשלים את אימות הזהות ולבצע את הקריאה הדחופה שוב, כדי להגדיל את מספר הבייביסיטריות שיכולות לקבל את הבקשה."
+);
+
+assert.equal(
+  shouldShowUnverifiedParentNowNotice({ broadcastStatus: null, parentIdentityVerified: false }),
+  false
+);
+assert.equal(
+  shouldShowUnverifiedParentNowNotice({ broadcastStatus: "expired", parentIdentityVerified: false }),
+  false
+);
+assert.equal(
+  shouldShowUnverifiedParentNowNotice({ broadcastStatus: "cancelled", parentIdentityVerified: false }),
+  false
+);
+assert.equal(
+  shouldShowUnverifiedParentNowNotice({ broadcastStatus: "filled", parentIdentityVerified: false }),
+  false
+);
+assert.equal(
+  shouldShowUnverifiedParentNowNotice({ broadcastStatus: "active", parentIdentityVerified: false }),
+  true
+);
+assert.equal(
+  shouldShowUnverifiedParentNowNotice({ broadcastStatus: "paused", parentIdentityVerified: false }),
+  true
+);
+assert.equal(
+  shouldShowUnverifiedParentNowNotice({ broadcastStatus: "active", parentIdentityVerified: true }),
+  false
+);
+assert.equal(
+  shouldShowUnverifiedParentNowNotice({ broadcastStatus: "active", parentIdentityVerified: null }),
+  false
+);
+
+const radar = read("app/parent/search/broadcast-radar/page.tsx");
+const notice = read("components/parent/unverified-parent-now-notice.tsx");
+const statusAt = radar.indexOf("השידור המיידי הופעל");
+const noticeAt = radar.indexOf("<UnverifiedParentNowNotice");
+const responsesAt = radar.indexOf("מטפלות פנויות שהגיבו");
+assert.ok(statusAt >= 0 && noticeAt > statusAt && responsesAt > noticeAt);
+assert.match(radar, /identity_verification_status/);
+assert.match(radar, /shouldShowUnverifiedParentNowNotice/);
+assert.doesNotMatch(read("app/parent/broadcast/page.tsx"), /UnverifiedParentNowNotice/);
+assert.match(notice, /UNVERIFIED_PARENT_NOW_NOTICE_HEADING/);
+assert.match(notice, /text-\[#00A86B\]/);
+assert.match(notice, /bg-\[#FF8A8A\]/);
+assert.match(notice, /לאימות זהות/);
+assert.match(notice, /להתעלם ולהמשיך/);
+assert.match(notice, /onDismiss/);
+assert.match(notice, /parentIdentityVerificationHref/);
+assert.match(notice, /shadow-\[0_28px_64px/);
+assert.match(radar, /top-\[8\.25rem\]/);
+assert.match(radar, /min-h-\[26rem\]/);
+assert.match(radar, /z-30/);
+assert.match(radar, /sessionStorage/);
+assert.match(radar, /unverifiedParentNowNoticeDismissKey/);
+assert.equal(
+  unverifiedParentNowNoticeDismissKey("alert-1"),
+  "anynanny_now_unverified_notice_dismissed:alert-1"
+);
+const dismissFn = radar.slice(
+  radar.indexOf("function dismissUnverifiedNowNotice"),
+  radar.indexOf("Restore the parent's existing")
+);
+assert.doesNotMatch(dismissFn, /requestBroadcastStatusChange/);
+assert.doesNotMatch(dismissFn, /broadcast_alerts/);
+assert.doesNotMatch(notice, /requestBroadcastStatusChange|alert\(/);
+assert.doesNotMatch(notice, /ביטול השידור|הפעל מחדש/);
 
 console.log("request trust filters ok");

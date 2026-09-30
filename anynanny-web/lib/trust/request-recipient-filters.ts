@@ -50,6 +50,32 @@ export function parentIdentityVerificationHref(): string {
   return `${PARENT_IDENTITY_VERIFICATION_PATH}?${PARENT_IDENTITY_VERIFICATION_QUERY}=1`;
 }
 
+export const UNVERIFIED_PARENT_NOW_NOTICE_HEADING = "שימו לב!";
+
+export const UNVERIFIED_PARENT_NOW_NOTICE_BODY =
+  "ייתכן שחלק מהבייביסיטריות הזמינות באזור לא קיבלו את הבקשה הדחופה שלך, משום שהן בחרו לקבל בקשות רק מהורים עם זהות מאומתת.";
+
+export const UNVERIFIED_PARENT_NOW_NOTICE_FOLLOWUP =
+  "מומלץ להשלים את אימות הזהות ולבצע את הקריאה הדחופה שוב, כדי להגדיל את מספר הבייביסיטריות שיכולות לקבל את הבקשה.";
+
+/**
+ * Informational only. Shown on a current NOW broadcast (active or paused)
+ * when the parent's identity status is known and is not exactly `verified`.
+ * Unknown status stays hidden so a verified parent is never warned by mistake.
+ */
+export function shouldShowUnverifiedParentNowNotice(input: {
+  broadcastStatus: string | null;
+  parentIdentityVerified: boolean | null;
+}): boolean {
+  if (input.parentIdentityVerified !== false) return false;
+  return input.broadcastStatus === "active" || input.broadcastStatus === "paused";
+}
+
+/** Session-only hide. Not stored on the broadcast row. */
+export function unverifiedParentNowNoticeDismissKey(alertId: string): string {
+  return `anynanny_now_unverified_notice_dismissed:${alertId}`;
+}
+
 export type NowRecipientCandidate = {
   sitterId: string;
   /** Working city contains the broadcast city. */
