@@ -13,7 +13,7 @@ export const MANUAL_PAYMENT_METHOD_LABELS: Record<ManualPaymentMethod, string> =
   paybox: "PayBox"
 };
 
-export const MANUAL_PAYMENT_HEADING = "כמה נוח לך לשלם?";
+export const MANUAL_PAYMENT_HEADING = "אמצעי תשלום לבחירה";
 export const MANUAL_PAYMENT_PAID_BUTTON = "שילמתי";
 
 export const MANUAL_PAYMENT_CASH_TITLE = "תשלום במזומן";
@@ -133,16 +133,19 @@ export type ParentManualSettlementStep =
 
 export type ManualPaymentDestinations = {
   bookingId: string;
-  cash: { available: true };
+  /** True only when the sitter has declared cash as an accepted method. */
+  cash: { available: boolean };
   bit: { available: boolean; destination?: string };
   paybox: { available: boolean; destination?: string; link?: string };
 };
 
 export function eligibleManualPaymentMethods(input: {
+  cashAccepted: boolean;
   bitConfigured: boolean;
   payboxConfigured: boolean;
 }): ManualPaymentMethod[] {
-  const methods: ManualPaymentMethod[] = ["cash"];
+  const methods: ManualPaymentMethod[] = [];
+  if (input.cashAccepted) methods.push("cash");
   if (input.bitConfigured) methods.push("bit");
   if (input.payboxConfigured) methods.push("paybox");
   return methods;

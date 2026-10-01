@@ -39,20 +39,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "אמצעי תשלום או הזמנה לא תקינים." }, { status: 400 });
   }
 
-  if (paymentMethod === "bit" || paymentMethod === "paybox") {
-    const destinations = await loadAuthorizedManualPaymentDestinations(supabase, {
-      actorId: user.id,
-      bookingId
-    });
-    if (!destinations.ok) {
-      return NextResponse.json({ error: destinations.error }, { status: destinations.status });
-    }
-    if (!methodHasAuthorizedDestination(paymentMethod, destinations.destinations)) {
-      return NextResponse.json(
-        { error: "אמצעי התשלום שנבחר אינו זמין עבור נני זו." },
-        { status: 400 }
-      );
-    }
+  const destinations = await loadAuthorizedManualPaymentDestinations(supabase, {
+    actorId: user.id,
+    bookingId
+  });
+  if (!destinations.ok) {
+    return NextResponse.json({ error: destinations.error }, { status: destinations.status });
+  }
+  if (!methodHasAuthorizedDestination(paymentMethod, destinations.destinations)) {
+    return NextResponse.json(
+      { error: "אמצעי התשלום שנבחר אינו זמין עבור נני זו." },
+      { status: 400 }
+    );
   }
 
   const rpc = await supabase.rpc("report_manual_payment", {
