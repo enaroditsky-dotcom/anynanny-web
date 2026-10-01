@@ -83,8 +83,7 @@ export default async function ParentDashboardPage() {
       "first_name, last_name, address, avatar_url",
       "first_name, last_name, address",
       "first_name, last_name",
-      "first_name, last_name, address, parent_serial",
-      "first_name, last_name, address, parent_serial, parent_public_id"
+      "first_name, last_name, address, parent_serial"
     ];
 
     for (const select of profileSelectAttempts) {
@@ -97,7 +96,6 @@ export default async function ParentDashboardPage() {
       if (error) {
         if (
           isPostgrestMissingColumnError(error.message, "parent_serial") ||
-          isPostgrestMissingColumnError(error.message, "parent_public_id") ||
           isPostgrestMissingColumnError(error.message, "address") ||
           isPostgrestMissingColumnError(error.message, "avatar_url") ||
           isPostgrestSchemaDriftError(error.message)

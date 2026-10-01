@@ -30,6 +30,7 @@
     "test:parent-onboarding-wizard": "npx --yes tsx scripts/test-parent-onboarding-wizard.ts",
     "test:sitter-onboarding-wizard": "npx --yes tsx scripts/test-sitter-onboarding-wizard.ts",
     "test:parent-public-id-display": "npx --yes tsx scripts/test-parent-public-id-display.ts",
+    "test:real-public-ids": "npx --yes tsx scripts/test-real-public-ids.ts",
     "test:ugc-safety": "npx --yes tsx scripts/test-ugc-safety-moderation.ts",
     "test:release-stuck-shift-scope": "npx --yes tsx scripts/test-release-stuck-shift-scope.ts",
     "test:modal-bottom-nav-clearance": "npx --yes tsx scripts/test-modal-bottom-nav-clearance.ts",

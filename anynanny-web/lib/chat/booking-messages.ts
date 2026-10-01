@@ -46,7 +46,7 @@ export type BookingChatInboxRow = {
   booking_id: string;
   partner_user_id: string;
   partner_name: string | null;
-  /** Public display id (AN-#### for sitters, P-#### for parents). */
+  /** Public display id (RAN-/AN-/CONS- for sitters, RP-/P- for parents). */
   partner_public_id: string | null;
   schedule_label: string;
   last_message_at: string;
