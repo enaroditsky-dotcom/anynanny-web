@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   isManualPaymentMethodUsable,
+  parentVisibleCashAccepted,
   sanitizeManualPaymentDestinations
 } from "@/lib/billing/payment-method-availability";
 import {
@@ -69,6 +70,40 @@ export async function parentHasRatedOwnedBooking(
   }
 
   return Boolean(ratings.data?.id);
+}
+
+function cashDestination(acceptsCash: boolean): ManualPaymentDestinations["cash"] {
+  return { available: acceptsCash };
+}
+
+async function loadSitterAcceptsCash(
+  admin: SupabaseClient | null,
+  sitterId: string
+): Promise<boolean> {
+  if (!admin || !sitterId) return false;
+  const row = await admin
+    .from(SITTER_PROFILES_TABLE)
+    .select("payout_preferred_method")
+    .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
+    .maybeSingle();
+  if (row.error) {
+    console.warn("[loadSitterAcceptsCash]", row.error.message);
+    return false;
+  }
+  return parentVisibleCashAccepted(
+    (row.data as { payout_preferred_method?: string | null } | null)?.payout_preferred_method
+  );
+}
+
+function cashAcceptedFromDestinationPayload(payload: {
+  accepts_cash?: unknown;
+  preferred_method?: unknown;
+}): boolean | null {
+  if (typeof payload.accepts_cash === "boolean") return payload.accepts_cash;
+  if (payload.preferred_method !== undefined && payload.preferred_method !== null) {
+    return parentVisibleCashAccepted(payload.preferred_method);
+  }
+  return null;
 }
 
 function buildPayboxDestination(input: {
@@ -148,9 +183,9 @@ export async function loadAuthorizedManualPaymentDestinations(
     return { ok: false, status, error, reason: gate.reason };
   }
 
-  const cashOnly: ManualPaymentDestinations = {
+  const noneAvailable: ManualPaymentDestinations = {
     bookingId: String(row.id),
-    cash: { available: true },
+    cash: { available: false },
     bit: { available: false },
     paybox: { available: false }
   };
@@ -161,18 +196,24 @@ export async function loadAuthorizedManualPaymentDestinations(
 
   if (!rpc.error) {
     const payload = (rpc.data ?? {}) as {
+      accepts_cash?: boolean;
+      preferred_method?: string | null;
       bit_phone?: string | null;
       paybox_phone?: string | null;
       paybox_link?: string | null;
     };
     const bitPhone = String(payload.bit_phone ?? "").trim();
     const payboxPhone = String(payload.paybox_phone ?? "").trim();
+    const acceptsCashFromRpc = cashAcceptedFromDestinationPayload(payload);
+    const acceptsCash =
+      acceptsCashFromRpc ??
+      (await loadSitterAcceptsCash(tryGetSupabaseServiceRoleClient(), sitterId));
     return {
       ok: true,
       destinations:
         sanitizeManualPaymentDestinations({
           bookingId: String(row.id),
-          cash: { available: true },
+          cash: cashDestination(acceptsCash),
           bit: isValidIsraeliMobile(bitPhone)
             ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
             : { available: false },
@@ -180,12 +221,7 @@ export async function loadAuthorizedManualPaymentDestinations(
             phone: payboxPhone,
             link: payload.paybox_link
           })
-        }) ?? {
-          bookingId: String(row.id),
-          cash: { available: true },
-          bit: { available: false },
-          paybox: { available: false }
-        }
+        }) ?? noneAvailable
     };
   }
 
@@ -213,20 +249,22 @@ export async function loadAuthorizedManualPaymentDestinations(
   const admin = tryGetSupabaseServiceRoleClient();
   if (!admin) {
     console.warn(
-      "[loadAuthorizedManualPaymentDestinations] destinations RPC unavailable and SUPABASE_SERVICE_ROLE_KEY missing; Bit/PayBox hidden"
+      "[loadAuthorizedManualPaymentDestinations] destinations RPC unavailable and SUPABASE_SERVICE_ROLE_KEY missing; sitter payment methods hidden"
     );
-    return { ok: true, destinations: cashOnly };
+    return { ok: true, destinations: noneAvailable };
   }
 
   const payout = await admin
     .from(SITTER_PROFILES_TABLE)
-    .select("payout_bit_phone, payout_paybox_phone, payout_paybox_link")
+    .select(
+      "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_paybox_link"
+    )
     .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
     .maybeSingle();
 
   if (payout.error) {
     console.warn("[loadAuthorizedManualPaymentDestinations] payout", payout.error.message);
-    return { ok: true, destinations: cashOnly };
+    return { ok: true, destinations: noneAvailable };
   }
 
   const bitPhone = String(
@@ -244,17 +282,17 @@ export async function loadAuthorizedManualPaymentDestinations(
     destinations:
       sanitizeManualPaymentDestinations({
         bookingId: String(row.id),
-        cash: { available: true },
+        cash: cashDestination(
+          parentVisibleCashAccepted(
+            (payout.data as { payout_preferred_method?: string | null } | null)
+              ?.payout_preferred_method
+          )
+        ),
         bit: isValidIsraeliMobile(bitPhone)
           ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
           : { available: false },
         paybox: buildPayboxDestination({ phone: payboxPhone, link: payboxLink })
-      }) ?? {
-        bookingId: String(row.id),
-        cash: { available: true },
-        bit: { available: false },
-        paybox: { available: false }
-      }
+      }) ?? noneAvailable
   };
 }
 

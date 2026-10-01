@@ -83,7 +83,6 @@ assert.match(reportUi, /שלח דיווח/);
 
 const modified = {
   "book-shift": read("components/parent/book-shift-modal.tsx"),
-  "parent-wallet": read("app/parent/wallet/wallet-client.tsx"),
   "personal-area": read("components/personal-area/personal-area-ui.tsx"),
   "session-rating": read("components/session/session-rating-modal.tsx"),
   "bank-details": read("components/sitter/SitterBankDetailsModal.tsx"),
@@ -126,10 +125,12 @@ assert.match(bookShift, /שלח בקשה/);
 assert.match(bookShift, /handleClose/);
 assert.doesNotMatch(bookShift, /max-h-\[90dvh\]|max-h-\[85vh\]/);
 
-const parentWallet = modified["parent-wallet"];
-assert.match(parentWallet, /אמצעי תשלום שלי/);
-assert.match(parentWallet, /PARENT_WALLET_SELECTABLE_METHODS/);
-assert.match(parentWallet, /תשלום משמרת מוצג בדשבורד לפי אמצעי הקבלה/);
+const parentWallet = read("app/parent/wallet/wallet-client.tsx");
+assert.match(parentWallet, /אמצעי תשלום/);
+assert.match(parentWallet, /קיצורי דרך לאפליקציות תשלום חיצוניות/);
+assert.match(parentWallet, /target="_blank"/);
+assert.match(parentWallet, /noopener noreferrer/);
+assert.doesNotMatch(parentWallet, /אמצעי תשלום שלי|הוספת כרטיס|HYP|AUTH_MODAL_OVERLAY_SCROLL/);
 assert.doesNotMatch(parentWallet, /Google Pay|Apple Pay/);
 assert.doesNotMatch(parentWallet, /items-end/);
 

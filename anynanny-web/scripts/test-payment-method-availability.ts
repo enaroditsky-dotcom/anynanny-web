@@ -23,6 +23,7 @@ import {
   type ManualPaymentDestinations
 } from "../lib/billing/manual-payment-ui";
 import { EMPTY_SITTER_PAYOUT_METHODS } from "../lib/wallet/sitter-payout-methods";
+import { paymentAppShortcutHref } from "../lib/wallet/payment-app-shortcuts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function read(relativePath: string): string {
@@ -48,10 +49,11 @@ function destinations(input: {
   payboxLink?: string;
   bitAvailable?: boolean;
   payboxAvailable?: boolean;
+  cashAvailable?: boolean;
 }): ManualPaymentDestinations {
   return {
     bookingId: "booking-1",
-    cash: { available: true },
+    cash: { available: input.cashAvailable === true },
     bit:
       input.bitAvailable === false
         ? { available: false, destination: input.bit }
@@ -71,27 +73,41 @@ function destinations(input: {
   };
 }
 
-// 1. Bit configured, PayBox missing → Parent sees only Bit (+ cash)
+// 1. Bit configured, PayBox missing, cash not accepted → Parent sees only Bit
 {
   const dest = destinations({ bit: VALID_BIT });
   assert.deepEqual(availableParentReceivingMethodsFromDestinations(dest), ["bit"]);
-  assert.deepEqual(availableManualPaymentMethods(dest), ["cash", "bit"]);
+  assert.deepEqual(availableManualPaymentMethods(dest), ["bit"]);
   assert.equal(canReportManualPayment("bit", dest), true);
   assert.equal(canReportManualPayment("paybox", dest), false);
+  assert.equal(canReportManualPayment("cash", dest), false);
 }
 
-// 2. PayBox configured, Bit missing → Parent sees only PayBox (+ cash)
+// 2. PayBox configured, Bit missing, cash not accepted → Parent sees only PayBox
 {
   const dest = destinations({ payboxLink: VALID_PAYBOX_LINK });
   assert.deepEqual(availableParentReceivingMethodsFromDestinations(dest), ["paybox"]);
-  assert.deepEqual(availableManualPaymentMethods(dest), ["cash", "paybox"]);
+  assert.deepEqual(availableManualPaymentMethods(dest), ["paybox"]);
   assert.equal(canReportManualPayment("paybox", dest), true);
   assert.equal(canReportManualPayment("bit", dest), false);
+  assert.equal(canReportManualPayment("cash", dest), false);
 }
 
-// 3. Both configured → Parent sees both
+// 3. Cash accepted plus Bit → Parent sees cash and Bit only
 {
-  const dest = destinations({ bit: VALID_BIT, payboxPhone: "0521234567" });
+  const dest = destinations({ bit: VALID_BIT, cashAvailable: true });
+  assert.deepEqual(availableManualPaymentMethods(dest), ["cash", "bit"]);
+  assert.equal(canReportManualPayment("cash", dest), true);
+  assert.equal(canReportManualPayment("paybox", dest), false);
+}
+
+// 3b. Bit and PayBox configured, cash accepted → Parent sees all supported methods
+{
+  const dest = destinations({
+    bit: VALID_BIT,
+    payboxPhone: "0521234567",
+    cashAvailable: true
+  });
   assert.deepEqual(availableParentReceivingMethodsFromDestinations(dest), ["bit", "paybox"]);
   assert.deepEqual(availableManualPaymentMethods(dest), ["cash", "bit", "paybox"]);
 }
@@ -100,7 +116,7 @@ function destinations(input: {
 {
   const dest = emptyManualPaymentDestinations("booking-1");
   assert.deepEqual(availableParentReceivingMethodsFromDestinations(dest), []);
-  assert.deepEqual(availableManualPaymentMethods(dest), ["cash"]);
+  assert.deepEqual(availableManualPaymentMethods(dest), []);
   assert.equal(hasUsableDigitalReceivingMethod(dest), false);
   assert.match(panel, /PARENT_NO_DIGITAL_RECEIVING_COPY/);
   assert.equal(PARENT_NO_DIGITAL_RECEIVING_COPY, "לבייביסיטר עדיין לא הוגדר אמצעי לקבלת תשלום.");
@@ -176,9 +192,16 @@ assert.match(dashboard, /canReportManualPayment/);
 assert.match(dashboard, /sanitizeManualPaymentDestinations/);
 assert.match(dashboard, /\/api\/parent\/manual-payment-destinations/);
 
-// 12. Parent wallet uses the same availability model
-assert.match(parentWallet, /PARENT_WALLET_SELECTABLE_METHODS/);
-assert.match(parentWallet, /תשלום משמרת מתבצע לפי אמצעי הקבלה/);
+// 12. Parent wallet is external app shortcuts only — no stored card or HYP setup
+assert.doesNotMatch(parentWallet, /PARENT_WALLET_SELECTABLE_METHODS/);
+assert.doesNotMatch(parentWallet, /הוספת כרטיס|HYP|israel-deposit|\/api\/parent\/payment-methods/);
+assert.match(parentWallet, /אמצעי תשלום/);
+assert.match(parentWallet, /קיצורי דרך לאפליקציות תשלום חיצוניות/);
+assert.match(parentWallet, /התשלום מתבצע באפליקציה החיצונית/);
+assert.match(parentWallet, /פירוט תשלומים/);
+assert.equal(paymentAppShortcutHref("bit"), "https://www.bitpay.co.il/he");
+assert.equal(paymentAppShortcutHref("paybox"), "https://www.payboxapp.com/");
+assert.doesNotMatch(parentWallet, /bit:\/\/|paybox:\/\//);
 
 // 13. Sitter wallet visually distinguishes configured vs not configured
 assert.match(sitterWallet, /sitterReceivingDetailStatus/);
@@ -206,7 +229,11 @@ assert.match(destinationsServer, /isManualPaymentMethodUsable/);
 assert.match(destinationsServer, /sanitizeManualPaymentDestinations/);
 assert.equal(isManualPaymentMethodUsable("bit", emptyManualPaymentDestinations("b1")), false);
 assert.equal(isManualPaymentMethodUsable("paybox", emptyManualPaymentDestinations("b1")), false);
-assert.equal(isManualPaymentMethodUsable("cash", emptyManualPaymentDestinations("b1")), true);
+assert.equal(isManualPaymentMethodUsable("cash", emptyManualPaymentDestinations("b1")), false);
+assert.equal(
+  isManualPaymentMethodUsable("cash", destinations({ cashAvailable: true })),
+  true
+);
 
 // 15. Existing valid Bit flow still works
 {
@@ -230,9 +257,9 @@ assert.equal(isManualPaymentMethodUsable("cash", emptyManualPaymentDestinations(
 // 17. No crash when payout-method data is missing/null
 assert.deepEqual(availableParentReceivingMethodsFromPayoutMethods(null), []);
 assert.deepEqual(availableParentReceivingMethodsFromDestinations(null), []);
-assert.deepEqual(availableManualPaymentMethods(null), ["cash"]);
+assert.deepEqual(availableManualPaymentMethods(null), []);
 assert.equal(canReportManualPayment("bit", null), false);
-assert.equal(canReportManualPayment("cash", null), true);
+assert.equal(canReportManualPayment("cash", null), false);
 assert.equal(sitterReceivingSetupState(null, "paybox").configured, false);
 assert.equal(sanitizeManualPaymentDestinations(null), null);
 assert.deepEqual(parentReceivingAvailabilityFromDestinations(undefined), {
@@ -241,7 +268,11 @@ assert.deepEqual(parentReceivingAvailabilityFromDestinations(undefined), {
 });
 
 assert.deepEqual(
-  eligibleManualPaymentMethods({ bitConfigured: true, payboxConfigured: false }),
+  eligibleManualPaymentMethods({
+    cashAccepted: true,
+    bitConfigured: true,
+    payboxConfigured: false
+  }),
   ["cash", "bit"]
 );
 

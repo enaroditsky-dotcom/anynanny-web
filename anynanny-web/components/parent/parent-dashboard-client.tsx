@@ -1808,7 +1808,7 @@ export function ParentDashboardClient({
         setManualPaymentDestinations(
           sanitizeManualPaymentDestinations({
             bookingId: json.bookingId || bookingId,
-            cash: { available: true },
+            cash: { available: json.cash?.available === true },
             bit: json.bit ?? { available: false },
             paybox: json.paybox ?? { available: false }
           }) ?? emptyManualPaymentDestinations(bookingId)

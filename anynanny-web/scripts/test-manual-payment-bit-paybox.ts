@@ -59,22 +59,46 @@ const payboxLinkMigration = read(
 const payboxLinkLib = read("lib/billing/paybox-payment-link.ts");
 
 // 1–4. Visibility by sitter configuration
-assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: true, payboxConfigured: false }), [
-  "cash",
-  "bit"
-]);
-assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConfigured: true }), [
-  "cash",
-  "paybox"
-]);
-assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: true, payboxConfigured: true }), [
-  "cash",
-  "bit",
-  "paybox"
-]);
-assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConfigured: false }), [
-  "cash"
-]);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: false,
+    bitConfigured: true,
+    payboxConfigured: false
+  }),
+  ["bit"]
+);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: false,
+    bitConfigured: false,
+    payboxConfigured: true
+  }),
+  ["paybox"]
+);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: true,
+    bitConfigured: true,
+    payboxConfigured: true
+  }),
+  ["cash", "bit", "paybox"]
+);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: true,
+    bitConfigured: true,
+    payboxConfigured: false
+  }),
+  ["cash", "bit"]
+);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: false,
+    bitConfigured: false,
+    payboxConfigured: false
+  }),
+  []
+);
 assert.match(panel, /availableManualPaymentMethods/);
 assert.match(panel, /sanitizeManualPaymentDestinations/);
 assert.match(panel, /canReportManualPayment/);
@@ -388,13 +412,22 @@ assert.equal(payboxManualReceivingConfigured(phoneOnly), true);
 assert.equal(payoutMethodConfigured(linkOnly, "paybox"), false);
 assert.equal(payboxManualReceivingConfigured(linkOnly), true);
 assert.equal(payboxManualReceivingConfigured(neither), false);
-assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConfigured: false }), [
-  "cash"
-]);
-assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConfigured: true }), [
-  "cash",
-  "paybox"
-]);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: false,
+    bitConfigured: false,
+    payboxConfigured: false
+  }),
+  []
+);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: false,
+    bitConfigured: false,
+    payboxConfigured: true
+  }),
+  ["paybox"]
+);
 
 assert.equal(
   parentMayReadManualPaymentDestinations({

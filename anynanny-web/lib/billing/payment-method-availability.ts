@@ -23,6 +23,7 @@ import {
   EMPTY_SITTER_PAYOUT_METHODS,
   formatIsraeliMobileDisplay,
   isValidIsraeliMobile,
+  parsePreferredReceivingMethod,
   payboxManualReceivingConfigured,
   type SitterPayoutMethods
 } from "@/lib/wallet/sitter-payout-methods";
@@ -84,12 +85,21 @@ export function isPayboxReceivingUsable(input: {
   );
 }
 
+/**
+ * Cash is accepted only when the sitter's preferred receiving method is cash.
+ * That is the only stored cash declaration (`payout_preferred_method`).
+ * Bit and PayBox are separate: a saved valid destination means that method is accepted.
+ */
+export function parentVisibleCashAccepted(preferred: unknown): boolean {
+  return parsePreferredReceivingMethod(preferred) === "cash";
+}
+
 export function emptyManualPaymentDestinations(
   bookingId = ""
 ): ManualPaymentDestinations {
   return {
     bookingId,
-    cash: { available: true },
+    cash: { available: false },
     bit: { available: false },
     paybox: { available: false }
   };
@@ -110,7 +120,7 @@ export function sanitizeManualPaymentDestinations(
 
   return {
     bookingId,
-    cash: { available: true },
+    cash: { available: destinations.cash?.available === true },
     bit: isBitReceivingUsable(bitPhone)
       ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
       : { available: false },
@@ -175,12 +185,14 @@ export function availableParentReceivingMethodsFromPayoutMethods(
   );
 }
 
-/** Cash is always a real manual method. Bit/PayBox only when usable for this sitter. */
+/** Each method appears only when this sitter has accepted it. */
 export function availableManualPaymentMethods(
   destinations: ManualPaymentDestinations | null | undefined
 ): ManualPaymentMethod[] {
-  const availability = parentReceivingAvailabilityFromDestinations(destinations);
+  const sanitized = sanitizeManualPaymentDestinations(destinations);
+  const availability = parentReceivingAvailabilityFromDestinations(sanitized);
   return eligibleManualPaymentMethods({
+    cashAccepted: sanitized?.cash.available === true,
     bitConfigured: availability.bit.usable,
     payboxConfigured: availability.paybox.usable
   });
@@ -197,8 +209,8 @@ export function isManualPaymentMethodUsable(
   destinations: ManualPaymentDestinations | null | undefined
 ): boolean {
   if (!method) return false;
-  if (method === "cash") return true;
   const sanitized = sanitizeManualPaymentDestinations(destinations);
+  if (method === "cash") return sanitized?.cash.available === true;
   if (!sanitized) return false;
   if (method === "bit") {
     return sanitized.bit.available === true && Boolean(sanitized.bit.destination);

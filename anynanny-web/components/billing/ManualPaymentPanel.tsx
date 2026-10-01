@@ -73,8 +73,11 @@ export function ManualPaymentPanel({
   const methodUsable = canReportManualPayment(selectedMethod, safeDestinations);
   const canReport =
     methodUsable && !busy && bookingReady && !destinationsLoading;
+  const showNoAcceptedMethods = !destinationsLoading && methods.length === 0;
   const showDigitalEmptyState =
-    !destinationsLoading && !hasUsableDigitalReceivingMethod(safeDestinations);
+    !destinationsLoading &&
+    methods.includes("cash") &&
+    !hasUsableDigitalReceivingMethod(safeDestinations);
 
   const copyDestination = async () => {
     if (!destination || typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -116,7 +119,13 @@ export function ManualPaymentPanel({
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2.5">
-                {showDigitalEmptyState ? (
+                {showNoAcceptedMethods ? (
+                  <div className="rounded-xl border border-white/15 bg-white/5 px-3.5 py-3 text-right">
+                    <p className="text-sm font-bold text-white">
+                      {PARENT_NO_DIGITAL_RECEIVING_COPY}
+                    </p>
+                  </div>
+                ) : showDigitalEmptyState ? (
                   <div className="rounded-xl border border-white/15 bg-white/5 px-3.5 py-3 text-right">
                     <p className="text-sm font-bold text-white">
                       {PARENT_NO_DIGITAL_RECEIVING_COPY}

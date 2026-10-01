@@ -73,9 +73,22 @@ assert.doesNotMatch(panel, /כרטיס אשראי|Apple Pay|Google Pay/);
 assert.doesNotMatch(uiCopy, /כרטיס אשראי|Apple Pay|Google Pay/);
 assert.doesNotMatch(dashboard, /PaymentFactory/);
 assert.doesNotMatch(paymentFactory, /מזומן/);
-assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConfigured: false }), [
-  "cash"
-]);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: false,
+    bitConfigured: false,
+    payboxConfigured: false
+  }),
+  []
+);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: true,
+    bitConfigured: false,
+    payboxConfigured: false
+  }),
+  ["cash"]
+);
 
 // 3. Cash → שילמתי → awaiting_sitter_confirmation
 assert.match(panel, /MANUAL_PAYMENT_PAID_BUTTON/);
@@ -102,14 +115,38 @@ assert.deepEqual(
 );
 
 // 4–5. Bit / PayBox only when configured
-assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: true, payboxConfigured: false }), [
-  "cash",
-  "bit"
-]);
-assert.deepEqual(eligibleManualPaymentMethods({ bitConfigured: false, payboxConfigured: true }), [
-  "cash",
-  "paybox"
-]);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: false,
+    bitConfigured: true,
+    payboxConfigured: false
+  }),
+  ["bit"]
+);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: false,
+    bitConfigured: false,
+    payboxConfigured: true
+  }),
+  ["paybox"]
+);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: true,
+    bitConfigured: true,
+    payboxConfigured: false
+  }),
+  ["cash", "bit"]
+);
+assert.deepEqual(
+  eligibleManualPaymentMethods({
+    cashAccepted: true,
+    bitConfigured: true,
+    payboxConfigured: true
+  }),
+  ["cash", "bit", "paybox"]
+);
 assert.match(destinationsServer, /parent_manual_payment_destinations/);
 assert.match(destinationsServer, /isValidIsraeliMobile\(bitPhone\)/);
 assert.match(destinationsServer, /isValidIsraeliMobile\(phone\)/);
@@ -235,7 +272,7 @@ assert.match(reportRoute, /storedMethod/);
 assert.doesNotMatch(reportRoute, /confirm_manual_payment_received/);
 assert.match(read("lib/notifications/create-notification.ts"), /manualPaymentReportedNotificationCopy/);
 
-assert.equal(MANUAL_PAYMENT_HEADING, "כמה נוח לך לשלם?");
+assert.equal(MANUAL_PAYMENT_HEADING, "אמצעי תשלום לבחירה");
 assert.match(panel, /MANUAL_PAYMENT_HEADING/);
 
 console.log("test-manual-payment-parent-ui: PASS");
