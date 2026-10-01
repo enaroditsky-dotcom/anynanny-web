@@ -30,7 +30,8 @@ export async function upsertProfileOnSignup(
   const first_name = input.first_name.trim();
   const last_name = input.last_name.trim();
 
-  // שים לב: איננו שולחים שדות serial לכאן, כדי שהמסד והטריגר ייצרו את ה-AN-1001 / P-1001 באופן אוטומטי
+  // Do not send a public id. The database trigger assigns RP-#### / RAN-####
+  // for new users and never replaces an existing P- / RP- / AN- / RAN- / CONS- id.
   const baseRow: Record<string, unknown> = {
     id: input.id,
     role: input.role,

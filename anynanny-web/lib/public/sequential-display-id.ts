@@ -19,7 +19,9 @@ export function parentDisplayIdCacheKey(userId: string): string {
   return `${PARENT_DISPLAY_ID_STORAGE_KEY}:${userId.trim()}`;
 }
 
+const REAL_PARENT_SERIAL_RE = /^RP-\d+$/i;
 const PARENT_SERIAL_RE = /^P-\d+$/i;
+const REAL_SITTER_SERIAL_RE = /^RAN-\d+$/i;
 const SITTER_SERIAL_RE = /^AN-\d+$/i;
 const CONSULTANT_SERIAL_RE = /^CONS-\d+$/i;
 
@@ -31,13 +33,13 @@ export function pickProfileSerialId(row: unknown): number | null {
   return Math.floor(n);
 }
 
-/** Canonical parent display id: P-1001 */
+/** Legacy serial_id fallback: P-1001. Stored RP-#### / P-#### values are preferred. */
 export function formatParentPublicIdFromSerial(serialId: number | null | undefined): string | null {
   if (serialId == null || !Number.isFinite(Number(serialId)) || Number(serialId) < 1) return null;
   return `P-${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
 }
 
-/** Canonical babysitter display id: AN-1001 */
+/** Legacy serial_id fallback: AN-1001. Stored RAN-#### / AN-#### / CONS-#### values are preferred. */
 export function formatSitterPublicIdFromSerial(serialId: number | null | undefined): string | null {
   if (serialId == null || !Number.isFinite(Number(serialId)) || Number(serialId) < 1) return null;
   return `AN-${PUBLIC_DISPLAY_ID_BASE + Math.floor(Number(serialId))}`;
@@ -47,17 +49,21 @@ export function normalizeParentSerial(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const v = raw.trim();
   if (!v) return null;
+  if (REAL_PARENT_SERIAL_RE.test(v)) return `RP-${v.slice(3)}`;
+  if (/^RP_\d+$/i.test(v)) return `RP-${v.slice(3)}`;
   if (PARENT_SERIAL_RE.test(v)) return `P-${v.slice(2)}`;
   if (/^P_\d+$/i.test(v)) return `P-${v.slice(2)}`;
   if (/^\d+$/.test(v)) return `P-${v}`;
   return null;
 }
 
-/** Accept AN-#### (babysitter) or CONS-#### (expert). */
+/** Accept RAN-#### / AN-#### (babysitter) or CONS-#### (expert). */
 function normalizeSitterSerial(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const v = raw.trim();
   if (!v) return null;
+  if (REAL_SITTER_SERIAL_RE.test(v)) return `RAN-${v.slice(4)}`;
+  if (/^RAN_\d+$/i.test(v)) return `RAN-${v.slice(4)}`;
   if (CONSULTANT_SERIAL_RE.test(v)) return `CONS-${v.slice(5)}`;
   if (/^CONS_\d+$/i.test(v)) return `CONS-${v.slice(5)}`;
   if (SITTER_SERIAL_RE.test(v)) return `AN-${v.slice(3)}`;
@@ -72,7 +78,6 @@ export function pickProfilePublicId(row: unknown, role: "parent" | "sitter"): st
 
   if (role === "parent") {
     return (
-      normalizeParentSerial(r.parent_public_id) ||
       normalizeParentSerial(r.parent_serial) ||
       normalizeParentSerial(r.parentSerial) ||
       normalizeParentSerial(r.public_id) ||
@@ -81,6 +86,7 @@ export function pickProfilePublicId(row: unknown, role: "parent" | "sitter"): st
     );
   }
 
+  // profiles.nanny_serial is canonical. sitter_profiles.nanny_serial is the same id mirrored.
   return (
     normalizeSitterSerial(r.nanny_serial) ||
     normalizeSitterSerial(r.nanny_id_number) ||
@@ -114,8 +120,7 @@ async function readParentPublicIdFromProfiles(
   const cached = getCachedWorkingSelect(cacheKey);
   const selectAttempts = [
     ...(cached ? [cached] : []),
-    "parent_public_id, parent_serial, public_id, serial_id, role",
-    "parent_public_id, parent_serial, serial_id, role",
+    "parent_serial, public_id, serial_id, role",
     "parent_serial, serial_id, role",
     "public_id, serial_id, role",
     "serial_id, role",
@@ -133,7 +138,6 @@ async function readParentPublicIdFromProfiles(
     if (error) {
       lastError = error.message;
       if (
-        isPostgrestMissingColumnError(error.message, "parent_public_id") ||
         isPostgrestMissingColumnError(error.message, "parent_serial") ||
         isPostgrestMissingColumnError(error.message, "public_id") ||
         isPostgrestMissingColumnError(error.message, "serial_id") ||
@@ -157,6 +161,27 @@ async function readSitterPublicIdFromProfiles(
   supabase: SupabaseClient,
   userId: string
 ): Promise<{ publicId: string | null; error: string | null }> {
+  const { data: profileRow, error: profileError } = await supabase
+    .from(PROFILES_TABLE)
+    .select("nanny_serial")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!profileError) {
+    const canonical = normalizeSitterSerial(
+      (profileRow as { nanny_serial?: string } | null)?.nanny_serial
+    );
+    if (canonical) {
+      cacheSitterDisplayId(canonical);
+      return { publicId: canonical, error: null };
+    }
+  } else if (
+    !isPostgrestMissingColumnError(profileError.message, "nanny_serial") &&
+    !isPostgrestSchemaDriftError(profileError.message)
+  ) {
+    return { publicId: null, error: profileError.message };
+  }
+
   const cacheKey = `sitter_profiles:nanny-serial`;
   const cached = getCachedWorkingSelect(cacheKey);
   const fk = SITTER_PROFILES_USER_COLUMN;
@@ -199,7 +224,7 @@ async function readSitterPublicIdFromProfiles(
   return { publicId: null, error: lastError };
 }
 
-/** Loads role-scoped public display id for dashboard badges (AN-#### / CONS-#### / P-####). */
+/** Loads role-scoped public display id for dashboard badges (RAN-/AN-/CONS-#### or RP-/P-####). */
 export async function fetchProfilePublicId(
   supabase: SupabaseClient,
   userId: string,

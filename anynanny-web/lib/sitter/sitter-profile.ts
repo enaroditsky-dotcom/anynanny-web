@@ -549,7 +549,7 @@ export type SitterProfileRow = {
   id: string;
   user_id?: string;
 
-  /** Assigned on insert; babysitter AN-1001+ or expert CONS-1001+. */
+  /** Permanent public id. New sitters RAN-1001+, existing AN-1001+ or CONS-1001+. */
   nanny_serial?: string | null;
 
   /** Profile image URL stored on the linked public.profiles row and merged by the profile API. */
@@ -807,7 +807,7 @@ export function hasSitterCompletedOnboarding(
 
 /**
  * Ensure a `sitter_profiles` row exists for this user.
- * Optionally seed signup names and service_types (so experts get CONS- on insert).
+ * Optionally seed signup names and service_types. The public id is assigned by the database and is not replaced when service types change.
  */
 export async function ensureSitterProfileRowForUser(
   supabase: SupabaseClient,

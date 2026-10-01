@@ -66,7 +66,7 @@ export const PARENT_SEARCH_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, m) =>
 export type ParentSearchMinute = string;
 
 export type ParentSearchFilters = {
-  /** Public serial on `sitter_profiles.nanny_serial` (e.g. AN-1001 / CONS-1001). */
+  /** Public serial on `sitter_profiles.nanny_serial` (e.g. AN-1001 / RAN-1001 / CONS-1001). */
   searchSitterSerial: string;
   /** `YYYY-MM-DD` — shift/booking start date */
   searchDate: string;
@@ -227,25 +227,29 @@ export function minYearsExperienceToRpcValue(raw: unknown): number {
   return match ? parseInt(match[0], 10) : 0;
 }
 
-/** Normalize parent input to canonical serial form (`AN-1004` / `CONS-1001`). */
+/** Normalize parent input to canonical serial form (`AN-1004` / `RAN-1001` / `CONS-1001`). */
 export function normalizeSitterSerialForLookup(raw: string | null | undefined): string | null {
   const compact = String(raw ?? "")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "");
   if (!compact) return null;
+  if (/^RAN-\d+$/.test(compact)) return compact;
+  if (/^RAN_\d+$/.test(compact)) return `RAN-${compact.slice(4)}`;
   if (/^CONS-\d+$/.test(compact)) return compact;
   if (/^CONS_\d+$/.test(compact)) return `CONS-${compact.slice(5)}`;
   if (/^AN-\d+$/.test(compact)) return compact;
   if (/^AN_\d+$/.test(compact)) return `AN-${compact.slice(3)}`;
+  // Digits alone stay on the legacy babysitter prefix. RAN-1001 and AN-1001
+  // both exist, so a bare number cannot mean both.
   if (/^\d+$/.test(compact)) return `AN-${compact}`;
   return compact;
 }
 
-/** True when input is a complete public serial (e.g. AN-1004 / CONS-1001). */
+/** True when input is a complete public serial (e.g. AN-1004 / RAN-1001 / CONS-1001). */
 export function isExactSitterSerialQuery(raw: string | null | undefined): boolean {
   const norm = normalizeSitterSerialForLookup(raw);
-  return norm != null && /^(AN|CONS)-\d+$/.test(norm);
+  return norm != null && /^(RAN|AN|CONS)-\d+$/.test(norm);
 }
 
 /** Exact serial lookup still bypasses city/rating/price/transport. Time windows are always sent. */
