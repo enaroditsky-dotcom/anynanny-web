@@ -75,14 +75,12 @@ export function isBitReceivingUsable(phone: string | null | undefined): boolean 
   return isValidIsraeliMobile(String(phone ?? ""));
 }
 
+/** Parent-visible PayBox is a valid Israeli mobile. A personal link is not shown or opened. */
 export function isPayboxReceivingUsable(input: {
   phone?: string | null;
   link?: string | null;
 }): boolean {
-  return (
-    isValidIsraeliMobile(String(input.phone ?? "")) ||
-    Boolean(parseAuthorizedPayboxPaymentLink(input.link))
-  );
+  return isValidIsraeliMobile(String(input.phone ?? ""));
 }
 
 /**
@@ -116,7 +114,6 @@ export function sanitizeManualPaymentDestinations(
   const bookingId = String(destinations.bookingId ?? "").trim();
   const bitPhone = String(destinations.bit?.destination ?? "").trim();
   const payboxPhone = String(destinations.paybox?.destination ?? "").trim();
-  const payboxLink = parseAuthorizedPayboxPaymentLink(destinations.paybox?.link);
 
   return {
     bookingId,
@@ -124,14 +121,8 @@ export function sanitizeManualPaymentDestinations(
     bit: isBitReceivingUsable(bitPhone)
       ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
       : { available: false },
-    paybox: isPayboxReceivingUsable({ phone: payboxPhone, link: payboxLink })
-      ? {
-          available: true,
-          destination: isValidIsraeliMobile(payboxPhone)
-            ? formatIsraeliMobileDisplay(payboxPhone)
-            : undefined,
-          link: payboxLink ?? undefined
-        }
+    paybox: isPayboxReceivingUsable({ phone: payboxPhone })
+      ? { available: true, destination: formatIsraeliMobileDisplay(payboxPhone) }
       : { available: false }
   };
 }
@@ -216,10 +207,7 @@ export function isManualPaymentMethodUsable(
     return sanitized.bit.available === true && Boolean(sanitized.bit.destination);
   }
   if (method === "paybox") {
-    return (
-      sanitized.paybox.available === true &&
-      Boolean(sanitized.paybox.destination || sanitized.paybox.link)
-    );
+    return sanitized.paybox.available === true && Boolean(sanitized.paybox.destination);
   }
   return false;
 }

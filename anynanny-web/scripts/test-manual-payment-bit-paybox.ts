@@ -6,7 +6,6 @@ import { evaluateManualPaymentTransition } from "../lib/billing/manual-payment-l
 import {
   eligibleManualPaymentMethods,
   MANUAL_PAYMENT_PAID_BUTTON,
-  MANUAL_PAYMENT_PAYBOX_OPEN_BUTTON,
   parentMayReadManualPaymentDestinations,
   parentReportedPaidByMethodCopy,
   sitterManualPaymentPromptForMethod
@@ -368,12 +367,12 @@ assert.match(payboxLinkMigration, /manual_payment_booking_has_parent_rating/);
 assert.match(payboxLinkLib, /links\.payboxapp\.com/);
 assert.match(payboxLinkLib, /payboxapp\.page\.link/);
 assert.doesNotMatch(payboxLinkLib, /paybox:\/\//);
-assert.match(panel, /MANUAL_PAYMENT_PAYBOX_OPEN_BUTTON/);
-assert.match(panel, /parseAuthorizedPayboxPaymentLink/);
-assert.equal(MANUAL_PAYMENT_PAYBOX_OPEN_BUTTON, "פתח PayBox");
+assert.match(panel, /העתקה/);
+assert.match(panel, /clipboard/);
+assert.doesNotMatch(panel, /paymentAppShortcutHref|target="_blank"|bitpay|payboxapp|parseAuthorizedPayboxPaymentLink|paybox\.link|payout_paybox_link/);
 assert.equal(MANUAL_PAYMENT_PAID_BUTTON, "שילמתי");
-assert.match(destinationsServer, /paybox_link/);
-assert.match(destinationsServer, /parseAuthorizedPayboxPaymentLink/);
+assert.doesNotMatch(destinationsServer, /paybox_link/);
+assert.doesNotMatch(destinationsServer, /parseAuthorizedPayboxPaymentLink/);
 assert.match(payoutMethodsLib, /payboxLink/);
 assert.match(payoutMethodsLib, /sitter_own_manual_payout_destinations/);
 assert.doesNotMatch(payoutMethodsLib, /const PUBLIC_SELECT_COLS =\s*"payout_preferred_method, payout_bit_phone/);

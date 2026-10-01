@@ -127,9 +127,9 @@ assert.doesNotMatch(bookShift, /max-h-\[90dvh\]|max-h-\[85vh\]/);
 
 const parentWallet = read("app/parent/wallet/wallet-client.tsx");
 assert.match(parentWallet, /אמצעי תשלום/);
-assert.match(parentWallet, /קיצורי דרך לאפליקציות תשלום חיצוניות/);
-assert.match(parentWallet, /target="_blank"/);
-assert.match(parentWallet, /noopener noreferrer/);
+assert.match(parentWallet, /לא הוגדרו אמצעי תשלום/);
+assert.doesNotMatch(parentWallet, /target="_blank"/);
+assert.doesNotMatch(parentWallet, /bitpay\.co\.il|payboxapp\.com/);
 assert.doesNotMatch(parentWallet, /אמצעי תשלום שלי|הוספת כרטיס|HYP|AUTH_MODAL_OVERLAY_SCROLL/);
 assert.doesNotMatch(parentWallet, /Google Pay|Apple Pay/);
 assert.doesNotMatch(parentWallet, /items-end/);

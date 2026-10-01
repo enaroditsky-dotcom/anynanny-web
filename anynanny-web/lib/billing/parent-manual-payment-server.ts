@@ -19,7 +19,6 @@ import {
   formatIsraeliMobileDisplay,
   isValidIsraeliMobile
 } from "@/lib/wallet/sitter-payout-methods";
-import { parseAuthorizedPayboxPaymentLink } from "@/lib/billing/paybox-payment-link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export function tryGetSupabaseServiceRoleClient(): SupabaseClient | null {
@@ -108,16 +107,12 @@ function cashAcceptedFromDestinationPayload(payload: {
 
 function buildPayboxDestination(input: {
   phone?: string | null;
-  link?: string | null;
 }): ManualPaymentDestinations["paybox"] {
   const phone = String(input.phone ?? "").trim();
-  const link = parseAuthorizedPayboxPaymentLink(input.link);
-  const phoneOk = isValidIsraeliMobile(phone);
-  if (!phoneOk && !link) return { available: false };
+  if (!isValidIsraeliMobile(phone)) return { available: false };
   return {
     available: true,
-    destination: phoneOk ? formatIsraeliMobileDisplay(phone) : undefined,
-    link: link ?? undefined
+    destination: formatIsraeliMobileDisplay(phone)
   };
 }
 
@@ -200,7 +195,6 @@ export async function loadAuthorizedManualPaymentDestinations(
       preferred_method?: string | null;
       bit_phone?: string | null;
       paybox_phone?: string | null;
-      paybox_link?: string | null;
     };
     const bitPhone = String(payload.bit_phone ?? "").trim();
     const payboxPhone = String(payload.paybox_phone ?? "").trim();
@@ -217,10 +211,7 @@ export async function loadAuthorizedManualPaymentDestinations(
           bit: isValidIsraeliMobile(bitPhone)
             ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
             : { available: false },
-          paybox: buildPayboxDestination({
-            phone: payboxPhone,
-            link: payload.paybox_link
-          })
+          paybox: buildPayboxDestination({ phone: payboxPhone })
         }) ?? noneAvailable
     };
   }
@@ -257,7 +248,7 @@ export async function loadAuthorizedManualPaymentDestinations(
   const payout = await admin
     .from(SITTER_PROFILES_TABLE)
     .select(
-      "payout_preferred_method, payout_bit_phone, payout_paybox_phone, payout_paybox_link"
+      "payout_preferred_method, payout_bit_phone, payout_paybox_phone"
     )
     .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
     .maybeSingle();
@@ -272,9 +263,6 @@ export async function loadAuthorizedManualPaymentDestinations(
   ).trim();
   const payboxPhone = String(
     (payout.data as { payout_paybox_phone?: string | null } | null)?.payout_paybox_phone ?? ""
-  ).trim();
-  const payboxLink = String(
-    (payout.data as { payout_paybox_link?: string | null } | null)?.payout_paybox_link ?? ""
   ).trim();
 
   return {
@@ -291,7 +279,7 @@ export async function loadAuthorizedManualPaymentDestinations(
         bit: isValidIsraeliMobile(bitPhone)
           ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
           : { available: false },
-        paybox: buildPayboxDestination({ phone: payboxPhone, link: payboxLink })
+        paybox: buildPayboxDestination({ phone: payboxPhone })
       }) ?? noneAvailable
   };
 }
