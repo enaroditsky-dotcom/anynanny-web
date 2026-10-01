@@ -164,11 +164,6 @@ export function manualPaymentDestinationInstruction(method: "bit" | "paybox"): s
   return "שלמו לנני ב-PayBox למספר הבא, ואז חזרו ל-AnyNanny ולחצו על 'שילמתי'.";
 }
 
-export const MANUAL_PAYMENT_PAYBOX_OPEN_BUTTON = "פתח PayBox";
-
-export const MANUAL_PAYMENT_PAYBOX_LINK_COPY =
-  "לחצו על 'פתח PayBox' לתשלום, ואז חזרו ל-AnyNanny ולחצו על 'שילמתי'.";
-
 export function parseSelectedManualPaymentMethod(value: unknown): ManualPaymentMethod | null {
   const normalized = String(value ?? "").trim().toLowerCase();
   return isManualPaymentMethod(normalized) ? normalized : null;

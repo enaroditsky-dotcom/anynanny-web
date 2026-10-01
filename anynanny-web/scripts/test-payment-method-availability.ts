@@ -23,7 +23,6 @@ import {
   type ManualPaymentDestinations
 } from "../lib/billing/manual-payment-ui";
 import { EMPTY_SITTER_PAYOUT_METHODS } from "../lib/wallet/sitter-payout-methods";
-import { paymentAppShortcutHref } from "../lib/wallet/payment-app-shortcuts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function read(relativePath: string): string {
@@ -83,14 +82,18 @@ function destinations(input: {
   assert.equal(canReportManualPayment("cash", dest), false);
 }
 
-// 2. PayBox configured, Bit missing, cash not accepted → Parent sees only PayBox
+// 2. PayBox phone configured, Bit missing → parent sees only PayBox. A link alone does not.
 {
-  const dest = destinations({ payboxLink: VALID_PAYBOX_LINK });
-  assert.deepEqual(availableParentReceivingMethodsFromDestinations(dest), ["paybox"]);
-  assert.deepEqual(availableManualPaymentMethods(dest), ["paybox"]);
-  assert.equal(canReportManualPayment("paybox", dest), true);
-  assert.equal(canReportManualPayment("bit", dest), false);
-  assert.equal(canReportManualPayment("cash", dest), false);
+  const linkOnly = destinations({ payboxLink: VALID_PAYBOX_LINK });
+  assert.deepEqual(availableParentReceivingMethodsFromDestinations(linkOnly), []);
+  assert.deepEqual(availableManualPaymentMethods(linkOnly), []);
+  assert.equal(canReportManualPayment("paybox", linkOnly), false);
+  const phone = destinations({ payboxPhone: "0521234567" });
+  assert.deepEqual(availableParentReceivingMethodsFromDestinations(phone), ["paybox"]);
+  assert.deepEqual(availableManualPaymentMethods(phone), ["paybox"]);
+  assert.equal(canReportManualPayment("paybox", phone), true);
+  assert.equal(canReportManualPayment("bit", phone), false);
+  assert.equal(canReportManualPayment("cash", phone), false);
 }
 
 // 3. Cash accepted plus Bit → Parent sees cash and Bit only
@@ -149,6 +152,18 @@ function destinations(input: {
   assert.equal(isManualPaymentMethodUsable("bit", dest), false);
 }
 
+// 12. Parent wallet shows configured phones only — no external launcher
+assert.doesNotMatch(parentWallet, /PARENT_WALLET_SELECTABLE_METHODS/);
+assert.doesNotMatch(parentWallet, /הוספת כרטיס|HYP|israel-deposit|\/api\/parent\/payment-methods/);
+assert.match(parentWallet, /אמצעי תשלום/);
+assert.match(parentWallet, /לא הוגדרו אמצעי תשלום/);
+assert.match(parentWallet, /העתקה/);
+assert.match(parentWallet, /פירוט תשלומים/);
+assert.match(panel, /העתקה/);
+assert.match(panel, /MANUAL_PAYMENT_PAID_BUTTON/);
+assert.doesNotMatch(panel, /target="_blank"|bitpay|payboxapp|paymentAppShortcutHref|payout_paybox_link/);
+assert.doesNotMatch(parentWallet, /target="_blank"|bitpay|payboxapp|paymentAppShortcutHref|bit:\/\/|paybox:\/\//);
+
 // 8. Inactive setup card on Sitter side remains visible as setup
 {
   const setup = sitterReceivingSetupState(EMPTY_SITTER_PAYOUT_METHODS, "bit");
@@ -191,17 +206,6 @@ assert.match(panel, /sanitizeManualPaymentDestinations/);
 assert.match(dashboard, /canReportManualPayment/);
 assert.match(dashboard, /sanitizeManualPaymentDestinations/);
 assert.match(dashboard, /\/api\/parent\/manual-payment-destinations/);
-
-// 12. Parent wallet is external app shortcuts only — no stored card or HYP setup
-assert.doesNotMatch(parentWallet, /PARENT_WALLET_SELECTABLE_METHODS/);
-assert.doesNotMatch(parentWallet, /הוספת כרטיס|HYP|israel-deposit|\/api\/parent\/payment-methods/);
-assert.match(parentWallet, /אמצעי תשלום/);
-assert.match(parentWallet, /קיצורי דרך לאפליקציות תשלום חיצוניות/);
-assert.match(parentWallet, /התשלום מתבצע באפליקציה החיצונית/);
-assert.match(parentWallet, /פירוט תשלומים/);
-assert.equal(paymentAppShortcutHref("bit"), "https://www.bitpay.co.il/he");
-assert.equal(paymentAppShortcutHref("paybox"), "https://www.payboxapp.com/");
-assert.doesNotMatch(parentWallet, /bit:\/\/|paybox:\/\//);
 
 // 13. Sitter wallet visually distinguishes configured vs not configured
 assert.match(sitterWallet, /sitterReceivingDetailStatus/);

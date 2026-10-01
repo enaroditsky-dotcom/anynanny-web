@@ -150,8 +150,8 @@ assert.deepEqual(
 assert.match(destinationsServer, /parent_manual_payment_destinations/);
 assert.match(destinationsServer, /isValidIsraeliMobile\(bitPhone\)/);
 assert.match(destinationsServer, /isValidIsraeliMobile\(phone\)/);
-assert.match(destinationsServer, /parseAuthorizedPayboxPaymentLink/);
-assert.match(destinationsServer, /paybox_link/);
+assert.doesNotMatch(destinationsServer, /parseAuthorizedPayboxPaymentLink/);
+assert.doesNotMatch(destinationsServer, /paybox_link/);
 assert.match(reportRoute, /methodHasAuthorizedDestination/);
 assert.match(dashboard, /canReportManualPayment/);
 assert.match(panel, /availableManualPaymentMethods/);
