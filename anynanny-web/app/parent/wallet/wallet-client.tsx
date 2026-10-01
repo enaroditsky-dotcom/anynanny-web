@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
-import { ArrowUpRight, ArrowDownLeft, ChevronDown, Copy, Loader2, RefreshCw } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PageBackLink } from "@/components/navigation/page-back-link";
-import { APP_SHELL_SCROLL_ID } from "@/lib/ui/app-shell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchParentWalletView } from "@/lib/wallet/parent-wallet";
-import { sanitizeManualPaymentDestinations } from "@/lib/billing/payment-method-availability";
-import type { ManualPaymentDestinations } from "@/lib/billing/manual-payment-ui";
 import type { BillingTransaction } from "@/lib/wallet/billing-transactions";
 
 /** Visible history rows before the list scrolls internally. */
@@ -19,113 +16,18 @@ const WALLET_HISTORY_VISIBLE_ROWS = 6;
  * Measured row box is 4rem: p-3 plus two text lines, which are taller than the h-8 icon.
  * space-y-2 adds 0.5rem between rows.
  * 6 rows = 6 * 4rem + 5 * 0.5rem = 26.5rem (424px).
- * On short screens the list max-height is tightened to the space above BottomNav.
+ * Shorter lists stay at their natural height. The page itself scrolls.
  */
 const WALLET_HISTORY_LIST_MAX_CLASS =
   "max-h-[26.5rem] min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] [scrollbar-color:rgb(148_163_184/0.45)_transparent] [scrollbar-width:thin]";
 
 /**
- * AppShellGate pads the scrollport by
- * 6.5rem + --anynanny-now-dock + safe-area-inset-bottom for the fixed BottomNav.
- * The wallet frame is sized to that content box minus MainLayout's bottom padding.
- * pb-3 on the frame is the cream gap under the history card so its rounded
- * bottom corners and shadow stay above the nav. The 1rem in the fallback is
- * MainLayout pb-4. The 3rem is the app-shell header.
+ * The wallet column scrolls with the app shell at every viewport.
+ * Shell bottom padding clears the fixed nav. History rows scroll inside the card
+ * once the list exceeds the cap above. The payment accordion stays in normal flow.
  */
-const WALLET_FRAME_MAX_CLASS =
-  "max-h-[calc(100dvh-3rem-env(safe-area-inset-top,0px)-6.5rem-var(--anynanny-now-dock,0px)-env(safe-area-inset-bottom,0px)-1rem)]";
-
-const WALLET_NO_PAYMENT_METHODS_COPY =
-  "לא הוגדרו אמצעי תשלום. מומלץ להתקין ולהגדיר Bit ו־PayBox, ולאחר מכן לעדכן כאן את מספרי הטלפון.";
-
-type WalletPaymentPhones = {
-  bit: string | null;
-  paybox: string | null;
-};
-
-function useWalletHistoryFrame(layoutKey: string) {
-  const frameRef = useRef<HTMLDivElement>(null);
-  const upperRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const frame = frameRef.current;
-    const scroller = document.getElementById(APP_SHELL_SCROLL_ID);
-    if (!frame || !scroller) return;
-
-    const fit = () => {
-      const upper = upperRef.current;
-      const list = listRef.current;
-      frame.style.height = "";
-      frame.style.maxHeight = "";
-      if (upper) {
-        upper.style.maxHeight = "";
-        upper.style.overflowY = "";
-      }
-      if (list) list.style.maxHeight = "";
-
-      const scrollerStyle = getComputedStyle(scroller);
-      const padBottom = Number.parseFloat(scrollerStyle.paddingBottom) || 0;
-      const scrollerRect = scroller.getBoundingClientRect();
-      const frameRect = frame.getBoundingClientRect();
-      const offset = Math.max(0, frameRect.top - scrollerRect.top + scroller.scrollTop);
-      const main = frame.parentElement;
-      const mainPadBottom = main
-        ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0
-        : 0;
-      const available = Math.floor(scroller.clientHeight - padBottom - offset - mainPadBottom);
-      if (!Number.isFinite(available) || available < 220) return;
-
-      frame.style.height = `${available}px`;
-      frame.style.maxHeight = `${available}px`;
-
-      if (!list) return;
-      const rootPx = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-      const sixRows =
-        (WALLET_HISTORY_VISIBLE_ROWS * 4 + (WALLET_HISTORY_VISIBLE_ROWS - 1) * 0.5) * rootPx;
-      const card = list.parentElement;
-      const cardPadBottom = card
-        ? Number.parseFloat(getComputedStyle(card).paddingBottom) || 0
-        : 0;
-
-      const roomForList = () => {
-        const contentBottom =
-          frame.getBoundingClientRect().bottom -
-          (Number.parseFloat(getComputedStyle(frame).paddingBottom) || 0);
-        return Math.floor(contentBottom - list.getBoundingClientRect().top - cardPadBottom);
-      };
-
-      let room = roomForList();
-      if (upper && room < 96) {
-        const deficit = 96 - room;
-        const upperMax = Math.max(72, upper.getBoundingClientRect().height - deficit);
-        upper.style.maxHeight = `${Math.floor(upperMax)}px`;
-        upper.style.overflowY = "auto";
-        room = roomForList();
-      }
-      if (room < 64) return;
-      list.style.maxHeight = `${Math.min(sixRows, room)}px`;
-    };
-
-    fit();
-    const observer = new ResizeObserver(fit);
-    observer.observe(scroller);
-    window.addEventListener("resize", fit);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", fit);
-      frame.style.height = "";
-      frame.style.maxHeight = "";
-      if (upperRef.current) {
-        upperRef.current.style.maxHeight = "";
-        upperRef.current.style.overflowY = "";
-      }
-      if (listRef.current) listRef.current.style.maxHeight = "";
-    };
-  }, [layoutKey]);
-
-  return { frameRef, upperRef, listRef };
-}
+const WALLET_PAYMENT_INFO_COPY =
+  "זמין ובטוח: שלמו לבייביסיטר לפי אמצעי התשלום שהיא בחרה — Bit, PayBox או מזומן.";
 
 const CHECKOUT_RETURN_PARAMS = [
   "status",
@@ -148,11 +50,6 @@ export default function ParentWalletClient() {
   const [transactions, setTransactions] = useState<BillingTransaction[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(true);
   const [paymentAppsOpen, setPaymentAppsOpen] = useState(false);
-  const [paymentPhones, setPaymentPhones] = useState<WalletPaymentPhones | null>(null);
-  const [copiedPhone, setCopiedPhone] = useState<"bit" | "paybox" | null>(null);
-  const { frameRef, upperRef, listRef } = useWalletHistoryFrame(
-    `${paymentAppsOpen}:${loadingData}:${transactions.length}:${paymentPhones?.bit ?? ""}:${paymentPhones?.paybox ?? ""}`
-  );
 
   const fetchWalletData = useCallback(async () => {
     if (!supabase || !user?.id) return;
@@ -176,64 +73,6 @@ export default function ParentWalletClient() {
       setLoadingData(false);
     }
   }, [authLoading, user?.id, fetchWalletData]);
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user?.id || !supabase) {
-      setPaymentPhones({ bit: null, paybox: null });
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("bookings")
-          .select("id")
-          .eq("parent_id", user.id)
-          .eq("status", "completed")
-          .order("created_at", { ascending: false })
-          .limit(5);
-        if (error || !data?.length) {
-          if (!cancelled) setPaymentPhones({ bit: null, paybox: null });
-          return;
-        }
-        let bit: string | null = null;
-        let paybox: string | null = null;
-        for (const row of data) {
-          const bookingId = String((row as { id?: string }).id ?? "");
-          if (!bookingId) continue;
-          const res = await fetch(
-            `/api/parent/manual-payment-destinations?bookingId=${encodeURIComponent(bookingId)}`,
-            { method: "GET", credentials: "same-origin", cache: "no-store" }
-          );
-          if (!res.ok) continue;
-          const json = (await res.json()) as ManualPaymentDestinations;
-          const safe = sanitizeManualPaymentDestinations(json);
-          bit = safe?.bit.destination ?? null;
-          paybox = safe?.paybox.destination ?? null;
-          if (bit || paybox) break;
-        }
-        if (!cancelled) setPaymentPhones({ bit, paybox });
-      } catch (err) {
-        console.warn("[parent-wallet] payment phones failed:", err);
-        if (!cancelled) setPaymentPhones({ bit: null, paybox: null });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, supabase, user?.id]);
-
-  const copyPaymentPhone = async (kind: "bit" | "paybox", phone: string) => {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    try {
-      await navigator.clipboard.writeText(phone.replace(/-/g, ""));
-      setCopiedPhone(kind);
-      window.setTimeout(() => setCopiedPhone((current) => (current === kind ? null : current)), 1600);
-    } catch {
-      setCopiedPhone(null);
-    }
-  };
 
   // Drop hosted-checkout return params. Do not save a card or complete a charge.
   useEffect(() => {
@@ -275,12 +114,7 @@ export default function ParentWalletClient() {
 
   return (
     <MainLayout showBrandHeader={false}>
-      <div
-        ref={frameRef}
-        className={`mx-auto flex w-full min-h-0 min-w-0 max-w-md flex-col overflow-hidden pb-3 ${WALLET_FRAME_MAX_CLASS}`}
-        dir="rtl"
-      >
-        <div ref={upperRef} className="min-h-0 shrink space-y-5 overflow-x-hidden">
+      <div className="mx-auto w-full min-w-0 max-w-md space-y-5" dir="rtl">
         <div className="flex w-full items-center justify-between gap-3 px-1 pt-2" dir="ltr">
           <PageBackLink href="/parent/dashboard" />
           <button
@@ -334,7 +168,41 @@ export default function ParentWalletClient() {
               onClick={() => setPaymentAppsOpen((open) => !open)}
               className="flex w-full min-w-0 items-center justify-between gap-3 text-right"
             >
-              <span className="text-sm font-bold text-navy-header">אמצעי תשלום</span>
+              <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="text-base font-extrabold text-navy-header">אמצעי תשלום שימושיים</span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg">
+                    <Image
+                      src="/wallet/bit-logo.png"
+                      alt="Bit"
+                      width={272}
+                      height={205}
+                      className="absolute max-w-none"
+                      style={{
+                        width: "54.04px",
+                        height: "auto",
+                        left: "-9.94px",
+                        top: "-4.17px"
+                      }}
+                    />
+                  </span>
+                  <span className="inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-lg">
+                    <Image
+                      src="/wallet/paybox-logo.png"
+                      alt="PayBox"
+                      width={32}
+                      height={32}
+                      className="h-8 w-8 object-cover"
+                    />
+                  </span>
+                  <span
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-[32px] font-extrabold leading-none text-navy-header"
+                    aria-label="מזומן"
+                  >
+                    ₪
+                  </span>
+                </span>
+              </span>
               <ChevronDown
                 className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${
                   paymentAppsOpen ? "rotate-180" : ""
@@ -345,89 +213,19 @@ export default function ParentWalletClient() {
           </h2>
 
           {paymentAppsOpen ? (
-            <div id="parent-wallet-payment-apps" className="min-w-0">
-              {paymentPhones == null ? (
-                <div className="mt-3 flex items-center justify-center gap-2 py-2 text-xs text-slate-400">
-                  <Loader2 className="h-4 w-4 animate-spin text-navy-header" aria-hidden />
-                  <span>טוענים אמצעי תשלום…</span>
-                </div>
-              ) : !paymentPhones.bit && !paymentPhones.paybox ? (
-                <p className="mt-3 break-words text-[13px] leading-relaxed text-slate-500">
-                  {WALLET_NO_PAYMENT_METHODS_COPY}
-                </p>
-              ) : (
-                <div className="mt-3 grid grid-cols-1 gap-2.5">
-                  {(
-                    [
-                      paymentPhones.bit
-                        ? {
-                            id: "bit" as const,
-                            label: "Bit",
-                            phone: paymentPhones.bit,
-                            logoSrc: "/wallet/bit-logo.png",
-                            logoAlt: "bit"
-                          }
-                        : null,
-                      paymentPhones.paybox
-                        ? {
-                            id: "paybox" as const,
-                            label: "PayBox",
-                            phone: paymentPhones.paybox,
-                            logoSrc: "/wallet/paybox-logo.png",
-                            logoAlt: "PayBox"
-                          }
-                        : null
-                    ].filter((row) => row != null)
-                  ).map((row) => (
-                    <div
-                      key={row.id}
-                      className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-right"
-                    >
-                      <Image
-                        src={row.logoSrc}
-                        alt={row.logoAlt}
-                        width={40}
-                        height={40}
-                        className="h-10 w-10 shrink-0 rounded-xl object-cover"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold text-slate-800">
-                          {row.label}
-                        </span>
-                        <span
-                          className="mt-0.5 block whitespace-nowrap text-sm font-semibold tabular-nums tracking-wide text-slate-700"
-                          dir="ltr"
-                        >
-                          {row.phone}
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void copyPaymentPhone(row.id, row.phone)}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50"
-                      >
-                        <Copy className="h-3.5 w-3.5" aria-hidden />
-                        {copiedPhone === row.id ? "הועתק" : "העתקה"}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <p id="parent-wallet-payment-apps" className="mt-4 break-words text-[16px] font-semibold leading-relaxed text-slate-800 md:text-[17px]">
+              {WALLET_PAYMENT_INFO_COPY}
+            </p>
           ) : null}
         </section>
-        </div>
 
-        <section className="mt-5 min-w-0 shrink-0 rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
+        <section className="min-w-0 rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
           <h2 className="text-sm font-bold text-navy-header">פירוט תשלומים</h2>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
             היסטוריית התנועות שנרשמו בארנק.
           </p>
 
-          <div
-            ref={listRef}
-            className={`mt-3 min-w-0 space-y-2 ${WALLET_HISTORY_LIST_MAX_CLASS}`}
-          >
+          <div className={`mt-3 min-w-0 space-y-2 ${WALLET_HISTORY_LIST_MAX_CLASS}`}>
             {isPageLoading ? (
               <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-2">
                 <Loader2 className="h-5 w-5 animate-spin text-navy-header" />
