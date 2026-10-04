@@ -246,9 +246,10 @@ function HomeInner() {
             onClick={() => setRegistrationOpen((open) => !open)}
             aria-expanded={registrationOpen}
             aria-controls="landing-registration-options"
-            className="landing-register-cta mx-auto flex w-[76%] min-h-[3.25rem] items-center justify-center gap-2 rounded-2xl border border-navy-header bg-navy-header px-8 py-3.5 text-lg font-extrabold text-white shadow-[0_10px_24px_rgba(0,31,63,0.3),0_0_0_4px_rgba(255,138,138,0.22)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-salmon focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF6] sm:w-full sm:min-h-0 sm:gap-1 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:text-sm sm:font-extrabold sm:text-navy-header sm:shadow-none sm:hover:brightness-100 sm:hover:opacity-80"
+            className="landing-register-cta mx-auto flex w-fit min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-navy-header bg-navy-header px-8 py-3.5 text-lg font-extrabold text-white shadow-[0_8px_18px_rgba(0,31,63,0.28),0_0_0_3px_rgba(255,138,138,0.2)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-salmon focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF6] sm:w-full sm:min-h-0 sm:gap-1 sm:whitespace-normal sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:text-sm sm:font-extrabold sm:text-navy-header sm:shadow-none sm:hover:brightness-100 sm:hover:opacity-80"
           >
-            <span>הרשמה</span>
+            <span className="sm:hidden">להרשמה</span>
+            <span className="hidden sm:inline">הרשמה</span>
             {registrationOpen ? (
               <ChevronUp className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
             ) : (
