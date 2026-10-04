@@ -17,6 +17,7 @@ import {
   filterCalendarShiftsByView,
   isUpcomingOrActiveCalendarShift,
   PARENT_CALENDAR_VIEW_OPTIONS,
+  sortCalendarShiftsChronologically,
   type CalendarViewMode
 } from "@/lib/bookings/calendar-shift-filters";
 import {
@@ -61,10 +62,6 @@ export {
 
 const HEBREW_WEEKDAYS = ["א", "ב", "ג", "ד", "ה", "ו", "ש"] as const;
 const HEBREW_WEEKDAY_FULL = ["יום ראשון", "יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "יום שבת"] as const;
-
-const DAY_START_HOUR = 6;
-const DAY_END_HOUR = 23;
-const TIMELINE_MINUTES = (DAY_END_HOUR - DAY_START_HOUR) * 60;
 
 const DATE_WITH_SHIFT_CLASS = "font-bold text-red-800";
 const DATE_WITHOUT_SHIFT_CLASS = "font-normal text-blue-600";
@@ -270,20 +267,6 @@ function formatFullIsraeliDate(dateStr: string): string {
   const parts = dateStr.slice(0, 10).split("-");
   if (parts.length !== 3) return dateStr;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
-}
-
-function minutesFromDayStart(iso: string): number {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 0;
-  return Math.max(0, (d.getHours() - DAY_START_HOUR) * 60 + d.getMinutes());
-}
-
-function shiftTimelineStyle(startTime: string, endTime: string): { top: string; height: string } {
-  const startMin = Math.min(TIMELINE_MINUTES, minutesFromDayStart(startTime));
-  const endMin = Math.min(TIMELINE_MINUTES, Math.max(startMin + 30, minutesFromDayStart(endTime)));
-  const top = (startMin / TIMELINE_MINUTES) * 100;
-  const height = Math.max(10, ((endMin - startMin) / TIMELINE_MINUTES) * 100);
-  return { top: `${top}%`, height: `${height}%` };
 }
 
 export type CalendarShiftActionContext = {
@@ -573,13 +556,18 @@ function TodayShiftList({
   );
 }
 
+const PARENT_TODAY_EMPTY_MESSAGE = "לא נקבעו משמרות להיום";
+
 export function TodayGridView({
   shifts,
   presentation = "timeline",
   ...actionContext
 }: CalendarViewsContext & {
   shifts: CalendarShift[];
-  /** `shifts` lists only real bookings. The default timeline is unchanged. */
+  /**
+   * `shifts` is the sitter board list.
+   * The parent day view (`timeline` prop, no hourly grid) lists only today's bookings.
+   */
   presentation?: "timeline" | "shifts";
 }) {
   if (presentation === "shifts") {
@@ -587,69 +575,28 @@ export function TodayGridView({
   }
 
   const today = todayDateISO();
-  const hasShifts = shifts.length > 0;
-  const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, i) => DAY_START_HOUR + i);
-  const slotCount = hours.length;
-  const timelineHeightRem = slotCount * 3.5;
+  const ordered = sortCalendarShiftsChronologically(shifts);
+  const hasShifts = ordered.length > 0;
 
   return (
     <CalendarShell
-      className="h-full"
       title={`תצוגת יום · ${formatIsraeliDate(today)}`}
-      subtitle={hasShifts ? `${shifts.length} משמרות היום` : embeddedEmptyHint("today")}
+      subtitle={hasShifts ? `${ordered.length} משמרות היום` : undefined}
     >
       <div className="shrink-0 px-4 py-2 text-right">
         <p className={`text-lg font-semibold tabular-nums ${dateLabelClass(hasShifts)}`}>{formatIsraeliDate(today)}</p>
       </div>
-      <div className="border-t border-slate-100">
-        <div className="relative flex" style={{ minHeight: `${timelineHeightRem}rem` }}>
-          <div className="sticky right-0 z-[1] w-12 shrink-0 border-l border-slate-100 bg-slate-50/95">
-            {hours.map((hour) => (
-              <div
-                key={hour}
-                className="flex h-14 items-start justify-center pt-1 text-xs font-medium tabular-nums text-slate-600"
-              >
-                {pad2(hour)}:00
-              </div>
-            ))}
-          </div>
-          <div className="relative min-w-0 flex-1 bg-[#FDFBF6]/40">
-            {hours.map((hour) => (
-              <div key={hour} className="h-14 border-b border-slate-100/80" />
-            ))}
-            {shifts.map((shift) => {
-              const style = shiftTimelineStyle(shift.startTime, shift.endTime);
-              return (
-                <div
-                  key={shift.id}
-                  className={`absolute inset-x-1.5 overflow-hidden rounded-lg border border-white/80 px-2 py-1 shadow-sm ${shiftAccentClass(shift.status)} border-r-4`}
-                  style={style}
-                >
-                  <p className="truncate text-xs font-semibold text-navy-header">{shift.partnerName}</p>
-                  <p className="truncate text-xs font-normal text-slate-600 tabular-nums">
-                    <BookingTimeRange
-                      start={formatClockTime(shift.startTime)}
-                      end={formatClockTime(shift.endTime)}
-                    />
-                  </p>
-                </div>
-              );
-            })}
-            {!hasShifts ? (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <CalendarEmptyState message={embeddedEmptyHint("today")} />
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </div>
       {hasShifts ? (
         <div className="space-y-2 border-t border-slate-100 px-3 py-3">
-          {shifts.map((shift) => (
-            <ShiftCard key={`card-${shift.id}`} shift={shift} {...actionContext} />
+          {ordered.map((shift) => (
+            <ShiftCard key={shift.id} shift={shift} {...actionContext} />
           ))}
         </div>
-      ) : null}
+      ) : (
+        <div className="flex items-center justify-center border-t border-slate-100 px-4 py-10">
+          <p className="text-center text-base font-semibold text-slate-500">{PARENT_TODAY_EMPTY_MESSAGE}</p>
+        </div>
+      )}
     </CalendarShell>
   );
 }
