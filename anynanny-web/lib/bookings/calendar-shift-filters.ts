@@ -184,6 +184,17 @@ export function filterCalendarShiftsByView<T extends CalendarShiftFilterFields>(
   }
 }
 
+/** Display order for a day list. Does not change which shifts belong to the view. */
+export function sortCalendarShiftsChronologically<T extends { startTime: string }>(
+  shifts: readonly T[]
+): T[] {
+  return [...shifts].sort((a, b) => {
+    const aMs = new Date(a.startTime).getTime();
+    const bMs = new Date(b.startTime).getTime();
+    return (Number.isFinite(aMs) ? aMs : 0) - (Number.isFinite(bMs) ? bMs : 0);
+  });
+}
+
 export function calendarViewEmptyHint(view: CalendarViewMode): string {
   switch (view) {
     case "today":

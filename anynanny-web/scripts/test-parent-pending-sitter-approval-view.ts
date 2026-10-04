@@ -10,7 +10,8 @@ import {
   isVisibleParentCalendarShift,
   PARENT_CALENDAR_LOAD_STATUSES,
   PARENT_CALENDAR_VIEW_OPTIONS,
-  PARENT_PENDING_SITTER_APPROVAL_STATUS
+  PARENT_PENDING_SITTER_APPROVAL_STATUS,
+  sortCalendarShiftsChronologically
 } from "../lib/bookings/calendar-shift-filters";
 import { todayDateISO } from "../lib/bookings/booking-date-utils";
 import { isSitterBookingAwaitingApprovalStatus } from "../lib/bookings/booking-realtime-handler";
@@ -142,6 +143,84 @@ assert.match(parentCalendar, /PARENT_CALENDAR_VIEW_OPTIONS/);
 assert.match(parentCalendar, /isVisibleParentCalendarShift/);
 assert.match(parentCalendar, /first_name, last_name/);
 assert.doesNotMatch(parentCalendar, /phone|national_id|id_number|military/);
+
+function dateOffset(iso: string, days: number): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(year!, (month ?? 1) - 1, day);
+  date.setDate(date.getDate() + days);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+const yesterday = dateOffset(today, -1);
+const tomorrow = dateOffset(today, 1);
+const todayMorning = shift({
+  id: "today-morning",
+  status: "approved",
+  bookingDate: today,
+  startTime: `${today}T09:00:00`,
+  endTime: `${tomorrow}T12:00:00`
+});
+const todayEvening = shift({
+  id: "today-evening",
+  status: "approved",
+  bookingDate: today,
+  startTime: `${today}T18:00:00`,
+  endTime: `${tomorrow}T12:00:00`
+});
+const yesterdayShift = shift({
+  id: "yesterday-1",
+  status: "approved",
+  bookingDate: yesterday,
+  startTime: `${yesterday}T18:00:00`,
+  endTime: `${tomorrow}T12:00:00`
+});
+const tomorrowShift = shift({
+  id: "tomorrow-1",
+  status: "approved",
+  bookingDate: tomorrow,
+  startTime: `${tomorrow}T09:00:00`,
+  endTime: `${tomorrow}T13:00:00`
+});
+
+const noShifts: Array<ReturnType<typeof shift>> = [];
+assert.deepEqual(
+  filterCalendarShiftsByView(noShifts, "today", undefined, now).map((s) => s.id),
+  []
+);
+assert.deepEqual(
+  filterCalendarShiftsByView([todayMorning], "today", undefined, now).map((s) => s.id),
+  ["today-morning"]
+);
+assert.deepEqual(
+  sortCalendarShiftsChronologically(
+    filterCalendarShiftsByView([todayEvening, todayMorning], "today", undefined, now)
+  ).map((s) => s.id),
+  ["today-morning", "today-evening"]
+);
+assert.deepEqual(
+  filterCalendarShiftsByView([yesterdayShift, tomorrowShift], "today", undefined, now).map((s) => s.id),
+  []
+);
+assert.deepEqual(
+  filterCalendarShiftsByView([yesterdayShift, tomorrowShift], "all", undefined, now)
+    .map((s) => s.id)
+    .sort(),
+  ["tomorrow-1", "yesterday-1"]
+);
+
+const todayGridStart = views.indexOf("const PARENT_TODAY_EMPTY_MESSAGE");
+const todayGridEnd = views.indexOf("export function WeekGridView");
+const todayGrid = views.slice(todayGridStart, todayGridEnd);
+assert.ok(todayGridStart >= 0 && todayGridEnd > todayGridStart);
+assert.match(todayGrid, /sortCalendarShiftsChronologically\(shifts\)/);
+assert.match(todayGrid, /לא נקבעו משמרות להיום/);
+assert.doesNotMatch(todayGrid, /אין משמרות להיום/);
+assert.doesNotMatch(todayGrid, /embeddedEmptyHint\("today"\)/);
+assert.doesNotMatch(todayGrid, /DAY_START_HOUR|pad2\(hour\)|minHeight/);
+assert.match(views.slice(0, todayGridStart), /אין משמרות להיום/);
 
 const createBooking = read("lib/bookings/create-booking.ts");
 assert.match(createBooking, /status: "pending"/);
