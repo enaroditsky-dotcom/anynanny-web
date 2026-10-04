@@ -160,13 +160,38 @@ button {
   animation: profile-image-backdrop-in 180ms ease-out;
 }
 
+@keyframes landing-register-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+    box-shadow:
+      0 10px 24px rgba(0, 31, 63, 0.3),
+      0 0 0 4px rgba(255, 138, 138, 0.22);
+  }
+  50% {
+    transform: scale(1.04);
+    filter: brightness(1.08);
+    box-shadow:
+      0 16px 32px rgba(0, 31, 63, 0.38),
+      0 0 18px 6px rgba(255, 138, 138, 0.45);
+  }
+}
+
+@media (max-width: 639px) and (prefers-reduced-motion: no-preference) {
+  .landing-register-cta {
+    animation: landing-register-pulse 1.25s ease-in-out infinite;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-parent-wizard-in-forward,
   .animate-parent-wizard-out-forward,
   .animate-parent-wizard-in-back,
   .animate-parent-wizard-out-back,
   .profile-image-zoom-in,
-  .profile-image-backdrop-in {
+  .profile-image-backdrop-in,
+  .landing-register-cta {
     animation: none !important;
   }
 }
