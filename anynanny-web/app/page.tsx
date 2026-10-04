@@ -175,23 +175,23 @@ function HomeInner() {
 
   return (
     <main
-      className="min-h-[100dvh] w-full overflow-y-auto bg-[#FDFBF6] px-4 py-3 sm:py-5"
+      className="min-h-[100dvh] w-full overflow-y-auto bg-[#FDFBF6] px-4 py-1.5 sm:py-5"
       dir="rtl"
     >
-      <div className="mx-auto flex min-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col items-center justify-start gap-3 pt-1 sm:min-h-[calc(100dvh-2.5rem)] sm:justify-center sm:gap-4 sm:pt-0">
+      <div className="mx-auto flex min-h-[calc(100dvh-0.75rem)] w-full max-w-md flex-col items-center justify-start gap-0 pt-0 sm:min-h-[calc(100dvh-2.5rem)] sm:justify-center sm:gap-4 sm:pt-0">
         {/* Brand */}
         <div className="shrink-0 text-center">
           <h1 className="flex w-full min-w-0 justify-center">
             <AnyNannyLogo variant="hero" />
           </h1>
 
-          <p className="-mt-2 text-xs font-bold leading-tight text-slate-500 sm:-mt-3 sm:text-sm">
+          <p className="-mt-3 text-xs font-bold leading-tight text-slate-500 sm:-mt-3 sm:text-sm">
             פשוט למצוא זמן לחיים
           </p>
         </div>
 
-        {/* Anny — unframed cutout; bottom pad keeps the video title clear */}
-        <div className="flex shrink-0 justify-center pb-4 sm:pb-5">
+        {/* Anny — unframed cutout. Mobile sits close under the slogan; sm keeps the bottom pad. */}
+        <div className="mt-1.5 flex shrink-0 justify-center pb-0 sm:mt-0 sm:pb-5">
           <AnynannyMascotPortrait
             framed={false}
             className="h-[clamp(88px,14dvh,128px)] w-[clamp(88px,14dvh,128px)] sm:h-[148px] sm:w-[148px]"
@@ -210,7 +210,7 @@ function HomeInner() {
         />
 
         {/* Login */}
-        <section className="w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:p-4">
+        <section className="mt-2 w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:mt-0 sm:p-4">
           <h2 className="text-center text-xl font-extrabold tracking-tight text-navy-header sm:text-2xl">
             כניסה
           </h2>
@@ -240,19 +240,19 @@ function HomeInner() {
         </section>
 
         {/* Register */}
-        <section className="w-full shrink-0 px-1 pt-1 sm:px-1.5 sm:pt-1.5">
+        <section className="mt-1.5 w-full shrink-0 px-1 pt-0 sm:mt-0 sm:px-1.5 sm:pt-1.5">
           <button
             type="button"
             onClick={() => setRegistrationOpen((open) => !open)}
             aria-expanded={registrationOpen}
             aria-controls="landing-registration-options"
-            className="mx-auto flex w-full items-center justify-center gap-1 text-navy-header transition hover:opacity-80"
+            className="landing-register-cta mx-auto flex w-[76%] min-h-[3.25rem] items-center justify-center gap-2 rounded-2xl border border-navy-header bg-navy-header px-8 py-3.5 text-lg font-extrabold text-white shadow-[0_10px_24px_rgba(0,31,63,0.3),0_0_0_4px_rgba(255,138,138,0.22)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-salmon focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF6] sm:w-full sm:min-h-0 sm:gap-1 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:text-sm sm:font-extrabold sm:text-navy-header sm:shadow-none sm:hover:brightness-100 sm:hover:opacity-80"
           >
-            <span className="text-sm font-extrabold">הרשמה</span>
+            <span>הרשמה</span>
             {registrationOpen ? (
-              <ChevronUp className="h-4 w-4 shrink-0" aria-hidden />
+              <ChevronUp className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
             ) : (
-              <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
+              <ChevronDown className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
             )}
           </button>
 
@@ -301,7 +301,7 @@ function HomeInner() {
           </div>
         </section>
 
-        <p className="max-w-sm shrink-0 text-center text-[12px] leading-snug text-slate-500 sm:text-xs">
+        <p className="mt-1.5 max-w-sm shrink-0 text-center text-[12px] leading-snug text-slate-500 sm:mt-0 sm:text-xs">
           הורים ובייביסיטריות — כל הקהילה במקום אחד.
         </p>
       </div>

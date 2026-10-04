@@ -38,7 +38,7 @@ export function HomepageWelcomeVideo({ onJoinClick }: HomepageWelcomeVideoProps)
   }, []);
 
   return (
-    <section className="w-full shrink-0" aria-labelledby="homepage-welcome-video-title">
+    <section className="mt-0.5 w-full shrink-0 sm:mt-0" aria-labelledby="homepage-welcome-video-title">
       <div className="px-1 text-center">
         <h2
           id="homepage-welcome-video-title"
@@ -48,7 +48,7 @@ export function HomepageWelcomeVideo({ onJoinClick }: HomepageWelcomeVideoProps)
         </h2>
       </div>
 
-      <div className="mt-2 overflow-hidden rounded-2xl border border-[#001F3F]/10 bg-white shadow-soft sm:rounded-3xl">
+      <div className="mt-1 overflow-hidden rounded-2xl border border-[#001F3F]/10 bg-white shadow-soft sm:mt-2 sm:rounded-3xl">
         <div className="relative aspect-video w-full overflow-hidden bg-[#0B243B]">
           <video
             ref={videoRef}
@@ -95,7 +95,7 @@ export function HomepageWelcomeVideo({ onJoinClick }: HomepageWelcomeVideoProps)
       </div>
 
       {onJoinClick ? (
-        <p className="mt-2 text-center">
+        <p className="mt-1.5 text-center sm:mt-2">
           <button
             type="button"
             onClick={onJoinClick}
