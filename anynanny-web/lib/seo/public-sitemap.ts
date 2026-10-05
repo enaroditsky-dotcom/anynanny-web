@@ -29,6 +29,11 @@ export const SEO_LANDING_PAGES: readonly PublicSitemapPage[] = [
     path: "/jobs/students",
     changeFrequency: "weekly",
     priority: 0.8
+  },
+  {
+    path: "/babysitter",
+    changeFrequency: "weekly",
+    priority: 0.9
   }
 ];
 
