@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { BABYSITTER_CITIES, babysitterCityPath } from "@/lib/marketing/babysitter-cities";
 
 /** Canonical production origin. Sitemap URLs are absolute so they do not follow the request host. */
 export const SITE_ORIGIN = "https://www.anynanny.org";
@@ -34,7 +35,14 @@ export const SEO_LANDING_PAGES: readonly PublicSitemapPage[] = [
     path: "/babysitter",
     changeFrequency: "weekly",
     priority: 0.9
-  }
+  },
+  ...BABYSITTER_CITIES.map(
+    (city): PublicSitemapPage => ({
+      path: babysitterCityPath(city.slug),
+      changeFrequency: "weekly",
+      priority: 0.8
+    })
+  )
 ];
 
 /** Public legal pages linked from the marketing site. None of these set noindex. */
