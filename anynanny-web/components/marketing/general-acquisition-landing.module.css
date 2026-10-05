@@ -124,6 +124,10 @@
   color: var(--acq-green);
 }
 
+.heroTitle.heroTitleCity {
+  font-size: clamp(1.2rem, 5.4vw, 1.55rem);
+}
+
 .differentiator {
   width: 100%;
   max-width: 40rem;
@@ -324,6 +328,13 @@
   margin-top: 0.9rem;
 }
 
+.related {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 0.85rem;
+}
+
 .related a {
   display: inline-flex;
   align-items: center;
@@ -336,6 +347,113 @@
   line-height: 1.35;
   text-decoration: underline;
   text-underline-offset: 0.18em;
+}
+
+.localNote {
+  width: min(100%, 40rem);
+  max-width: 100%;
+  min-width: 0;
+  margin: 0.85rem 0 0;
+  color: var(--acq-navy);
+  font-size: 0.98rem;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.nearby,
+.cityIndex,
+.crumbs {
+  width: min(100%, 40rem);
+  max-width: 100%;
+  min-width: 0;
+  margin-top: 0.9rem;
+  box-sizing: border-box;
+}
+
+.nearby h2,
+.cityIndex h2 {
+  margin: 0;
+  color: var(--acq-navy);
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.nearby ul,
+.cityIndex ul,
+.crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: 100%;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crumbs ol {
+  margin-top: 0;
+  gap: 0.35rem 0.5rem;
+}
+
+.nearby li,
+.cityIndex li,
+.crumbs li {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.nearby a,
+.cityIndex a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--acq-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--acq-navy);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+  white-space: normal;
+}
+
+.crumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--acq-navy);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.crumbs li:not(:last-child)::after {
+  content: "·";
+  color: rgba(0, 31, 63, 0.45);
+  font-weight: 500;
+}
+
+.crumbs a {
+  color: var(--acq-navy);
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.crumbs [aria-current="page"] {
+  font-weight: 800;
 }
 
 @media (max-width: 640px) {
@@ -404,6 +522,10 @@
   .direct,
   .scene,
   .actions,
+  .localNote,
+  .nearby,
+  .cityIndex,
+  .crumbs,
   .related {
     grid-column: 1 / -1;
     width: min(100%, 40rem);
@@ -513,8 +635,16 @@
     box-shadow: 0 10px 28px rgba(0, 31, 63, 0.06);
   }
 
+  .localNote,
+  .nearby,
+  .cityIndex,
+  .crumbs,
   .related {
     margin-top: 1.15rem;
+  }
+
+  .heroTitle.heroTitleCity {
+    font-size: clamp(1.28rem, 2.2vw, 1.6rem);
   }
 }
 
@@ -554,6 +684,10 @@
   .direct,
   .scene,
   .actions,
+  .localNote,
+  .nearby,
+  .cityIndex,
+  .crumbs,
   .related {
     width: 100%;
   }
@@ -567,6 +701,35 @@
     margin-top: 0;
     font-size: 1.75rem;
     white-space: nowrap;
+  }
+
+  .heroTitle.heroTitleCity {
+    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 1.5rem;
+    white-space: normal;
+  }
+
+  .heroTitle.heroTitleCity .h1Find,
+  .heroTitle.heroTitleCity .h1Work {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0;
+    padding: 0.16rem 0.75rem 0.22rem;
+    white-space: normal;
+  }
+
+  .heroTitle.heroTitleCity .h1Find {
+    background: #e7f1fb;
+    color: var(--acq-navy);
+  }
+
+  .heroTitle.heroTitleCity .h1Work {
+    background: #fde8ee;
+    color: var(--acq-green);
   }
 
   .h1Find,
