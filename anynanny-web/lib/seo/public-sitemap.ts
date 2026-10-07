@@ -36,6 +36,11 @@ export const SEO_LANDING_PAGES: readonly PublicSitemapPage[] = [
     changeFrequency: "weekly",
     priority: 0.9
   },
+  {
+    path: "/app",
+    changeFrequency: "weekly",
+    priority: 0.9
+  },
   ...BABYSITTER_CITIES.map(
     (city): PublicSitemapPage => ({
       path: babysitterCityPath(city.slug),
