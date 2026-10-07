@@ -13,7 +13,7 @@ function compactId(value: string): string {
 
 /**
  * Matches a participant display name or AnyNanny public id.
- * "AN-1004", "an-1004", and the numeric fragment "1004" all match the same id.
+ * "AN-1004", "RAN-1001", "RP-1001", and the numeric fragment "1004" all match that stored id.
  * An empty query matches every conversation.
  */
 export function conversationMatchesInboxQuery(

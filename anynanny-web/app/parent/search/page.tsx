@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { Search } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { MainLayout } from "@components/layout/MainLayout";
 import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filters";
 import {
@@ -35,6 +37,7 @@ function ParentSearchContent() {
   const [navigating, setNavigating] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [invalidFields, setInvalidFields] = useState<ParentSearchMandatoryField[]>([]);
+  const [parentPublicId, setParentPublicId] = useState<string | null>(null);
 
   useEffect(() => {
     setDraftFilters(parseFiltersFromSearchParams(new URLSearchParams(searchQuery)));
@@ -73,7 +76,22 @@ function ParentSearchContent() {
   const showWait = !authSettled || (signedIn && effectiveRole === null);
   const redirectingToLogin = authSettled && !signedIn;
 
-  const parentPublicId = (user as any)?.parent_public_id || (user as any)?.user_metadata?.parent_public_id;
+  useEffect(() => {
+    const uid = user?.id;
+    if (!showContent || !uid) {
+      setParentPublicId(null);
+      return;
+    }
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    let cancelled = false;
+    void fetchProfilePublicId(supabase, uid, "parent").then(({ publicId }) => {
+      if (!cancelled) setParentPublicId(publicId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showContent, user?.id]);
 
   return (
     <MainLayout showBrandHeader={false}>

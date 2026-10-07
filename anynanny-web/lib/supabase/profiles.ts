@@ -11,16 +11,19 @@ export type ProfileRow = {
   role: ProfileRole;
   avatar_url?: string | null;
   balance: number;
-  /** Unified public identifier (e.g. AN_1001 / P_1001). */
+  /** Unified public identifier mirrored from the role id (P- / RP- for parents). */
   public_id?: string | null;
   /** False until user completes /auth/role-selection (omit on legacy rows). */
   role_selected?: boolean | null;
   /** Set when parent finishes /parent/onboarding. */
   parent_onboarding_completed_at?: string | null;
-  /** Auto-increment serial for P-/AN- display ids (client adds 1000). */
+  /** Legacy integer. Display ids use parent_serial or nanny_serial, not this. */
   serial_id?: number | null;
-  /** Legacy parent/sitter-specific ids (fallback when public_id is unset). */
-  parent_public_id?: string | null;
+  /** Canonical parent public id: existing P-####, new real parents RP-####. */
+  parent_serial?: string | null;
+  /** Canonical sitter public id. Existing AN-/CONS- stay. New sitters receive RAN-####. sitter_profiles.nanny_serial mirrors this. */
+  nanny_serial?: string | null;
+  /** Legacy shell label (Nanny-0001). Not the sitter public id. */
   nanny_public_id?: string | null;
   /** Phase 1 identity verification — never auto-set to verified. */
   identity_verification_status?: "unverified" | "pending" | "verified" | "failed" | null;
