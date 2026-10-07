@@ -21,6 +21,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.9,
     },
+    {
+      url: "https://www.anynanny.org/app",
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
     ...BABYSITTER_CITIES.map((city) => ({
       url: babysitterCityCanonical(city.slug),
       lastModified: new Date(),

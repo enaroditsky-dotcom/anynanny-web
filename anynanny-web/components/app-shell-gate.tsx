@@ -32,6 +32,7 @@ const CHROMELESS_PREFIXES = [
   "/privacy",
   "/delete-account",
   "/babysitter",
+  "/app",
   "/welcome",
   "/charter",
   "/sitter/onboarding"
