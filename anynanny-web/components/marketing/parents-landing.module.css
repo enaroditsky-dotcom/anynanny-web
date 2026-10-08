@@ -1,0 +1,271 @@
+.page {
+  --parents-navy: #001f3f;
+  --parents-green: #3a9a44;
+  --parents-cream: #fdfbf6;
+  --parents-blue: #e7f1fb;
+  --parents-line: rgba(0, 31, 63, 0.1);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 100dvh;
+  max-width: 100%;
+  overflow-x: hidden;
+  background: var(--parents-cream);
+  color: var(--parents-navy);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  direction: rtl;
+  text-align: right;
+}
+
+.page :where(a, button):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(58, 154, 68, 0.45);
+}
+
+.header {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  padding: 0.55rem 0.85rem 0.05rem;
+  box-sizing: border-box;
+}
+
+.lockup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.anny {
+  width: 3.35rem;
+  height: 3.35rem;
+  flex: 0 0 auto;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  width: min(72rem, 100%);
+  min-width: 0;
+  margin-inline: auto;
+  padding: 0.15rem 0.9rem 2.4rem;
+  box-sizing: border-box;
+}
+
+.heroTitle,
+.revolution,
+.supporting,
+.intro {
+  width: min(40rem, 100%);
+  margin-inline: auto;
+  text-align: center;
+}
+
+.heroTitle {
+  margin: 0.2rem auto 0;
+  font-size: clamp(1.45rem, 5.4vw, 2.15rem);
+  font-weight: 800;
+  line-height: 1.28;
+}
+
+.revolution {
+  margin: 0.7rem auto 0;
+  font-size: clamp(1.2rem, 3.6vw, 1.55rem);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.supporting {
+  margin: 0.55rem auto 0;
+  font-size: clamp(1.02rem, 3.2vw, 1.2rem);
+  line-height: 1.45;
+}
+
+.intro {
+  margin: 0.55rem auto 0;
+  font-size: 1.02rem;
+}
+
+.hero {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  margin: 0.9rem auto 0;
+}
+
+.hero img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.9rem;
+  box-shadow: 0 14px 36px rgba(0, 31, 63, 0.1);
+}
+
+.heroHit {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0.7rem;
+  cursor: pointer;
+}
+
+.heroHit:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 3px rgba(58, 154, 68, 0.95);
+}
+
+/* Percentages of the 1087×732 parent hero. They scale with the image. */
+.heroDownload {
+  left: 60.63%;
+  top: 41.94%;
+  width: 35.23%;
+  height: 9.7%;
+}
+
+.heroApple {
+  left: 61.18%;
+  top: 54.78%;
+  width: 15.55%;
+  height: 7.65%;
+}
+
+.heroGoogle {
+  left: 78.1%;
+  top: 54.78%;
+  width: 17.11%;
+  height: 7.65%;
+}
+
+.installNote {
+  width: min(40rem, 100%);
+  margin: 0.75rem auto 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.85rem;
+  background: #f3faf4;
+  border: 1px solid rgba(58, 154, 68, 0.22);
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.simple,
+.value {
+  width: min(40rem, 100%);
+  min-width: 0;
+  margin: 1rem auto 0;
+  padding: 1.1rem 1.05rem 1.15rem;
+  border-radius: 1.15rem;
+  box-sizing: border-box;
+}
+
+.simple {
+  background: #fff;
+  border: 1px solid var(--parents-line);
+}
+
+.value {
+  background: var(--parents-blue);
+  border: 1px solid rgba(0, 31, 63, 0.1);
+}
+
+.simple h2,
+.value h2 {
+  margin: 0;
+  font-size: clamp(1.22rem, 3.2vw, 1.5rem);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.simple p,
+.value p {
+  margin: 0.7rem 0 0;
+}
+
+.simple ul {
+  margin: 0.8rem 0 0;
+  padding: 0 1.15rem 0 0;
+}
+
+.simple li {
+  margin-top: 0.4rem;
+}
+
+.parentCta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: min(22rem, 100%);
+  min-height: 3.25rem;
+  margin: 1.15rem auto 0;
+  padding: 0.75rem 1.15rem;
+  border-radius: 999px;
+  background: var(--parents-navy);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(0, 31, 63, 0.16);
+  font-size: 1.08rem;
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+}
+
+@media (min-width: 801px) {
+  .header {
+    padding-top: 0.7rem;
+  }
+
+  .anny {
+    width: 3.7rem;
+    height: 3.7rem;
+  }
+
+  .hero {
+    width: min(68rem, 100%);
+  }
+}
+
+@media (max-width: 800px) {
+  /*
+   * On a phone the painted controls are shorter than 44px and only a few
+   * pixels apart. Grow the Web App hit area upward and the App Store hit
+   * area downward so both stay on their controls and do not meet.
+   */
+  .heroDownload {
+    top: auto;
+    bottom: 48.36%;
+    height: 9.7%;
+    min-height: 44px;
+  }
+
+  .heroApple {
+    height: 7.65%;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 430px) {
+  .main {
+    padding-inline: 0.75rem;
+  }
+
+  .heroTitle {
+    font-size: 1.38rem;
+  }
+
+  .simple,
+  .value {
+    padding-inline: 0.9rem;
+  }
+}
