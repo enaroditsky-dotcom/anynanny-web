@@ -2,6 +2,7 @@ import { DeleteAccountSection } from "@/components/account/delete-account-sectio
 import { LogoutButton } from "@/components/account/logout-button";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { ParentTourSettingsEntry } from "@/components/product-tour/parent-tour-settings-entry";
+import { MarketingConsentSection } from "@/components/settings/marketing-consent-section";
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section";
 import { SettingsFaqEntry } from "@/components/settings/settings-faq-entry";
 import { BlockedUsersSection } from "@/components/safety/blocked-users-section";
@@ -25,6 +26,7 @@ export default function ParentSettingsPage() {
 
       <div className="mt-6">
         <NotificationSettingsSection />
+        <MarketingConsentSection />
       </div>
 
       <BlockedUsersSection />

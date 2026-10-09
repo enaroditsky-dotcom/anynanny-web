@@ -72,6 +72,16 @@ function normalizeSitterSerial(raw: unknown): string | null {
   return null;
 }
 
+/** New real parents only. Legacy P-#### is not an RP id. */
+export function isRealParentPublicId(raw: unknown): boolean {
+  return normalizeParentSerial(raw)?.startsWith("RP-") === true;
+}
+
+/** New real sitters only. Legacy AN-#### and CONS-#### are not RAN ids. */
+export function isRealSitterPublicId(raw: unknown): boolean {
+  return normalizeSitterSerial(raw)?.startsWith("RAN-") === true;
+}
+
 export function pickProfilePublicId(row: unknown, role: "parent" | "sitter"): string | null {
   if (!row || typeof row !== "object") return null;
   const r = row as Record<string, unknown>;

@@ -1,6 +1,7 @@
 import { DeleteAccountSection } from "@/components/account/delete-account-section";
 import { LogoutButton } from "@/components/account/logout-button";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
+import { MarketingConsentSection } from "@/components/settings/marketing-consent-section";
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section";
 import { SettingsFaqEntry } from "@/components/settings/settings-faq-entry";
 import { SitterTourSettingsEntry } from "@/components/product-tour/sitter-tour-settings-entry";
@@ -25,6 +26,7 @@ export default function SitterSettingsPage() {
 
       <div className="mt-6">
         <NotificationSettingsSection />
+        <MarketingConsentSection />
       </div>
 
       <BlockedUsersSection />

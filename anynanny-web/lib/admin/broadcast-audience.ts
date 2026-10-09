@@ -1,5 +1,6 @@
 import { isIdentityVerified, parseIdentityVerificationStatus } from "@/lib/identity/identity-verification";
 import { interpretProductProfileOwnership } from "@/lib/auth/product-profiles";
+import { isRealParentPublicId, isRealSitterPublicId } from "@/lib/public/sequential-display-id";
 import { hasSitterCompletedOnboarding } from "@/lib/sitter/sitter-profile";
 
 export const BROADCAST_AUDIENCE_TYPES = [
@@ -9,7 +10,9 @@ export const BROADCAST_AUDIENCE_TYPES = [
   "identity_unverified",
   "identity_verified",
   "profile_incomplete",
-  "profile_complete"
+  "profile_complete",
+  "rp_marketing_opt_in",
+  "ran_marketing_opt_in"
 ] as const;
 
 export type BroadcastAudienceType = (typeof BROADCAST_AUDIENCE_TYPES)[number];
@@ -23,7 +26,9 @@ export const BROADCAST_AUDIENCE_LABELS: Record<BroadcastAudienceType, string> = 
   identity_unverified: "משתמשים שלא אימתו זהות",
   identity_verified: "משתמשים שאימתו זהות",
   profile_incomplete: "פרופיל לא הושלם",
-  profile_complete: "פרופיל הושלם"
+  profile_complete: "פרופיל הושלם",
+  rp_marketing_opt_in: "הורים RP עם הסכמה לעדכונים",
+  ran_marketing_opt_in: "נני RAN עם הסכמה לעדכונים"
 };
 
 export function isBroadcastAudienceType(value: unknown): value is BroadcastAudienceType {
@@ -43,6 +48,12 @@ export type BroadcastAudienceProfile = {
   parent_onboarding_completed_at: string | null;
   sitter_onboarding_completed_at: string | null;
   identity_verification_status: string | null;
+  /** Canonical parent public id on profiles.parent_serial. */
+  parent_serial?: string | null;
+  /** Canonical sitter public id on profiles.nanny_serial. */
+  nanny_serial?: string | null;
+  /** Separate from operational messaging. Absent or false is not consent. */
+  marketing_consent?: boolean | null;
 };
 
 function ownershipOf(row: BroadcastAudienceProfile) {
@@ -75,6 +86,9 @@ function primaryRoleOnboardingComplete(row: BroadcastAudienceProfile): boolean {
  * - profile_complete / incomplete: onboarding for the primary profiles.role only
  *   (parent → parent_onboarding_completed_at; sitter → sitter_profiles.onboarding_completed_at).
  *   Dual-role second product is not used for this pair.
+ * - rp_marketing_opt_in: profiles.parent_serial is RP-#### AND marketing_consent is true
+ * - ran_marketing_opt_in: profiles.nanny_serial is RAN-#### AND marketing_consent is true
+ *   Legacy P- / AN- / CONS- ids are excluded. Operational audiences ignore marketing_consent.
  */
 export function profileMatchesBroadcastAudience(
   row: BroadcastAudienceProfile,
@@ -100,6 +114,10 @@ export function profileMatchesBroadcastAudience(
       return primaryRoleOnboardingComplete(row);
     case "profile_incomplete":
       return !primaryRoleOnboardingComplete(row);
+    case "rp_marketing_opt_in":
+      return row.marketing_consent === true && isRealParentPublicId(row.parent_serial);
+    case "ran_marketing_opt_in":
+      return row.marketing_consent === true && isRealSitterPublicId(row.nanny_serial);
     default:
       return false;
   }

@@ -47,7 +47,10 @@ assert.doesNotMatch(policy, /Stripe/);
 assert.doesNotMatch(policy, /Cardcom/);
 assert.doesNotMatch(policy, /שירותי אנליטיקה;/);
 assert.match(policy, /אינה מפעילה כלי אנליטיקה של צד שלישי/);
-assert.match(policy, /אינה מציגה בפלטפורמה פרסומות של צדדים שלישיים/);
+assert.match(policy, /רשאית להציג בפלטפורמה פרסום, תוכן מסחרי, הטבות, מבצעים והצעות של שותפים/);
+assert.match(policy, /אינה מהווה כשלעצמה הסכמה לקבלת דיוור שיווקי ישיר/);
+assert.match(policy, /אינה מוכרת למפרסמים את פרטי הקשר/);
+assert.doesNotMatch(policy, /אינה מציגה בפלטפורמה פרסומות של צדדים שלישיים/);
 
 assert.match(policy, /מחיקת החשבון בהגדרות החשבון/);
 assert.match(policy, /מנסה למחוק את קובצי תמונת הפרופיל/);
