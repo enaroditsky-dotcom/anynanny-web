@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { AgeGateStep } from "@/components/auth/age-gate-step";
+import { MarketingConsentCheckbox } from "@/components/auth/marketing-consent-checkbox";
 import {
   LEGAL_ACCEPTANCE_REQUIRED_MESSAGE,
   TermsAcceptanceCheckbox
@@ -18,6 +19,7 @@ import {
 import { ExpertRegistrationFields } from "@/components/sitter/expert-registration-fields";
 import { upsertProfileOnSignup } from "@/lib/auth/supabase-profile";
 import { createLegalAcceptanceRecord } from "@/lib/legal/acceptance";
+import { createRegistrationMarketingConsent } from "@/lib/legal/marketing-consent";
 import {
   emptyExpertProfileDraft,
   expertDraftToProfilePatch,
@@ -120,11 +122,13 @@ function RegisterInner() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [ageGatePassed, setAgeGatePassed] = useState(false);
   const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [legalError, setLegalError] = useState<string | null>(null);
 
   useEffect(() => {
     setAgeGatePassed(false);
     setAcceptedLegal(false);
+    setMarketingConsent(false);
     setLegalError(null);
   }, [role]);
 
@@ -169,6 +173,7 @@ function RegisterInner() {
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
     const legalAcceptance = createLegalAcceptanceRecord();
+    const marketingConsentRecord = createRegistrationMarketingConsent(marketingConsent);
     const expertPatch = isExpert
       ? expertDraftToProfilePatch(expertDraft)
       : null;
@@ -216,7 +221,8 @@ function RegisterInner() {
           role,
           first_name: trimmedFirst,
           last_name: trimmedLast,
-          legalAcceptance
+          legalAcceptance,
+          marketingConsent: marketingConsentRecord
         });
 
         if (profileResult.error) {
@@ -412,6 +418,12 @@ function RegisterInner() {
               setAcceptedLegal(checked);
               if (checked) setLegalError(null);
             }}
+          />
+          <MarketingConsentCheckbox
+            id="register-marketing-consent"
+            checked={marketingConsent}
+            disabled={loading}
+            onChange={setMarketingConsent}
           />
 
           <button

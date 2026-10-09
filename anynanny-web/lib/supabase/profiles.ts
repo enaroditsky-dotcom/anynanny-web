@@ -35,6 +35,13 @@ export type ProfileRow = {
   terms_version?: string | null;
   privacy_accepted_at?: string | null;
   privacy_version?: string | null;
+  /** Separate opt-in for SMS, email, and digital marketing. False is not consent. */
+  marketing_consent?: boolean | null;
+  marketing_consent_at?: string | null;
+  marketing_consent_version?: string | null;
+  marketing_consent_source?: string | null;
+  /** Set once the user has been asked, whether they accepted or declined. */
+  marketing_consent_prompted_at?: string | null;
   /** User preference for Web Push. Default true. Not the same as OS permission. */
   push_enabled?: boolean | null;
   /** In-app sounds/haptics. Does not control OS notification sound. */

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { User, Baby } from 'lucide-react';
 import { AgeGateStep } from '@/components/auth/age-gate-step';
+import { MarketingConsentCheckbox } from '@/components/auth/marketing-consent-checkbox';
 import {
   LEGAL_ACCEPTANCE_REQUIRED_MESSAGE,
   TermsAcceptanceCheckbox
@@ -14,6 +15,7 @@ import { resolvePostAuthPath } from '@/lib/auth/post-auth-destination';
 import { upsertProfileOnSignup } from '@/lib/auth/supabase-profile';
 import { saveSignupNamesToDevice } from '@/lib/auth/signup-names';
 import { createLegalAcceptanceRecord } from '@/lib/legal/acceptance';
+import { createRegistrationMarketingConsent } from '@/lib/legal/marketing-consent';
 import { isProfileRole } from '@/lib/supabase/profiles';
 import { ensureSitterProfileRowForUser } from '@/lib/sitter/sitter-profile';
 import { RequiredFieldMark } from '@/components/ui/required-field-mark';
@@ -33,6 +35,7 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [legalError, setLegalError] = useState<string | null>(null);
 
   const brandColor = '#008080';
@@ -83,6 +86,7 @@ export default function SignUpPage() {
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
     const legalAcceptance = createLegalAcceptanceRecord();
+    const marketingConsentRecord = createRegistrationMarketingConsent(marketingConsent);
     saveSignupNamesToDevice({ first_name: trimmedFirst, last_name: trimmedLast });
 
     try {
@@ -108,6 +112,7 @@ export default function SignUpPage() {
           first_name: trimmedFirst,
           last_name: trimmedLast,
           legalAcceptance,
+          marketingConsent: marketingConsentRecord,
         });
         if (profileResult.error) {
           console.warn('[sign-up] profile upsert:', profileResult.error);
@@ -175,6 +180,7 @@ export default function SignUpPage() {
                   setRole("sitter");
                   setAgeGatePassed(false);
                   setAcceptedLegal(false);
+                  setMarketingConsent(false);
                   setLegalError(null);
                   setErrorMsg(null);
                 }}
@@ -189,6 +195,7 @@ export default function SignUpPage() {
                   setRole("parent");
                   setAgeGatePassed(false);
                   setAcceptedLegal(false);
+                  setMarketingConsent(false);
                   setLegalError(null);
                   setErrorMsg(null);
                 }}
@@ -268,6 +275,12 @@ export default function SignUpPage() {
               setAcceptedLegal(checked);
               if (checked) setLegalError(null);
             }}
+          />
+          <MarketingConsentCheckbox
+            id="sign-up-marketing-consent"
+            checked={marketingConsent}
+            disabled={loading}
+            onChange={setMarketingConsent}
           />
           <button
             type="submit"

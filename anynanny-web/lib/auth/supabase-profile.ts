@@ -1,4 +1,8 @@
 import type { LegalAcceptanceRecord } from "@/lib/legal/acceptance";
+import {
+  isMissingMarketingConsentColumn,
+  type MarketingConsentWrite
+} from "@/lib/legal/marketing-consent";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
@@ -25,6 +29,7 @@ export async function upsertProfileOnSignup(
     first_name: string;
     last_name: string;
     legalAcceptance?: LegalAcceptanceRecord;
+    marketingConsent?: MarketingConsentWrite;
   }
 ): Promise<{ error: string | null }> {
   const first_name = input.first_name.trim();
@@ -40,11 +45,18 @@ export async function upsertProfileOnSignup(
     balance: 0,
     role_selected: true
   };
-  const row: Record<string, unknown> = input.legalAcceptance
+  const withLegal: Record<string, unknown> = input.legalAcceptance
     ? { ...baseRow, ...input.legalAcceptance }
     : baseRow;
+  const row: Record<string, unknown> = input.marketingConsent
+    ? { ...withLegal, ...input.marketingConsent }
+    : withLegal;
 
   let { error } = await supabase.from(PROFILES_TABLE).upsert(row, { onConflict: "id" });
+
+  if (error && input.marketingConsent && isMissingMarketingConsentColumn(error.message)) {
+    ({ error } = await supabase.from(PROFILES_TABLE).upsert(withLegal, { onConflict: "id" }));
+  }
 
   if (error && input.legalAcceptance && isMissingLegalAcceptanceColumn(error.message)) {
     ({ error } = await supabase.from(PROFILES_TABLE).upsert(baseRow, { onConflict: "id" }));
