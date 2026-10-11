@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
 import {
@@ -21,6 +22,12 @@ import {
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type LandingPath = "parent" | "sitter";
+
+const HOMEPAGE_INFO_LINKS: Array<{ href: string; label: string }> = [
+  { href: "/parents", label: "מחפשים בייביסיטר?" },
+  { href: "/babysitter", label: "רוצה לעבוד כבייביסיטר?" },
+  { href: "/jobs/students", label: "עבודה בבייביסיטר לסטודנטיות" }
+];
 
 function PathIcon({ path }: { path: LandingPath }) {
   if (path === "parent") {
@@ -305,6 +312,27 @@ function HomeInner() {
         <p className="mt-1.5 max-w-sm shrink-0 text-center text-[12px] leading-snug text-slate-500 sm:mt-0 sm:text-xs">
           הורים ובייביסיטריות — כל הקהילה במקום אחד.
         </p>
+
+        <nav
+          aria-label="עוד ב־AnyNanny"
+          className="mt-3 w-full max-w-sm shrink-0 border-t border-navy-header/10 pt-2.5 text-center sm:mt-4"
+        >
+          <p className="text-[11px] font-semibold leading-none text-navy-header/55">
+            עוד ב־AnyNanny
+          </p>
+          <ul className="mt-1 flex flex-col items-center">
+            {HOMEPAGE_INFO_LINKS.map((link) => (
+              <li key={link.href} className="max-w-full">
+                <Link
+                  href={link.href}
+                  className="inline-flex min-h-8 items-center px-1 py-0.5 text-center text-[13px] font-semibold leading-snug text-navy-header underline decoration-emerald-600/50 underline-offset-[3px] transition hover:text-emerald-800"
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
       </div>
     </main>
   );
