@@ -50,13 +50,13 @@ export function AppLanding({
             fetchPriority="high"
           />
           <a
-            className={`${styles.heroHit} ${styles.heroDownload}`}
-            href={APP_LANDING_APP_STORE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="להורדת AnyNanny ב-App Store"
-            data-hero-hit="download"
-          />
+            className={styles.heroEntry}
+            href={APP_LANDING_SITE_URL}
+            aria-label="להרשמה ולהורדה"
+            data-hero-hit="entry"
+          >
+            להרשמה ולהורדה
+          </a>
           <a
             className={`${styles.heroHit} ${styles.heroApple}`}
             href={APP_LANDING_APP_STORE_URL}
