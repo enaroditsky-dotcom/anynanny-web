@@ -93,11 +93,33 @@
   box-shadow: 0 0 0 3px rgba(58, 154, 68, 0.9);
 }
 
-.heroDownload {
+.heroEntry {
+  position: absolute;
+  z-index: 1;
   left: 35.9%;
   top: 61%;
   width: 29.5%;
   height: 12.4%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.15rem 0.35rem;
+  border-radius: 999px;
+  background: var(--app-green);
+  color: #fff;
+  font-size: clamp(0.62rem, 1.35vw, 1.05rem);
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  text-decoration: none;
+}
+
+.heroEntry:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(58, 154, 68, 0.9);
 }
 
 .heroApple {
