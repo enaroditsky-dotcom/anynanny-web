@@ -22,6 +22,17 @@ import {
 import type { ManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
 import { formatElapsed } from "@/lib/session/protocol";
 
+/**
+ * In-flow end space so the paid action can scroll clear of the fixed BottomNav.
+ * Padding on the app-shell scroller is not reliably part of scrollHeight on
+ * Android Chrome or an installed PWA, which leaves this button partly covered.
+ * 8rem clears the nav rail; the Now dock and safe-area inset extend it.
+ */
+const PAYMENT_PANEL_NAV_CLEARANCE =
+  "pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]";
+const PAYMENT_PANEL_SCROLL_END =
+  "scroll-mb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]";
+
 export type ManualPaymentPanelProps = {
   elapsedSeconds: number;
   sitterBaseNis: number;
@@ -85,7 +96,7 @@ export function ManualPaymentPanel({
   };
 
   return (
-    <div className="flex w-full shrink-0 flex-col items-stretch">
+    <div className={`flex w-full shrink-0 flex-col items-stretch ${PAYMENT_PANEL_NAV_CLEARANCE}`}>
       <div className="w-full rounded-2xl bg-[#001F3F] px-4 py-5 shadow-[0_8px_28px_-8px_rgba(0,31,63,0.55)] ring-1 ring-[#001F3F]/25 sm:px-5 sm:py-6">
         <div className="flex w-full flex-col gap-4 text-center">
           <div className="space-y-2">
@@ -201,7 +212,7 @@ export function ManualPaymentPanel({
               if (!canReport) return;
               onReportPaid();
             }}
-            className="mt-1 w-full rounded-xl bg-emerald-600 px-4 py-3.5 text-base font-bold text-white shadow-[0_6px_18px_-6px_rgba(16,185,129,0.65)] ring-1 ring-emerald-300/50 transition hover:bg-emerald-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+            className={`mt-1 w-full rounded-xl bg-emerald-600 px-4 py-3.5 text-base font-bold text-white shadow-[0_6px_18px_-6px_rgba(16,185,129,0.65)] ring-1 ring-emerald-300/50 transition hover:bg-emerald-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 ${PAYMENT_PANEL_SCROLL_END}`}
           >
             {busy ? "מדווחים…" : MANUAL_PAYMENT_PAID_BUTTON}
           </button>

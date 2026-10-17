@@ -93,6 +93,14 @@ assert.deepEqual(
 // 3. Cash → שילמתי → awaiting_sitter_confirmation
 assert.match(panel, /MANUAL_PAYMENT_PAID_BUTTON/);
 assert.match(panel, /MANUAL_PAYMENT_CASH_COPY/);
+assert.match(
+  panel,
+  /pb-\[calc\(8rem\+var\(--anynanny-now-dock,0px\)\+env\(safe-area-inset-bottom,0px\)\)\]/
+);
+assert.match(
+  panel,
+  /scroll-mb-\[calc\(8rem\+var\(--anynanny-now-dock,0px\)\+env\(safe-area-inset-bottom,0px\)\)\]/
+);
 assert.equal(MANUAL_PAYMENT_PAID_BUTTON, "שילמתי");
 assert.equal(MANUAL_PAYMENT_CASH_COPY, "לאחר מסירת התשלום לנני, לחצו על 'שילמתי'.");
 assert.match(dashboard, /\/api\/parent\/report-manual-payment/);
