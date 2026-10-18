@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import type { ReactNode } from "react";
-import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
+import { AnyNannyAppLogo } from "@/components/brand/anynanny-app-logo";
 
 type MainLayoutProps = {
   children: ReactNode;
@@ -19,23 +18,10 @@ export function MainLayout({
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-md flex-col bg-[#FDFBF6] md:rounded-[2rem] md:shadow-soft">
       {showBrandHeader ? (
-        <header className="relative sticky top-0 z-20 flex h-[5.25rem] shrink-0 items-center justify-center bg-white px-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)] sm:h-[5.5rem]">
-          <div className="flex min-w-0 flex-row-reverse items-center gap-1">
-            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-100 sm:h-[3.25rem] sm:w-[3.25rem]">
-              <Image
-                src="/anynanny_clean.jpg"
-                alt=""
-                fill
-                aria-hidden
-                className="object-cover object-center"
-                sizes="52px"
-                priority
-              />
-            </div>
-            <h1 className="flex min-w-0 items-center">
-              <AnyNannyLogo variant="header" />
-            </h1>
-          </div>
+        <header className="relative sticky top-0 z-20 flex h-[9rem] shrink-0 items-center justify-center bg-white px-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)] sm:h-[9.7rem]">
+          <h1 className="flex min-w-0 items-center justify-center">
+            <AnyNannyAppLogo variant="header" />
+          </h1>
         </header>
       ) : null}
 

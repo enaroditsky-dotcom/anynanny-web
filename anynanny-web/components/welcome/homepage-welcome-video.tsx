@@ -42,13 +42,13 @@ export function HomepageWelcomeVideo({ onJoinClick }: HomepageWelcomeVideoProps)
       <div className="px-1 text-center">
         <h2
           id="homepage-welcome-video-title"
-          className="text-[15px] font-normal leading-snug tracking-tight text-navy-header sm:text-base"
+          className="text-[15px] font-normal leading-snug tracking-tight text-navy-header sm:text-[0.65rem]"
         >
           הכירו את AnyNanny ב־10 שניות
         </h2>
       </div>
 
-      <div className="mt-1 overflow-hidden rounded-2xl border border-[#001F3F]/10 bg-white shadow-soft sm:mt-2 sm:rounded-3xl">
+      <div className="mx-auto mt-1 w-full overflow-hidden rounded-2xl border border-[#001F3F]/10 bg-white shadow-soft sm:mt-[0.325rem] sm:w-[65%] sm:rounded-[0.975rem]">
         <div className="relative aspect-video w-full overflow-hidden bg-[#0B243B]">
           <video
             ref={videoRef}
@@ -82,12 +82,12 @@ export function HomepageWelcomeVideo({ onJoinClick }: HomepageWelcomeVideoProps)
               onClick={startPlayback}
               tabIndex={showTeaser ? 0 : -1}
               aria-label={hasEnded ? WELCOME_HOMEPAGE_REPLAY_LABEL : WELCOME_HOMEPAGE_PLAY_LABEL}
-              className="group relative z-10 flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-white text-navy-header shadow-[0_10px_28px_rgba(0,31,63,0.32)] ring-4 ring-white/35 transition duration-200 hover:scale-105 hover:shadow-[0_12px_32px_rgba(255,138,138,0.35)] focus-visible:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FF8A8A]/70 sm:h-[4.75rem] sm:w-[4.75rem]"
+              className="group relative z-10 flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-white text-navy-header shadow-[0_10px_28px_rgba(0,31,63,0.32)] ring-4 ring-white/35 transition duration-200 hover:scale-105 hover:shadow-[0_12px_32px_rgba(255,138,138,0.35)] focus-visible:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FF8A8A]/70 sm:h-[3.0875rem] sm:w-[3.0875rem] sm:ring-[2.6px]"
             >
               {hasEnded ? (
-                <RotateCcw className="h-7 w-7" aria-hidden />
+                <RotateCcw className="h-7 w-7 sm:h-[1.1375rem] sm:w-[1.1375rem]" aria-hidden />
               ) : (
-                <Play className="ms-0.5 h-8 w-8 fill-current" aria-hidden />
+                <Play className="ms-0.5 h-8 w-8 fill-current sm:h-[1.3rem] sm:w-[1.3rem]" aria-hidden />
               )}
             </button>
           </div>
@@ -95,7 +95,7 @@ export function HomepageWelcomeVideo({ onJoinClick }: HomepageWelcomeVideoProps)
       </div>
 
       {onJoinClick ? (
-        <p className="mt-1.5 text-center sm:mt-2">
+        <p className="mt-1.5 text-center sm:mt-[0.325rem]">
           <button
             type="button"
             onClick={onJoinClick}

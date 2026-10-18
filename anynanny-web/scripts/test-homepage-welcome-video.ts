@@ -24,11 +24,21 @@ assert.ok(statSync(videoPath).size > 1_000_000);
 assert.equal(WELCOME_VIDEO_SRC, "/welcome/anynanny-welcome.mp4");
 
 assert.match(landing, /HomepageWelcomeVideo/);
-assert.match(landing, /AnyNannyLogo/);
-assert.match(landing, /variant="hero"/);
+assert.match(landing, /AnyNannyEntryBrand/);
+assert.doesNotMatch(landing, /AnyNannyLogo/);
+assert.doesNotMatch(landing, /AnynannyMascotPortrait/);
 assert.match(landing, /פשוט למצוא זמן לחיים/);
 assert.doesNotMatch(landing, /AnyNannyWordmark/);
 assert.doesNotMatch(landing, /צפו בסרטון קצר שמסביר איך AnyNanny/);
+
+const entryBrand = read("components/brand/anynanny-entry-brand.tsx");
+assert.match(entryBrand, /AnyNanny logo new\.png/);
+assert.match(entryBrand, /anynanny-official-wordmark new\.png/);
+assert.match(entryBrand, /aspectRatio: "1 \/ 1"/);
+assert.match(entryBrand, /aspectRatio: "2172 \/ 724"/);
+assert.match(entryBrand, /object-contain/);
+assert.doesNotMatch(entryBrand, /anynanny-official-wordmark\.png"/);
+assert.doesNotMatch(entryBrand, /anynanny-clean-transparent/);
 
 const wordmarkPath = resolve(root, "public/brand/anynanny-official-wordmark.png");
 assert.equal(existsSync(wordmarkPath), true);
@@ -49,14 +59,26 @@ assert.doesNotMatch(logo, /anynanny-wordmark\.png/);
 assert.doesNotMatch(logo, /<svg/);
 assert.doesNotMatch(logo, /strokeWidth/);
 
+const appLogo = read("components/brand/anynanny-app-logo.tsx");
+assert.match(appLogo, /לוגו AnyNanny עם מטפלת מחייכת\.png/);
+assert.match(appLogo, /aspectRatio: "2172 \/ 724"/);
+assert.match(appLogo, /object-contain/);
+assert.match(appLogo, /shell:/);
+assert.match(appLogo, /header:/);
+
 const appHeader = read("components/app-shell-header.tsx");
-assert.match(appHeader, /AnyNannyLogo/);
-assert.match(appHeader, /variant="header"/);
+assert.match(appHeader, /AnyNannyAppLogo/);
+assert.match(appHeader, /variant="shell"/);
+assert.doesNotMatch(appHeader, /AnyNannyLogo/);
+assert.doesNotMatch(appHeader, /anynanny-clean-transparent/);
+assert.doesNotMatch(appHeader, /anynanny_clean/);
 assert.doesNotMatch(appHeader, /Any<span className="text-emerald-600">Nanny<\/span>/);
 
 const mainLayout = read("components/layout/MainLayout.tsx");
-assert.match(mainLayout, /AnyNannyLogo/);
+assert.match(mainLayout, /AnyNannyAppLogo/);
 assert.match(mainLayout, /variant="header"/);
+assert.doesNotMatch(mainLayout, /AnyNannyLogo/);
+assert.doesNotMatch(mainLayout, /anynanny_clean/);
 assert.doesNotMatch(mainLayout, /text-\[#00A86B\]">Nanny/);
 
 const signUp = read("app/auth/sign-up/page.tsx");

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
+import { AnyNannyAppLogo } from "@/components/brand/anynanny-app-logo";
 
 export function AppShellHeader() {
   const { isLoading } = useAuth();
@@ -17,28 +17,14 @@ export function AppShellHeader() {
 
   return (
     <header className="z-40 w-full shrink-0 border-b border-navy-header/10 bg-white pt-[env(safe-area-inset-top,0px)] shadow-[0_4px_16px_rgba(15,23,42,0.06)]">
-      <div className="flex h-12 items-center justify-center px-2" dir="rtl">
+      <div className="flex h-[5.2rem] items-center justify-center px-2" dir="rtl">
         {showUi ? (
-          <div className="flex min-w-0 items-center gap-1">
-            <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-navy-header/20 bg-white shadow-sm">
-              <img
-                src="/anynanny-clean-transparent.png.jpg"
-                alt=""
-                aria-hidden
-                className="h-full w-full object-contain p-0.5"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/anynanny_clean.jpg";
-                }}
-              />
-            </div>
-
-            <AnyNannyLogo variant="header" />
-          </div>
+          <AnyNannyAppLogo variant="shell" />
         ) : (
-          <div className="flex items-center gap-1">
-            <div className="h-8 w-8 animate-pulse rounded-full bg-slate-100" />
-            <div className="h-7 w-[6.85rem] animate-pulse rounded bg-slate-100" />
-          </div>
+          <div
+            className="w-[14.3375rem] max-w-[calc(100vw-1.5rem)] animate-pulse rounded bg-slate-100"
+            style={{ aspectRatio: "2172 / 724" }}
+          />
         )}
       </div>
     </header>
