@@ -98,8 +98,8 @@ const paymentInsert = applyCoordinationRealtimeChange([], {
   new: {
     id: "n-pay",
     kind: "manual_payment_confirmed",
-    title: "קבלת התשלום אושרה",
-    body: "הנני אישרה שהתשלום התקבל.",
+    title: "✅ הבייביסיטר אישרה את קבלת התשלום",
+    body: "התשלום עבור המשמרת אושר והמשמרת הושלמה בהצלחה. תודה שבחרתם ב־AnyNanny!",
     payload: { booking_id: "b1" },
     created_at: "2026-09-01T12:00:00.000Z",
     read_at: null
@@ -107,7 +107,7 @@ const paymentInsert = applyCoordinationRealtimeChange([], {
 });
 assert.equal(paymentInsert.length, 1);
 assert.equal(paymentInsert[0]?.kind, "manual_payment_confirmed");
-assert.equal(paymentInsert[0]?.title, "קבלת התשלום אושרה");
+assert.equal(paymentInsert[0]?.title, "✅ הבייביסיטר אישרה את קבלת התשלום");
 
 const ignoredPaymentRequired = applyCoordinationRealtimeChange(paymentInsert, {
   eventType: "INSERT",

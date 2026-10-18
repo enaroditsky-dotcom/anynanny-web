@@ -2,10 +2,7 @@ import "server-only";
 
 import { coerceBookingPaymentStatus } from "@/lib/bookings/payment-status-label";
 import { tryGetSupabaseServiceRoleClient } from "@/lib/billing/parent-manual-payment-server";
-import {
-  notifyParentManualPaymentConfirmed,
-  notifyParentManualPaymentDenied
-} from "@/lib/notifications/create-notification";
+import { notifyParentManualPaymentDenied } from "@/lib/notifications/create-notification";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type SitterManualPaymentAction = "confirm" | "deny";
@@ -117,20 +114,16 @@ export async function runSitterManualPaymentAction(
   const paymentStatus = coerceBookingPaymentStatus(payload.payment_status) ?? expected;
   const noop = payload.noop === true;
 
-  if (!noop && owned.parentId) {
+  // Receipt confirmation is only a payment-state change. The parent is notified
+  // later, from mark_manual_payment_paid_after_sitter_rating, after the rating
+  // is saved and the booking is paid.
+  if (!noop && owned.parentId && input.action === "deny") {
     const admin = tryGetSupabaseServiceRoleClient();
     if (admin) {
-      if (input.action === "confirm") {
-        await notifyParentManualPaymentConfirmed(admin, {
-          parentId: owned.parentId,
-          bookingId
-        });
-      } else {
-        await notifyParentManualPaymentDenied(admin, {
-          parentId: owned.parentId,
-          bookingId
-        });
-      }
+      await notifyParentManualPaymentDenied(admin, {
+        parentId: owned.parentId,
+        bookingId
+      });
     }
   }
 

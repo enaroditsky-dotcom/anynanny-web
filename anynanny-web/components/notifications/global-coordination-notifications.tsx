@@ -21,6 +21,7 @@ import {
   coordinationChatHref,
   coordinationScheduleLabel,
   fetchUnreadAdminBroadcastNotifications,
+  fetchUnreadPaymentCompletionNotifications,
   isAdminBroadcastNotificationKind,
   isCoordinationNotificationKind,
   isGlobalOperationalNotificationKind,
@@ -32,6 +33,10 @@ import { isOperationalCardsSuppressedRoute } from "@/lib/notifications/operation
 import { markNotificationsReadBestEffort } from "@/lib/notifications/read-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
+
+function keepsOperationalCardOnDashboard(kind: CoordinationNotification["kind"]): boolean {
+  return isAdminBroadcastNotificationKind(kind) || kind === "manual_payment_confirmed";
+}
 
 function toneForKind(kind: CoordinationNotification["kind"]): "emerald" | "amber" | "rose" {
   if (isAdminBroadcastNotificationKind(kind)) return "amber";
@@ -144,7 +149,7 @@ export function GlobalCoordinationNotifications() {
 
   useEffect(() => {
     if (!isOperationalCardsSuppressedRoute(pathname)) return;
-    setItems((prev) => prev.filter((row) => isAdminBroadcastNotificationKind(row.kind)));
+    setItems((prev) => prev.filter((row) => keepsOperationalCardOnDashboard(row.kind)));
     for (const [id, timer] of [...dismissTimersRef.current.entries()]) {
       clearTimeout(timer);
       dismissTimersRef.current.delete(id);
@@ -157,11 +162,17 @@ export function GlobalCoordinationNotifications() {
     if (!supabase) return;
 
     let cancelled = false;
-    void fetchUnreadAdminBroadcastNotifications(supabase, userId).then((result) => {
-      if (cancelled || result.error) return;
+    void Promise.all([
+      fetchUnreadAdminBroadcastNotifications(supabase, userId),
+      fetchUnreadPaymentCompletionNotifications(supabase, userId)
+    ]).then((results) => {
+      if (cancelled) return;
       setItems((prev) => {
         const byId = new Map(prev.map((row) => [row.id, row]));
-        for (const row of result.notifications) byId.set(row.id, row);
+        for (const result of results) {
+          if (result.error) continue;
+          for (const row of result.notifications) byId.set(row.id, row);
+        }
         return [...byId.values()];
       });
     });
@@ -222,7 +233,7 @@ export function GlobalCoordinationNotifications() {
   );
 
   const visibleItems = isOperationalCardsSuppressedRoute(pathname)
-    ? items.filter((row) => isAdminBroadcastNotificationKind(row.kind))
+    ? items.filter((row) => keepsOperationalCardOnDashboard(row.kind))
     : items;
 
   if (!userId || visibleItems.length === 0) return null;

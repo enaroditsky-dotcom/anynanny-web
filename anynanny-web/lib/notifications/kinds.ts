@@ -115,6 +115,11 @@ export function notificationDedupeKey(
 
   if (kind === "favorite_sitter_added") return ids.favoriteId?.trim() || null;
 
+  if (kind === "manual_payment_confirmed") {
+    const bookingId = ids.bookingId?.trim();
+    return bookingId ? `${bookingId}:paid` : null;
+  }
+
   return ids.bookingId?.trim() || null;
 }
 

@@ -1,5 +1,8 @@
 import { parseManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
-import { manualPaymentReportedNotificationCopy } from "@/lib/billing/manual-payment-ui";
+import {
+  MANUAL_PAYMENT_CONFIRMED_NOTIFICATION,
+  manualPaymentReportedNotificationCopy
+} from "@/lib/billing/manual-payment-ui";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
 import {
   notificationDedupeKey,
@@ -128,6 +131,12 @@ export async function notifySitterManualPaymentResolvedReported(
   });
 }
 
+/**
+ * Completion copy for manual_payment_confirmed.
+ * Do not call this from receipt confirmation. The booking becomes paid in
+ * mark_manual_payment_paid_after_sitter_rating, and that function inserts
+ * the single parent notification with dedupe key {bookingId}:paid.
+ */
 export async function notifyParentManualPaymentConfirmed(
   supabase: SupabaseClient,
   input: {
@@ -139,12 +148,12 @@ export async function notifyParentManualPaymentConfirmed(
   await createInAppNotification(supabase, {
     userId: input.parentId,
     kind,
-    title: "קבלת התשלום אושרה",
-    body: "הנני אישרה שהתשלום התקבל.",
+    title: MANUAL_PAYMENT_CONFIRMED_NOTIFICATION.title,
+    body: MANUAL_PAYMENT_CONFIRMED_NOTIFICATION.body,
     payload: {
       booking_id: input.bookingId,
       parent_id: input.parentId,
-      status: "awaiting_sitter_rating",
+      status: "paid",
       gateway: "manual"
     },
     dedupeKey: notificationDedupeKey(kind, {

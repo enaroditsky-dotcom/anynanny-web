@@ -68,7 +68,7 @@ const COORDINATION_TITLE: Record<CoordinationNotificationKind, string> = {
 };
 
 const OPERATIONAL_FALLBACK_TITLE: Record<OperationalCardNotificationKind, string> = {
-  manual_payment_confirmed: "קבלת התשלום אושרה",
+  manual_payment_confirmed: "✅ הבייביסיטר אישרה את קבלת התשלום",
   manual_payment_denied: "התשלום לא אושר",
   manual_payment_resolved_reported: "ההורה דיווח שהתשלום הוסדר",
   payment_received: "תשלום התקבל",
@@ -240,6 +240,8 @@ export function shouldPresentOperationalEventPopup(args: {
   if (String(args.eventType ?? "").toUpperCase() !== "INSERT") return false;
   const kind = String(args.kind ?? "");
   if (isAdminBroadcastNotificationKind(kind)) return true;
+  // Completion notice must surface even while the parent is still on the dashboard.
+  if (kind === "manual_payment_confirmed") return true;
   if (isOperationalCardsSuppressedRoute(args.pathname)) return false;
   return isGlobalOperationalNotificationKind(kind);
 }
@@ -286,6 +288,33 @@ export async function fetchUnreadCoordinationNotifications(
     .in("kind", [...GLOBAL_OPERATIONAL_NOTIFICATION_KINDS])
     .is("read_at", null)
     .order("created_at", { ascending: false });
+
+  if (error) {
+    return { notifications: [], error: readSupabaseErrorMessage(error) };
+  }
+
+  const notifications = ((data ?? []) as Record<string, unknown>[])
+    .map((row) => mapCoordinationNotificationRow(row))
+    .filter((row): row is CoordinationNotification => Boolean(row));
+
+  return { notifications: sortNewestFirst(notifications), error: null };
+}
+
+export async function fetchUnreadPaymentCompletionNotifications(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ notifications: CoordinationNotification[]; error: string | null }> {
+  const uid = userId.trim();
+  if (!uid) return { notifications: [], error: null };
+
+  const { data, error } = await supabase
+    .from(NOTIFICATIONS_TABLE)
+    .select("id, kind, title, body, payload, created_at, read_at")
+    .eq("user_id", uid)
+    .eq("kind", "manual_payment_confirmed")
+    .is("read_at", null)
+    .order("created_at", { ascending: false })
+    .limit(5);
 
   if (error) {
     return { notifications: [], error: readSupabaseErrorMessage(error) };

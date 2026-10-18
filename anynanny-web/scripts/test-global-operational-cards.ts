@@ -120,6 +120,7 @@ const ui = read("components/notifications/global-coordination-notifications.tsx"
 assert.match(ui, /isOperationalCardsSuppressedRoute/);
 assert.match(ui, /visibleItems/);
 assert.match(ui, /fetchUnreadAdminBroadcastNotifications/);
+assert.match(ui, /fetchUnreadPaymentCompletionNotifications/);
 assert.doesNotMatch(ui, /isOperationalCardsSuppressedRoute\(pathname\)\) return null/);
 assert.doesNotMatch(ui, /fetchUnreadCoordinationNotifications/);
 assert.doesNotMatch(ui, /event: "\*"/);
@@ -155,7 +156,7 @@ assert.equal(
     pathname: "/parent/dashboard",
     kind: "manual_payment_confirmed"
   }),
-  false
+  true
 );
 assert.equal(
   shouldPresentOperationalEventPopup({
@@ -190,7 +191,7 @@ assert.equal(
     },
     "/parent/dashboard"
   ).length,
-  0
+  1
 );
 assert.equal(
   applyOperationalEventPopupChange(

@@ -128,7 +128,7 @@ assert.equal(
   notificationHrefForKind("manual_payment_reported", "sitter", { booking_id: "b1" }),
   "/sitter/dashboard"
 );
-assert.equal(notificationDedupeKey("manual_payment_confirmed", { bookingId: "b1" }), "b1");
+assert.equal(notificationDedupeKey("manual_payment_confirmed", { bookingId: "b1" }), "b1:paid");
 assert.equal(
   notificationHrefForKind("manual_payment_confirmed", "parent", { booking_id: "b1" }),
   "/parent/dashboard"

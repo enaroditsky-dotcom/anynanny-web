@@ -129,8 +129,11 @@ assert.doesNotMatch(dashboard, /הסדרתי את התשלום/);
 
 // 9–10. Parent notifications
 assert.equal(MANUAL_PAYMENT_CONFIRMED_NOTIFICATION.kind, "manual_payment_confirmed");
-assert.equal(MANUAL_PAYMENT_CONFIRMED_NOTIFICATION.title, "קבלת התשלום אושרה");
-assert.equal(MANUAL_PAYMENT_CONFIRMED_NOTIFICATION.body, "הנני אישרה שהתשלום התקבל.");
+assert.equal(MANUAL_PAYMENT_CONFIRMED_NOTIFICATION.title, "✅ הבייביסיטר אישרה את קבלת התשלום");
+assert.equal(
+  MANUAL_PAYMENT_CONFIRMED_NOTIFICATION.body,
+  "התשלום עבור המשמרת אושר והמשמרת הושלמה בהצלחה. תודה שבחרתם ב־AnyNanny!"
+);
 assert.equal(MANUAL_PAYMENT_DENIED_NOTIFICATION.kind, "manual_payment_denied");
 assert.equal(MANUAL_PAYMENT_DENIED_NOTIFICATION.title, "התשלום לא אושר");
 assert.equal(
@@ -147,7 +150,7 @@ assert.equal(
   privacySafeBodyForKind("manual_payment_denied"),
   "הנני דיווחה שהתשלום טרם התקבל. יש להסדיר את התשלום לפני הזמנה חדשה."
 );
-assert.match(actionServer, /notifyParentManualPaymentConfirmed/);
+assert.doesNotMatch(actionServer, /notifyParentManualPaymentConfirmed/);
 assert.match(actionServer, /notifyParentManualPaymentDenied/);
 
 // 11. Wrong sitter cannot confirm/deny

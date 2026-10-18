@@ -82,8 +82,8 @@ export const SITTER_AWAITING_RATING_LABEL = "ממתין לדירוג" as const;
 
 export const MANUAL_PAYMENT_CONFIRMED_NOTIFICATION = {
   kind: "manual_payment_confirmed",
-  title: "קבלת התשלום אושרה",
-  body: "הנני אישרה שהתשלום התקבל."
+  title: "✅ הבייביסיטר אישרה את קבלת התשלום",
+  body: "התשלום עבור המשמרת אושר והמשמרת הושלמה בהצלחה. תודה שבחרתם ב־AnyNanny!"
 } as const;
 
 export const MANUAL_PAYMENT_DENIED_NOTIFICATION = {

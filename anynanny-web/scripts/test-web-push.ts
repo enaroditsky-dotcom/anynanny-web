@@ -108,6 +108,20 @@ assert.equal(bookingPush.body, "יש לך בקשת משמרת חדשה");
 assert.equal(bookingPush.url, "/sitter/dashboard");
 assert.doesNotMatch(JSON.stringify(bookingPush), /should-not-appear|address/);
 
+const completionPush = buildPrivacySafePushPayload({
+  notificationId: "n-pay",
+  kind: "manual_payment_confirmed",
+  role: "parent",
+  payload: { booking_id: "b1" }
+});
+assert.equal(completionPush.title, "AnyNanny");
+assert.equal(
+  completionPush.body,
+  "התשלום עבור המשמרת אושר והמשמרת הושלמה בהצלחה. תודה שבחרתם ב־AnyNanny!"
+);
+assert.equal(completionPush.url, "/parent/dashboard");
+assert.doesNotMatch(JSON.stringify(completionPush), /rating|comment/);
+
 // 8. chat_message → safe content + correct deep link
 const chatPush = buildPrivacySafePushPayload({
   notificationId: "n2",

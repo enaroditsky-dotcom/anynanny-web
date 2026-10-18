@@ -369,4 +369,56 @@ assert.match(parentDashboard, /ManualPaymentPanel/);
 const paymentFactory = read("components/billing/PaymentFactory.tsx");
 assert.doesNotMatch(paymentFactory, /report_manual_payment|מזומן/);
 
+const completionSql = read(
+  "supabase/migrations/20261018074652_parent_payment_completion_notification.sql"
+);
+const completionFn = completionSql.slice(
+  completionSql.indexOf(
+    "create or replace function public.mark_manual_payment_paid_after_sitter_rating"
+  )
+);
+assert.doesNotMatch(completionFn, /confirm_manual_payment_received\(/);
+assert.doesNotMatch(confirmFn, /create_canonical_notification/);
+const paidReturn = completionFn.slice(
+  completionFn.indexOf("if v_status = 'paid' then"),
+  completionFn.indexOf("if v_status is distinct from 'awaiting_sitter_rating'")
+);
+assert.match(paidReturn, /'noop', true/);
+assert.doesNotMatch(paidReturn, /create_canonical_notification/);
+assert.match(completionFn, /manual_payment_booking_has_sitter_rating/);
+assert.match(completionFn, /get diagnostics v_updated = row_count/);
+assert.match(completionFn, /if v_updated = 1 and v_booking\.parent_id is not null then/);
+assert.match(
+  completionFn,
+  /perform public\.create_canonical_notification\(\s*v_booking\.parent_id,/
+);
+assert.match(completionFn, /'manual_payment_confirmed'/);
+assert.match(completionFn, /✅ הבייביסיטר אישרה את קבלת התשלום/);
+assert.match(
+  completionFn,
+  /התשלום עבור המשמרת אושר והמשמרת הושלמה בהצלחה\. תודה שבחרתם ב־AnyNanny!/
+);
+assert.match(completionFn, /'status', 'paid'/);
+assert.match(completionFn, /v_booking\.id::text \|\| ':paid'/);
+assert.doesNotMatch(completionFn, /delete from public\.notifications/);
+const notifyCall = completionFn.slice(completionFn.indexOf("perform public.create_canonical_notification"));
+const payloadSql = notifyCall.slice(
+  notifyCall.indexOf("jsonb_build_object("),
+  notifyCall.indexOf("v_booking.id::text")
+);
+assert.doesNotMatch(payloadSql, /rating|comment|stars/);
+assert.doesNotMatch(
+  completionFn.slice(0, completionFn.indexOf("if v_updated = 1")),
+  /create_canonical_notification/
+);
+
+const confirmAction = read("lib/billing/sitter-manual-payment-server.ts");
+assert.match(confirmAction, /confirm_manual_payment_received/);
+assert.doesNotMatch(confirmAction, /notifyParentManualPaymentConfirmed/);
+assert.match(confirmAction, /notifyParentManualPaymentDenied/);
+
+const parentHistory = read("app/parent/history/page.tsx");
+assert.doesNotMatch(parentHistory, /parseFocusBookingId/);
+assert.doesNotMatch(parentHistory, /history-booking-/);
+
 console.log("test-manual-payment-lifecycle: PASS");
