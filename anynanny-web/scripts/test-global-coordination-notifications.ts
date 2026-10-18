@@ -36,7 +36,8 @@ const approved: CoordinationNotification = {
     end_time: "2026-10-27T22:00:00.000Z"
   },
   created_at: "2026-08-27T11:00:00.000Z",
-  read_at: null
+  read_at: null,
+  dedupe_key: null
 };
 
 assert.equal(coordinationNotificationTitle("booking_approved"), "הבייביסיטר אישרה את המשמרת!");

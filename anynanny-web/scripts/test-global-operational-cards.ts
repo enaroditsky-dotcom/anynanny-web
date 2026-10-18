@@ -146,7 +146,8 @@ assert.equal(
   shouldPresentOperationalEventPopup({
     eventType: "INSERT",
     pathname: "/parent/profile",
-    kind: "manual_payment_confirmed"
+    kind: "manual_payment_confirmed",
+    dedupeKey: "b1:paid"
   }),
   true
 );
@@ -154,9 +155,19 @@ assert.equal(
   shouldPresentOperationalEventPopup({
     eventType: "INSERT",
     pathname: "/parent/dashboard",
-    kind: "manual_payment_confirmed"
+    kind: "manual_payment_confirmed",
+    dedupeKey: "b1:paid"
   }),
   true
+);
+assert.equal(
+  shouldPresentOperationalEventPopup({
+    eventType: "INSERT",
+    pathname: "/parent/dashboard",
+    kind: "manual_payment_confirmed",
+    dedupeKey: "b1"
+  }),
+  false
 );
 assert.equal(
   shouldPresentOperationalEventPopup({
@@ -184,14 +195,15 @@ assert.equal(
         kind: "manual_payment_confirmed",
         title: "קבלת התשלום אושרה",
         body: "",
-        payload: {},
+        payload: { status: "awaiting_sitter_rating" },
+        dedupe_key: "booking-historical",
         created_at: "2026-09-01T10:00:00.000Z",
         read_at: null
       }
     },
     "/parent/dashboard"
   ).length,
-  1
+  0
 );
 assert.equal(
   applyOperationalEventPopupChange(
@@ -201,9 +213,10 @@ assert.equal(
       new: {
         id: "live-pay",
         kind: "manual_payment_confirmed",
-        title: "קבלת התשלום אושרה",
+        title: "✅ הבייביסיטר אישרה את קבלת התשלום",
         body: "",
-        payload: {},
+        payload: { status: "paid" },
+        dedupe_key: "b1:paid",
         created_at: "2026-09-01T10:00:00.000Z",
         read_at: null
       }

@@ -50,7 +50,23 @@ export type CoordinationNotification = {
   payload: CanonicalNotificationPayload;
   created_at: string;
   read_at: string | null;
+  /** Persisted notifications.dedupe_key. Completion rows end with ":paid". */
+  dedupe_key: string | null;
 };
+
+/** Suffix written by the paid-completion notification. Historical confirm rows omit it. */
+export const PAID_PAYMENT_COMPLETION_DEDUPE_SUFFIX = ":paid";
+
+export function isPaidPaymentCompletionDedupeKey(value: unknown): boolean {
+  return String(value ?? "").trim().endsWith(PAID_PAYMENT_COMPLETION_DEDUPE_SUFFIX);
+}
+
+export function isPaidPaymentCompletionNotification(args: {
+  kind?: string | null;
+  dedupeKey?: unknown;
+}): boolean {
+  return String(args.kind ?? "") === "manual_payment_confirmed" && isPaidPaymentCompletionDedupeKey(args.dedupeKey);
+}
 
 const COORDINATION_KIND_SET = new Set<string>(COORDINATION_NOTIFICATION_KINDS);
 const GLOBAL_OPERATIONAL_KIND_SET = new Set<string>(GLOBAL_OPERATIONAL_NOTIFICATION_KINDS);
@@ -172,6 +188,7 @@ export function mapCoordinationNotificationRow(row: Record<string, unknown>): Co
       ? (row.payload as CanonicalNotificationPayload)
       : {};
   const readAt = row.read_at == null || row.read_at === "" ? null : String(row.read_at);
+  const dedupeKey = String(row.dedupe_key ?? "").trim();
   return {
     id,
     kind: kindRaw,
@@ -179,7 +196,8 @@ export function mapCoordinationNotificationRow(row: Record<string, unknown>): Co
     body: String(row.body ?? "").trim(),
     payload,
     created_at: String(row.created_at ?? ""),
-    read_at: readAt
+    read_at: readAt,
+    dedupe_key: dedupeKey || null
   };
 }
 
@@ -236,14 +254,71 @@ export function shouldPresentOperationalEventPopup(args: {
   eventType?: string;
   pathname: string | null;
   kind?: string | null;
+  dedupeKey?: unknown;
 }): boolean {
   if (String(args.eventType ?? "").toUpperCase() !== "INSERT") return false;
   const kind = String(args.kind ?? "");
   if (isAdminBroadcastNotificationKind(kind)) return true;
-  // Completion notice must surface even while the parent is still on the dashboard.
-  if (kind === "manual_payment_confirmed") return true;
+  // Only the paid-completion row surfaces. Confirm-time rows share the kind and stay hidden.
+  if (kind === "manual_payment_confirmed") {
+    return isPaidPaymentCompletionDedupeKey(args.dedupeKey);
+  }
   if (isOperationalCardsSuppressedRoute(args.pathname)) return false;
   return isGlobalOperationalNotificationKind(kind);
+}
+
+/** Keep every other kind, and at most the newest paid-completion card. */
+export function collapsePaymentCompletionCards(
+  rows: CoordinationNotification[]
+): CoordinationNotification[] {
+  let newest: CoordinationNotification | null = null;
+  const others: CoordinationNotification[] = [];
+  for (const row of rows) {
+    if (row.kind !== "manual_payment_confirmed") {
+      others.push(row);
+      continue;
+    }
+    if (!isPaidPaymentCompletionDedupeKey(row.dedupe_key)) continue;
+    if (
+      !newest ||
+      String(row.created_at).localeCompare(String(newest.created_at)) > 0 ||
+      (String(row.created_at) === String(newest.created_at) && row.id.localeCompare(newest.id) > 0)
+    ) {
+      newest = row;
+    }
+  }
+  return sortNewestFirst(newest ? [...others, newest] : others);
+}
+
+/**
+ * Login and refresh replay. Historical confirm-time rows stay in the table and are not returned.
+ * An empty result is correct while the paid-completion migration has not created any ":paid" rows.
+ */
+export function selectReplayablePaymentCompletionNotifications(
+  rows: ReadonlyArray<Record<string, unknown>>
+): CoordinationNotification[] {
+  const completions = rows
+    .filter((row) => row.read_at == null || row.read_at === "")
+    .filter((row) =>
+      isPaidPaymentCompletionNotification({
+        kind: row.kind != null ? String(row.kind) : null,
+        dedupeKey: row.dedupe_key
+      })
+    )
+    .map((row) => mapCoordinationNotificationRow(row))
+    .filter((row): row is CoordinationNotification => Boolean(row));
+  return collapsePaymentCompletionCards(completions);
+}
+
+/** Close (X) persists read_at for this id. The auto-hide timer does not. */
+export function shouldPersistOperationalCardRead(args: {
+  markRead?: boolean;
+  kind?: string | null;
+  dedupeKey?: unknown;
+}): boolean {
+  if (!args.markRead) return false;
+  if (isAdminBroadcastNotificationKind(args.kind)) return true;
+  return isPaidPaymentCompletionNotification({ kind: args.kind, dedupeKey: args.dedupeKey });
 }
 
 export function applyOperationalEventPopupChange(
@@ -265,13 +340,17 @@ export function applyOperationalEventPopupChange(
   if (event !== "INSERT") return current;
 
   const kind = String(payload.new?.kind ?? "");
-  if (!shouldPresentOperationalEventPopup({ eventType: event, pathname, kind })) {
+  const dedupeKey = payload.new?.dedupe_key;
+  if (!shouldPresentOperationalEventPopup({ eventType: event, pathname, kind, dedupeKey })) {
     return current;
   }
 
   const mapped = payload.new ? mapCoordinationNotificationRow(payload.new) : null;
   if (!mapped) return current;
-  return mergeCoordinationNotifications(current, mapped).slice(0, MAX_LIVE_OPERATIONAL_EVENT_POPUPS);
+  return collapsePaymentCompletionCards(mergeCoordinationNotifications(current, mapped)).slice(
+    0,
+    MAX_LIVE_OPERATIONAL_EVENT_POPUPS
+  );
 }
 
 export async function fetchUnreadCoordinationNotifications(
@@ -309,22 +388,22 @@ export async function fetchUnreadPaymentCompletionNotifications(
 
   const { data, error } = await supabase
     .from(NOTIFICATIONS_TABLE)
-    .select("id, kind, title, body, payload, created_at, read_at")
+    .select("id, kind, title, body, payload, created_at, read_at, dedupe_key")
     .eq("user_id", uid)
     .eq("kind", "manual_payment_confirmed")
+    .like("dedupe_key", `%${PAID_PAYMENT_COMPLETION_DEDUPE_SUFFIX}`)
     .is("read_at", null)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(1);
 
   if (error) {
     return { notifications: [], error: readSupabaseErrorMessage(error) };
   }
 
-  const notifications = ((data ?? []) as Record<string, unknown>[])
-    .map((row) => mapCoordinationNotificationRow(row))
-    .filter((row): row is CoordinationNotification => Boolean(row));
-
-  return { notifications: sortNewestFirst(notifications), error: null };
+  return {
+    notifications: selectReplayablePaymentCompletionNotifications((data ?? []) as Record<string, unknown>[]),
+    error: null
+  };
 }
 
 /** Unread admin system messages only — replayed on mount so offline recipients still see them. */

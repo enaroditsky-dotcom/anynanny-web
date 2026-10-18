@@ -17,6 +17,7 @@ import { BookingScheduleText } from "@/components/bookings/booking-schedule-labe
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
 import {
   applyOperationalEventPopupChange,
+  collapsePaymentCompletionCards,
   coordinationBookingHref,
   coordinationChatHref,
   coordinationScheduleLabel,
@@ -27,6 +28,7 @@ import {
   isGlobalOperationalNotificationKind,
   operationalCardActionLabel,
   OPERATIONAL_EVENT_POPUP_DURATION_MS,
+  shouldPersistOperationalCardRead,
   type CoordinationNotification
 } from "@/lib/notifications/coordination";
 import { isOperationalCardsSuppressedRoute } from "@/lib/notifications/operational-card-routes";
@@ -115,10 +117,24 @@ export function GlobalCoordinationNotifications() {
   }, []);
 
   const dismissPopup = useCallback(
-    (id: string, options?: { markRead?: boolean; kind?: CoordinationNotification["kind"] }) => {
+    (
+      id: string,
+      options?: {
+        markRead?: boolean;
+        kind?: CoordinationNotification["kind"];
+        dedupeKey?: string | null;
+      }
+    ) => {
       clearDismissTimer(id);
       setItems((prev) => prev.filter((row) => row.id !== id));
-      if (options?.markRead && userId && isAdminBroadcastNotificationKind(options.kind)) {
+      if (
+        userId &&
+        shouldPersistOperationalCardRead({
+          markRead: options?.markRead,
+          kind: options?.kind,
+          dedupeKey: options?.dedupeKey
+        })
+      ) {
         const supabase = getSupabaseBrowserClient();
         if (supabase) {
           void markNotificationsReadBestEffort(supabase, userId, { ids: [id] });
@@ -173,7 +189,7 @@ export function GlobalCoordinationNotifications() {
           if (result.error) continue;
           for (const row of result.notifications) byId.set(row.id, row);
         }
-        return [...byId.values()];
+        return collapsePaymentCompletionCards([...byId.values()]);
       });
     });
 
@@ -232,9 +248,10 @@ export function GlobalCoordinationNotifications() {
     [userId, router, dismissPopup]
   );
 
-  const visibleItems = isOperationalCardsSuppressedRoute(pathname)
+  const routeItems = isOperationalCardsSuppressedRoute(pathname)
     ? items.filter((row) => keepsOperationalCardOnDashboard(row.kind))
     : items;
+  const visibleItems = collapsePaymentCompletionCards(routeItems);
 
   if (!userId || visibleItems.length === 0) return null;
 
@@ -266,7 +283,11 @@ export function GlobalCoordinationNotifications() {
                   aria-label="סגור"
                   className={ICON_BUTTON}
                   onClick={() =>
-                    dismissPopup(item.id, { markRead: true, kind: item.kind })
+                    dismissPopup(item.id, {
+                      markRead: true,
+                      kind: item.kind,
+                      dedupeKey: item.dedupe_key
+                    })
                   }
                 >
                   <X className="h-4 w-4" aria-hidden />
