@@ -10,8 +10,7 @@ import {
 } from "@/lib/auth/post-auth-destination";
 import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
-import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
-import { AnynannyMascotPortrait } from "@/components/brand/anynanny-mascot-portrait";
+import { AnyNannyEntryBrand } from "@/components/brand/anynanny-entry-brand";
 import { welcomeSignupHref } from "@/lib/charter/routing";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
@@ -31,10 +30,10 @@ const HOMEPAGE_INFO_LINKS: Array<{ href: string; label: string }> = [
 
 function PathIcon({ path }: { path: LandingPath }) {
   if (path === "parent") {
-    return <Users className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />;
+    return <Users className="h-4 w-4 sm:h-[0.8125rem] sm:w-[0.8125rem]" aria-hidden />;
   }
 
-  return <Baby className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />;
+  return <Baby className="h-4 w-4 sm:h-[0.8125rem] sm:w-[0.8125rem]" aria-hidden />;
 }
 
 const PATHS: Array<{
@@ -182,27 +181,17 @@ function HomeInner() {
 
   return (
     <main
-      className="min-h-[100dvh] w-full overflow-y-auto bg-[#FDFBF6] px-4 py-1.5 sm:py-5"
+      className="min-h-[100dvh] w-full overflow-y-auto bg-[#FDFBF6] px-4 py-1.5 sm:py-[0.8125rem]"
       dir="rtl"
     >
-      <div className="mx-auto flex min-h-[calc(100dvh-0.75rem)] w-full max-w-md flex-col items-center justify-start gap-0 pt-0 sm:min-h-[calc(100dvh-2.5rem)] sm:justify-center sm:gap-4 sm:pt-0">
-        {/* Brand */}
-        <div className="shrink-0 text-center">
-          <h1 className="flex w-full min-w-0 justify-center">
-            <AnyNannyLogo variant="hero" />
-          </h1>
+      <div className="mx-auto flex min-h-[calc(100dvh-0.75rem)] w-full max-w-md flex-col items-center justify-start gap-0 pt-0 sm:min-h-0 sm:gap-[0.65rem] sm:pt-1">
+        {/* Brand — illustration, then official wordmark. */}
+        <div className="w-full min-w-0 shrink-0 text-center">
+          <AnyNannyEntryBrand />
 
-          <p className="-mt-3 text-xs font-bold leading-tight text-slate-500 sm:-mt-3 sm:text-sm">
+          <p className="mt-0.5 text-xs font-bold leading-tight text-slate-500 sm:mt-[0.1625rem] sm:text-[0.56875rem]">
             פשוט למצוא זמן לחיים
           </p>
-        </div>
-
-        {/* Anny — unframed cutout. Mobile sits close under the slogan; sm keeps the bottom pad. */}
-        <div className="mt-1.5 flex shrink-0 justify-center pb-0 sm:mt-0 sm:pb-5">
-          <AnynannyMascotPortrait
-            framed={false}
-            className="h-[clamp(88px,14dvh,128px)] w-[clamp(88px,14dvh,128px)] sm:h-[148px] sm:w-[148px]"
-          />
         </div>
 
         <HomepageWelcomeVideo
@@ -217,12 +206,12 @@ function HomeInner() {
         />
 
         {/* Login */}
-        <section className="mt-2 w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:mt-0 sm:p-4">
-          <h2 className="text-center text-xl font-extrabold tracking-tight text-navy-header sm:text-2xl">
+        <section className="mt-2 w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:mt-0 sm:rounded-[0.975rem] sm:p-[0.65rem]">
+          <h2 className="text-center text-xl font-extrabold tracking-tight text-navy-header sm:text-[0.975rem]">
             כניסה
           </h2>
 
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-[0.325rem] sm:gap-[0.325rem]">
             {PATHS.map((path) => (
               <button
                 key={`login-${path.id}`}
@@ -230,15 +219,15 @@ function HomeInner() {
                 onClick={() =>
                   navigateWithPath("login", path.id)
                 }
-                className={`flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition hover:brightness-[0.99] active:scale-[0.98] sm:min-h-[92px] sm:rounded-2xl ${path.accent}`}
+                className={`flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition hover:brightness-[0.99] active:scale-[0.98] sm:min-h-[3.7375rem] sm:gap-1 sm:rounded-xl sm:px-1.5 sm:py-2 ${path.accent}`}
               >
                 <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-10 sm:w-10 ${path.iconWrap}`}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-[1.625rem] sm:w-[1.625rem] ${path.iconWrap}`}
                 >
                   <PathIcon path={path.id} />
                 </span>
 
-                <span className="block text-sm font-bold leading-tight sm:text-[17px]">
+                <span className="block text-sm font-bold leading-tight sm:text-[11.05px]">
                   כניסת {path.title}
                 </span>
               </button>
@@ -247,24 +236,23 @@ function HomeInner() {
         </section>
 
         {/* Register */}
-        <section className="mt-1.5 w-full shrink-0 px-1 pt-0 sm:mt-0 sm:px-1.5 sm:pt-1.5">
+        <section className="mt-1.5 w-full shrink-0 px-1 pt-0 sm:mt-0 sm:px-1 sm:pt-[0.24375rem]">
           <button
             type="button"
             onClick={() => setRegistrationOpen((open) => !open)}
             aria-expanded={registrationOpen}
             aria-controls="landing-registration-options"
-            className="landing-register-cta mx-auto flex w-fit min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-navy-header bg-navy-header px-8 py-3.5 text-lg font-extrabold text-white shadow-[0_8px_18px_rgba(0,31,63,0.28),0_0_0_3px_rgba(255,138,138,0.2)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-salmon focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF6] sm:my-2 sm:h-14 sm:min-h-14 sm:w-full sm:px-8 sm:py-0"
+            className="landing-register-cta mx-auto flex w-fit min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-navy-header bg-navy-header px-8 py-3.5 text-center text-[1.51875rem] font-bold leading-[1.75rem] text-white shadow-[0_8px_18px_rgba(0,31,63,0.28),0_0_0_3px_rgba(255,138,138,0.2)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-salmon focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF6] sm:my-[0.325rem] sm:h-11 sm:min-h-11 sm:w-full sm:gap-[0.325rem] sm:rounded-[0.975rem] sm:px-[1.3rem] sm:py-0 sm:text-[0.9871875rem] sm:leading-none"
           >
-            <span className="sm:hidden">להרשמה</span>
-            <span className="hidden sm:inline">הרשמה</span>
+            <span>להרשמה</span>
             {registrationOpen ? (
-              <ChevronUp className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
+              <ChevronUp className="h-5 w-5 shrink-0 sm:h-[0.65rem] sm:w-[0.65rem]" aria-hidden />
             ) : (
-              <ChevronDown className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
+              <ChevronDown className="h-5 w-5 shrink-0 sm:h-[0.65rem] sm:w-[0.65rem]" aria-hidden />
             )}
           </button>
 
-          <p className="mt-0.5 text-center text-[12px] leading-snug text-slate-500 sm:text-[13px]">
+          <p className="mt-0.5 text-center text-[12px] leading-snug text-slate-500 sm:mt-[0.1625rem] sm:text-[13px]">
             עדיין אין לכם חשבון? צרו את החשבון המתאים לכם
           </p>
 
@@ -285,10 +273,10 @@ function HomeInner() {
                     onClick={() =>
                       navigateWithPath("register", path.id)
                     }
-                    className={`flex min-h-[70px] flex-col items-center justify-center gap-1 rounded-xl border bg-white px-2 py-2.5 text-center shadow-sm transition hover:bg-slate-50 active:scale-[0.98] sm:min-h-[78px] sm:rounded-2xl ${path.accent}`}
+                    className={`flex min-h-[70px] flex-col items-center justify-center gap-1 rounded-xl border bg-white px-2 py-2.5 text-center shadow-sm transition hover:bg-slate-50 active:scale-[0.98] sm:min-h-[3.16875rem] sm:gap-[0.1625rem] sm:rounded-xl sm:py-1.5 ${path.accent}`}
                   >
                     <span
-                      className={`flex h-8 w-8 items-center justify-center rounded-lg ring-1 sm:h-9 sm:w-9 ${path.iconWrap}`}
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg ring-1 sm:h-[1.4625rem] sm:w-[1.4625rem] ${path.iconWrap}`}
                     >
                       <PathIcon path={path.id} />
                     </span>
@@ -315,9 +303,9 @@ function HomeInner() {
 
         <nav
           aria-label="עוד ב־AnyNanny"
-          className="mt-3 w-full max-w-sm shrink-0 border-t border-navy-header/10 pt-2.5 text-center sm:mt-4"
+          className="mt-3 w-full max-w-sm shrink-0 border-t border-navy-header/10 pt-2.5 text-center sm:mt-[0.65rem] sm:pt-[0.40625rem]"
         >
-          <p className="text-[11px] font-semibold leading-none text-navy-header/55">
+          <p className="text-[11px] font-semibold leading-none text-navy-header/55 sm:text-[0.65rem]">
             עוד ב־AnyNanny
           </p>
           <ul className="mt-1 flex flex-col items-center">
