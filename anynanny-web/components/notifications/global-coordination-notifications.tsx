@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -13,6 +14,14 @@ import {
   X
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { userHasAnsweredBroadcastQuestion } from "@/lib/broadcast/question-answer";
+import {
+  BROADCAST_QUESTION_ANSWERED_EVENT,
+  MY_QUESTIONS_HREF,
+  broadcastQuestionDismissPersistsRead,
+  broadcastQuestionIdFromPayload,
+  isBroadcastQuestionPath
+} from "@/lib/broadcast/question-link";
 import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
 import {
@@ -104,7 +113,13 @@ export function GlobalCoordinationNotifications() {
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
   const dismissTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const answeredQuestionIdsRef = useRef<Set<string>>(new Set());
+  const pendingQuestionInserts = useRef<Map<string, { eventType?: string; new?: Record<string, unknown> | null }>>(
+    new Map()
+  );
   const [items, setItems] = useState<CoordinationNotification[]>([]);
+  const [questionLookupError, setQuestionLookupError] = useState<string | null>(null);
+  const [lookupRetry, setLookupRetry] = useState(0);
 
   const userId = signedIn && user?.id ? user.id : null;
   const role: "parent" | "sitter" =
@@ -158,10 +173,24 @@ export function GlobalCoordinationNotifications() {
   );
 
   useEffect(() => {
+    answeredQuestionIdsRef.current = new Set();
+    pendingQuestionInserts.current.clear();
+    setQuestionLookupError(null);
     setItems([]);
     for (const timer of dismissTimersRef.current.values()) clearTimeout(timer);
     dismissTimersRef.current.clear();
   }, [userId]);
+
+  useEffect(() => {
+    const onAnswered = (event: Event) => {
+      const questionId = String((event as CustomEvent<{ questionId?: string }>).detail?.questionId ?? "").trim();
+      if (!questionId) return;
+      answeredQuestionIdsRef.current.add(questionId);
+      setItems((prev) => prev.filter((row) => broadcastQuestionIdFromPayload(row.payload) !== questionId));
+    };
+    window.addEventListener(BROADCAST_QUESTION_ANSWERED_EVENT, onAnswered);
+    return () => window.removeEventListener(BROADCAST_QUESTION_ANSWERED_EVENT, onAnswered);
+  }, []);
 
   useEffect(() => {
     if (!isOperationalCardsSuppressedRoute(pathname)) return;
@@ -178,25 +207,88 @@ export function GlobalCoordinationNotifications() {
     if (!supabase) return;
 
     let cancelled = false;
-    void Promise.all([
-      fetchUnreadAdminBroadcastNotifications(supabase, userId),
-      fetchUnreadPaymentCompletionNotifications(supabase, userId)
-    ]).then((results) => {
-      if (cancelled) return;
-      setItems((prev) => {
-        const byId = new Map(prev.map((row) => [row.id, row]));
-        for (const result of results) {
-          if (result.error) continue;
-          for (const row of result.notifications) byId.set(row.id, row);
+    const load = () => {
+      void Promise.all([
+        fetchUnreadAdminBroadcastNotifications(supabase, userId),
+        fetchUnreadPaymentCompletionNotifications(supabase, userId)
+      ]).then((results) => {
+        if (cancelled) return;
+        const [broadcasts] = results;
+        if (!broadcasts.error) {
+          setQuestionLookupError((current) =>
+            broadcasts.questionStatusError
+              ? broadcasts.questionStatusError
+              : pendingQuestionInserts.current.size > 0
+                ? current
+                : null
+          );
         }
-        return collapsePaymentCompletionCards([...byId.values()]);
+        setItems((prev) => {
+          const [, payments] = results;
+          const next = new Map<string, CoordinationNotification>();
+          for (const row of prev) {
+            if (isAdminBroadcastNotificationKind(row.kind)) continue;
+            next.set(row.id, row);
+          }
+          const broadcastRows = broadcasts.error
+            ? prev.filter((row) => isAdminBroadcastNotificationKind(row.kind))
+            : broadcasts.notifications;
+          for (const row of broadcastRows) {
+            const questionId = broadcastQuestionIdFromPayload(row.payload);
+            if (questionId && answeredQuestionIdsRef.current.has(questionId)) continue;
+            next.set(row.id, row);
+          }
+          if (!payments.error) {
+            for (const row of payments.notifications) next.set(row.id, row);
+          }
+          return collapsePaymentCompletionCards([...next.values()]);
+        });
       });
-    });
+    };
+    load();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onVisible);
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onVisible);
     };
-  }, [userId, isLoading]);
+  }, [userId, isLoading, lookupRetry]);
+
+  useEffect(() => {
+    if (!userId || isLoading || lookupRetry === 0) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    const pending = [...pendingQuestionInserts.current.entries()];
+    if (pending.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      for (const [questionId, payload] of pending) {
+        const answered = await userHasAnsweredBroadcastQuestion(supabase, questionId);
+        if (cancelled) return;
+        if (answeredQuestionIdsRef.current.has(questionId)) {
+          pendingQuestionInserts.current.delete(questionId);
+          continue;
+        }
+        if (answered !== true && answered !== false) {
+          setQuestionLookupError("לא הצלחנו לבדוק אם השאלה כבר נענתה.");
+          return;
+        }
+        pendingQuestionInserts.current.delete(questionId);
+        if (answered === false) {
+          setItems((prev) => applyOperationalEventPopupChange(prev, payload, pathnameRef.current));
+        }
+      }
+      if (!cancelled && pendingQuestionInserts.current.size === 0) setQuestionLookupError(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lookupRetry, userId, isLoading]);
 
   useEffect(() => {
     if (!userId || isLoading) return;
@@ -211,16 +303,37 @@ export function GlobalCoordinationNotifications() {
         table: NOTIFICATIONS_TABLE,
         filter: `user_id=eq.${userId}`,
         handler: (payload) => {
-          const kind = String((payload.new as { kind?: unknown } | null)?.kind ?? "");
+          const record = payload.new as { kind?: unknown; payload?: { question_id?: unknown } } | null;
+          const kind = String(record?.kind ?? "");
           if (kind && !isGlobalOperationalNotificationKind(kind)) return;
-          setItems((prev) => {
-            const next = applyOperationalEventPopupChange(prev, payload, pathnameRef.current);
-            for (const row of next) {
-              if (!prev.some((existing) => existing.id === row.id)) {
-                scheduleDismiss(row.id, row.kind);
+          const questionId = broadcastQuestionIdFromPayload(record?.payload);
+          const present = () => {
+            if (questionId && answeredQuestionIdsRef.current.has(questionId)) return;
+            setItems((prev) => {
+              const next = applyOperationalEventPopupChange(prev, payload, pathnameRef.current);
+              for (const row of next) {
+                if (!prev.some((existing) => existing.id === row.id)) {
+                  scheduleDismiss(row.id, row.kind);
+                }
               }
+              return next;
+            });
+          };
+          if (!questionId) {
+            present();
+            return;
+          }
+          if (answeredQuestionIdsRef.current.has(questionId)) return;
+          void userHasAnsweredBroadcastQuestion(supabase, questionId).then((answered) => {
+            if (answeredQuestionIdsRef.current.has(questionId)) return;
+            if (answered === true) return;
+            if (answered !== false) {
+              pendingQuestionInserts.current.set(questionId, payload);
+              setQuestionLookupError("לא הצלחנו לבדוק אם השאלה כבר נענתה.");
+              return;
             }
-            return next;
+            pendingQuestionInserts.current.delete(questionId);
+            present();
           });
         }
       }
@@ -234,6 +347,10 @@ export function GlobalCoordinationNotifications() {
   const openHref = useCallback(
     async (item: CoordinationNotification, href: string) => {
       if (!userId) return;
+      if (broadcastQuestionIdFromPayload(item.payload)) {
+        router.push(href);
+        return;
+      }
       dismissPopup(item.id);
       const supabase = getSupabaseBrowserClient();
       if (supabase) {
@@ -251,9 +368,12 @@ export function GlobalCoordinationNotifications() {
   const routeItems = isOperationalCardsSuppressedRoute(pathname)
     ? items.filter((row) => keepsOperationalCardOnDashboard(row.kind))
     : items;
-  const visibleItems = collapsePaymentCompletionCards(routeItems);
+  const visibleItems = collapsePaymentCompletionCards(routeItems).filter((row) => {
+    const questionId = broadcastQuestionIdFromPayload(row.payload);
+    return !questionId || !isBroadcastQuestionPath(pathname, questionId);
+  });
 
-  if (!userId || visibleItems.length === 0) return null;
+  if (!userId || (visibleItems.length === 0 && !questionLookupError)) return null;
 
   return (
     <div
@@ -263,6 +383,26 @@ export function GlobalCoordinationNotifications() {
       aria-live="polite"
     >
       <div className="pointer-events-none mx-auto flex max-h-[min(38vh,18rem)] w-full max-w-sm flex-col gap-2 overflow-y-auto overscroll-y-contain sm:mx-0 sm:ms-4 sm:me-auto">
+        {questionLookupError ? (
+          <div className="pointer-events-auto rounded-2xl border border-amber-300 bg-amber-50 p-3 text-right text-sm text-[#001F3F]" role="alert">
+            <p>{questionLookupError} השאלה לא סומנה כנענתה.</p>
+            <div className="mt-2 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center rounded-xl border border-[#001F3F]/20 px-3 text-sm font-semibold"
+                onClick={() => setLookupRetry((retry) => retry + 1)}
+              >
+                נסו שוב
+              </button>
+              <Link
+                href={MY_QUESTIONS_HREF}
+                className="inline-flex min-h-11 items-center rounded-xl bg-[#001F3F] px-3 text-sm font-bold text-white"
+              >
+                השאלות שלי
+              </Link>
+            </div>
+          </div>
+        ) : null}
         {visibleItems.map((item) => {
           const tone = toneForKind(item.kind);
           const schedule = coordinationScheduleLabel(item.payload);
@@ -284,7 +424,7 @@ export function GlobalCoordinationNotifications() {
                   className={ICON_BUTTON}
                   onClick={() =>
                     dismissPopup(item.id, {
-                      markRead: true,
+                      markRead: broadcastQuestionDismissPersistsRead(item.payload),
                       kind: item.kind,
                       dedupeKey: item.dedupe_key
                     })

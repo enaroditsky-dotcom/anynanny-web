@@ -6,6 +6,7 @@ import { MarketingConsentSection } from "@/components/settings/marketing-consent
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section";
 import { SettingsFaqEntry } from "@/components/settings/settings-faq-entry";
 import { BlockedUsersSection } from "@/components/safety/blocked-users-section";
+import { MyQuestionsSettingsLink } from "@/components/broadcast/my-questions-settings-link";
 import { CommunityResourcesSection } from "@/components/settings/community-resources-section";
 import { FileText, Shield, ExternalLink } from "lucide-react";
 
@@ -28,6 +29,8 @@ export default function ParentSettingsPage() {
         <NotificationSettingsSection />
         <MarketingConsentSection />
       </div>
+
+      <MyQuestionsSettingsLink />
 
       <BlockedUsersSection />
 

@@ -1,4 +1,5 @@
 ﻿import { isInternalBroadcastCtaRoute } from "@/lib/admin/broadcast-cta";
+import { broadcastQuestionHref, broadcastQuestionIdFromPayload } from "@/lib/broadcast/question-link";
 import { calendarBookingHref } from "@/lib/bookings/calendar-booking-href";
 
 export const CANONICAL_NOTIFICATION_KINDS = [
@@ -73,6 +74,7 @@ export type CanonicalNotificationPayload = {
   cta_route?: string | null;
   cta_label?: string | null;
   is_test?: boolean | null;
+  question_id?: string | null;
 };
 
 export function isCanonicalNotificationKind(
@@ -147,6 +149,8 @@ export function notificationHrefForKind(
   }
   if (kind === "broadcast_alert") return "/sitter/dashboard";
   if (kind === "admin_broadcast") {
+    const questionId = broadcastQuestionIdFromPayload(payload);
+    if (questionId) return broadcastQuestionHref(questionId);
     const ctaRoute = String(payload.cta_route ?? "").trim();
     if (ctaRoute && isInternalBroadcastCtaRoute(ctaRoute)) return ctaRoute;
     return role === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
