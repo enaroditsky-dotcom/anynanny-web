@@ -1,9 +1,18 @@
-import { adminAuthCookieOptions, isValidAdminPassword } from "@/lib/admin/auth";
+import { adminAuthCookieOptions, getAdminPassword, getAdminSessionSecret, isValidAdminPassword } from "@/lib/admin/auth";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { password?: string };
-  const password = String(body.password ?? "");
+  if (!getAdminPassword() || !getAdminSessionSecret()) {
+    return NextResponse.json({ error: "Admin login is unavailable." }, { status: 503 });
+  }
+
+  let password = "";
+  try {
+    const body = (await request.json()) as { password?: unknown };
+    password = typeof body?.password === "string" ? body.password : "";
+  } catch {
+    return NextResponse.json({ error: "Invalid admin password." }, { status: 401 });
+  }
 
   if (!isValidAdminPassword(password)) {
     return NextResponse.json({ error: "Invalid admin password." }, { status: 401 });

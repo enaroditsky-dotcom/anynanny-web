@@ -230,7 +230,7 @@ assert.match(chatLogs, /requireAdminPage/);
 const prevPassword = process.env.ADMIN_DASHBOARD_PASSWORD;
 const prevSecret = process.env.ADMIN_SESSION_SECRET;
 process.env.ADMIN_DASHBOARD_PASSWORD = "ugc-test-password";
-delete process.env.ADMIN_SESSION_SECRET;
+process.env.ADMIN_SESSION_SECRET = "ugc-test-session-secret";
 assert.equal(isValidAdminSessionValue("1"), false);
 assert.equal(isValidAdminSessionValue(""), false);
 assert.equal(isValidAdminSessionValue("v1.1.deadbeef"), false);

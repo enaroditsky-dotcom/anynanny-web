@@ -1,23 +1,29 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 export const ADMIN_AUTH_COOKIE = "anynanny_admin_auth";
 
 const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const ADMIN_SESSION_PREFIX = "v1";
 
-export function getAdminPassword(): string {
-  return (process.env.ADMIN_DASHBOARD_PASSWORD ?? "change-me").trim();
+export function getAdminPassword(): string | null {
+  const password = (process.env.ADMIN_DASHBOARD_PASSWORD ?? "").trim();
+  return password.length > 0 ? password : null;
 }
 
+function digestUtf8(value: string): Buffer {
+  return createHash("sha256").update(value, "utf8").digest();
+}
+
+/** Fixed-length digests, so a shorter or longer attempt does not return early. */
 export function isValidAdminPassword(password: string): boolean {
-  return password.trim() === getAdminPassword();
+  const expected = getAdminPassword();
+  if (!expected) return false;
+  return timingSafeEqual(digestUtf8(password.trim()), digestUtf8(expected));
 }
 
-/** Prefer ADMIN_SESSION_SECRET; fall back to the dashboard password. */
-export function getAdminSessionSecret(): string {
+export function getAdminSessionSecret(): string | null {
   const dedicated = (process.env.ADMIN_SESSION_SECRET ?? "").trim();
-  if (dedicated) return dedicated;
-  return getAdminPassword();
+  return dedicated.length > 0 ? dedicated : null;
 }
 
 function hmacSha256Hex(secret: string, payload: string): string {
@@ -32,8 +38,10 @@ function timingSafeEqualHex(left: string, right: string): boolean {
 }
 
 export function createAdminSessionValue(now = Date.now()): string {
+  const secret = getAdminSessionSecret();
+  if (!secret) throw new Error("Admin session secret is not configured.");
   const issued = String(now);
-  const mac = hmacSha256Hex(getAdminSessionSecret(), `${ADMIN_SESSION_PREFIX}:${issued}`);
+  const mac = hmacSha256Hex(secret, `${ADMIN_SESSION_PREFIX}:${issued}`);
   return `${ADMIN_SESSION_PREFIX}.${issued}.${mac}`;
 }
 
@@ -55,7 +63,9 @@ export function isValidAdminSessionValue(raw: string | null | undefined, now = D
   if (!Number.isFinite(issued) || issued <= 0) return false;
   if (now < issued || now - issued > ADMIN_SESSION_TTL_MS) return false;
 
-  const expectedMac = hmacSha256Hex(getAdminSessionSecret(), `${ADMIN_SESSION_PREFIX}:${issuedRaw}`);
+  const secret = getAdminSessionSecret();
+  if (!secret) return false;
+  const expectedMac = hmacSha256Hex(secret, `${ADMIN_SESSION_PREFIX}:${issuedRaw}`);
   return timingSafeEqualHex(presentedMac.toLowerCase(), expectedMac.toLowerCase());
 }
 
