@@ -65,6 +65,7 @@
     "test:broadcast-question-inbox": "npx --yes tsx scripts/test-broadcast-question-inbox.ts",
     "test:marketing-consent": "npx --yes tsx scripts/test-marketing-consent.ts",
     "test:email-verification": "npx --yes tsx scripts/test-email-verification.ts",
+    "test:register-supabase-client": "npx --yes tsx scripts/test-register-supabase-client.ts",
     "test:chat-emoji-picker": "npx --yes tsx scripts/test-chat-emoji-picker.ts",
     "test:parent-favorite-sitters": "npx --yes tsx scripts/test-parent-favorite-sitters.ts",
     "test:chat-inbox-ux": "npx --yes tsx scripts/test-chat-inbox-ux.ts"
