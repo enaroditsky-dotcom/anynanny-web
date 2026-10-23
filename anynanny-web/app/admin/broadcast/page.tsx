@@ -1,4 +1,5 @@
-import { AdminBroadcastForm } from "@/components/admin/admin-broadcast-form";
+import { AdminBroadcastComposer } from "@/components/admin/admin-broadcast-composer";
+import { AdminBroadcastQuestionResults } from "@/components/admin/admin-broadcast-question-results";
 import { requireAdminPage } from "@/lib/admin/require-admin";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +11,10 @@ export default async function AdminBroadcastPage() {
     <main className="mx-auto max-w-5xl p-6 md:py-16" dir="rtl">
       <h1 className="mb-2 text-2xl font-semibold text-navy-900">שליחת הודעת Broadcast</h1>
       <p className="mb-6 text-sm text-navy-700">
-        הודעת מערכת פנימית שתופיע אצל המשתמשים בחוויית ההודעות הקיימת של AnyNanny. אין שליחת Push, SMS או אימייל.
+        הודעה רגילה או שאלה אמריקאית. שתיהן מופיעות אצל המשתמשים בתוך AnyNanny. אין שליחת Push, SMS או אימייל.
       </p>
-      <AdminBroadcastForm />
+      <AdminBroadcastComposer />
+      <AdminBroadcastQuestionResults />
     </main>
   );
 }

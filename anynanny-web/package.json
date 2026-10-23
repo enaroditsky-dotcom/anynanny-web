@@ -58,8 +58,15 @@
     "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts",
     "test:didit-kyc": "npx --yes tsx scripts/test-didit-kyc.ts",
     "test:admin-broadcast": "npx --yes tsx scripts/test-admin-broadcast.ts",
+    "test:admin-login-security": "npx --yes tsx scripts/test-admin-login-security.ts",
+    "test:admin-broadcast-question": "npx --yes tsx scripts/test-admin-broadcast-question.ts",
+    "test:broadcast-v2-questions": "npx --yes tsx scripts/test-broadcast-v2-questions.ts",
+    "test:broadcast-question-answer": "npx --yes tsx scripts/test-broadcast-question-answer.ts",
+    "test:broadcast-question-results": "npx --yes tsx scripts/test-broadcast-question-results.ts",
+    "test:broadcast-question-inbox": "npx --yes tsx scripts/test-broadcast-question-inbox.ts",
     "test:marketing-consent": "npx --yes tsx scripts/test-marketing-consent.ts",
     "test:email-verification": "npx --yes tsx scripts/test-email-verification.ts",
+    "test:register-supabase-client": "npx --yes tsx scripts/test-register-supabase-client.ts",
     "test:chat-emoji-picker": "npx --yes tsx scripts/test-chat-emoji-picker.ts",
     "test:parent-favorite-sitters": "npx --yes tsx scripts/test-parent-favorite-sitters.ts",
     "test:chat-inbox-ux": "npx --yes tsx scripts/test-chat-inbox-ux.ts"
@@ -76,6 +83,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@types/node": "^22.13.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",

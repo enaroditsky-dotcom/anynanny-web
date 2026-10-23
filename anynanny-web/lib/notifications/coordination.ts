@@ -1,4 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAnsweredBroadcastQuestionIds } from "@/lib/broadcast/question-answer";
+import { broadcastQuestionIdFromPayload, omitAnsweredBroadcastQuestions } from "@/lib/broadcast/question-link";
+import {
+  ORDINARY_BROADCAST_CARD_LIMIT,
+  ordinaryAdminBroadcastsForReplay
+} from "@/lib/broadcast/question-replay";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
 import {
@@ -132,6 +138,7 @@ export function operationalCardActionLabel(
   payload?: CanonicalNotificationPayload
 ): string {
   if (kind === "admin_broadcast") {
+    if (broadcastQuestionIdFromPayload(payload)) return "למענה";
     const label = String(payload?.cta_label ?? "").trim();
     return label || "לפרטים";
   }
@@ -406,13 +413,17 @@ export async function fetchUnreadPaymentCompletionNotifications(
   };
 }
 
-/** Unread admin system messages only — replayed on mount so offline recipients still see them. */
+/**
+ * Unread ordinary admin broadcasts. Interactive questions are not part of this
+ * list: they stay on /broadcast/questions and must not fill these cards.
+ * A failed answer lookup is reported and is not treated as "already answered".
+ */
 export async function fetchUnreadAdminBroadcastNotifications(
   supabase: SupabaseClient,
   userId: string
-): Promise<{ notifications: CoordinationNotification[]; error: string | null }> {
+): Promise<{ notifications: CoordinationNotification[]; error: string | null; questionStatusError: string | null }> {
   const uid = userId.trim();
-  if (!uid) return { notifications: [], error: null };
+  if (!uid) return { notifications: [], error: null, questionStatusError: null };
 
   const { data, error } = await supabase
     .from(NOTIFICATIONS_TABLE)
@@ -420,16 +431,30 @@ export async function fetchUnreadAdminBroadcastNotifications(
     .eq("user_id", uid)
     .eq("kind", "admin_broadcast")
     .is("read_at", null)
+    .filter("payload->>question_id", "is", null)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(ORDINARY_BROADCAST_CARD_LIMIT);
 
   if (error) {
-    return { notifications: [], error: readSupabaseErrorMessage(error) };
+    return { notifications: [], error: readSupabaseErrorMessage(error), questionStatusError: null };
   }
 
-  const notifications = ((data ?? []) as Record<string, unknown>[])
-    .map((row) => mapCoordinationNotificationRow(row))
-    .filter((row): row is CoordinationNotification => Boolean(row));
+  const notifications = sortNewestFirst(
+    ((data ?? []) as Record<string, unknown>[])
+      .map((row) => mapCoordinationNotificationRow(row))
+      .filter((row): row is CoordinationNotification => Boolean(row))
+  );
+  const includesQuestion = notifications.some((row) => broadcastQuestionIdFromPayload(row.payload));
+  const answered = includesQuestion
+    ? await fetchAnsweredBroadcastQuestionIds(supabase)
+    : { ids: new Set<string>(), error: null };
+  const withoutAnswered = answered.error
+    ? notifications.filter((row) => !broadcastQuestionIdFromPayload(row.payload))
+    : omitAnsweredBroadcastQuestions(notifications, answered.ids);
 
-  return { notifications: sortNewestFirst(notifications), error: null };
+  return {
+    notifications: ordinaryAdminBroadcastsForReplay(withoutAnswered),
+    error: null,
+    questionStatusError: answered.error ? "לא הצלחנו לבדוק אם השאלה כבר נענתה." : null
+  };
 }

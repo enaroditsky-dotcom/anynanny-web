@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { AgeGateStep } from "@/components/auth/age-gate-step";
 import { MarketingConsentCheckbox } from "@/components/auth/marketing-consent-checkbox";
 import {
@@ -33,13 +32,10 @@ import {
   SITTER_PROFILES_USER_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import type { ProfileRole } from "@/lib/supabase/profiles";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 
-const SUPABASE_URL = "https://dqycvddpdhxawdgdatfe.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxeWN2ZGRwZGh4YXdkZ2RhdGZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNDMzNTEsImV4cCI6MjA5MzgxOTM1MX0.1nIMudhzgs1j41tzA4VhtEQjdIhztFWMmDoFU1G69-I";
-
-const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+type RegistrationClient = NonNullable<ReturnType<typeof getSupabaseBrowserClient>>;
 
 const ROLE_LABELS: Record<ProfileRole, string> = {
   parent: "הורה",
@@ -47,6 +43,7 @@ const ROLE_LABELS: Record<ProfileRole, string> = {
 };
 
 async function persistExpertSitterProfile(
+  supabase: RegistrationClient,
   userId: string,
   draft: ExpertProfileDraft,
   names: { first_name: string; last_name: string }
@@ -86,6 +83,7 @@ async function persistExpertSitterProfile(
 function RegisterInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const supabase = getSupabaseBrowserClient();
 
   const role = useMemo((): ProfileRole | null => {
     const value = searchParams.get("role");
@@ -134,6 +132,11 @@ function RegisterInner() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!supabase) {
+      setErrorMsg("לקוח ה-Database אינו זמין.");
+      return;
+    }
 
     if (!role) {
       setErrorMsg(
@@ -231,7 +234,7 @@ function RegisterInner() {
 
         if (role === "sitter") {
           if (isExpert) {
-            await persistExpertSitterProfile(data.user.id, expertDraft, {
+            await persistExpertSitterProfile(supabase, data.user.id, expertDraft, {
               first_name: trimmedFirst,
               last_name: trimmedLast
             });
