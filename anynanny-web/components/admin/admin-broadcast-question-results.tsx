@@ -20,6 +20,7 @@ type HistoryItem = {
   recipients: number;
   respondents: number;
   response_rate: number;
+  selected_public_ids?: string[] | null;
 };
 
 type Detail = {
@@ -203,6 +204,9 @@ export function AdminBroadcastQuestionResults() {
             <dl className="mt-3 grid gap-2 text-xs text-navy-700 sm:grid-cols-2">
               <div>נשלחה: {formatWhen(item.created_at)}</div>
               <div>קהל: {item.audience_label}</div>
+              {item.selected_public_ids && item.selected_public_ids.length > 0 ? (
+                <div className="sm:col-span-2">מזהים: {item.selected_public_ids.join(", ")}</div>
+              ) : null}
               <div>סוג: {item.format_label} · {item.selection_label}</div>
               <div>סטטוס: {item.closed_at ? "סגורה" : "פתוחה"} · {item.is_test ? "בדיקה" : "אמיתית"}</div>
               <div>נמענים: {item.recipients}</div>
@@ -237,6 +241,9 @@ export function AdminBroadcastQuestionResults() {
                   <h3 className="text-lg font-semibold text-navy-900">{detail.question.prompt}</h3>
                   <p className="mt-1 text-sm text-navy-700">
                     {detail.question.closed ? "סגורה" : "פתוחה"} · {detail.question.audience_label} · {detail.question.is_test ? "בדיקה" : "אמיתית"}
+                    {detail.question.selected_public_ids && detail.question.selected_public_ids.length > 0
+                      ? ` · ${detail.question.selected_public_ids.join(", ")}`
+                      : ""}
                   </p>
                 </div>
                 {detail.question.closed ? null : (

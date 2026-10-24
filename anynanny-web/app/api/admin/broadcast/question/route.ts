@@ -1,9 +1,23 @@
 import { NextResponse } from "next/server";
 import { countBroadcastRecipients } from "@/lib/admin/broadcast-send";
-import { sendAdminBroadcastQuestion } from "@/lib/admin/broadcast-question-send";
+import {
+  previewSelectedBroadcastQuestionRecipients,
+  sendAdminBroadcastQuestion,
+  sendSelectedAdminBroadcastQuestion
+} from "@/lib/admin/broadcast-question-send";
+import {
+  SELECTED_RECIPIENTS_REJECTED_MESSAGE,
+  isSelectedRecipientsRejected,
+  requireSelectedPublicIds
+} from "@/lib/admin/broadcast-selected-recipients";
+import {
+  ADMIN_BROADCAST_TEST_UNAVAILABLE_MESSAGE,
+  BroadcastTestRecipientError,
+  requireDedicatedBroadcastTestUserId
+} from "@/lib/admin/broadcast-test-recipient";
+import { resolveConfiguredBroadcastTestRecipient } from "@/lib/admin/broadcast-test-recipient-load";
 import { validateBroadcastQuestion } from "@/lib/admin/broadcast-question-validation";
 import { requireAdminApi } from "@/lib/admin/require-admin";
-import { createServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -17,19 +31,8 @@ type RequestBody = {
   selection_mode?: unknown;
   options?: unknown;
   idempotency_key?: unknown;
+  public_ids?: unknown;
 };
-
-async function signedInUserId(): Promise<string | null> {
-  try {
-    const supabase = await createServerClient();
-    const {
-      data: { user }
-    } = await supabase.auth.getUser();
-    return user?.id?.trim() || null;
-  } catch {
-    return null;
-  }
-}
 
 export async function POST(request: Request) {
   const denied = await requireAdminApi();
@@ -61,11 +64,36 @@ export async function POST(request: Request) {
 
   try {
     if (action === "preview") {
+      const selected = requireSelectedPublicIds(parsed.value.audience, body.public_ids);
+      if (!selected.ok) {
+        return NextResponse.json({ error: selected.error }, { status: 400 });
+      }
+      if (selected.ids) {
+        const checked = await previewSelectedBroadcastQuestionRecipients(selected.ids);
+        return NextResponse.json({
+          audience: parsed.value.audience,
+          audience_label: parsed.value.audienceLabel,
+          recipient_count: checked.recipientCount,
+          ok: checked.ok,
+          error: checked.error,
+          entries: checked.entries.map((entry) => ({
+            public_id: entry.publicId,
+            role: entry.role,
+            ok: entry.ok,
+            reason: entry.reason
+          })),
+          prompt: parsed.value.prompt,
+          question_format: parsed.value.questionFormat,
+          selection_mode: parsed.value.selectionMode,
+          options: parsed.value.options
+        });
+      }
       const counted = await countBroadcastRecipients(parsed.value.audience);
       return NextResponse.json({
         audience: counted.audience,
         audience_label: parsed.value.audienceLabel,
         recipient_count: counted.recipientCount,
+        ok: true,
         prompt: parsed.value.prompt,
         question_format: parsed.value.questionFormat,
         selection_mode: parsed.value.selectionMode,
@@ -78,24 +106,42 @@ export async function POST(request: Request) {
     }
 
     if (action === "test") {
-      const userId = await signedInUserId();
-      if (!userId) {
-        return NextResponse.json(
-          {
-            error:
-              "יש להתחבר גם כמשתמש AnyNanny כדי לשלוח הודעת בדיקה לעצמך. סשן האדמין בלבד אינו מזהה נמען."
-          },
-          { status: 400 }
-        );
+      let testUserId: string;
+      try {
+        testUserId = requireDedicatedBroadcastTestUserId(await resolveConfiguredBroadcastTestRecipient());
+      } catch (error) {
+        if (error instanceof BroadcastTestRecipientError) {
+          return NextResponse.json({ error: ADMIN_BROADCAST_TEST_UNAVAILABLE_MESSAGE }, { status: 400 });
+        }
+        throw error;
       }
       const result = await sendAdminBroadcastQuestion({
         message: parsed.value,
         isTest: true,
-        testUserId: userId
+        testUserId
       });
       return NextResponse.json({
         ok: true,
         test: true,
+        question_id: result.questionId,
+        recipient_count: result.recipientCount,
+        already_sent: result.alreadySent
+      });
+    }
+
+    const selected = requireSelectedPublicIds(parsed.value.audience, body.public_ids);
+    if (!selected.ok) {
+      return NextResponse.json({ error: selected.error }, { status: 400 });
+    }
+
+    if (selected.ids) {
+      const result = await sendSelectedAdminBroadcastQuestion({
+        message: parsed.value,
+        publicIds: selected.ids
+      });
+      return NextResponse.json({
+        ok: true,
+        test: false,
         question_id: result.questionId,
         recipient_count: result.recipientCount,
         already_sent: result.alreadySent
@@ -115,6 +161,9 @@ export async function POST(request: Request) {
       already_sent: result.alreadySent
     });
   } catch (error) {
+    if (isSelectedRecipientsRejected(error)) {
+      return NextResponse.json({ error: SELECTED_RECIPIENTS_REJECTED_MESSAGE }, { status: 400 });
+    }
     console.error("[admin-broadcast-question]", error);
     const message =
       action === "preview" ? "לא הצלחנו לחשב את מספר הנמענים." : "לא הצלחנו לשלוח את השאלה.";

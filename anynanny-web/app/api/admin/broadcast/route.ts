@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/require-admin";
 import {
   countBroadcastRecipients,
+  previewSelectedBroadcastRecipients,
   sendAdminBroadcast,
-  sendBroadcastTestToUser
+  sendBroadcastTestToUser,
+  sendSelectedAdminBroadcast
 } from "@/lib/admin/broadcast-send";
 import { validateBroadcastMessage } from "@/lib/admin/broadcast-validation";
+import { SELECTED_RECIPIENTS_REJECTED_MESSAGE, requireSelectedPublicIds } from "@/lib/admin/broadcast-selected-recipients";
 import { createServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +23,7 @@ type RequestBody = {
   cta_label?: unknown;
   cta_route?: unknown;
   idempotency_key?: unknown;
+  public_ids?: unknown;
 };
 
 async function signedInUserId(): Promise<string | null> {
@@ -63,19 +67,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (action === "preview") {
-      const counted = await countBroadcastRecipients(parsed.value.audience);
-      return NextResponse.json({
-        audience: counted.audience,
-        audience_label: parsed.value.audienceLabel,
-        recipient_count: counted.recipientCount,
-        title: parsed.value.title,
-        body: parsed.value.body,
-        cta_label: parsed.value.ctaLabel,
-        cta_route: parsed.value.ctaRoute
-      });
-    }
-
     if (action === "test") {
       const userId = await signedInUserId();
       if (!userId) {
@@ -96,8 +87,61 @@ export async function POST(request: Request) {
       });
     }
 
+    const selected = requireSelectedPublicIds(parsed.value.audience, body.public_ids);
+    if (!selected.ok) {
+      return NextResponse.json({ error: selected.error }, { status: 400 });
+    }
+
+    if (action === "preview") {
+      if (selected.ids) {
+        const checked = await previewSelectedBroadcastRecipients(selected.ids);
+        return NextResponse.json({
+          audience: parsed.value.audience,
+          audience_label: parsed.value.audienceLabel,
+          recipient_count: checked.recipientCount,
+          ok: checked.ok,
+          error: checked.error,
+          entries: checked.entries.map((entry) => ({
+            public_id: entry.publicId,
+            role: entry.role,
+            ok: entry.ok,
+            reason: entry.reason
+          })),
+          title: parsed.value.title,
+          body: parsed.value.body,
+          cta_label: parsed.value.ctaLabel,
+          cta_route: parsed.value.ctaRoute
+        });
+      }
+      const counted = await countBroadcastRecipients(parsed.value.audience);
+      return NextResponse.json({
+        audience: counted.audience,
+        audience_label: parsed.value.audienceLabel,
+        recipient_count: counted.recipientCount,
+        ok: true,
+        title: parsed.value.title,
+        body: parsed.value.body,
+        cta_label: parsed.value.ctaLabel,
+        cta_route: parsed.value.ctaRoute
+      });
+    }
+
     if (!parsed.value.idempotencyKey) {
       return NextResponse.json({ error: "Missing idempotency key." }, { status: 400 });
+    }
+
+    if (selected.ids) {
+      const result = await sendSelectedAdminBroadcast({
+        message: parsed.value,
+        publicIds: selected.ids
+      });
+      return NextResponse.json({
+        ok: true,
+        test: false,
+        broadcast_id: result.broadcastId,
+        recipient_count: result.recipientCount,
+        already_sent: result.alreadySent
+      });
     }
 
     const result = await sendAdminBroadcast(parsed.value);
@@ -109,6 +153,9 @@ export async function POST(request: Request) {
       already_sent: result.alreadySent
     });
   } catch (error) {
+    if (error instanceof Error && error.message === SELECTED_RECIPIENTS_REJECTED_MESSAGE) {
+      return NextResponse.json({ error: SELECTED_RECIPIENTS_REJECTED_MESSAGE }, { status: 400 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Broadcast failed." },
       { status: 500 }

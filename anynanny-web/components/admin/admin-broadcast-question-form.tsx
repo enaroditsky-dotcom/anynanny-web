@@ -7,6 +7,13 @@ import {
   DEFAULT_BROADCAST_AUDIENCE,
   type BroadcastAudienceType
 } from "@/lib/admin/broadcast-audience";
+import { SelectedPublicIdField } from "@/components/admin/selected-public-id-field";
+import {
+  parseSelectedPublicIdList,
+  SELECTED_BROADCAST_AUDIENCE,
+  selectedPublicIdReasonLabel,
+  type SelectedPublicIdEntry
+} from "@/lib/admin/broadcast-selected-recipients";
 import {
   BROADCAST_QUESTION_OPTION_MAX_COUNT,
   BROADCAST_QUESTION_OPTION_MAX_LENGTH,
@@ -29,6 +36,9 @@ type PreviewState = {
   question_format: BroadcastQuestionFormat;
   selection_mode: BroadcastQuestionSelectionMode;
   options: string[];
+  ok: boolean;
+  error: string | null;
+  entries: SelectedPublicIdEntry[];
 };
 
 const NEW_QUESTION_LABEL = "שאלה חדשה";
@@ -52,6 +62,7 @@ function emptyCustomOptions(): OptionDraft[] {
 
 export function AdminBroadcastQuestionForm() {
   const [audience, setAudience] = useState<BroadcastAudienceType>(DEFAULT_BROADCAST_AUDIENCE);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [prompt, setPrompt] = useState("");
   const [questionFormat, setQuestionFormat] = useState<BroadcastQuestionFormat>("yes_no");
   const [selectionMode, setSelectionMode] = useState<BroadcastQuestionSelectionMode>("single");
@@ -83,14 +94,23 @@ export function AdminBroadcastQuestionForm() {
     [audience, effectiveSelection, options, prompt, questionFormat]
   );
 
+  const selectedRequest = () =>
+    audience === SELECTED_BROADCAST_AUDIENCE ? { public_ids: selectedIds } : {};
+
   const clearPreview = () => {
     setPreview(null);
     setError(null);
     setSuccess(null);
   };
 
+  const changeSelectedIds = (ids: string[]) => {
+    setSelectedIds(ids);
+    clearPreview();
+  };
+
   const resetForm = () => {
     setAudience(DEFAULT_BROADCAST_AUDIENCE);
+    setSelectedIds([]);
     setPrompt("");
     setQuestionFormat("yes_no");
     setSelectionMode("single");
@@ -133,6 +153,8 @@ export function AdminBroadcastQuestionForm() {
       question_format?: BroadcastQuestionFormat;
       selection_mode?: BroadcastQuestionSelectionMode;
       options?: string[];
+      ok?: boolean;
+      entries?: Array<{ public_id?: string; role?: "parent" | "sitter" | null; ok?: boolean; reason?: string | null }>;
       already_sent?: boolean;
     };
     if (!response.ok) {
@@ -146,14 +168,26 @@ export function AdminBroadcastQuestionForm() {
     setError(null);
     setSuccess(null);
     try {
-      const json = await callApi("preview");
+      if (audience === SELECTED_BROADCAST_AUDIENCE) {
+        const parsedIds = parseSelectedPublicIdList(selectedIds);
+        if (!parsedIds.ok) throw new Error(parsedIds.error);
+      }
+      const json = await callApi("preview", selectedRequest());
       setPreview({
         audience_label: json.audience_label ?? BROADCAST_AUDIENCE_LABELS[audience],
         recipient_count: json.recipient_count ?? 0,
         prompt: json.prompt ?? prompt.trim(),
         question_format: json.question_format ?? questionFormat,
         selection_mode: json.selection_mode ?? effectiveSelection,
-        options: json.options ?? options
+        options: json.options ?? options,
+        ok: json.ok !== false,
+        error: typeof json.error === "string" ? json.error : null,
+        entries: (json.entries ?? []).map((entry) => ({
+          publicId: String(entry.public_id ?? ""),
+          role: entry.role === "parent" || entry.role === "sitter" ? entry.role : null,
+          ok: entry.ok === true,
+          reason: entry.reason ?? null
+        }))
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "תצוגה מקדימה נכשלה.");
@@ -168,7 +202,7 @@ export function AdminBroadcastQuestionForm() {
     setSuccess(null);
     try {
       await callApi("test", { idempotency_key: `test_${newIdempotencyKey()}` });
-      setSuccess("שאלת הבדיקה נשלחה רק למשתמש המחובר שלך.");
+      setSuccess("שאלת הבדיקה נשלחה רק לחשבון P-1002.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "שליחת בדיקה נכשלה.");
     } finally {
@@ -179,11 +213,15 @@ export function AdminBroadcastQuestionForm() {
   const handleSend = async () => {
     if (sendingLockRef.current) return;
     const count = preview?.recipient_count;
-    if (count == null) {
+    if (!preview || count == null) {
       setError("יש לפתוח תצוגה מקדימה לפני השליחה.");
       return;
     }
-    const confirmed = window.confirm(broadcastQuestionConfirmMessage(count));
+    if (audience === SELECTED_BROADCAST_AUDIENCE && (!preview.ok || count < 1)) {
+      setError("יש לתקן את רשימת המזהים לפני השליחה.");
+      return;
+    }
+    const confirmed = window.confirm(broadcastQuestionConfirmMessage(preview.audience_label, count));
     if (!confirmed) return;
 
     sendingLockRef.current = true;
@@ -191,7 +229,7 @@ export function AdminBroadcastQuestionForm() {
     setError(null);
     setSuccess(null);
     try {
-      const json = await callApi("send", { idempotency_key: sendKeyRef.current });
+      const json = await callApi("send", { idempotency_key: sendKeyRef.current, ...selectedRequest() });
       if (json.already_sent) {
         setSuccess("השאלה כבר נשלחה עם אותו מפתח. לא בוצעה שליחה כפולה.");
       } else {
@@ -214,7 +252,10 @@ export function AdminBroadcastQuestionForm() {
     clearPreview();
   };
 
-  const sendDisabled = busy !== null || !preview;
+  const sendBlocked =
+    audience === SELECTED_BROADCAST_AUDIENCE &&
+    (preview == null || !preview.ok || preview.recipient_count < 1);
+  const sendDisabled = busy !== null || !preview || sendBlocked;
 
   return (
     <div className="space-y-5" dir="rtl">
@@ -237,6 +278,14 @@ export function AdminBroadcastQuestionForm() {
             </option>
           ))}
         </select>
+        {audience === SELECTED_BROADCAST_AUDIENCE ? (
+          <SelectedPublicIdField
+            ids={selectedIds}
+            entries={preview?.entries ?? []}
+            disabled={busy !== null}
+            onChange={changeSelectedIds}
+          />
+        ) : null}
 
         <label className="block text-sm font-medium text-navy-900" htmlFor="questionPrompt">
           שאלה
@@ -377,7 +426,7 @@ export function AdminBroadcastQuestionForm() {
             onClick={() => void handleTest()}
             disabled={busy !== null}
           >
-            {busy === "test" ? "שולח בדיקה…" : "שליחת הודעת בדיקה לעצמי"}
+            {busy === "test" ? "שולח בדיקה…" : "שליחת בדיקה לחשבון P-1002"}
           </button>
           <button
             className="rounded-xl border border-navy-200 bg-white px-4 py-2 text-sm font-semibold text-navy-800 disabled:cursor-not-allowed disabled:opacity-60"
@@ -401,6 +450,12 @@ export function AdminBroadcastQuestionForm() {
             <span className="text-navy-600">מספר נמענים: </span>
             {preview.recipient_count}
           </p>
+          {preview.error ? (
+            <p className="text-red-800">{selectedPublicIdReasonLabel(preview.error) ?? preview.error}</p>
+          ) : null}
+          {audience === SELECTED_BROADCAST_AUDIENCE && !preview.ok ? (
+            <p className="text-red-800">השליחה חסומה עד שכל המזהים תקינים.</p>
+          ) : null}
           <p>
             <span className="text-navy-600">סוג: </span>
             {preview.question_format === "yes_no" ? "כן / לא" : "תשובות לבחירה"}

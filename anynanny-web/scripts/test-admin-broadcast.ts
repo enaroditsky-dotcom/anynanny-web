@@ -99,6 +99,7 @@ assert.equal(isValidAdminSessionValue(""), false);
 
 // 2-6. recipient counts / group membership
 assert.equal(countBroadcastAudience(users, "all_users"), 6);
+assert.deepEqual(ids("selected_public_ids"), []);
 assert.deepEqual(ids("parents"), ["dual-parent-primary", "parent-complete-verified", "parent-incomplete-unverified"]);
 assert.deepEqual(ids("sitters"), ["dual-parent-primary", "sitter-complete-verified", "sitter-incomplete-pending"]);
 assert.deepEqual(ids("identity_verified"), ["parent-complete-verified", "sitter-complete-verified"]);
@@ -264,7 +265,8 @@ assert.match(form, /שליחת הודעת בדיקה לעצמי/);
 assert.match(form, /broadcastSendButtonLabel/);
 assert.match(form, /broadcastConfirmMessage/);
 assert.equal(broadcastSendButtonLabel(38), "שליחה ל-38 משתמשים");
-assert.match(broadcastConfirmMessage(38), /38 משתמשים/);
+assert.match(broadcastConfirmMessage("כל המשתמשים", 38), /38 משתמשים/);
+assert.match(broadcastConfirmMessage("כל המשתמשים", 38), /כל המשתמשים/);
 assert.match(page, /שליחת הודעת Broadcast/);
 assert.match(kinds, /"admin_broadcast"/);
 assert.match(read("components/admin/admin-top-bar.tsx"), /\/admin\/broadcast/);
