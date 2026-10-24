@@ -53,6 +53,7 @@ type QuestionRow = {
   selection_mode: string;
   prompt: string;
   is_test: boolean;
+  selected_public_ids: string[] | null;
 };
 
 export type QuestionHistoryItem = QuestionRow & {
@@ -124,9 +125,12 @@ export async function listBroadcastQuestionHistory(input: {
   const bounds = pageBounds(input.page, QUESTION_HISTORY_PAGE_SIZE);
   let query = client()
     .from(QUESTIONS)
-    .select("id, created_at, closed_at, audience_type, question_format, selection_mode, prompt, is_test", {
-      count: "exact"
-    })
+    .select(
+      "id, created_at, closed_at, audience_type, question_format, selection_mode, prompt, is_test, selected_public_ids",
+      {
+        count: "exact"
+      }
+    )
     .eq("is_test", input.scope === "test")
     .order("created_at", { ascending: false })
     .range(bounds.from, bounds.to);
@@ -168,7 +172,9 @@ export async function listBroadcastQuestionHistory(input: {
 async function loadQuestion(questionId: string): Promise<QuestionRow | null> {
   const { data, error } = await client()
     .from(QUESTIONS)
-    .select("id, created_at, closed_at, audience_type, question_format, selection_mode, prompt, is_test")
+    .select(
+      "id, created_at, closed_at, audience_type, question_format, selection_mode, prompt, is_test, selected_public_ids"
+    )
     .eq("id", questionId)
     .maybeSingle();
   if (error) throw new Error(error.message);

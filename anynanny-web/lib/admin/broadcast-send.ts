@@ -3,6 +3,10 @@ import { createInAppNotification } from "@/lib/notifications/create-notification
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import type { BroadcastAudienceType } from "@/lib/admin/broadcast-audience";
 import type { ValidatedBroadcastMessage } from "@/lib/admin/broadcast-validation";
+import {
+  readSelectedRecipientPreview,
+  SELECTED_RECIPIENTS_REJECTED_MESSAGE
+} from "@/lib/admin/broadcast-selected-recipients";
 
 export const ADMIN_COUNT_BROADCAST_RECIPIENTS_RPC = "admin_count_broadcast_recipients";
 export const ADMIN_SEND_IN_APP_BROADCAST_RPC = "admin_send_in_app_broadcast";
@@ -99,6 +103,58 @@ export async function sendAdminBroadcast(
   });
   if (error) {
     throw new Error(error.message || "Failed to send broadcast.");
+  }
+  const row = (data ?? {}) as {
+    broadcast_id?: string;
+    recipient_count?: number;
+    already_sent?: boolean;
+  };
+  const broadcastId = String(row.broadcast_id ?? "").trim();
+  if (!broadcastId) {
+    throw new Error("Broadcast did not return an id.");
+  }
+  return {
+    broadcastId,
+    recipientCount: asCount(row.recipient_count),
+    alreadySent: Boolean(row.already_sent)
+  };
+}
+
+export const ADMIN_PREVIEW_SELECTED_BROADCAST_RPC = "admin_preview_selected_broadcast_recipients";
+export const ADMIN_SEND_SELECTED_IN_APP_BROADCAST_RPC = "admin_send_selected_in_app_broadcast";
+
+export async function previewSelectedBroadcastRecipients(publicIds: string[]) {
+  const supabase = getSupabaseServiceRoleClient();
+  const { data, error } = await supabase.rpc(ADMIN_PREVIEW_SELECTED_BROADCAST_RPC, {
+    p_public_ids: publicIds
+  });
+  if (error) {
+    throw new Error("Failed to preview selected recipients.");
+  }
+  return readSelectedRecipientPreview(data);
+}
+
+export async function sendSelectedAdminBroadcast(input: {
+  message: ValidatedBroadcastMessage;
+  publicIds: string[];
+}): Promise<BroadcastSendResult> {
+  if (!input.message.idempotencyKey) {
+    throw new Error("Missing idempotency key.");
+  }
+  const supabase = getSupabaseServiceRoleClient();
+  const { data, error } = await supabase.rpc(ADMIN_SEND_SELECTED_IN_APP_BROADCAST_RPC, {
+    p_public_ids: input.publicIds,
+    p_title: input.message.title,
+    p_body: input.message.body,
+    p_cta_label: input.message.ctaLabel,
+    p_cta_route: input.message.ctaRoute,
+    p_idempotency_key: input.message.idempotencyKey
+  });
+  if (error) {
+    if (/selected recipients are invalid/i.test(error.message || "")) {
+      throw new Error(SELECTED_RECIPIENTS_REJECTED_MESSAGE);
+    }
+    throw new Error("Failed to send broadcast.");
   }
   const row = (data ?? {}) as {
     broadcast_id?: string;

@@ -145,8 +145,8 @@ export function validateBroadcastMessage(input: BroadcastMessageInput):
   };
 }
 
-export function broadcastConfirmMessage(recipientCount: number): string {
-  return `את/ה עומד/ת לשלוח הודעה ל-${recipientCount} משתמשים. לא ניתן לבטל הודעות שכבר נשלחו. להמשיך?`;
+export function broadcastConfirmMessage(audienceLabel: string, recipientCount: number): string {
+  return `את/ה עומד/ת לשלוח הודעה לקהל ${audienceLabel}, ל-${recipientCount} משתמשים. לא ניתן לבטל הודעות שכבר נשלחו. להמשיך?`;
 }
 
 export function broadcastSendButtonLabel(recipientCount: number): string {

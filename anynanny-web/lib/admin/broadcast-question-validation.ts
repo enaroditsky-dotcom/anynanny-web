@@ -68,8 +68,8 @@ export function isBroadcastQuestionDraftDirty(draft: BroadcastQuestionDraft): bo
   );
 }
 
-export function broadcastQuestionConfirmMessage(recipientCount: number): string {
-  return `את/ה עומד/ת לשלוח שאלה ל-${recipientCount} משתמשים. לא ניתן לבטל שליחה שכבר יצאה. להמשיך?`;
+export function broadcastQuestionConfirmMessage(audienceLabel: string, recipientCount: number): string {
+  return `את/ה עומד/ת לשלוח שאלה לקהל ${audienceLabel}, ל-${recipientCount} משתמשים. לא ניתן לבטל שליחה שכבר יצאה. להמשיך?`;
 }
 
 function asPrompt(value: unknown): string | { error: string } {

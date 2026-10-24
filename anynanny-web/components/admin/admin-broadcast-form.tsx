@@ -7,6 +7,13 @@ import {
   DEFAULT_BROADCAST_AUDIENCE,
   type BroadcastAudienceType
 } from "@/lib/admin/broadcast-audience";
+import { SelectedPublicIdField } from "@/components/admin/selected-public-id-field";
+import {
+  parseSelectedPublicIdList,
+  SELECTED_BROADCAST_AUDIENCE,
+  selectedPublicIdReasonLabel,
+  type SelectedPublicIdEntry
+} from "@/lib/admin/broadcast-selected-recipients";
 import {
   BROADCAST_BODY_MAX_LENGTH,
   BROADCAST_NEW_MESSAGE_CANCEL,
@@ -28,6 +35,9 @@ type PreviewState = {
   body: string;
   cta_label: string | null;
   cta_route: string | null;
+  ok: boolean;
+  error: string | null;
+  entries: SelectedPublicIdEntry[];
 };
 
 function newIdempotencyKey(): string {
@@ -39,6 +49,7 @@ function newIdempotencyKey(): string {
 
 export function AdminBroadcastForm() {
   const [audience, setAudience] = useState<BroadcastAudienceType>(DEFAULT_BROADCAST_AUDIENCE);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [ctaLabel, setCtaLabel] = useState("");
@@ -62,8 +73,17 @@ export function AdminBroadcastForm() {
     [audience, title, body, ctaLabel, ctaRoute]
   );
 
+  const selectedRequest = () =>
+    audience === SELECTED_BROADCAST_AUDIENCE ? { public_ids: selectedIds } : {};
+
+  const changeSelectedIds = (ids: string[]) => {
+    setSelectedIds(ids);
+    setPreview(null);
+  };
+
   const resetForm = () => {
     setAudience(DEFAULT_BROADCAST_AUDIENCE);
+    setSelectedIds([]);
     setTitle("");
     setBody("");
     setCtaLabel("");
@@ -106,6 +126,8 @@ export function AdminBroadcastForm() {
       body?: string;
       cta_label?: string | null;
       cta_route?: string | null;
+      ok?: boolean;
+      entries?: Array<{ public_id?: string; role?: "parent" | "sitter" | null; ok?: boolean; reason?: string | null }>;
       already_sent?: boolean;
       test?: boolean;
     };
@@ -120,7 +142,11 @@ export function AdminBroadcastForm() {
     setError(null);
     setSuccess(null);
     try {
-      const json = await callApi("preview");
+      if (audience === SELECTED_BROADCAST_AUDIENCE) {
+        const parsedIds = parseSelectedPublicIdList(selectedIds);
+        if (!parsedIds.ok) throw new Error(parsedIds.error);
+      }
+      const json = await callApi("preview", selectedRequest());
       setPreview({
         audience: json.audience ?? audience,
         audience_label: json.audience_label ?? BROADCAST_AUDIENCE_LABELS[audience],
@@ -128,7 +154,15 @@ export function AdminBroadcastForm() {
         title: json.title ?? title.trim(),
         body: json.body ?? body.trim(),
         cta_label: json.cta_label ?? (ctaLabel.trim() || null),
-        cta_route: json.cta_route ?? (ctaRoute.trim() || null)
+        cta_route: json.cta_route ?? (ctaRoute.trim() || null),
+        ok: json.ok !== false,
+        error: typeof json.error === "string" ? json.error : null,
+        entries: (json.entries ?? []).map((entry) => ({
+          publicId: String(entry.public_id ?? ""),
+          role: entry.role === "parent" || entry.role === "sitter" ? entry.role : null,
+          ok: entry.ok === true,
+          reason: entry.reason ?? null
+        }))
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "תצוגה מקדימה נכשלה.");
@@ -154,11 +188,15 @@ export function AdminBroadcastForm() {
   const handleSend = async () => {
     if (sendingLockRef.current) return;
     const count = preview?.recipient_count;
-    if (count == null) {
+    if (!preview || count == null) {
       setError("יש לפתוח תצוגה מקדימה לפני השליחה.");
       return;
     }
-    const confirmed = window.confirm(broadcastConfirmMessage(count));
+    if (audience === SELECTED_BROADCAST_AUDIENCE && (!preview.ok || count < 1)) {
+      setError("יש לתקן את רשימת המזהים לפני השליחה.");
+      return;
+    }
+    const confirmed = window.confirm(broadcastConfirmMessage(preview.audience_label, count));
     if (!confirmed) return;
 
     sendingLockRef.current = true;
@@ -166,7 +204,7 @@ export function AdminBroadcastForm() {
     setError(null);
     setSuccess(null);
     try {
-      const json = await callApi("send", { idempotency_key: sendKeyRef.current });
+      const json = await callApi("send", { idempotency_key: sendKeyRef.current, ...selectedRequest() });
       if (json.already_sent) {
         setSuccess("ההודעה כבר נשלחה עם אותו מפתח. לא בוצעה שליחה כפולה.");
       } else {
@@ -181,7 +219,10 @@ export function AdminBroadcastForm() {
     }
   };
 
-  const sendDisabled = busy !== null || !preview;
+  const sendBlocked =
+    audience === SELECTED_BROADCAST_AUDIENCE &&
+    (preview == null || !preview.ok || preview.recipient_count < 1);
+  const sendDisabled = busy !== null || !preview || sendBlocked;
   const resetDisabled = busy !== null;
 
   return (
@@ -205,6 +246,14 @@ export function AdminBroadcastForm() {
             </option>
           ))}
         </select>
+        {audience === SELECTED_BROADCAST_AUDIENCE ? (
+          <SelectedPublicIdField
+            ids={selectedIds}
+            entries={preview?.audience === audience ? preview.entries : []}
+            disabled={busy !== null}
+            onChange={changeSelectedIds}
+          />
+        ) : null}
 
         <label className="block text-sm font-medium text-navy-900" htmlFor="broadcastTitle">
           כותרת
@@ -309,6 +358,12 @@ export function AdminBroadcastForm() {
             <span className="text-navy-600">מספר נמענים: </span>
             {preview.recipient_count}
           </p>
+          {preview.error ? (
+            <p className="text-red-800">{selectedPublicIdReasonLabel(preview.error) ?? preview.error}</p>
+          ) : null}
+          {audience === SELECTED_BROADCAST_AUDIENCE && !preview.ok ? (
+            <p className="text-red-800">השליחה חסומה עד שכל המזהים תקינים.</p>
+          ) : null}
           <p>
             <span className="text-navy-600">כותרת: </span>
             {preview.title}

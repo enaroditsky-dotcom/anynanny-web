@@ -12,7 +12,8 @@ export const BROADCAST_AUDIENCE_TYPES = [
   "profile_incomplete",
   "profile_complete",
   "rp_marketing_opt_in",
-  "ran_marketing_opt_in"
+  "ran_marketing_opt_in",
+  "selected_public_ids"
 ] as const;
 
 export type BroadcastAudienceType = (typeof BROADCAST_AUDIENCE_TYPES)[number];
@@ -28,7 +29,8 @@ export const BROADCAST_AUDIENCE_LABELS: Record<BroadcastAudienceType, string> = 
   profile_incomplete: "פרופיל לא הושלם",
   profile_complete: "פרופיל הושלם",
   rp_marketing_opt_in: "הורים RP עם הסכמה לעדכונים",
-  ran_marketing_opt_in: "נני RAN עם הסכמה לעדכונים"
+  ran_marketing_opt_in: "נני RAN עם הסכמה לעדכונים",
+  selected_public_ids: "משתמשים נבחרים לפי ID"
 };
 
 export function isBroadcastAudienceType(value: unknown): value is BroadcastAudienceType {
@@ -36,6 +38,15 @@ export function isBroadcastAudienceType(value: unknown): value is BroadcastAudie
     typeof value === "string" &&
     (BROADCAST_AUDIENCE_TYPES as readonly string[]).includes(value)
   );
+}
+
+/** Metadata accepted by the legacy question RPC. A self-test recipient is p_test_user_id only. */
+export function audienceForLegacyQuestionRpc(input: {
+  audience: BroadcastAudienceType;
+  isTest: boolean;
+}): BroadcastAudienceType {
+  if (input.isTest) return DEFAULT_BROADCAST_AUDIENCE;
+  return input.audience;
 }
 
 /**
@@ -118,6 +129,8 @@ export function profileMatchesBroadcastAudience(
       return row.marketing_consent === true && isRealParentPublicId(row.parent_serial);
     case "ran_marketing_opt_in":
       return row.marketing_consent === true && isRealSitterPublicId(row.nanny_serial);
+    case "selected_public_ids":
+      return false;
     default:
       return false;
   }
