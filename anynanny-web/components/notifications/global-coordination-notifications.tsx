@@ -14,21 +14,26 @@ import {
   X
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import {
-  UnansweredQuestionCard,
-  UnansweredQuestionsInboxCard
-} from "@/components/broadcast/unanswered-question-card";
+import { BroadcastQuestionAnswer } from "@/components/broadcast/broadcast-question-answer";
+import { NannyTalksFrame } from "@/components/broadcast/nanny-talks-frame";
 import { userHasAnsweredBroadcastQuestion } from "@/lib/broadcast/question-answer";
 import {
   BROADCAST_QUESTION_ANSWERED_EVENT,
-  MY_QUESTIONS_HREF,
   broadcastQuestionDismissPersistsRead,
   broadcastQuestionIdFromPayload
 } from "@/lib/broadcast/question-link";
 import {
+  dismissUnansweredQuestionCard,
   refreshUnansweredBroadcastQuestions,
   useUnansweredBroadcastQuestions
 } from "@/lib/broadcast/use-unanswered-questions";
+import {
+  BROADCAST_REMOVED_EVENT,
+  BROADCAST_TALKS_HREF,
+  EXPLICIT_BROADCAST_REMOVAL_LABEL,
+  removeOwnRegularBroadcast
+} from "@/lib/broadcast/system-talks";
+import { isInternalBroadcastCtaRoute } from "@/lib/admin/broadcast-cta";
 import { questionNoticeVisibleOnPath } from "@/lib/broadcast/question-visibility";
 import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
@@ -128,9 +133,21 @@ export function GlobalCoordinationNotifications() {
   const [items, setItems] = useState<CoordinationNotification[]>([]);
   const [questionLookupError, setQuestionLookupError] = useState<string | null>(null);
   const [lookupRetry, setLookupRetry] = useState(0);
+  const [hiddenBroadcastIds, setHiddenBroadcastIds] = useState<string[]>([]);
+  const [removingBroadcastId, setRemovingBroadcastId] = useState<string | null>(null);
+  const [broadcastRemoveError, setBroadcastRemoveError] = useState<string | null>(null);
+  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
+  const [dismissedQuestionIds, setDismissedQuestionIds] = useState<string[]>([]);
   const unansweredQuestions = useUnansweredBroadcastQuestions();
 
   const userId = signedIn && user?.id ? user.id : null;
+  useEffect(() => {
+    setHiddenBroadcastIds([]);
+    setRemovingBroadcastId(null);
+    setBroadcastRemoveError(null);
+    setActiveQuestionId(null);
+    setDismissedQuestionIds([]);
+  }, [userId]);
   const role: "parent" | "sitter" =
     effectiveRole === "sitter" || effectiveRole === "parent" ? effectiveRole : currentRole;
 
@@ -381,16 +398,61 @@ export function GlobalCoordinationNotifications() {
   const visibleItems = collapsePaymentCompletionCards(routeItems).filter(
     (row) => !broadcastQuestionIdFromPayload(row.payload)
   );
+  const operationalItems = visibleItems.filter((row) => !isAdminBroadcastNotificationKind(row.kind));
+  const regularBroadcast =
+    visibleItems.find(
+      (row) => isAdminBroadcastNotificationKind(row.kind) && !hiddenBroadcastIds.includes(row.id)
+    ) ?? null;
   const hiddenOnItsPage = Boolean(
     unansweredQuestions.card && !questionNoticeVisibleOnPath(pathname, unansweredQuestions.card.id)
   );
   const questionCard = hiddenOnItsPage ? null : unansweredQuestions.card;
-  const inboxFallbackLabel =
-    questionCard || hiddenOnItsPage ? null : unansweredQuestions.inboxFallbackLabel;
+  const broadcastBlockedByOperations = operationalItems.length > 0;
+  const questionTalkVisible = Boolean(
+    activeQuestionId && questionNoticeVisibleOnPath(pathname, activeQuestionId) && !broadcastBlockedByOperations
+  );
+  const showRegularTalk = !questionTalkVisible && !broadcastBlockedByOperations && Boolean(regularBroadcast);
 
-  if (!userId || (visibleItems.length === 0 && !questionLookupError && !questionCard && !inboxFallbackLabel)) return null;
+  useEffect(() => {
+    const nextId = questionCard?.id ?? null;
+    if (!nextId || dismissedQuestionIds.includes(nextId)) return;
+    setActiveQuestionId((current) => current ?? nextId);
+  }, [questionCard, dismissedQuestionIds]);
+
+  useEffect(() => {
+    const onRemoved = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      setActiveQuestionId((current) => (current === id ? null : current));
+    };
+    window.addEventListener(BROADCAST_REMOVED_EVENT, onRemoved);
+    return () => window.removeEventListener(BROADCAST_REMOVED_EVENT, onRemoved);
+  }, []);
+
+  const dismissRegularTalk = () => {
+    if (!regularBroadcast) return;
+    setHiddenBroadcastIds((current) => (current.includes(regularBroadcast.id) ? current : [...current, regularBroadcast.id]));
+  };
+
+  const removeRegularTalk = async () => {
+    if (!regularBroadcast || !userId || removingBroadcastId) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    setRemovingBroadcastId(regularBroadcast.id);
+    const result = await removeOwnRegularBroadcast(supabase, userId, regularBroadcast.id);
+    setRemovingBroadcastId(null);
+    if (!result.ok) {
+      setBroadcastRemoveError(result.message);
+      return;
+    }
+    setBroadcastRemoveError(null);
+    dismissPopup(regularBroadcast.id);
+  };
+
+  if (!userId || (operationalItems.length === 0 && !questionLookupError && !questionTalkVisible && !showRegularTalk)) return null;
 
   return (
+    <>
     <div
       className="pointer-events-none fixed inset-x-0 top-12 z-[60] px-2 pt-1.5 sm:px-3"
       style={{ top: "calc(3rem + env(safe-area-inset-top, 0px))" }}
@@ -410,20 +472,15 @@ export function GlobalCoordinationNotifications() {
                 נסו שוב
               </button>
               <Link
-                href={MY_QUESTIONS_HREF}
+                href={BROADCAST_TALKS_HREF}
                 className="inline-flex min-h-11 items-center rounded-xl bg-[#001F3F] px-3 text-sm font-bold text-white"
               >
-                השאלות שלי
+                הודעות המערכת
               </Link>
             </div>
           </div>
         ) : null}
-        {questionCard ? (
-          <UnansweredQuestionCard card={questionCard} extraLabel={unansweredQuestions.extraLabel} />
-        ) : inboxFallbackLabel ? (
-          <UnansweredQuestionsInboxCard label={inboxFallbackLabel} />
-        ) : null}
-        {visibleItems.map((item) => {
+        {operationalItems.map((item) => {
           const tone = toneForKind(item.kind);
           const schedule = coordinationScheduleLabel(item.payload);
           const bookingHref = coordinationBookingHref(item.kind, role, item.payload);
@@ -491,5 +548,51 @@ export function GlobalCoordinationNotifications() {
         })}
       </div>
     </div>
+    {questionTalkVisible && activeQuestionId ? (
+      <NannyTalksFrame
+        title="AnyNanny"
+        onDismiss={() => {
+          dismissUnansweredQuestionCard(activeQuestionId);
+          setDismissedQuestionIds((current) =>
+            current.includes(activeQuestionId) ? current : [...current, activeQuestionId]
+          );
+          setActiveQuestionId(null);
+        }}
+      >
+        <BroadcastQuestionAnswer questionId={activeQuestionId} embedded />
+      </NannyTalksFrame>
+    ) : null}
+    {showRegularTalk && regularBroadcast ? (
+      <NannyTalksFrame title="AnyNanny" onDismiss={dismissRegularTalk}>
+        {regularBroadcast.title ? <p className="text-base font-semibold leading-snug">{regularBroadcast.title}</p> : null}
+        {regularBroadcast.body && regularBroadcast.body !== regularBroadcast.title ? (
+          <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed">{regularBroadcast.body}</p>
+        ) : null}
+        {isInternalBroadcastCtaRoute(String(regularBroadcast.payload.cta_route ?? "")) ? (
+          <Link
+            href={String(regularBroadcast.payload.cta_route)}
+            className="mt-3 inline-flex min-h-11 items-center text-sm font-bold underline"
+          >
+            לפתיחה
+          </Link>
+        ) : null}
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center rounded-md border border-neutral-300 bg-neutral-100 px-4 text-sm font-semibold"
+            disabled={removingBroadcastId === regularBroadcast.id}
+            onClick={() => void removeRegularTalk()}
+          >
+            {EXPLICIT_BROADCAST_REMOVAL_LABEL}
+          </button>
+        </div>
+        {broadcastRemoveError ? (
+          <p className="mt-2 text-sm text-rose-700" role="alert">
+            {broadcastRemoveError}
+          </p>
+        ) : null}
+      </NannyTalksFrame>
+    ) : null}
+    </>
   );
 }

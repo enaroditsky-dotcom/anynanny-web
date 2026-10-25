@@ -126,7 +126,7 @@ assert.equal(
   }),
   false
 );
-assert.equal(shouldPersistOperationalCardRead({ markRead: true, kind: "admin_broadcast" }), true);
+assert.equal(shouldPersistOperationalCardRead({ markRead: true, kind: "admin_broadcast" }), false);
 assert.equal(
   shouldPersistOperationalCardRead({
     markRead: true,

@@ -59,7 +59,7 @@ const visible = omitAnsweredBroadcastQuestions([regular, question, other], new S
 assert.deepEqual(visible.map((row) => row.id), ["n1", "n3"]);
 assert.equal(broadcastQuestionDismissPersistsRead({ question_id: questionId }), false);
 assert.equal(broadcastQuestionDismissPersistsRead({ cta_label: "לפרטים" }), true);
-assert.equal(shouldPersistOperationalCardRead({ markRead: true, kind: "admin_broadcast" }), true);
+assert.equal(shouldPersistOperationalCardRead({ markRead: true, kind: "admin_broadcast" }), false);
 assert.equal(shouldPersistOperationalCardRead({ markRead: false, kind: "admin_broadcast" }), false);
 
 assert.equal(broadcastQuestionSubmitMessage({ message: "question is closed" }), "השאלה נסגרה. אי אפשר לענות עוד.");
@@ -87,18 +87,18 @@ assert.doesNotMatch(form, /localStorage|sessionStorage|admin_close_broadcast_que
 const savedStart = form.indexOf("{saved ? (");
 const savedBlock = form.slice(savedStart, form.indexOf(") : null}", savedStart));
 assert.ok(savedStart > 0 && savedBlock.includes("התשובה נשמרה"));
-assert.doesNotMatch(savedBlock, /סגור/);
+assert.doesNotMatch(savedBlock, /EXPLICIT_BROADCAST_REMOVAL_LABEL/);
 const updateLabel = form.indexOf("עדכון תשובה");
 const closeStart = form.indexOf("{saved ? (", updateLabel);
 const closeBlock = form.slice(closeStart, form.indexOf(") : null}", closeStart));
-assert.ok(updateLabel > 0 && closeStart > updateLabel && closeBlock.includes("סגור"));
+assert.ok(updateLabel > 0 && closeStart > updateLabel && closeBlock.includes("EXPLICIT_BROADCAST_REMOVAL_LABEL"));
+assert.match(closeBlock, /removeFromInbox/);
+assert.match(form, /removeOwnBroadcastQuestion/);
 assert.match(closeBlock, /justify-end/);
 assert.match(closeBlock, /min-h-11/);
 assert.match(closeBlock, /bg-neutral-100/);
 assert.match(closeBlock, /border-neutral-300/);
 assert.doesNotMatch(closeBlock, /w-full|bg-\[#001F3F\]/);
-assert.equal(form.split("סגור").length - 1, 1);
-assert.doesNotMatch(closeBlock, /publishBroadcastQuestionAnswered|submitBroadcastQuestionAnswer/);
 const rejectedSubmit = form.indexOf("if (!result.ok)");
 const markSaved = form.indexOf("setSaved(true)");
 assert.ok(rejectedSubmit > 0 && markSaved > rejectedSubmit);

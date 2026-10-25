@@ -187,8 +187,6 @@ assert.equal(
 assert.equal(noticeVisibleToUser({ ownerId: null, card: null }, null)?.card, null);
 
 const parentNav = read("components/bottom-nav.tsx");
-const settingsLink = read("components/broadcast/my-questions-settings-link.tsx");
-const card = read("components/broadcast/unanswered-question-card.tsx");
 const overlay = read("components/notifications/global-coordination-notifications.tsx");
 const coordination = read("lib/notifications/coordination.ts");
 const inbox = read("lib/broadcast/question-inbox.ts");
@@ -196,22 +194,13 @@ const store = read("lib/broadcast/use-unanswered-questions.ts");
 
 assert.match(parentNav, /href: "\/parent\/settings"/);
 assert.match(parentNav, /href: "\/sitter\/settings"/);
-assert.equal(parentNav.match(/badgeKey: "questions"/g)?.length, 2);
-assert.match(parentNav, /data-unanswered-question-badge/);
-assert.match(parentNav, /useUnansweredBroadcastQuestions/);
-assert.match(settingsLink, /השאלות שלי/);
-assert.match(settingsLink, /data-unanswered-question-badge/);
-assert.match(settingsLink, /useUnansweredBroadcastQuestions/);
-assert.match(card, /למענה/);
-assert.match(card, /data-broadcast-question-card/);
-assert.match(card, /dismissUnansweredQuestionCard\(card\.id\)/);
-assert.doesNotMatch(card, /markNotificationsRead|read_at|localStorage|sessionStorage|publishBroadcastQuestionAnswered/);
-const inboxCard = card.slice(card.indexOf("export function UnansweredQuestionsInboxCard"));
-assert.match(inboxCard, /השאלות שלי/);
-assert.match(inboxCard, /data-broadcast-question-inbox-card/);
-assert.doesNotMatch(inboxCard, /dismissUnansweredQuestionCard|סגור|למענה/);
-assert.match(overlay, /UnansweredQuestionCard/);
-assert.match(overlay, /UnansweredQuestionsInboxCard/);
+assert.equal(parentNav.match(/badgeKey: "questions"/g)?.length ?? 0, 0);
+assert.match(parentNav, /data-broadcast-messages-badge/);
+assert.match(parentNav, /useBroadcastMessagesBadge/);
+assert.doesNotMatch(read("app/parent/settings/page.tsx"), /MyQuestionsSettingsLink|השאלות שלי/);
+assert.doesNotMatch(read("app/sitter/settings/page.tsx"), /MyQuestionsSettingsLink|השאלות שלי/);
+assert.match(overlay, /NannyTalksFrame/);
+assert.match(overlay, /dismissUnansweredQuestionCard/);
 assert.match(overlay, /questionNoticeVisibleOnPath/);
 assert.match(overlay, /!broadcastQuestionIdFromPayload\(row\.payload\)/);
 assert.match(overlay, /refreshUnansweredBroadcastQuestions/);

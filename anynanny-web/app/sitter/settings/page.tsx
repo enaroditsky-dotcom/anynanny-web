@@ -6,7 +6,6 @@ import { NotificationSettingsSection } from "@/components/settings/notification-
 import { SettingsFaqEntry } from "@/components/settings/settings-faq-entry";
 import { SitterTourSettingsEntry } from "@/components/product-tour/sitter-tour-settings-entry";
 import { BlockedUsersSection } from "@/components/safety/blocked-users-section";
-import { MyQuestionsSettingsLink } from "@/components/broadcast/my-questions-settings-link";
 import { CommunityResourcesSection } from "@/components/settings/community-resources-section";
 import { FileText, Shield, ExternalLink } from "lucide-react";
 
@@ -29,8 +28,6 @@ export default function SitterSettingsPage() {
         <NotificationSettingsSection />
         <MarketingConsentSection />
       </div>
-
-      <MyQuestionsSettingsLink />
 
       <BlockedUsersSection />
 

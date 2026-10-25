@@ -10,6 +10,7 @@ import { MessageCircle } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 
+import { AnynannySystemConversation } from "@/components/broadcast/anynanny-system-conversation";
 import { SitterBookingChatInbox } from "@/components/chat/booking-chat-inbox";
 
 import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
@@ -130,7 +131,12 @@ function SitterMessagesInner() {
 
       ) : null}
 
-      {!parentIdFromQuery ? <SitterBookingChatInbox /> : null}
+      {!parentIdFromQuery ? (
+        <>
+          <AnynannySystemConversation />
+          <SitterBookingChatInbox />
+        </>
+      ) : null}
 
     </>
 

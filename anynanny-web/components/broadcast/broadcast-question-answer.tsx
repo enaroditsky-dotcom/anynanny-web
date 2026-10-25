@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
-import { broadcastQuestionHomeHref, MY_QUESTIONS_HREF } from "@/lib/broadcast/question-link";
+import { broadcastQuestionHomeHref } from "@/lib/broadcast/question-link";
+import { EXPLICIT_BROADCAST_REMOVAL_LABEL, removeOwnBroadcastQuestion } from "@/lib/broadcast/system-talks";
 import {
   loadBroadcastQuestionForCurrentUser,
   submitBroadcastQuestionAnswer,
@@ -15,7 +16,13 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 const QUESTION_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function BroadcastQuestionAnswer({ questionId }: { questionId: string }) {
+export function BroadcastQuestionAnswer({
+  questionId,
+  embedded = false
+}: {
+  questionId: string;
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const { isLoading, signedIn, user, effectiveRole } = useAuth();
   const userId = signedIn && user?.id ? user.id : null;
@@ -27,6 +34,8 @@ export function BroadcastQuestionAnswer({ questionId }: { questionId: string }) 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const visibleQuestion = loadedForUserId === userId ? question : null;
 
   useEffect(() => {
@@ -110,13 +119,26 @@ export function BroadcastQuestionAnswer({ questionId }: { questionId: string }) 
     setQuestion((current) => (current ? { ...current, selectedOptionIds: result.optionIds } : current));
   };
 
-  return (
-    <main className="mx-auto w-full max-w-lg px-2 py-4 text-right" dir="rtl">
-      <p className="text-sm font-semibold text-[#001F3F]">AnyNanny</p>
-      <h1 className="mt-1 text-2xl font-semibold text-[#001F3F]">שאלה</h1>
-      <Link href={MY_QUESTIONS_HREF} className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-[#001F3F] underline">
-        השאלות שלי
-      </Link>
+  const removeFromInbox = async () => {
+    if (!validId || removing || !saved) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setRemoveError("לא הצלחנו להסיר את ההודעה. נסו שוב.");
+      return;
+    }
+    setRemoving(true);
+    setRemoveError(null);
+    const result = await removeOwnBroadcastQuestion(supabase, validId);
+    setRemoving(false);
+    if (!result.ok) {
+      setRemoveError(result.message);
+      return;
+    }
+    if (!embedded) router.push(homeHref);
+  };
+
+  const body = (
+    <>
       {validId && (loading || isLoading) ? <p className="mt-6 text-sm text-[#001F3F]/80">טוען את השאלה…</p> : null}
       {!isLoading && !validId ? (
         <p className="mt-6 text-sm text-rose-700" role="alert">
@@ -191,16 +213,36 @@ export function BroadcastQuestionAnswer({ questionId }: { questionId: string }) 
           )}
           {saved ? (
             <div className="mt-3 flex justify-end">
-              <Link
-                href={homeHref}
-                className="inline-flex min-h-11 items-center justify-center rounded-md border border-neutral-300 bg-neutral-100 px-4 text-base font-semibold text-[#001F3F]"
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center justify-center rounded-md border border-neutral-300 bg-neutral-100 px-4 text-sm font-semibold text-[#001F3F] disabled:opacity-60"
+                disabled={removing}
+                onClick={() => void removeFromInbox()}
               >
-                סגור
-              </Link>
+                {removing ? "מסיר…" : EXPLICIT_BROADCAST_REMOVAL_LABEL}
+              </button>
             </div>
+          ) : null}
+          {removeError ? (
+            <p className="mt-2 text-sm text-rose-700" role="alert">
+              {removeError}
+            </p>
           ) : null}
         </section>
       ) : null}
+    </>
+  );
+
+  if (embedded) return <div data-nanny-question-form>{body}</div>;
+
+  return (
+    <main className="mx-auto w-full max-w-lg px-2 py-4 text-right" dir="rtl">
+      <p className="text-sm font-semibold text-[#001F3F]">AnyNanny</p>
+      <h1 className="mt-1 text-2xl font-semibold text-[#001F3F]">שאלה</h1>
+      <Link href={effectiveRole === "sitter" ? "/sitter/messages" : "/parent/messages"} className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-[#001F3F] underline">
+        הודעות
+      </Link>
+      {body}
     </main>
   );
 }

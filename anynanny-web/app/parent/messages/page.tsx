@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { AnynannySystemConversation } from "@/components/broadcast/anynanny-system-conversation";
 import { ParentBookingChatInbox } from "@/components/chat/booking-chat-inbox";
 import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -64,7 +65,12 @@ function ParentMessagesInner() {
           {deepLinkError}
         </p>
       ) : null}
-      {!sitterIdFromQuery ? <ParentBookingChatInbox /> : null}
+      {!sitterIdFromQuery ? (
+        <>
+          <AnynannySystemConversation />
+          <ParentBookingChatInbox />
+        </>
+      ) : null}
     </>
   );
 }

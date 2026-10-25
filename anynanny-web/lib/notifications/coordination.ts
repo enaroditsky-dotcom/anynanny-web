@@ -324,7 +324,7 @@ export function shouldPersistOperationalCardRead(args: {
   dedupeKey?: unknown;
 }): boolean {
   if (!args.markRead) return false;
-  if (isAdminBroadcastNotificationKind(args.kind)) return true;
+  if (isAdminBroadcastNotificationKind(args.kind)) return false;
   return isPaidPaymentCompletionNotification({ kind: args.kind, dedupeKey: args.dedupeKey });
 }
 
