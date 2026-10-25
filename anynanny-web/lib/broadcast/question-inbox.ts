@@ -139,3 +139,14 @@ export async function listMyBroadcastQuestions(
 
   return { questions, page: bounds.page, pageSize: MY_QUESTIONS_PAGE_SIZE, total: page.total };
 }
+
+/** Open questions addressed to this user that still have no submitted answer. */
+export async function loadUnansweredBroadcastQuestionNotice(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ count: number; questions: MyBroadcastQuestion[] }> {
+  const uid = userId.trim();
+  if (!uid) return { count: 0, questions: [] };
+  const page = await listMyBroadcastQuestions(supabase, { userId: uid, status: "pending", page: 1 });
+  return { count: page.total, questions: page.questions };
+}

@@ -65,6 +65,7 @@
     "test:broadcast-question-answer": "npx --yes tsx scripts/test-broadcast-question-answer.ts",
     "test:broadcast-question-results": "npx --yes tsx scripts/test-broadcast-question-results.ts",
     "test:broadcast-question-inbox": "npx --yes tsx scripts/test-broadcast-question-inbox.ts",
+    "test:broadcast-question-visibility": "npx --yes tsx scripts/test-broadcast-question-visibility.ts",
     "test:marketing-consent": "npx --yes tsx scripts/test-marketing-consent.ts",
     "test:email-verification": "npx --yes tsx scripts/test-email-verification.ts",
     "test:register-supabase-client": "npx --yes tsx scripts/test-register-supabase-client.ts",

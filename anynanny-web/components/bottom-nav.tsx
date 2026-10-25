@@ -9,13 +9,14 @@ import { useAuth } from "@/components/auth-provider";
 import { CHAT_COMPOSER_ACTIVE_EVENT } from "@/lib/chat/composer-chrome";
 import { useWalletNotification } from "@/features/wallet/hooks/useWalletNotification";
 import { useChatNotification } from "@/features/chat/hooks/useChatNotification";
+import { useUnansweredBroadcastQuestions } from "@/lib/broadcast/use-unanswered-questions";
 
 type NavItem = {
   href: string;
   label: string;
   match: (path: string) => boolean;
   Icon: typeof Home;
-  badgeKey?: "messages" | "wallet";
+  badgeKey?: "messages" | "wallet" | "questions";
   tour?: string;
 };
 
@@ -47,6 +48,7 @@ const parentSideItems: NavItem[] = [
     label: "הגדרות",
     match: (p) => p.startsWith("/parent/settings") || p.startsWith("/parent/faq"),
     Icon: Settings,
+    badgeKey: "questions",
     tour: "settings"
   }
 ];
@@ -78,6 +80,7 @@ const sitterItems: NavItem[] = [
     label: "הגדרות",
     match: (p) => p.startsWith("/sitter/settings") || p.startsWith("/sitter/faq"),
     Icon: Settings,
+    badgeKey: "questions",
     tour: "sitter-settings"
   }
 ];
@@ -87,18 +90,21 @@ function NavLink({
   pathname,
   hasUnreadMessages,
   hasWalletUpdate,
+  unansweredQuestionBadge,
   clearWalletNotification
 }: {
   item: NavItem;
   pathname: string;
   hasUnreadMessages: boolean;
   hasWalletUpdate: boolean;
+  unansweredQuestionBadge: string | null;
   clearWalletNotification: () => void;
 }) {
   const { href, label, match, Icon, badgeKey, tour } = item;
   const active = match(pathname);
   const showMessageBadge = badgeKey === "messages" && hasUnreadMessages;
   const showWalletBadge = badgeKey === "wallet" && hasWalletUpdate;
+  const showQuestionBadge = badgeKey === "questions" && Boolean(unansweredQuestionBadge);
   const showBadge = showMessageBadge || showWalletBadge;
 
   return (
@@ -112,7 +118,9 @@ function NavLink({
         active ? "text-emerald-700" : "text-navy-header/70 hover:bg-slate-50 hover:text-navy-header"
       }`}
       aria-label={
-        showMessageBadge
+        showQuestionBadge
+          ? `${label} — ${unansweredQuestionBadge} שאלות ממתינות`
+          : showMessageBadge
             ? `${label} — הודעות חדשות`
             : showWalletBadge
               ? `${label} — עדכון בארנק`
@@ -123,6 +131,15 @@ function NavLink({
         <Icon className={`h-[26px] w-[26px] shrink-0 ${active ? "stroke-[2.25]" : "stroke-[1.85]"}`} aria-hidden />
         {showBadge ? (
           <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
+        ) : null}
+        {showQuestionBadge ? (
+          <span
+            data-unanswered-question-badge
+            className="absolute -left-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+            dir="ltr"
+          >
+            {unansweredQuestionBadge}
+          </span>
         ) : null}
       </div>
       <span className="max-w-[5.25rem] truncate text-center">{label}</span>
@@ -204,6 +221,7 @@ export function BottomNav() {
 
   const { hasWalletUpdate, clearWalletNotification } = useWalletNotification(user?.id, role);
   const { hasUnreadMessages } = useChatNotification(user?.id);
+  const { badge: unansweredQuestionBadge } = useUnansweredBroadcastQuestions();
 
   useEffect(() => {
     const onComposer = (event: Event) => {
@@ -237,6 +255,7 @@ export function BottomNav() {
               pathname={pathname}
               hasUnreadMessages={hasUnreadMessages}
               hasWalletUpdate={hasWalletUpdate}
+              unansweredQuestionBadge={unansweredQuestionBadge}
               clearWalletNotification={clearWalletNotification}
             />
           ))}
@@ -248,6 +267,7 @@ export function BottomNav() {
               pathname={pathname}
               hasUnreadMessages={hasUnreadMessages}
               hasWalletUpdate={hasWalletUpdate}
+              unansweredQuestionBadge={unansweredQuestionBadge}
               clearWalletNotification={clearWalletNotification}
             />
           ))}
@@ -271,6 +291,7 @@ export function BottomNav() {
             pathname={pathname}
             hasUnreadMessages={hasUnreadMessages}
             hasWalletUpdate={hasWalletUpdate}
+            unansweredQuestionBadge={unansweredQuestionBadge}
             clearWalletNotification={clearWalletNotification}
           />
         ))}
@@ -282,6 +303,7 @@ export function BottomNav() {
             pathname={pathname}
             hasUnreadMessages={hasUnreadMessages}
             hasWalletUpdate={hasWalletUpdate}
+            unansweredQuestionBadge={unansweredQuestionBadge}
             clearWalletNotification={clearWalletNotification}
           />
         ))}

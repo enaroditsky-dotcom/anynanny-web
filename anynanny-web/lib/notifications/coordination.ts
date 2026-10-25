@@ -414,8 +414,9 @@ export async function fetchUnreadPaymentCompletionNotifications(
 }
 
 /**
- * Unread ordinary admin broadcasts. Interactive questions are not part of this
- * list: they stay on /broadcast/questions and must not fill these cards.
+ * Unread ordinary admin broadcasts. Interactive questions are excluded here so
+ * they cannot take these replay slots. The dashboard question card and the
+ * unanswered badge read the signed-in user's recipient rows instead.
  * A failed answer lookup is reported and is not treated as "already answered".
  */
 export async function fetchUnreadAdminBroadcastNotifications(

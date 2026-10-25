@@ -14,14 +14,22 @@ import {
   X
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import {
+  UnansweredQuestionCard,
+  UnansweredQuestionsInboxCard
+} from "@/components/broadcast/unanswered-question-card";
 import { userHasAnsweredBroadcastQuestion } from "@/lib/broadcast/question-answer";
 import {
   BROADCAST_QUESTION_ANSWERED_EVENT,
   MY_QUESTIONS_HREF,
   broadcastQuestionDismissPersistsRead,
-  broadcastQuestionIdFromPayload,
-  isBroadcastQuestionPath
+  broadcastQuestionIdFromPayload
 } from "@/lib/broadcast/question-link";
+import {
+  refreshUnansweredBroadcastQuestions,
+  useUnansweredBroadcastQuestions
+} from "@/lib/broadcast/use-unanswered-questions";
+import { questionNoticeVisibleOnPath } from "@/lib/broadcast/question-visibility";
 import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
 import {
@@ -120,6 +128,7 @@ export function GlobalCoordinationNotifications() {
   const [items, setItems] = useState<CoordinationNotification[]>([]);
   const [questionLookupError, setQuestionLookupError] = useState<string | null>(null);
   const [lookupRetry, setLookupRetry] = useState(0);
+  const unansweredQuestions = useUnansweredBroadcastQuestions();
 
   const userId = signedIn && user?.id ? user.id : null;
   const role: "parent" | "sitter" =
@@ -267,7 +276,7 @@ export function GlobalCoordinationNotifications() {
     if (pending.length === 0) return;
     let cancelled = false;
     void (async () => {
-      for (const [questionId, payload] of pending) {
+      for (const [questionId] of pending) {
         const answered = await userHasAnsweredBroadcastQuestion(supabase, questionId);
         if (cancelled) return;
         if (answeredQuestionIdsRef.current.has(questionId)) {
@@ -279,9 +288,7 @@ export function GlobalCoordinationNotifications() {
           return;
         }
         pendingQuestionInserts.current.delete(questionId);
-        if (answered === false) {
-          setItems((prev) => applyOperationalEventPopupChange(prev, payload, pathnameRef.current));
-        }
+        void refreshUnansweredBroadcastQuestions();
       }
       if (!cancelled && pendingQuestionInserts.current.size === 0) setQuestionLookupError(null);
     })();
@@ -326,14 +333,17 @@ export function GlobalCoordinationNotifications() {
           if (answeredQuestionIdsRef.current.has(questionId)) return;
           void userHasAnsweredBroadcastQuestion(supabase, questionId).then((answered) => {
             if (answeredQuestionIdsRef.current.has(questionId)) return;
-            if (answered === true) return;
+            if (answered === true) {
+              void refreshUnansweredBroadcastQuestions();
+              return;
+            }
             if (answered !== false) {
               pendingQuestionInserts.current.set(questionId, payload);
               setQuestionLookupError("לא הצלחנו לבדוק אם השאלה כבר נענתה.");
               return;
             }
             pendingQuestionInserts.current.delete(questionId);
-            present();
+            void refreshUnansweredBroadcastQuestions();
           });
         }
       }
@@ -368,12 +378,17 @@ export function GlobalCoordinationNotifications() {
   const routeItems = isOperationalCardsSuppressedRoute(pathname)
     ? items.filter((row) => keepsOperationalCardOnDashboard(row.kind))
     : items;
-  const visibleItems = collapsePaymentCompletionCards(routeItems).filter((row) => {
-    const questionId = broadcastQuestionIdFromPayload(row.payload);
-    return !questionId || !isBroadcastQuestionPath(pathname, questionId);
-  });
+  const visibleItems = collapsePaymentCompletionCards(routeItems).filter(
+    (row) => !broadcastQuestionIdFromPayload(row.payload)
+  );
+  const hiddenOnItsPage = Boolean(
+    unansweredQuestions.card && !questionNoticeVisibleOnPath(pathname, unansweredQuestions.card.id)
+  );
+  const questionCard = hiddenOnItsPage ? null : unansweredQuestions.card;
+  const inboxFallbackLabel =
+    questionCard || hiddenOnItsPage ? null : unansweredQuestions.inboxFallbackLabel;
 
-  if (!userId || (visibleItems.length === 0 && !questionLookupError)) return null;
+  if (!userId || (visibleItems.length === 0 && !questionLookupError && !questionCard && !inboxFallbackLabel)) return null;
 
   return (
     <div
@@ -402,6 +417,11 @@ export function GlobalCoordinationNotifications() {
               </Link>
             </div>
           </div>
+        ) : null}
+        {questionCard ? (
+          <UnansweredQuestionCard card={questionCard} extraLabel={unansweredQuestions.extraLabel} />
+        ) : inboxFallbackLabel ? (
+          <UnansweredQuestionsInboxCard label={inboxFallbackLabel} />
         ) : null}
         {visibleItems.map((item) => {
           const tone = toneForKind(item.kind);
