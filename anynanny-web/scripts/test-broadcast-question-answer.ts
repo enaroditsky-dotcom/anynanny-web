@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   broadcastQuestionDismissPersistsRead,
+  broadcastQuestionHomeHref,
   broadcastQuestionHref,
   broadcastQuestionIdFromPayload,
   omitAnsweredBroadcastQuestions
@@ -30,6 +31,10 @@ assert.equal(broadcastQuestionIdFromPayload({ question_id: questionId }), questi
 assert.equal(broadcastQuestionIdFromPayload({ question_id: "not-a-uuid" }), null);
 assert.equal(broadcastQuestionIdFromPayload({ cta_route: "/parent/dashboard" }), null);
 assert.equal(broadcastQuestionHref(questionId), `/broadcast/question/${questionId}`);
+assert.equal(broadcastQuestionHomeHref("parent"), "/parent/dashboard");
+assert.equal(broadcastQuestionHomeHref("sitter"), "/sitter/dashboard");
+assert.equal(broadcastQuestionHomeHref(null), "/parent/dashboard");
+assert.equal(broadcastQuestionHomeHref("other"), "/parent/dashboard");
 
 assert.equal(
   notificationHrefForKind("admin_broadcast", "parent", { question_id: questionId, cta_route: "/parent/profile" }),
@@ -77,7 +82,16 @@ assert.match(form, /type=\{multiple \? "checkbox" : "radio"\}/);
 assert.match(form, /שליחת תשובה/);
 assert.match(form, /התשובה נשמרה/);
 assert.match(form, /dir="rtl"/);
-assert.doesNotMatch(form, /localStorage|sessionStorage/);
+assert.match(form, /broadcastQuestionHomeHref\(effectiveRole\)/);
+assert.doesNotMatch(form, /localStorage|sessionStorage|admin_close_broadcast_question|closed_at/);
+const savedStart = form.indexOf("{saved ? (");
+const savedBlock = form.slice(savedStart, form.indexOf(") : null}", savedStart));
+assert.ok(savedStart > 0 && savedBlock.includes("סגור"));
+assert.equal(form.split("סגור").length - 1, 1);
+assert.doesNotMatch(savedBlock, /publishBroadcastQuestionAnswered|submitBroadcastQuestionAnswer/);
+const rejectedSubmit = form.indexOf("if (!result.ok)");
+const markSaved = form.indexOf("setSaved(true)");
+assert.ok(rejectedSubmit > 0 && markSaved > rejectedSubmit);
 
 assert.match(cards, /broadcastQuestionDismissPersistsRead/);
 assert.match(cards, /userHasAnsweredBroadcastQuestion/);

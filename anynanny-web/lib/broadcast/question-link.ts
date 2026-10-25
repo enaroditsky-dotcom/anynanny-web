@@ -17,6 +17,11 @@ export function broadcastQuestionHref(questionId: string): string {
   return `/broadcast/question/${encodeURIComponent(questionId)}`;
 }
 
+/** Home after a saved answer. Closing the screen does not close the question. */
+export function broadcastQuestionHomeHref(role: string | null | undefined): "/parent/dashboard" | "/sitter/dashboard" {
+  return role === "sitter" ? "/sitter/dashboard" : "/parent/dashboard";
+}
+
 export function isBroadcastQuestionPath(pathname: string | null | undefined, questionId: string): boolean {
   const path = String(pathname ?? "").split(/[?#]/, 1)[0] ?? "";
   return path === broadcastQuestionHref(questionId);

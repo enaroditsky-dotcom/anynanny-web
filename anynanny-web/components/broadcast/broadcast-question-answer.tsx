@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
-import { MY_QUESTIONS_HREF } from "@/lib/broadcast/question-link";
+import { broadcastQuestionHomeHref, MY_QUESTIONS_HREF } from "@/lib/broadcast/question-link";
 import {
   loadBroadcastQuestionForCurrentUser,
   submitBroadcastQuestionAnswer,
@@ -17,7 +17,7 @@ const QUESTION_ID =
 
 export function BroadcastQuestionAnswer({ questionId }: { questionId: string }) {
   const router = useRouter();
-  const { isLoading, signedIn, user } = useAuth();
+  const { isLoading, signedIn, user, effectiveRole } = useAuth();
   const userId = signedIn && user?.id ? user.id : null;
   const validId = QUESTION_ID.test(questionId) ? questionId : null;
   const [question, setQuestion] = useState<BroadcastQuestionView | null>(null);
@@ -72,6 +72,7 @@ export function BroadcastQuestionAnswer({ questionId }: { questionId: string }) 
 
   const closed = Boolean(visibleQuestion?.closedAt);
   const multiple = visibleQuestion?.selectionMode === "multiple";
+  const homeHref = broadcastQuestionHomeHref(effectiveRole);
 
   const toggle = (optionId: string) => {
     if (!visibleQuestion || closed || submitting) return;
@@ -137,9 +138,17 @@ export function BroadcastQuestionAnswer({ questionId }: { questionId: string }) 
           ) : null}
           {closed ? <p className="mt-3 text-sm font-medium text-[#001F3F]/70">השאלה נסגרה.</p> : null}
           {saved ? (
-            <p className="mt-3 text-sm font-semibold text-emerald-800" role="status">
-              התשובה נשמרה.
-            </p>
+            <>
+              <p className="mt-3 text-sm font-semibold text-emerald-800" role="status">
+                התשובה נשמרה.
+              </p>
+              <Link
+                href={homeHref}
+                className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[#001F3F] px-4 text-base font-bold text-white"
+              >
+                סגור
+              </Link>
+            </>
           ) : null}
           <fieldset className="mt-4 space-y-2" disabled={closed || submitting}>
             <legend className="sr-only">תשובות</legend>
