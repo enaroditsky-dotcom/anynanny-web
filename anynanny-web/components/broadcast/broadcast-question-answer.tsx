@@ -138,17 +138,9 @@ export function BroadcastQuestionAnswer({ questionId }: { questionId: string }) 
           ) : null}
           {closed ? <p className="mt-3 text-sm font-medium text-[#001F3F]/70">השאלה נסגרה.</p> : null}
           {saved ? (
-            <>
-              <p className="mt-3 text-sm font-semibold text-emerald-800" role="status">
-                התשובה נשמרה.
-              </p>
-              <Link
-                href={homeHref}
-                className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[#001F3F] px-4 text-base font-bold text-white"
-              >
-                סגור
-              </Link>
-            </>
+            <p className="mt-3 text-sm font-semibold text-emerald-800" role="status">
+              התשובה נשמרה.
+            </p>
           ) : null}
           <fieldset className="mt-4 space-y-2" disabled={closed || submitting}>
             <legend className="sr-only">תשובות</legend>
@@ -197,6 +189,16 @@ export function BroadcastQuestionAnswer({ questionId }: { questionId: string }) 
               {submitting ? "שומר…" : saved ? "עדכון תשובה" : "שליחת תשובה"}
             </button>
           )}
+          {saved ? (
+            <div className="mt-3 flex justify-end">
+              <Link
+                href={homeHref}
+                className="inline-flex min-h-11 items-center justify-center rounded-md border border-neutral-300 bg-neutral-100 px-4 text-base font-semibold text-[#001F3F]"
+              >
+                סגור
+              </Link>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </main>
