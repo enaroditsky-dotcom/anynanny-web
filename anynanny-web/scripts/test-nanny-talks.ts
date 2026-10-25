@@ -40,7 +40,7 @@ assert.match(frame, /role="dialog"/);
 assert.match(frame, /aria-modal="true"/);
 assert.match(frame, /Escape/);
 assert.match(frame, /data-nanny-speech-bubble/);
-assert.match(frame, /data-nanny-speech-tail/);
+assert.doesNotMatch(frame, /data-nanny-speech-tail|<svg/);
 assert.match(frame, /overflow-y-auto/);
 assert.match(frame, /max-h-\[min\(70dvh,34rem\)\]/);
 assert.match(frame, /object-contain/);
@@ -50,8 +50,7 @@ assert.match(frame, /NANNY_IMAGE_SRC/);
 assert.match(frame, /dir="rtl"/);
 assert.match(frame, /text-right/);
 assert.match(frame, /data-nanny-speech-bubble[\s\S]*data-nanny-character/);
-assert.match(frame, /left-0/);
-assert.match(frame, /-translate-x-\[72%\]/);
+assert.doesNotMatch(frame, /-translate-x-\[72%\]/);
 assert.doesNotMatch(frame, /start-8/);
 assert.doesNotMatch(frame, /<img[^>]*alt="[^"]+"/);
 
@@ -235,7 +234,7 @@ assert.match(overlay, /rememberBroadcastArrival/);
 assert.match(overlay, /playBroadcastArrivalTone/);
 assert.match(overlay, /arrivalSoundRef\.current = emptyBroadcastArrivalSound\(\)/);
 assert.match(read("components/sitter/SitterBroadcastAlertModal.tsx"), /function playAlertSound/);
-assert.match(read("components/broadcast/nanny-talks-frame.tsx"), /left-0/);
+assert.doesNotMatch(read("components/broadcast/nanny-talks-frame.tsx"), /data-nanny-speech-tail/);
 
 let sound = emptyBroadcastArrivalSound();
 const baselineQuestion = observeBroadcastArrivals(sound, {

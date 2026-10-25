@@ -66,14 +66,6 @@ export function NannyTalksFrame({
             </div>
             {children}
           </div>
-          <svg
-            data-nanny-speech-tail
-            viewBox="0 0 28 18"
-            aria-hidden
-            className="pointer-events-none absolute bottom-10 left-0 z-20 h-5 w-14 -translate-x-[72%] text-[#FFF8EE]"
-          >
-            <path d="M2 2 C10 2 12 16 26 14 C14 16 8 8 2 2 Z" fill="currentColor" />
-          </svg>
         </div>
         <img
           src={NANNY_IMAGE_SRC}
