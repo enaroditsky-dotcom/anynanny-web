@@ -34,7 +34,13 @@ import {
   removeOwnRegularBroadcast
 } from "@/lib/broadcast/system-talks";
 import { isInternalBroadcastCtaRoute } from "@/lib/admin/broadcast-cta";
+import {
+  emptyBroadcastArrivalSound,
+  observeBroadcastArrivals,
+  type BroadcastArrivalSoundState
+} from "@/lib/broadcast/broadcast-arrival-sound";
 import { NANNY_TALK_REFRESH_MS, resolveNannyTalkModal } from "@/lib/broadcast/nanny-talk-presentation";
+import { playBroadcastArrivalTone } from "@/lib/broadcast/play-broadcast-arrival-tone";
 import { questionNoticeVisibleOnPath } from "@/lib/broadcast/question-visibility";
 import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
@@ -120,6 +126,23 @@ function IconForKind({ kind }: { kind: CoordinationNotification["kind"] }) {
 const ICON_BUTTON =
   "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-current/70 transition hover:bg-white/70 hover:text-current";
 
+function rememberBroadcastArrival(
+  stateRef: { current: BroadcastArrivalSoundState },
+  input: {
+    userId: string | null;
+    channel: "question" | "broadcast";
+    ids: readonly string[];
+    ready: boolean;
+  }
+): void {
+  const next = observeBroadcastArrivals(stateRef.current, {
+    ...input,
+    audible: typeof document !== "undefined" && document.visibilityState === "visible"
+  });
+  stateRef.current = next.state;
+  if (next.play) playBroadcastArrivalTone();
+}
+
 export function GlobalCoordinationNotifications() {
   const { signedIn, user, isLoading, currentRole, effectiveRole } = useAuth();
   const pathname = usePathname();
@@ -143,7 +166,9 @@ export function GlobalCoordinationNotifications() {
   const unansweredQuestions = useUnansweredBroadcastQuestions();
 
   const userId = signedIn && user?.id ? user.id : null;
+  const arrivalSoundRef = useRef(emptyBroadcastArrivalSound());
   useEffect(() => {
+    arrivalSoundRef.current = emptyBroadcastArrivalSound();
     setHiddenBroadcastIds([]);
     setRemovingBroadcastId(null);
     setBroadcastRemoveError(null);
@@ -244,6 +269,12 @@ export function GlobalCoordinationNotifications() {
         if (cancelled) return;
         const [broadcasts] = results;
         if (!broadcasts.error) {
+          rememberBroadcastArrival(arrivalSoundRef, {
+            userId,
+            channel: "broadcast",
+            ids: broadcasts.notifications.map((row) => row.id),
+            ready: true
+          });
           setQuestionLookupError((current) =>
             broadcasts.questionStatusError
               ? broadcasts.questionStatusError
@@ -435,6 +466,15 @@ export function GlobalCoordinationNotifications() {
     if (!pendingQuestionId || dismissedQuestionIds.includes(pendingQuestionId)) return;
     setActiveQuestionId(pendingQuestionId);
   }, [pendingQuestionId, dismissedQuestionIds]);
+
+  useEffect(() => {
+    rememberBroadcastArrival(arrivalSoundRef, {
+      userId,
+      channel: "question",
+      ids: unansweredQuestions.pendingIds,
+      ready: Boolean(userId) && unansweredQuestions.loaded
+    });
+  }, [userId, unansweredQuestions.loaded, unansweredQuestions.pendingIds]);
 
   useEffect(() => {
     const onRemoved = (event: Event) => {

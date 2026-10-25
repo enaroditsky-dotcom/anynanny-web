@@ -3,6 +3,8 @@ import {
   parentReportedPaidByMethodCopy
 } from "@/lib/billing/manual-payment-ui";
 import { favoriteSitterNotificationBody } from "@/lib/favorites/parent-favorite-rules";
+import { BROADCAST_TALKS_HREF } from "@/lib/broadcast/system-talks";
+import { broadcastQuestionHref, broadcastQuestionIdFromPayload } from "@/lib/broadcast/question-link";
 import {
   isCanonicalNotificationKind,
   notificationHrefForKind,
@@ -33,6 +35,7 @@ const KIND_BODY: Record<string, string> = {
   booking_withdrawn_by_parent: "ההורה ביטל את בקשת המשמרת",
   pending_booking_expired: "הבייביסיטר לא הגיבה לפנייתך. הבקשה נסגרה.",
   shift_confirmed: "המשמרת אושרה בהצלחה",
+  shift_end_reminder: "המשמרת מתוכננת להסתיים בעוד 30 דקות.",
   shift_cancelled_no_start: "המשמרת בוטלה אוטומטית מכיוון שלא אושרה התחלת המשמרת.",
   missed_shift_clarification: "המשמרת לא התקיימה. יש לבחור את הסיבה.",
   manual_payment_reported: "יש לאשר האם התשלום התקבל.",
@@ -55,6 +58,7 @@ export function privacySafeBodyForKind(
   if (kind === "favorite_sitter_added") {
     return favoriteSitterNotificationBody(payload?.family_last_name);
   }
+  if (kind === "admin_broadcast") return "יש לכם הודעה חדשה מ-AnyNanny";
   return KIND_BODY[kind] ?? "יש לכם עדכון חדש ב-AnyNanny";
 }
 
@@ -68,6 +72,11 @@ export function pushHrefForKind(
   }
   if (kind === "rating_required") {
     return role === "parent" ? "/parent/dashboard" : "/sitter/dashboard";
+  }
+  if (kind === "admin_broadcast") {
+    const questionId = broadcastQuestionIdFromPayload(payload);
+    if (questionId) return broadcastQuestionHref(questionId);
+    return BROADCAST_TALKS_HREF;
   }
   if (isCanonicalNotificationKind(kind)) {
     return notificationHrefForKind(kind, role, payload);

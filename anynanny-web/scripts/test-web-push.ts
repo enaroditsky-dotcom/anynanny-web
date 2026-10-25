@@ -10,6 +10,7 @@ import {
 } from "../lib/push/capability";
 import { sendPushToSubscriptions } from "../lib/push/deliver-notification";
 import { PUSH_NOTIFICATION_KIND_LIST } from "../lib/push/kind-list";
+import type { CanonicalNotificationPayload } from "../lib/notifications/kinds";
 import { buildPrivacySafePushPayload, privacySafeBodyForKind, pushHrefForKind } from "../lib/push/payload";
 import {
   decodeUrlSafeBase64ToUint8Array,
@@ -136,6 +137,34 @@ assert.doesNotMatch(chatPush.body, /m1|hello|content/);
 // 9. broadcast_alert → correct sitter deep link
 assert.equal(pushHrefForKind("broadcast_alert", "sitter", {}), "/sitter/dashboard");
 assert.equal(privacySafeBodyForKind("broadcast_alert"), "AnyNanny Now חדש באזור שלך");
+const questionId = "11111111-1111-4111-8111-111111111111";
+const regularBroadcastPush = buildPrivacySafePushPayload({
+  notificationId: "broadcast-1",
+  kind: "admin_broadcast",
+  role: "parent",
+  payload: {
+    cta_route: "/parent/profile",
+    body: "private-broadcast-body"
+  } as CanonicalNotificationPayload
+});
+assert.equal(regularBroadcastPush.title, "AnyNanny");
+assert.equal(regularBroadcastPush.body, "יש לכם הודעה חדשה מ-AnyNanny");
+assert.equal(regularBroadcastPush.url, "/broadcast/talks");
+assert.doesNotMatch(JSON.stringify(regularBroadcastPush), /private-broadcast-body|profile|email|phone/);
+const questionBroadcastPush = buildPrivacySafePushPayload({
+  notificationId: "question-1",
+  kind: "admin_broadcast",
+  role: "sitter",
+  payload: {
+    question_id: questionId,
+    cta_route: "/sitter/profile",
+    body: "secret-question-prompt"
+  } as CanonicalNotificationPayload
+});
+assert.equal(questionBroadcastPush.body, "יש לכם הודעה חדשה מ-AnyNanny");
+assert.equal(questionBroadcastPush.url, `/broadcast/question/${questionId}`);
+assert.doesNotMatch(JSON.stringify(questionBroadcastPush), /secret-question-prompt|profile/);
+assert.equal(pushHrefForKind("booking_request", "sitter", { booking_id: "b1" }), "/sitter/dashboard");
 assert.equal(
   privacySafeBodyForKind("pending_no_response_reminder"),
   "הבייביסיטר עדיין לא הגיבה לבקשתך. לסגור את הפנייה לבייביסיטרית?"
@@ -146,6 +175,14 @@ assert.equal(
 );
 assert.equal(privacySafeBodyForKind("shift_end_reminder"), "המשמרת מתוכננת להסתיים בעוד 30 דקות.");
 assert.equal(
+  privacySafeBodyForKind("shift_end_reminder", { family_last_name: "Cohen" }),
+  "המשמרת מתוכננת להסתיים בעוד 30 דקות."
+);
+assert.doesNotMatch(
+  privacySafeBodyForKind("shift_end_reminder", { family_last_name: "Cohen" }),
+  /Cohen/
+);
+assert.equal(
   privacySafeBodyForKind("shift_cancelled_no_start"),
   "המשמרת בוטלה אוטומטית מכיוון שלא אושרה התחלת המשמרת."
 );
@@ -153,8 +190,16 @@ assert.equal(pushHrefForKind("shift_end_reminder", "parent", { booking_id: "b1" 
 assert.equal(pushHrefForKind("shift_end_reminder", "sitter", { booking_id: "b1" }), "/sitter/dashboard");
 assert.equal(pushHrefForKind("shift_cancelled_no_start", "parent", { booking_id: "b1" }), "/parent/dashboard");
 assert.equal(pushHrefForKind("shift_cancelled_no_start", "sitter", { booking_id: "b1" }), "/sitter/dashboard");
-assert.equal(pushHrefForKind("pending_no_response_reminder", "parent", { booking_id: "b1" }), "/parent/dashboard");
-assert.equal(pushHrefForKind("pending_booking_expired", "parent", { booking_id: "b1" }), "/parent/dashboard");
+assert.equal(
+  pushHrefForKind("pending_no_response_reminder", "parent", { booking_id: "b1" }),
+  "/parent/calendar?bookingId=b1"
+);
+assert.equal(pushHrefForKind("pending_no_response_reminder", "parent", {}), "/parent/dashboard");
+assert.equal(
+  pushHrefForKind("pending_booking_expired", "parent", { booking_id: "b1" }),
+  "/parent/calendar?bookingId=b1"
+);
+assert.equal(pushHrefForKind("pending_booking_expired", "parent", {}), "/parent/dashboard");
 assert.equal(pushHrefForKind("booking_withdrawn_by_parent", "sitter", { booking_id: "b1" }), "/sitter/dashboard");
 
 // 10–11. expired 410 removed; one bad endpoint does not block another
@@ -354,7 +399,8 @@ assert.throws(() => vapidPublicKeyToUint8Array(""), /missing/);
 assert.throws(() => vapidPublicKeyToUint8Array("%%%not-base64%%%"), /not valid Base64/);
 assert.throws(() => vapidPublicKeyToUint8Array("AQID"), /not a valid VAPID public key/);
 assert.match(settings, /אילו התראות אקבל\?/);
-assert.equal(PUSH_NOTIFICATION_KIND_LIST.length, 9);
+assert.equal(PUSH_NOTIFICATION_KIND_LIST.length, 10);
+assert.equal(PUSH_NOTIFICATION_KIND_LIST[9], "הודעה מ-AnyNanny");
 assert.match(settings, /לא שולט בצליל התראת המערכת/);
 assert.match(bottomNav, /hasUnreadMessages/);
 assert.match(swRegister, /navigator\.serviceWorker/);

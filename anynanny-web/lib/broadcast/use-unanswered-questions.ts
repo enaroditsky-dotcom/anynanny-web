@@ -22,7 +22,9 @@ const EMPTY_VIEW: NoticeView = {
   badge: null,
   card: null,
   extraLabel: null,
-  inboxFallbackLabel: null
+  inboxFallbackLabel: null,
+  loaded: false,
+  pendingIds: []
 };
 
 let state: UnansweredNoticeState = EMPTY_UNANSWERED_NOTICE;

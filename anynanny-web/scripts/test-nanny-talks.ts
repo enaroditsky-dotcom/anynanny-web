@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { shouldPersistOperationalCardRead } from "../lib/notifications/coordination";
 import {
+  emptyBroadcastArrivalSound,
+  observeBroadcastArrivals
+} from "../lib/broadcast/broadcast-arrival-sound";
+import {
   NANNY_TALK_REFRESH_MS,
   resolveNannyTalkModal,
   talkItemModalQuestionId
@@ -44,6 +48,11 @@ assert.match(frame, /createPortal/);
 assert.match(frame, /document\.body/);
 assert.match(frame, /NANNY_IMAGE_SRC/);
 assert.match(frame, /dir="rtl"/);
+assert.match(frame, /text-right/);
+assert.match(frame, /data-nanny-speech-bubble[\s\S]*data-nanny-character/);
+assert.match(frame, /left-0/);
+assert.match(frame, /-translate-x-\[72%\]/);
+assert.doesNotMatch(frame, /start-8/);
 assert.doesNotMatch(frame, /<img[^>]*alt="[^"]+"/);
 
 const overlay = read("components/notifications/global-coordination-notifications.tsx");
@@ -217,6 +226,115 @@ assert.equal(
   null
 );
 assert.equal(NANNY_TALK_REFRESH_MS >= 10000 && NANNY_TALK_REFRESH_MS <= 30000, true);
+
+const tone = read("lib/broadcast/play-broadcast-arrival-tone.ts");
+assert.match(tone, /areSoundAlertsEnabled/);
+assert.match(tone, /659\.25/);
+assert.match(tone, /catch/);
+assert.match(overlay, /rememberBroadcastArrival/);
+assert.match(overlay, /playBroadcastArrivalTone/);
+assert.match(overlay, /arrivalSoundRef\.current = emptyBroadcastArrivalSound\(\)/);
+assert.match(read("components/sitter/SitterBroadcastAlertModal.tsx"), /function playAlertSound/);
+assert.match(read("components/broadcast/nanny-talks-frame.tsx"), /left-0/);
+
+let sound = emptyBroadcastArrivalSound();
+const baselineQuestion = observeBroadcastArrivals(sound, {
+  userId: "account-a",
+  channel: "question",
+  ids: ["question-old"],
+  ready: false,
+  audible: true
+});
+assert.equal(baselineQuestion.play, false);
+sound = baselineQuestion.state;
+const primedQuestion = observeBroadcastArrivals(sound, {
+  userId: "account-a",
+  channel: "question",
+  ids: ["question-old"],
+  ready: true,
+  audible: true
+});
+assert.equal(primedQuestion.play, false);
+sound = primedQuestion.state;
+const primedBroadcast = observeBroadcastArrivals(sound, {
+  userId: "account-a",
+  channel: "broadcast",
+  ids: ["broadcast-old"],
+  ready: true,
+  audible: true
+});
+assert.equal(primedBroadcast.play, false);
+sound = primedBroadcast.state;
+const poll = observeBroadcastArrivals(sound, {
+  userId: "account-a",
+  channel: "question",
+  ids: ["question-old"],
+  ready: true,
+  audible: true
+});
+assert.equal(poll.play, false);
+sound = poll.state;
+const newQuestion = observeBroadcastArrivals(sound, {
+  userId: "account-a",
+  channel: "question",
+  ids: ["question-old", "question-new"],
+  ready: true,
+  audible: true
+});
+assert.equal(newQuestion.play, true);
+sound = newQuestion.state;
+const replayQuestion = observeBroadcastArrivals(sound, {
+  userId: "account-a",
+  channel: "question",
+  ids: ["question-old", "question-new"],
+  ready: true,
+  audible: true
+});
+assert.equal(replayQuestion.play, false);
+sound = replayQuestion.state;
+const hiddenArrival = observeBroadcastArrivals(sound, {
+  userId: "account-a",
+  channel: "broadcast",
+  ids: ["broadcast-old", "broadcast-new"],
+  ready: true,
+  audible: false
+});
+assert.equal(hiddenArrival.play, false);
+sound = hiddenArrival.state;
+const visibleArrival = observeBroadcastArrivals(sound, {
+  userId: "account-a",
+  channel: "broadcast",
+  ids: ["broadcast-old", "broadcast-new"],
+  ready: true,
+  audible: true
+});
+assert.equal(visibleArrival.play, true);
+sound = visibleArrival.state;
+const reconnect = observeBroadcastArrivals(sound, {
+  userId: "account-a",
+  channel: "broadcast",
+  ids: ["broadcast-old", "broadcast-new"],
+  ready: true,
+  audible: true
+});
+assert.equal(reconnect.play, false);
+const switched = observeBroadcastArrivals(reconnect.state, {
+  userId: "account-b",
+  channel: "question",
+  ids: ["question-new"],
+  ready: true,
+  audible: true
+});
+assert.equal(switched.play, false);
+const loggedOut = observeBroadcastArrivals(switched.state, {
+  userId: null,
+  channel: "broadcast",
+  ids: ["broadcast-new"],
+  ready: true,
+  audible: true
+});
+assert.equal(loggedOut.play, false);
+assert.equal(loggedOut.state.userId, null);
 assert.match(read("app/parent/messages/page.tsx"), /AnynannySystemConversation/);
 assert.match(read("app/sitter/messages/page.tsx"), /AnynannySystemConversation/);
 assert.doesNotMatch(overlay, /isOperationalCardsSuppressedRoute\(pathname\)\) return null/);

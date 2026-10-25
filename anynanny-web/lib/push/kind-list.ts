@@ -7,5 +7,6 @@ export const PUSH_NOTIFICATION_KIND_LIST = [
   "אישור הגעה / התחלה",
   "אישור סיום",
   "תשלום נדרש / התקבל",
-  "דירוג נדרש"
+  "דירוג נדרש",
+  "הודעה מ-AnyNanny"
 ] as const;

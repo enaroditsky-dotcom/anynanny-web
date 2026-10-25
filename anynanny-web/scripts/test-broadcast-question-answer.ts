@@ -115,7 +115,8 @@ assert.ok(
 );
 assert.match(coordination, /fetchAnsweredBroadcastQuestionIds/);
 assert.match(coordination, /omitAnsweredBroadcastQuestions/);
-assert.match(push, /kind === "admin_broadcast"/);
+assert.match(push, /claimNotificationPushDispatch/);
+assert.doesNotMatch(push, /in-app only/);
 assert.doesNotMatch(regularRoute, /broadcast_question/);
 
 console.log("broadcast question answer checks passed");

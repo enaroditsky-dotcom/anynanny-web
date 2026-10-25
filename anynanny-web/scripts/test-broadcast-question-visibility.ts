@@ -61,6 +61,7 @@ const several = unansweredNoticeView(
 assert.equal(several.count, 3);
 assert.equal(several.badge, "3");
 assert.equal(several.card?.id, "b");
+assert.deepEqual(several.pendingIds, ["a", "b", "c"]);
 assert.equal(several.card?.prompt, "שאלה b");
 assert.equal(several.extraLabel, "עוד 2 שאלות ממתינות");
 assert.equal(

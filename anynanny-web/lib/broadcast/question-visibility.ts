@@ -138,16 +138,28 @@ export function unansweredNoticeView(state: UnansweredNoticeState): {
   card: { id: string; prompt: string } | null;
   extraLabel: string | null;
   inboxFallbackLabel: string | null;
+  loaded: boolean;
+  pendingIds: string[];
 } {
   const hidden = new Set([...state.dismissedIds, ...state.answeredIds]);
   const [card] = selectDashboardQuestionCards(state.questions, { dismissedIds: hidden });
   const visibleCard = card ? { id: card.id, prompt: card.prompt.trim() } : null;
   const extraCount = Math.max(0, state.count - (visibleCard ? 1 : 0));
+  const pendingIds: string[] = [];
+  const seen = new Set<string>();
+  for (const row of state.questions) {
+    const id = row.id.trim();
+    if (!id || !isPendingBroadcastQuestion(row) || seen.has(id)) continue;
+    seen.add(id);
+    pendingIds.push(id);
+  }
   return {
     count: state.count,
     badge: formatUnansweredQuestionBadge(state.count),
     card: visibleCard,
     extraLabel: visibleCard ? extraUnansweredQuestionLabel(extraCount) : null,
-    inboxFallbackLabel: visibleCard ? null : unansweredInboxFallbackLabel(state.count)
+    inboxFallbackLabel: visibleCard ? null : unansweredInboxFallbackLabel(state.count),
+    loaded: state.loaded,
+    pendingIds
   };
 }

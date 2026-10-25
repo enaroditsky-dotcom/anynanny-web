@@ -75,6 +75,9 @@ export async function deliverCanonicalNotificationPush(
   if (!claimed) {
     return { skipped: true, sent: 0, removed: 0, reason: "duplicate" };
   }
+  // Regular Broadcasts and Broadcast questions share this path.
+  // An existing notification_push_dispatches row, including historical
+  // admin_broadcast claims, returns above and is not sent again.
 
   const { data: notification, error: notificationError } = await deps.admin
     .from(NOTIFICATIONS_TABLE)
@@ -100,10 +103,6 @@ export async function deliverCanonicalNotificationPush(
   }
 
   const kind = String(notification.kind ?? "");
-  if (kind === "admin_broadcast") {
-    return { skipped: true, sent: 0, removed: 0, reason: "in-app only" };
-  }
-
   const role = isProfileRole(profile?.role) ? profile.role : "parent";
   const { data: subscriptions, error: subError } = await deps.admin
     .from(PUSH_SUBSCRIPTIONS_TABLE)
@@ -119,7 +118,7 @@ export async function deliverCanonicalNotificationPush(
   const badge = await loadAppBadgeCount(deps.admin, userId);
   const payload = buildPrivacySafePushPayload({
     notificationId: String(notification.id),
-    kind: String(notification.kind ?? ""),
+    kind,
     role,
     payload: asPayload(notification.payload),
     badge
