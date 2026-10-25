@@ -34,6 +34,7 @@ import {
   removeOwnRegularBroadcast
 } from "@/lib/broadcast/system-talks";
 import { isInternalBroadcastCtaRoute } from "@/lib/admin/broadcast-cta";
+import { NANNY_TALK_REFRESH_MS, resolveNannyTalkModal } from "@/lib/broadcast/nanny-talk-presentation";
 import { questionNoticeVisibleOnPath } from "@/lib/broadcast/question-visibility";
 import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import { NOTIFICATIONS_TABLE } from "@/lib/chat/constants";
@@ -133,6 +134,7 @@ export function GlobalCoordinationNotifications() {
   const [items, setItems] = useState<CoordinationNotification[]>([]);
   const [questionLookupError, setQuestionLookupError] = useState<string | null>(null);
   const [lookupRetry, setLookupRetry] = useState(0);
+  const [inboxRefresh, setInboxRefresh] = useState(0);
   const [hiddenBroadcastIds, setHiddenBroadcastIds] = useState<string[]>([]);
   const [removingBroadcastId, setRemovingBroadcastId] = useState<string | null>(null);
   const [broadcastRemoveError, setBroadcastRemoveError] = useState<string | null>(null);
@@ -234,6 +236,7 @@ export function GlobalCoordinationNotifications() {
 
     let cancelled = false;
     const load = () => {
+      void refreshUnansweredBroadcastQuestions();
       void Promise.all([
         fetchUnreadAdminBroadcastNotifications(supabase, userId),
         fetchUnreadPaymentCompletionNotifications(supabase, userId)
@@ -283,7 +286,16 @@ export function GlobalCoordinationNotifications() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("pageshow", onVisible);
     };
-  }, [userId, isLoading, lookupRetry]);
+  }, [userId, isLoading, lookupRetry, pathname, inboxRefresh]);
+
+  useEffect(() => {
+    if (!userId || isLoading) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      setInboxRefresh((current) => current + 1);
+    }, NANNY_TALK_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [userId, isLoading]);
 
   useEffect(() => {
     if (!userId || isLoading || lookupRetry === 0) return;
@@ -331,43 +343,39 @@ export function GlobalCoordinationNotifications() {
           const kind = String(record?.kind ?? "");
           if (kind && !isGlobalOperationalNotificationKind(kind)) return;
           const questionId = broadcastQuestionIdFromPayload(record?.payload);
-          const present = () => {
-            if (questionId && answeredQuestionIdsRef.current.has(questionId)) return;
-            setItems((prev) => {
-              const next = applyOperationalEventPopupChange(prev, payload, pathnameRef.current);
-              for (const row of next) {
-                if (!prev.some((existing) => existing.id === row.id)) {
-                  scheduleDismiss(row.id, row.kind);
-                }
-              }
-              return next;
-            });
-          };
-          if (!questionId) {
-            present();
-            return;
-          }
-          if (answeredQuestionIdsRef.current.has(questionId)) return;
-          void userHasAnsweredBroadcastQuestion(supabase, questionId).then((answered) => {
-            if (answeredQuestionIdsRef.current.has(questionId)) return;
-            if (answered === true) {
-              void refreshUnansweredBroadcastQuestions();
-              return;
-            }
-            if (answered !== false) {
-              pendingQuestionInserts.current.set(questionId, payload);
-              setQuestionLookupError("לא הצלחנו לבדוק אם השאלה כבר נענתה.");
-              return;
-            }
-            pendingQuestionInserts.current.delete(questionId);
+          if (isAdminBroadcastNotificationKind(kind)) {
             void refreshUnansweredBroadcastQuestions();
+            setInboxRefresh((current) => current + 1);
+          }
+          if (questionId) return;
+          setItems((prev) => {
+            const next = applyOperationalEventPopupChange(prev, payload, pathnameRef.current);
+            for (const row of next) {
+              if (!prev.some((existing) => existing.id === row.id)) {
+                scheduleDismiss(row.id, row.kind);
+              }
+            }
+            return next;
           });
+        }
+      }
+    );
+    const recipientChannel = subscribePostgresChanges(
+      supabase,
+      `broadcast-question-recipients-${userId}`,
+      {
+        event: "INSERT",
+        table: "broadcast_question_recipients",
+        filter: `user_id=eq.${userId}`,
+        handler: () => {
+          void refreshUnansweredBroadcastQuestions();
         }
       }
     );
 
     return () => {
       removeRealtimeChannel(supabase, channel);
+      removeRealtimeChannel(supabase, recipientChannel);
     };
   }, [userId, isLoading, scheduleDismiss]);
 
@@ -407,17 +415,26 @@ export function GlobalCoordinationNotifications() {
     unansweredQuestions.card && !questionNoticeVisibleOnPath(pathname, unansweredQuestions.card.id)
   );
   const questionCard = hiddenOnItsPage ? null : unansweredQuestions.card;
+  const pendingQuestionId = questionCard?.id ?? null;
   const broadcastBlockedByOperations = operationalItems.length > 0;
-  const questionTalkVisible = Boolean(
-    activeQuestionId && questionNoticeVisibleOnPath(pathname, activeQuestionId) && !broadcastBlockedByOperations
-  );
-  const showRegularTalk = !questionTalkVisible && !broadcastBlockedByOperations && Boolean(regularBroadcast);
+  const nannyModal = resolveNannyTalkModal({
+    operationalPending: broadcastBlockedByOperations,
+    pendingQuestionId,
+    pendingQuestionVisible: pendingQuestionId ? questionNoticeVisibleOnPath(pathname, pendingQuestionId) : false,
+    dismissedQuestionIds,
+    heldQuestionId: activeQuestionId,
+    heldQuestionVisible: activeQuestionId ? questionNoticeVisibleOnPath(pathname, activeQuestionId) : false,
+    broadcastId: regularBroadcast?.id ?? null,
+    hiddenBroadcastIds
+  });
+  const questionTalkVisible = nannyModal?.type === "question";
+  const showRegularTalk = nannyModal?.type === "broadcast";
+  const displayQuestionId = nannyModal?.type === "question" ? nannyModal.questionId : null;
 
   useEffect(() => {
-    const nextId = questionCard?.id ?? null;
-    if (!nextId || dismissedQuestionIds.includes(nextId)) return;
-    setActiveQuestionId((current) => current ?? nextId);
-  }, [questionCard, dismissedQuestionIds]);
+    if (!pendingQuestionId || dismissedQuestionIds.includes(pendingQuestionId)) return;
+    setActiveQuestionId(pendingQuestionId);
+  }, [pendingQuestionId, dismissedQuestionIds]);
 
   useEffect(() => {
     const onRemoved = (event: Event) => {
@@ -548,18 +565,18 @@ export function GlobalCoordinationNotifications() {
         })}
       </div>
     </div>
-    {questionTalkVisible && activeQuestionId ? (
+    {questionTalkVisible && displayQuestionId ? (
       <NannyTalksFrame
         title="AnyNanny"
         onDismiss={() => {
-          dismissUnansweredQuestionCard(activeQuestionId);
+          dismissUnansweredQuestionCard(displayQuestionId);
           setDismissedQuestionIds((current) =>
-            current.includes(activeQuestionId) ? current : [...current, activeQuestionId]
+            current.includes(displayQuestionId) ? current : [...current, displayQuestionId]
           );
-          setActiveQuestionId(null);
+          setActiveQuestionId((current) => (current === displayQuestionId ? null : current));
         }}
       >
-        <BroadcastQuestionAnswer questionId={activeQuestionId} embedded />
+        <BroadcastQuestionAnswer questionId={displayQuestionId} embedded />
       </NannyTalksFrame>
     ) : null}
     {showRegularTalk && regularBroadcast ? (

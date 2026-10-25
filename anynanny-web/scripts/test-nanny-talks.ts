@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { shouldPersistOperationalCardRead } from "../lib/notifications/coordination";
 import {
+  NANNY_TALK_REFRESH_MS,
+  resolveNannyTalkModal,
+  talkItemModalQuestionId
+} from "../lib/broadcast/nanny-talk-presentation";
+import {
   ANYNANNY_SYSTEM_CONVERSATION_TITLE,
   BROADCAST_TALKS_HREF,
   EXPLICIT_BROADCAST_REMOVAL_LABEL,
@@ -35,11 +40,18 @@ assert.match(frame, /data-nanny-speech-tail/);
 assert.match(frame, /overflow-y-auto/);
 assert.match(frame, /max-h-\[min\(70dvh,34rem\)\]/);
 assert.match(frame, /object-contain/);
+assert.match(frame, /createPortal/);
+assert.match(frame, /document\.body/);
 assert.match(frame, /NANNY_IMAGE_SRC/);
 assert.match(frame, /dir="rtl"/);
 assert.doesNotMatch(frame, /<img[^>]*alt="[^"]+"/);
 
 const overlay = read("components/notifications/global-coordination-notifications.tsx");
+assert.match(overlay, /resolveNannyTalkModal/);
+assert.match(overlay, /NANNY_TALK_REFRESH_MS/);
+assert.match(overlay, /broadcast_question_recipients/);
+assert.match(overlay, /pathname, inboxRefresh/);
+assert.doesNotMatch(overlay, /current \?\? nextId/);
 assert.match(overlay, /NannyTalksFrame/);
 assert.match(overlay, /BroadcastQuestionAnswer/);
 assert.match(overlay, /dismissUnansweredQuestionCard/);
@@ -92,5 +104,121 @@ assert.doesNotMatch(talks, /localStorage|sessionStorage|\.delete\(/);
 const coordination = read("lib/notifications/coordination.ts");
 assert.match(coordination, /ordinaryAdminBroadcastsForReplay/);
 assert.match(coordination, /isAdminBroadcastNotificationKind\(args\.kind\)\) return false/);
+
+const open = {
+  operationalPending: false,
+  pendingQuestionVisible: true,
+  dismissedQuestionIds: [] as string[],
+  heldQuestionId: null as string | null,
+  heldQuestionVisible: true,
+  hiddenBroadcastIds: [] as string[]
+};
+
+const questionWhileOpen = resolveNannyTalkModal({
+  ...open,
+  pendingQuestionId: null,
+  broadcastId: null
+});
+assert.equal(questionWhileOpen, null);
+const questionArrived = resolveNannyTalkModal({
+  ...open,
+  pendingQuestionId: "question-new",
+  broadcastId: null
+});
+assert.deepEqual(questionArrived, { type: "question", questionId: "question-new" });
+assert.deepEqual(
+  resolveNannyTalkModal({ ...open, pendingQuestionId: "question-load", broadcastId: null }),
+  { type: "question", questionId: "question-load" }
+);
+assert.deepEqual(
+  resolveNannyTalkModal({ ...open, pendingQuestionId: null, broadcastId: "broadcast-new" }),
+  { type: "broadcast", broadcastId: "broadcast-new" }
+);
+
+const messageQuestionId = talkItemModalQuestionId({
+  kind: "question",
+  id: "question-message",
+  pending: true
+});
+assert.equal(messageQuestionId, "question-message");
+assert.deepEqual(
+  resolveNannyTalkModal({ ...open, pendingQuestionId: messageQuestionId, broadcastId: null }),
+  { type: "question", questionId: "question-message" }
+);
+assert.equal(
+  talkItemModalQuestionId({ kind: "question", id: "question-answered", pending: false }),
+  null
+);
+assert.equal(talkItemModalQuestionId({ kind: "broadcast", id: "broadcast-message", pending: true }), null);
+
+const dismissed = resolveNannyTalkModal({
+  ...open,
+  pendingQuestionId: "question-dismissed",
+  dismissedQuestionIds: ["question-dismissed"],
+  broadcastId: null
+});
+assert.equal(dismissed, null);
+assert.equal(
+  resolveNannyTalkModal({
+    ...open,
+    pendingQuestionId: "question-dismissed",
+    dismissedQuestionIds: ["question-dismissed"],
+    broadcastId: null
+  }),
+  null
+);
+
+assert.deepEqual(
+  resolveNannyTalkModal({
+    ...open,
+    operationalPending: true,
+    pendingQuestionId: "question-waiting",
+    broadcastId: "broadcast-waiting"
+  }),
+  null
+);
+assert.deepEqual(
+  resolveNannyTalkModal({
+    ...open,
+    pendingQuestionId: "question-newest",
+    broadcastId: "broadcast-older"
+  }),
+  { type: "question", questionId: "question-newest" }
+);
+
+const switchedAccount = resolveNannyTalkModal({
+  ...open,
+  pendingQuestionId: "question-next-account",
+  dismissedQuestionIds: [],
+  heldQuestionId: null,
+  broadcastId: null
+});
+assert.deepEqual(switchedAccount, { type: "question", questionId: "question-next-account" });
+assert.match(overlay, /setActiveQuestionId\(null\)/);
+assert.match(overlay, /setDismissedQuestionIds\(\[\]\)/);
+
+assert.deepEqual(
+  resolveNannyTalkModal({
+    ...open,
+    pendingQuestionId: "question-still-pending",
+    dismissedQuestionIds: [],
+    heldQuestionId: null,
+    broadcastId: "broadcast-hidden"
+  }),
+  { type: "question", questionId: "question-still-pending" }
+);
+assert.equal(
+  resolveNannyTalkModal({
+    ...open,
+    pendingQuestionId: null,
+    broadcastId: "broadcast-hidden",
+    hiddenBroadcastIds: ["broadcast-hidden"]
+  }),
+  null
+);
+assert.equal(NANNY_TALK_REFRESH_MS >= 10000 && NANNY_TALK_REFRESH_MS <= 30000, true);
+assert.match(read("app/parent/messages/page.tsx"), /AnynannySystemConversation/);
+assert.match(read("app/sitter/messages/page.tsx"), /AnynannySystemConversation/);
+assert.doesNotMatch(overlay, /isOperationalCardsSuppressedRoute\(pathname\)\) return null/);
 
 console.log("nanny talks checks passed");
