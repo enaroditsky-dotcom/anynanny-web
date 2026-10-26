@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import {
   PARENT_SEARCH_HOUR_OPTIONS,
   PARENT_SEARCH_MAX_HOURLY_SLIDER,
@@ -13,6 +13,14 @@ import {
   type ParentSearchMinExperience,
   type ParentSearchMinRating
 } from "@/lib/sitter/parent-search-filters";
+import {
+  isParentSearchCalendarDateSelectable,
+  isParentSearchHourSelectable,
+  isParentSearchMinuteSelectable,
+  parentSearchClockAfterDateChange,
+  parentSearchEarliestSelectableDate,
+  parentSearchEndDateMin
+} from "@/lib/sitter/parent-search-datetime";
 import {
   parentSearchFieldIsInvalid,
   type ParentSearchMandatoryField
@@ -173,6 +181,8 @@ function FieldLabel({
 
 function TimeBlock({
   title,
+  calendarDate,
+  now,
   hour,
   minute,
   disabled,
@@ -182,6 +192,8 @@ function TimeBlock({
   onMinuteChange
 }: {
   title: string;
+  calendarDate: string;
+  now: Date;
   hour: string;
   minute: ParentSearchMinute | "";
   disabled: boolean;
@@ -190,7 +202,7 @@ function TimeBlock({
   onHourChange: (hour: string) => void;
   onMinuteChange: (minute: ParentSearchMinute | "") => void;
 }) {
-  const selectClass = invalid ? TIME_SELECT_INVALID : TIME_SELECT;
+  const selectClass = `${invalid ? TIME_SELECT_INVALID : TIME_SELECT} parent-search-time-select`;
   return (
     <div
       className={`flex h-full flex-col rounded-xl border p-3 ${
@@ -210,9 +222,15 @@ function TimeBlock({
             onChange={(e) => onHourChange(e.target.value)}
           >
             <option value="">—</option>
-            {PARENT_SEARCH_HOUR_OPTIONS.map((h) => (
-              <option key={h} value={h}>{h}</option>
-            ))}
+            {PARENT_SEARCH_HOUR_OPTIONS.map((h) => {
+              const hourDisabled =
+                Boolean(calendarDate) && !isParentSearchHourSelectable(calendarDate, h, now);
+              return (
+                <option key={h} value={h} disabled={hourDisabled}>
+                  {h}
+                </option>
+              );
+            })}
           </select>
         </label>
 
@@ -226,9 +244,17 @@ function TimeBlock({
             onChange={(e) => onMinuteChange(e.target.value as ParentSearchMinute | "")}
           >
             <option value="">—</option>
-            {PARENT_SEARCH_MINUTE_OPTIONS.map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
+            {PARENT_SEARCH_MINUTE_OPTIONS.map((m) => {
+              const minuteDisabled =
+                Boolean(calendarDate) &&
+                Boolean(hour) &&
+                !isParentSearchMinuteSelectable(calendarDate, hour, m, now);
+              return (
+                <option key={m} value={m} disabled={minuteDisabled}>
+                  {m}
+                </option>
+              );
+            })}
           </select>
         </label>
       </div>
@@ -264,11 +290,49 @@ export function ParentSearchFiltersBar({
     searchEndMinute: "" as const
   };
 
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const refresh = () => {
+      const active = document.activeElement;
+      if (active instanceof HTMLSelectElement) return;
+      if (active instanceof HTMLInputElement && active.type === "date") return;
+      setNow(new Date());
+    };
+    const id = window.setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
+  const todayIso = parentSearchEarliestSelectableDate(now);
+  const endDateMin = parentSearchEndDateMin(filters.searchDate, now);
+
   const cityInvalid = parentSearchFieldIsInvalid(invalidFields, "selectedCity");
   const startDateInvalid = parentSearchFieldIsInvalid(invalidFields, "searchDate");
   const endDateInvalid = parentSearchFieldIsInvalid(invalidFields, "searchEndDate");
   const startTimeInvalid = parentSearchFieldIsInvalid(invalidFields, "searchStartTime");
   const endTimeInvalid = parentSearchFieldIsInvalid(invalidFields, "searchEndTime");
+
+  const acceptHour = (
+    day: string,
+    hour: string,
+    minute: string
+  ): { hour: string; minute: ParentSearchMinute | "" } | null => {
+    const at = new Date();
+    setNow(at);
+    if (hour && !isParentSearchHourSelectable(day, hour, at)) return null;
+    const clock = parentSearchClockAfterDateChange(day, hour, minute, at);
+    return { hour: clock.hour, minute: clock.minute as ParentSearchMinute | "" };
+  };
+
+  const acceptMinute = (day: string, hour: string, minute: string): ParentSearchMinute | "" | null => {
+    const at = new Date();
+    setNow(at);
+    if (minute && !isParentSearchMinuteSelectable(day, hour, minute, at)) return null;
+    return minute as ParentSearchMinute | "";
+  };
 
   return (
     <section data-tour="parent-search-filters" className="flex flex-col gap-4" dir="rtl">
@@ -337,29 +401,71 @@ export function ParentSearchFiltersBar({
             <input
               type="date"
               className={startDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
+              min={todayIso}
               value={filters.searchDate}
               aria-invalid={startDateInvalid}
               onChange={(e) => {
                 const searchDate = e.target.value;
+                const at = new Date();
+                setNow(at);
                 if (!searchDate) {
                   patch({ searchDate: "", ...clearTimes });
-                } else {
-                  patch({
-                    searchDate,
-                    searchEndDate: !filters.searchEndDate || filters.searchEndDate === filters.searchDate ? searchDate : filters.searchEndDate
-                  });
+                  return;
                 }
+                if (!isParentSearchCalendarDateSelectable(searchDate, at)) return;
+                const searchEndDate =
+                  !filters.searchEndDate || filters.searchEndDate === filters.searchDate
+                    ? searchDate
+                    : filters.searchEndDate;
+                const startClock = parentSearchClockAfterDateChange(
+                  searchDate,
+                  filters.searchStartHour ?? "",
+                  filters.searchStartMinute ?? "",
+                  at
+                );
+                const endClock = parentSearchClockAfterDateChange(
+                  searchEndDate,
+                  filters.searchEndHour ?? "",
+                  filters.searchEndMinute ?? "",
+                  at
+                );
+                patch({
+                  searchDate,
+                  searchEndDate,
+                  searchStartHour: startClock.hour,
+                  searchStartMinute: startClock.minute as ParentSearchMinute | "",
+                  searchEndHour: endClock.hour,
+                  searchEndMinute: endClock.minute as ParentSearchMinute | ""
+                });
               }}
             />
             <TimeBlock
               title="שעת התחלה"
               required
+              calendarDate={filters.searchDate}
+              now={now}
               hour={filters.searchStartHour ?? ""}
               minute={filters.searchStartMinute ?? ""}
               disabled={!filters.searchDate}
               invalid={startTimeInvalid}
-              onHourChange={(searchStartHour) => patch({ searchStartHour })}
-              onMinuteChange={(searchStartMinute) => patch({ searchStartMinute })}
+              onHourChange={(searchStartHour) => {
+                const clock = acceptHour(
+                  filters.searchDate,
+                  searchStartHour,
+                  filters.searchStartMinute ?? ""
+                );
+                if (!clock) return;
+                patch({ searchStartHour: clock.hour, searchStartMinute: clock.minute });
+              }}
+              onMinuteChange={(searchStartMinute) => {
+                const next = acceptMinute(
+                  filters.searchDate,
+                  filters.searchStartHour ?? "",
+                  searchStartMinute
+                );
+                if (next === null) return;
+                patch({ searchStartMinute: next });
+              }}
             />
           </div>
 
@@ -368,21 +474,59 @@ export function ParentSearchFiltersBar({
             <input
               type="date"
               className={endDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
-              min={filters.searchDate || undefined}
+              min={endDateMin}
               value={filters.searchEndDate}
               disabled={!filters.searchDate}
               aria-invalid={endDateInvalid}
-              onChange={(e) => patch({ searchEndDate: e.target.value })}
+              onChange={(e) => {
+                const searchEndDate = e.target.value;
+                const at = new Date();
+                setNow(at);
+                if (!searchEndDate) {
+                  patch({ searchEndDate: "" });
+                  return;
+                }
+                if (!isParentSearchCalendarDateSelectable(searchEndDate, at)) return;
+                const endClock = parentSearchClockAfterDateChange(
+                  searchEndDate,
+                  filters.searchEndHour ?? "",
+                  filters.searchEndMinute ?? "",
+                  at
+                );
+                patch({
+                  searchEndDate,
+                  searchEndHour: endClock.hour,
+                  searchEndMinute: endClock.minute as ParentSearchMinute | ""
+                });
+              }}
             />
             <TimeBlock
               title="שעת סיום"
               required
+              calendarDate={filters.searchEndDate}
+              now={now}
               hour={filters.searchEndHour ?? ""}
               minute={filters.searchEndMinute ?? ""}
               disabled={!filters.searchDate}
               invalid={endTimeInvalid}
-              onHourChange={(searchEndHour) => patch({ searchEndHour })}
-              onMinuteChange={(searchEndMinute) => patch({ searchEndMinute })}
+              onHourChange={(searchEndHour) => {
+                const clock = acceptHour(
+                  filters.searchEndDate,
+                  searchEndHour,
+                  filters.searchEndMinute ?? ""
+                );
+                if (!clock) return;
+                patch({ searchEndHour: clock.hour, searchEndMinute: clock.minute });
+              }}
+              onMinuteChange={(searchEndMinute) => {
+                const next = acceptMinute(
+                  filters.searchEndDate,
+                  filters.searchEndHour ?? "",
+                  searchEndMinute
+                );
+                if (next === null) return;
+                patch({ searchEndMinute: next });
+              }}
             />
           </div>
         </div>

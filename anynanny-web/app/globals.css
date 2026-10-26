@@ -122,6 +122,20 @@ button {
   cursor: pointer;
 }
 
+/* Past search hours/minutes stay readable but are not selectable. */
+.parent-search-time-select option:disabled {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.parent-search-time-select option:disabled:hover,
+.parent-search-time-select option:disabled:focus,
+.parent-search-time-select option:disabled:checked {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+}
+
 /* Six-spoke required marker — size only; do not inherit bold from labels. */
 .anynanny-required-mark {
   display: inline-block;

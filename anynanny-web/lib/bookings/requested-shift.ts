@@ -77,7 +77,8 @@ export function requestedShiftFromSearchParams(
 
 /** Validate a locked search window before insert (past day, inverted range). */
 export function validateRequestedShiftWindow(
-  window: RequestedShiftWindow
+  window: RequestedShiftWindow,
+  now: Date = new Date()
 ): RequestedShiftWindow | { error: string } {
   const startHour = formatShiftClock(window.startIso).slice(0, 2);
   const startMinute = formatShiftClock(window.startIso).slice(3, 5);
@@ -88,14 +89,17 @@ export function validateRequestedShiftWindow(
     return { error: "תאריך או שעה לא תקינים" };
   }
 
-  const validated = validateShiftWindow({
-    shiftDate: window.startDate,
-    shiftEndDate: window.endDate,
-    startHour,
-    startMinute,
-    endHour,
-    endMinute
-  });
+  const validated = validateShiftWindow(
+    {
+      shiftDate: window.startDate,
+      shiftEndDate: window.endDate,
+      startHour,
+      startMinute,
+      endHour,
+      endMinute
+    },
+    now
+  );
   if ("error" in validated) return validated;
 
   return {
