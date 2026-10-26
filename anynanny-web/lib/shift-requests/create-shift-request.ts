@@ -32,16 +32,22 @@ function buildLocalDateTimeIso(day: string, hour: string, minute: string): strin
   return local.toISOString();
 }
 
-export function validateShiftWindow(input: {
-  /** Start date (`YYYY-MM-DD`). */
-  shiftDate: string;
-  /** End date (`YYYY-MM-DD`) — may be after start date for overnight shifts. */
-  shiftEndDate: string;
-  startHour: string;
-  startMinute: string;
-  endHour: string;
-  endMinute: string;
-}):
+/** Shared copy for a shift date or time that is already in the past. */
+export const SHIFT_WINDOW_IN_PAST_MESSAGE = "לא ניתן לבקש משמרת בעבר";
+
+export function validateShiftWindow(
+  input: {
+    /** Start date (`YYYY-MM-DD`). */
+    shiftDate: string;
+    /** End date (`YYYY-MM-DD`) — may be after start date for overnight shifts. */
+    shiftEndDate: string;
+    startHour: string;
+    startMinute: string;
+    endHour: string;
+    endMinute: string;
+  },
+  now: Date = new Date()
+):
   | { startIso: string; endIso: string; startDate: string; endDate: string }
   | { error: string } {
   const { shiftDate, shiftEndDate, startHour, startMinute, endHour, endMinute } = input;
@@ -72,11 +78,11 @@ export function validateShiftWindow(input: {
     return { error: "מועד הסיום חייב להיות אחרי מועד ההתחלה (תאריך + שעה)" };
   }
 
-  const today = new Date();
+  const today = new Date(now.getTime());
   today.setHours(0, 0, 0, 0);
   const startDay = new Date(shiftDate.trim() + "T00:00:00");
   if (startDay < today) {
-    return { error: "לא ניתן לבקש משמרת בעבר" };
+    return { error: SHIFT_WINDOW_IN_PAST_MESSAGE };
   }
 
   return {
