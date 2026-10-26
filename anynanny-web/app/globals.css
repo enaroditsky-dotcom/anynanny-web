@@ -109,20 +109,10 @@ button {
   box-shadow: 0 0 0 3px rgba(0, 31, 63, 0.18);
 }
 
-/* Keep paired date inputs from overflowing native picker chrome on narrow mobile.
-   color-scheme forces the native calendar popup onto a light, white surface. */
+/* Keep the paired search date buttons from overflowing their column on a narrow phone. */
 .parent-search-date {
   min-width: 0;
-  color-scheme: light;
   background-color: #ffffff;
-}
-
-.parent-search-date::-webkit-calendar-picker-indicator {
-  width: 1rem;
-  height: 1rem;
-  margin: 0;
-  padding: 0;
-  cursor: pointer;
 }
 
 /* Past search hours/minutes stay readable but are not selectable. */

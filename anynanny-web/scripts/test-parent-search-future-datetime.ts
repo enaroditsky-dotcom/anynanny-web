@@ -9,6 +9,10 @@ import {
   type ParentSearchFilters
 } from "../lib/sitter/parent-search-filters";
 import {
+  isParentSearchCalendarDaySelectable,
+  parentSearchCalendarWeeks
+} from "../lib/sitter/parent-search-calendar";
+import {
   isParentSearchCalendarDateSelectable,
   isParentSearchDateTimeStrictlyFuture,
   isParentSearchHourSelectable,
@@ -276,17 +280,36 @@ assert.equal(isParentSearchHourSelectable(TODAY, "14", NOW), true);
 assert.equal(validateParentSearchCriteria(futureFilters, NOW).ok, true);
 assert.equal(NOW.getTime(), frozen);
 
-// 15–17, 20–21. Native date + selects stay in place; disabled options are real disabled controls.
+const october = parentSearchCalendarWeeks(2026, 9, TODAY);
+const octoberDays = october.flat();
+const day = (iso: string) => octoberDays.find((entry) => entry.iso === iso);
+assert.equal(october[0][0].iso, "2026-09-27");
+assert.equal(day(YESTERDAY)?.selectable, false);
+assert.equal(day("2026-10-01")?.selectable, false);
+assert.equal(day(TODAY)?.selectable, true);
+assert.equal(day(TOMORROW)?.selectable, true);
+assert.equal(isParentSearchCalendarDaySelectable(TODAY, TOMORROW), false);
+assert.equal(parentSearchCalendarWeeks(2026, 10, TODAY).every((week) => week.every((entry) => entry.selectable || !entry.inMonth)), true);
+
+// 15–17, 20–21. Custom white calendar plus native hour/minute selects.
 const ui = read("components/parent/parent-search-filters.tsx");
+const dateField = read("components/parent/parent-search-date-field.tsx");
 const css = read("app/globals.css");
 const validation = read("lib/sitter/parent-search-validation.ts");
 const searchPage = read("app/parent/search/page.tsx");
 const resultsPage = read("app/parent/search/results/page.tsx");
 
-assert.match(ui, /type="date"/);
+assert.match(ui, /ParentSearchDateField/);
+assert.doesNotMatch(ui, /type="date"/);
 assert.match(ui, /<select/);
 assert.match(ui, /min=\{todayIso\}/);
 assert.match(ui, /min=\{endDateMin\}/);
+assert.match(dateField, /backgroundColor: "#FFFFFF"/);
+assert.match(dateField, /disabled=\{!day\.selectable\}/);
+assert.match(dateField, /bg-\[#F3F4F6\]/);
+assert.match(dateField, /text-\[#9CA3AF\]/);
+assert.match(dateField, /ArrowLeft/);
+assert.match(dateField, /dir="rtl"/);
 assert.match(ui, /isParentSearchCalendarDateSelectable\(searchDate, at\)/);
 assert.match(ui, /isParentSearchCalendarDateSelectable\(searchEndDate, at\)/);
 assert.match(ui, /disabled=\{hourDisabled\}/);

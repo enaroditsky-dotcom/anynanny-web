@@ -26,6 +26,7 @@ import {
   type ParentSearchMandatoryField
 } from "@/lib/sitter/parent-search-validation";
 import { CityAutocomplete } from "@/components/geo/city-autocomplete";
+import { ParentSearchDateField } from "@/components/parent/parent-search-date-field";
 import {
   SEARCH_LIMIT_CLEAR_BUTTON,
   SEARCH_LIMIT_SLIDER_CLASS,
@@ -295,7 +296,7 @@ export function ParentSearchFiltersBar({
     const refresh = () => {
       const active = document.activeElement;
       if (active instanceof HTMLSelectElement) return;
-      if (active instanceof HTMLInputElement && active.type === "date") return;
+      if (active instanceof HTMLElement && active.closest("[data-parent-search-date]")) return;
       setNow(new Date());
     };
     const id = window.setInterval(refresh, 15000);
@@ -387,7 +388,7 @@ export function ParentSearchFiltersBar({
         </div>
       </div>
 
-      <div className={`${SECTION_SURFACE} space-y-3`}>
+      <div className={`${SECTION_SURFACE} relative z-10 space-y-3`}>
         <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
             <Calendar className="h-4 w-4" />
@@ -398,14 +399,14 @@ export function ParentSearchFiltersBar({
         <div className="grid grid-cols-2 items-start gap-3">
           <div className={`${PAIR_COL} gap-2`}>
             <FieldLabel required>תאריך התחלה</FieldLabel>
-            <input
-              type="date"
+            <ParentSearchDateField
               className={startDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
               min={todayIso}
+              now={now}
+              align="start"
+              invalid={startDateInvalid}
               value={filters.searchDate}
-              aria-invalid={startDateInvalid}
-              onChange={(e) => {
-                const searchDate = e.target.value;
+              onChange={(searchDate) => {
                 const at = new Date();
                 setNow(at);
                 if (!searchDate) {
@@ -471,15 +472,15 @@ export function ParentSearchFiltersBar({
 
           <div className={`${PAIR_COL} gap-2`}>
             <FieldLabel required>תאריך סיום</FieldLabel>
-            <input
-              type="date"
+            <ParentSearchDateField
               className={endDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
               min={endDateMin}
-              value={filters.searchEndDate}
+              now={now}
+              align="end"
               disabled={!filters.searchDate}
-              aria-invalid={endDateInvalid}
-              onChange={(e) => {
-                const searchEndDate = e.target.value;
+              invalid={endDateInvalid}
+              value={filters.searchEndDate}
+              onChange={(searchEndDate) => {
                 const at = new Date();
                 setNow(at);
                 if (!searchEndDate) {
