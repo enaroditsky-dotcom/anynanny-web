@@ -1,8 +1,10 @@
 import "server-only";
 
 import {
+  effectiveManualPaymentMethods,
+  enabledMethodsFromLegacyPreferred,
   isManualPaymentMethodUsable,
-  parentVisibleCashAccepted,
+  parsePayoutEnabledMethods,
   sanitizeManualPaymentDestinations
 } from "@/lib/billing/payment-method-availability";
 import {
@@ -10,7 +12,10 @@ import {
   parentMayResolveManualPaymentDispute,
   type ManualPaymentDestinations
 } from "@/lib/billing/manual-payment-ui";
-import { parseManualPaymentMethod, type ManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
+import {
+  parseManualPaymentMethod,
+  type ManualPaymentMethod
+} from "@/lib/billing/manual-payment-lifecycle";
 import { notifySitterManualPaymentResolvedReported } from "@/lib/notifications/create-notification";
 import { RATINGS_TABLE } from "@/lib/ratings/constants";
 import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
@@ -75,34 +80,96 @@ function cashDestination(acceptsCash: boolean): ManualPaymentDestinations["cash"
   return { available: acceptsCash };
 }
 
-async function loadSitterAcceptsCash(
+function isMissingEnabledMethodsColumn(message: string): boolean {
+  return /payout_enabled_methods/i.test(message);
+}
+
+async function loadStoredEnabledMethods(
   admin: SupabaseClient | null,
   sitterId: string
-): Promise<boolean> {
-  if (!admin || !sitterId) return false;
-  const row = await admin
+): Promise<{ known: boolean; enabled: ManualPaymentMethod[] | null }> {
+  if (!admin || !sitterId) return { known: false, enabled: null };
+  const withEnabled = await admin
+    .from(SITTER_PROFILES_TABLE)
+    .select("payout_enabled_methods, payout_preferred_method")
+    .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
+    .maybeSingle();
+  if (!withEnabled.error) {
+    const row = withEnabled.data as {
+      payout_enabled_methods?: unknown;
+      payout_preferred_method?: string | null;
+    } | null;
+    if (row && Object.prototype.hasOwnProperty.call(row, "payout_enabled_methods")) {
+      return { known: true, enabled: parsePayoutEnabledMethods(row.payout_enabled_methods) };
+    }
+    return {
+      known: true,
+      enabled: enabledMethodsFromLegacyPreferred(row?.payout_preferred_method)
+    };
+  }
+  if (!isMissingEnabledMethodsColumn(withEnabled.error.message)) {
+    console.warn("[loadStoredEnabledMethods]", withEnabled.error.message);
+    return { known: false, enabled: null };
+  }
+  const legacy = await admin
     .from(SITTER_PROFILES_TABLE)
     .select("payout_preferred_method")
     .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
     .maybeSingle();
-  if (row.error) {
-    console.warn("[loadSitterAcceptsCash]", row.error.message);
-    return false;
+  if (legacy.error) {
+    console.warn("[loadStoredEnabledMethods]", legacy.error.message);
+    return { known: false, enabled: null };
   }
-  return parentVisibleCashAccepted(
-    (row.data as { payout_preferred_method?: string | null } | null)?.payout_preferred_method
-  );
+  return {
+    known: true,
+    enabled: enabledMethodsFromLegacyPreferred(
+      (legacy.data as { payout_preferred_method?: string | null } | null)?.payout_preferred_method
+    )
+  };
 }
 
-function cashAcceptedFromDestinationPayload(payload: {
-  accepts_cash?: unknown;
-  preferred_method?: unknown;
-}): boolean | null {
-  if (typeof payload.accepts_cash === "boolean") return payload.accepts_cash;
-  if (payload.preferred_method !== undefined && payload.preferred_method !== null) {
-    return parentVisibleCashAccepted(payload.preferred_method);
+async function resolveParentManualMethods(input: {
+  sitterId: string;
+  payload: {
+    enabled_methods?: unknown;
+    preferred_method?: unknown;
+  };
+  bitConfigured: boolean;
+  payboxConfigured: boolean;
+}): Promise<ManualPaymentMethod[]> {
+  let known = Object.prototype.hasOwnProperty.call(input.payload, "enabled_methods");
+  let enabled: ManualPaymentMethod[] | null = known
+    ? parsePayoutEnabledMethods(input.payload.enabled_methods)
+    : null;
+  if (!known) {
+    const loaded = await loadStoredEnabledMethods(tryGetSupabaseServiceRoleClient(), input.sitterId);
+    known = loaded.known;
+    enabled = loaded.enabled;
   }
-  return null;
+  if (!known && input.payload.preferred_method !== undefined) {
+    enabled = enabledMethodsFromLegacyPreferred(input.payload.preferred_method);
+  }
+  return effectiveManualPaymentMethods({
+    enabledMethods: enabled,
+    bitConfigured: input.bitConfigured,
+    payboxConfigured: input.payboxConfigured
+  });
+}
+
+function bitDestination(
+  bitPhone: string,
+  include: boolean
+): ManualPaymentDestinations["bit"] {
+  if (!include || !isValidIsraeliMobile(bitPhone)) return { available: false };
+  return { available: true, destination: formatIsraeliMobileDisplay(bitPhone) };
+}
+
+function payboxDestination(
+  payboxPhone: string,
+  include: boolean
+): ManualPaymentDestinations["paybox"] {
+  if (!include) return { available: false };
+  return buildPayboxDestination({ phone: payboxPhone });
 }
 
 function buildPayboxDestination(input: {
@@ -198,20 +265,22 @@ export async function loadAuthorizedManualPaymentDestinations(
     };
     const bitPhone = String(payload.bit_phone ?? "").trim();
     const payboxPhone = String(payload.paybox_phone ?? "").trim();
-    const acceptsCashFromRpc = cashAcceptedFromDestinationPayload(payload);
-    const acceptsCash =
-      acceptsCashFromRpc ??
-      (await loadSitterAcceptsCash(tryGetSupabaseServiceRoleClient(), sitterId));
+    const bitConfigured = isValidIsraeliMobile(bitPhone);
+    const payboxConfigured = isValidIsraeliMobile(payboxPhone);
+    const methods = await resolveParentManualMethods({
+      sitterId,
+      payload,
+      bitConfigured,
+      payboxConfigured
+    });
     return {
       ok: true,
       destinations:
         sanitizeManualPaymentDestinations({
           bookingId: String(row.id),
-          cash: cashDestination(acceptsCash),
-          bit: isValidIsraeliMobile(bitPhone)
-            ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
-            : { available: false },
-          paybox: buildPayboxDestination({ phone: payboxPhone })
+          cash: cashDestination(methods.includes("cash")),
+          bit: bitDestination(bitPhone, methods.includes("bit")),
+          paybox: payboxDestination(payboxPhone, methods.includes("paybox"))
         }) ?? noneAvailable
     };
   }
@@ -248,38 +317,65 @@ export async function loadAuthorizedManualPaymentDestinations(
   const payout = await admin
     .from(SITTER_PROFILES_TABLE)
     .select(
-      "payout_preferred_method, payout_bit_phone, payout_paybox_phone"
+      "payout_enabled_methods, payout_preferred_method, payout_bit_phone, payout_paybox_phone"
     )
     .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
     .maybeSingle();
 
-  if (payout.error) {
+  let payoutRow = payout.data as {
+    payout_enabled_methods?: unknown;
+    payout_preferred_method?: string | null;
+    payout_bit_phone?: string | null;
+    payout_paybox_phone?: string | null;
+  } | null;
+  if (payout.error && isMissingEnabledMethodsColumn(payout.error.message)) {
+    const legacy = await admin
+      .from(SITTER_PROFILES_TABLE)
+      .select("payout_preferred_method, payout_bit_phone, payout_paybox_phone")
+      .eq(SITTER_PROFILES_USER_COLUMN, sitterId)
+      .maybeSingle();
+    if (legacy.error) {
+      console.warn("[loadAuthorizedManualPaymentDestinations] payout", legacy.error.message);
+      return { ok: true, destinations: noneAvailable };
+    }
+    const legacyRow = legacy.data as {
+      payout_preferred_method?: string | null;
+      payout_bit_phone?: string | null;
+      payout_paybox_phone?: string | null;
+    } | null;
+    payoutRow = legacyRow
+      ? {
+          ...legacyRow,
+          payout_enabled_methods: enabledMethodsFromLegacyPreferred(legacyRow.payout_preferred_method)
+        }
+      : null;
+  } else if (payout.error) {
     console.warn("[loadAuthorizedManualPaymentDestinations] payout", payout.error.message);
     return { ok: true, destinations: noneAvailable };
   }
 
-  const bitPhone = String(
-    (payout.data as { payout_bit_phone?: string | null } | null)?.payout_bit_phone ?? ""
-  ).trim();
-  const payboxPhone = String(
-    (payout.data as { payout_paybox_phone?: string | null } | null)?.payout_paybox_phone ?? ""
-  ).trim();
+  const bitPhone = String(payoutRow?.payout_bit_phone ?? "").trim();
+  const payboxPhone = String(payoutRow?.payout_paybox_phone ?? "").trim();
+  const bitConfigured = isValidIsraeliMobile(bitPhone);
+  const payboxConfigured = isValidIsraeliMobile(payboxPhone);
+  const enabledMethods =
+    payoutRow && Object.prototype.hasOwnProperty.call(payoutRow, "payout_enabled_methods")
+      ? payoutRow.payout_enabled_methods ?? null
+      : enabledMethodsFromLegacyPreferred(payoutRow?.payout_preferred_method);
+  const methods = effectiveManualPaymentMethods({
+    enabledMethods,
+    bitConfigured,
+    payboxConfigured
+  });
 
   return {
     ok: true,
     destinations:
       sanitizeManualPaymentDestinations({
         bookingId: String(row.id),
-        cash: cashDestination(
-          parentVisibleCashAccepted(
-            (payout.data as { payout_preferred_method?: string | null } | null)
-              ?.payout_preferred_method
-          )
-        ),
-        bit: isValidIsraeliMobile(bitPhone)
-          ? { available: true, destination: formatIsraeliMobileDisplay(bitPhone) }
-          : { available: false },
-        paybox: buildPayboxDestination({ phone: payboxPhone })
+        cash: cashDestination(methods.includes("cash")),
+        bit: bitDestination(bitPhone, methods.includes("bit")),
+        paybox: payboxDestination(payboxPhone, methods.includes("paybox"))
       }) ?? noneAvailable
   };
 }

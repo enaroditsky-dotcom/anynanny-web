@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import {
+  fetchSitterPayoutMethods,
   saveSitterPayoutMethods,
+  togglePayoutEnabledMethod,
   validateOptionalBitPhone,
   validateOptionalPayboxPhone,
   validatePayoutCard,
+  type PayoutEnabledMethod,
   type SitterPayoutMethodKind
 } from "@/lib/wallet/sitter-payout-methods";
 import { validateOptionalPayboxPaymentLink } from "@/lib/billing/paybox-payment-link";
@@ -15,6 +18,8 @@ export const dynamic = "force-dynamic";
 type Body = {
   kind?: SitterPayoutMethodKind | "cash";
   preferred?: boolean;
+  /** Membership in payout_enabled_methods. Saving a phone or link must not send this. */
+  enabled?: boolean;
   bitPhone?: string;
   payboxPhone?: string;
   payboxLink?: string;
@@ -30,7 +35,8 @@ type Body = {
 
 /**
  * Persist sitter payout destinations (Bit / PayBox / card metadata)
- * or a preferred-receiving declaration (cash).
+ * or membership in the enabled receiving set (cash / bit / paybox).
+ * Saving a phone or link does not change which methods are enabled.
  * Card PAN is reduced to last4; CVV is never stored (PCI).
  */
 export async function POST(request: Request) {
@@ -58,25 +64,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "kind must be bit | paybox | card | cash." }, { status: 400 });
   }
 
-  if (kind === "cash") {
-    const saved = await saveSitterPayoutMethods(supabase, user.id, { preferred: "cash" });
-    if (!saved.ok) {
-      return NextResponse.json(
-        { error: saved.error, missingSchema: saved.missingSchema === true },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json({ methods: saved.methods });
-  }
-
-  const preferredOnly =
-    (kind === "bit" || kind === "paybox") &&
-    body.preferred === true &&
+  if (
+    (kind === "cash" || kind === "bit" || kind === "paybox") &&
+    typeof body.enabled === "boolean" &&
     !Object.prototype.hasOwnProperty.call(body, "bitPhone") &&
     !Object.prototype.hasOwnProperty.call(body, "payboxPhone") &&
-    !Object.prototype.hasOwnProperty.call(body, "payboxLink");
-  if (preferredOnly) {
-    const saved = await saveSitterPayoutMethods(supabase, user.id, { preferred: kind });
+    !Object.prototype.hasOwnProperty.call(body, "payboxLink")
+  ) {
+    const loaded = await fetchSitterPayoutMethods(supabase, user.id);
+    if (loaded.error && !loaded.missingSchema) {
+      return NextResponse.json({ error: loaded.error }, { status: 400 });
+    }
+    const enabledMethods = togglePayoutEnabledMethod(
+      loaded.methods.enabledMethods,
+      kind as PayoutEnabledMethod,
+      body.enabled
+    );
+    const saved = await saveSitterPayoutMethods(supabase, user.id, { enabledMethods });
     if (!saved.ok) {
       return NextResponse.json(
         { error: saved.error, missingSchema: saved.missingSchema === true },
@@ -85,17 +89,12 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ methods: saved.methods });
   }
-
-  const setPreferred = body.preferred !== false;
 
   if (kind === "bit") {
     const bitPhone = String(body.bitPhone ?? "");
     const err = validateOptionalBitPhone(bitPhone);
     if (err) return NextResponse.json({ error: err }, { status: 400 });
-    const saved = await saveSitterPayoutMethods(supabase, user.id, {
-      bitPhone,
-      preferred: bitPhone.trim() && setPreferred ? "bit" : undefined
-    });
+    const saved = await saveSitterPayoutMethods(supabase, user.id, { bitPhone });
     if (!saved.ok) {
       return NextResponse.json(
         { error: saved.error, missingSchema: saved.missingSchema === true },
@@ -126,9 +125,7 @@ export async function POST(request: Request) {
     }
     const saved = await saveSitterPayoutMethods(supabase, user.id, {
       ...(payboxPhone !== undefined ? { payboxPhone } : {}),
-      ...(payboxLink !== undefined ? { payboxLink } : {}),
-      preferred:
-        payboxPhone?.trim() && setPreferred ? "paybox" : undefined
+      ...(payboxLink !== undefined ? { payboxLink } : {})
     });
     if (!saved.ok) {
       return NextResponse.json(
@@ -137,6 +134,10 @@ export async function POST(request: Request) {
       );
     }
     return NextResponse.json({ methods: saved.methods });
+  }
+
+  if (kind === "cash") {
+    return NextResponse.json({ error: "enabled must be boolean." }, { status: 400 });
   }
 
   const month = body.cardExpMonth == null ? null : Number(body.cardExpMonth);
@@ -155,6 +156,8 @@ export async function POST(request: Request) {
     requireCvv
   });
   if (cardErr) return NextResponse.json({ error: cardErr }, { status: 400 });
+
+  const setPreferred = body.preferred !== false;
 
   // Intentionally drop cardCvv / full PAN — only last4 + metadata reach Postgres.
   const saved = await saveSitterPayoutMethods(supabase, user.id, {

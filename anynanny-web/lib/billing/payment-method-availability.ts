@@ -8,9 +8,12 @@
  * Source of truth for Sitter receiving setup:
  *   SitterPayoutMethods (own payout destinations), validated with the same rules.
  *
- * Live Parent payment actions today: cash (always), Bit, PayBox.
- * Bit/PayBox are usable only when the sitter has a valid destination.
- * Invalid / blank / malformed persisted values are treated as not configured.
+ * Live Parent payment actions: cash, Bit, and PayBox.
+ * Parent-visible methods come from payout_enabled_methods.
+ * NULL or an empty enabled set is cash, even when a Bit or PayBox phone is stored.
+ * Bit or PayBox is shown only when that method is enabled and its phone is valid.
+ * An enabled method with an invalid phone is omitted and is not replaced.
+ * Bank and card are not parent methods.
  */
 
 import type { ManualPaymentMethod } from "@/lib/billing/manual-payment-lifecycle";
@@ -23,10 +26,13 @@ import {
   EMPTY_SITTER_PAYOUT_METHODS,
   formatIsraeliMobileDisplay,
   isValidIsraeliMobile,
+  parsePayoutEnabledMethods,
   parsePreferredReceivingMethod,
   payboxManualReceivingConfigured,
   type SitterPayoutMethods
 } from "@/lib/wallet/sitter-payout-methods";
+
+export { enabledMethodsFromLegacyPreferred, parsePayoutEnabledMethods } from "@/lib/wallet/sitter-payout-methods";
 
 export type ParentReceivingMethod = "bit" | "paybox";
 
@@ -84,12 +90,30 @@ export function isPayboxReceivingUsable(input: {
 }
 
 /**
- * Cash is accepted only when the sitter's preferred receiving method is cash.
- * That is the only stored cash declaration (`payout_preferred_method`).
- * Bit and PayBox are separate: a saved valid destination means that method is accepted.
+ * True only when `payout_preferred_method` is the explicit legacy value `cash`.
+ * Parent visibility uses `effectiveManualPaymentMethods`.
  */
 export function parentVisibleCashAccepted(preferred: unknown): boolean {
   return parsePreferredReceivingMethod(preferred) === "cash";
+}
+
+/**
+ * Parent-visible methods.
+ * NULL or [] is cash only. A saved phone does not enable a method.
+ * Enabled Bit/PayBox without a valid phone is omitted and cash is not added.
+ */
+export function effectiveManualPaymentMethods(input: {
+  enabledMethods: unknown;
+  bitConfigured: boolean;
+  payboxConfigured: boolean;
+}): ManualPaymentMethod[] {
+  const enabled = parsePayoutEnabledMethods(input.enabledMethods);
+  if (enabled == null || enabled.length === 0) return ["cash"];
+  return eligibleManualPaymentMethods({
+    cashAccepted: enabled.includes("cash"),
+    bitConfigured: enabled.includes("bit") && input.bitConfigured,
+    payboxConfigured: enabled.includes("paybox") && input.payboxConfigured
+  });
 }
 
 export function emptyManualPaymentDestinations(

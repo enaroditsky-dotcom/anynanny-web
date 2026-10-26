@@ -9,6 +9,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { sitterReceivingSetupState } from "@/lib/billing/payment-method-availability";
 import {
   EMPTY_SITTER_PAYOUT_METHODS,
+  displayedPayoutEnabledMethods,
   fetchSitterPayoutMethods,
   formatIsraeliMobileDisplay,
   payboxManualReceivingConfigured,
@@ -16,6 +17,7 @@ import {
   preferredReceivingMethodLabel,
   validateOptionalBitPhone,
   validateOptionalPayboxPhone,
+  type PayoutEnabledMethod,
   type SitterPayoutMethods
 } from "@/lib/wallet/sitter-payout-methods";
 import { validateOptionalPayboxPaymentLink } from "@/lib/billing/paybox-payment-link";
@@ -90,23 +92,24 @@ export const PAYBOX_PERSONAL_LINK_HELP_STEPS = [
   "שמרי את השינוי."
 ] as const;
 
-const PREFERRED_SELECT_BUTTON_LABEL = "בחירה כעדיפות";
+const ENABLED_RECEIVING_BADGE = "זמין לקבלת תשלומים";
 
-async function savePreferredMethod(
-  kind: "cash" | "bit" | "paybox"
+async function saveEnabledMethod(
+  kind: PayoutEnabledMethod,
+  enabled: boolean
 ): Promise<{ ok: true; methods: SitterPayoutMethods } | { ok: false; error: string }> {
   const res = await fetch("/api/sitter/payout-methods", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify(kind === "cash" ? { kind: "cash" } : { kind, preferred: true })
+    body: JSON.stringify({ kind, enabled })
   });
   const json = (await res.json().catch(() => ({}))) as {
     methods?: SitterPayoutMethods;
     error?: string;
   };
   if (!res.ok || !json.methods) {
-    return { ok: false, error: json.error || "שמירת ההעדפה נכשלה." };
+    return { ok: false, error: json.error || "שמירת אמצעי הקבלה נכשלה." };
   }
   return { ok: true, methods: json.methods };
 }
@@ -154,9 +157,7 @@ export function SitterManualReceivingDestinationsSection({
   const [loading, setLoading] = useState(true);
   const [savingBit, setSavingBit] = useState(false);
   const [savingPaybox, setSavingPaybox] = useState(false);
-  const [savingPreferred, setSavingPreferred] = useState<"cash" | "bit" | "paybox" | null>(
-    null
-  );
+  const [savingEnabled, setSavingEnabled] = useState<PayoutEnabledMethod | null>(null);
   const [savingPayboxLink, setSavingPayboxLink] = useState(false);
   const [bitError, setBitError] = useState<string | null>(null);
   const [preferredError, setPreferredError] = useState<string | null>(null);
@@ -188,32 +189,46 @@ export function SitterManualReceivingDestinationsSection({
     void reload();
   }, [reload]);
 
-  const selectPreferred = async (kind: "cash" | "bit" | "paybox") => {
+  const setMethodEnabled = async (kind: PayoutEnabledMethod, enabled: boolean) => {
     setPreferredError(null);
-    setSavingPreferred(kind);
-    const result = await savePreferredMethod(kind);
-    setSavingPreferred(null);
+    setSavingEnabled(kind);
+    const result = await saveEnabledMethod(kind, enabled);
+    setSavingEnabled(null);
     if (!result.ok) {
       setPreferredError(result.error);
       return;
     }
     setMethods(result.methods);
-    const label = preferredReceivingMethodLabel(kind) || kind;
     onMethodsChange?.(result.methods);
-    setToast(`${label} נבחר כדרך קבלת התשלום.`);
+    const label = preferredReceivingMethodLabel(kind) || kind;
+    setToast(enabled ? `${label} זמין לקבלת תשלומים.` : `${label} לא זמין לקבלת תשלומים.`);
   };
 
-  const preferredButton = (kind: "cash" | "bit" | "paybox") => {
-    const selected = methods.preferred === kind;
-    const saving = savingPreferred === kind;
+  const methodIsEnabled = (kind: PayoutEnabledMethod) =>
+    displayedPayoutEnabledMethods(methods.enabledMethods).includes(kind);
+
+  const enableToggle = (kind: PayoutEnabledMethod) => {
+    const selected = methodIsEnabled(kind);
+    const saving = savingEnabled === kind;
     return (
       <button
         type="button"
-        onClick={() => void selectPreferred(kind)}
-        disabled={savingPreferred !== null || selected}
-        className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+        role="switch"
+        aria-checked={selected}
+        aria-label={selected ? ENABLED_RECEIVING_BADGE : "הפעלה לקבלת תשלומים"}
+        onClick={() => void setMethodEnabled(kind, !selected)}
+        disabled={savingEnabled !== null}
+        className={`inline-flex min-h-[2.5rem] items-center justify-center rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-50 ${
+          selected ? "bg-[#0B3C5D] text-white" : "border border-[#0B3C5D]/30 bg-white text-[#0B3C5D]"
+        }`}
       >
-        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : PREFERRED_SELECT_BUTTON_LABEL}
+        {saving ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : selected ? (
+          ENABLED_RECEIVING_BADGE
+        ) : (
+          "הפעלה לקבלת תשלומים"
+        )}
       </button>
     );
   };
@@ -235,11 +250,7 @@ export function SitterManualReceivingDestinationsSection({
     setMethods(result.methods);
     setBitPhone(result.methods.bitPhone);
     onMethodsChange?.(result.methods);
-    setToast(
-      result.methods.bitPhone.trim()
-        ? "מספר Bit נשמר. ההורים יראו אותו רק בתשלום ידני."
-        : "מספר Bit הוסר."
-    );
+    setToast(result.methods.bitPhone.trim() ? "מספר Bit נשמר." : "מספר Bit הוסר.");
   };
 
   const savePaybox = async () => {
@@ -260,11 +271,7 @@ export function SitterManualReceivingDestinationsSection({
     setPayboxPhone(result.methods.payboxPhone);
     setPayboxLink(result.methods.payboxLink);
     onMethodsChange?.(result.methods);
-    setToast(
-      result.methods.payboxPhone.trim()
-        ? "מספר PayBox נשמר. ההורים יראו אותו רק בתשלום ידני."
-        : "מספר PayBox הוסר."
-    );
+    setToast(result.methods.payboxPhone.trim() ? "מספר PayBox נשמר." : "מספר PayBox הוסר.");
   };
 
   const savePayboxLink = async () => {
@@ -284,11 +291,7 @@ export function SitterManualReceivingDestinationsSection({
     setMethods(result.methods);
     setPayboxLink(result.methods.payboxLink);
     onMethodsChange?.(result.methods);
-    setToast(
-      result.methods.payboxLink.trim()
-        ? "לינק PayBox נשמר. ההורים יפתחו אותו רק בתשלום ידני."
-        : "לינק PayBox הוסר."
-    );
+    setToast(result.methods.payboxLink.trim() ? "לינק PayBox נשמר." : "לינק PayBox הוסר.");
   };
 
   const clearPayboxLink = async () => {
@@ -312,10 +315,10 @@ export function SitterManualReceivingDestinationsSection({
     ? "טוען…"
     : sitterReceivingSummary(bitReady, payboxReady);
 
-  const preferredMark = (kind: "cash" | "bit" | "paybox") =>
-    methods.preferred === kind ? (
+  const enabledMark = (kind: PayoutEnabledMethod) =>
+    methodIsEnabled(kind) ? (
       <span className="relative z-[1] inline-flex items-center rounded-full bg-white/60 px-2 py-0.5 text-[11px] font-semibold text-[#6A4B16] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-        מועדף
+        {ENABLED_RECEIVING_BADGE}
       </span>
     ) : null;
 
@@ -368,7 +371,7 @@ export function SitterManualReceivingDestinationsSection({
                   </span>
                 </span>
                 <MethodName cardTitle="מזומן" />
-                <span className="min-w-0 flex-1">{preferredMark("cash")}</span>
+                <span className="min-w-0 flex-1">{enabledMark("cash")}</span>
                 <ChevronDown
                   className={`${accordionChevronClass} ${cashOpen ? "rotate-180" : ""}`}
                   aria-hidden
@@ -379,10 +382,7 @@ export function SitterManualReceivingDestinationsSection({
                   <p className="text-[13px] leading-relaxed text-slate-500">
                     הצהרה בלבד — אין צורך במספר, לינק או פרטי חשבון.
                   </p>
-                  {methods.preferred === "cash" ? (
-                    <p className="text-[12px] font-medium text-slate-500">זו דרך הקבלה המועדפת.</p>
-                  ) : null}
-                  {preferredButton("cash")}
+                  {enableToggle("cash")}
                 </div>
               ) : null}
             </ReceivingMethodShell>
@@ -407,7 +407,7 @@ export function SitterManualReceivingDestinationsSection({
                   />
                 </span>
                 <MethodName cardTitle="Bit" />
-                <span className="min-w-0 flex-1">{preferredMark("bit")}</span>
+                <span className="min-w-0 flex-1">{enabledMark("bit")}</span>
                 <ChevronDown
                   className={`${accordionChevronClass} ${bitOpen ? "rotate-180" : ""}`}
                   aria-hidden
@@ -443,7 +443,7 @@ export function SitterManualReceivingDestinationsSection({
                     >
                       {savingBit ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת Bit"}
                     </button>
-                    {preferredButton("bit")}
+                    {enableToggle("bit")}
                   </div>
                 </div>
               ) : null}
@@ -468,7 +468,7 @@ export function SitterManualReceivingDestinationsSection({
                   />
                 </span>
                 <MethodName cardTitle="PayBox" />
-                <span className="min-w-0 flex-1">{preferredMark("paybox")}</span>
+                <span className="min-w-0 flex-1">{enabledMark("paybox")}</span>
                 <ChevronDown
                   className={`${accordionChevronClass} ${payboxOpen ? "rotate-180" : ""}`}
                   aria-hidden
@@ -513,7 +513,7 @@ export function SitterManualReceivingDestinationsSection({
                 >
                   {savingPaybox ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת PayBox"}
                 </button>
-                {preferredButton("paybox")}
+                {enableToggle("paybox")}
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">

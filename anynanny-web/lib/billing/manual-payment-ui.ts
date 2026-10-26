@@ -133,7 +133,7 @@ export type ParentManualSettlementStep =
 
 export type ManualPaymentDestinations = {
   bookingId: string;
-  /** True only when the sitter has declared cash as an accepted method. */
+  /** True when cash is parent-visible: enabled cash, or the NULL/empty enabled-set fallback. */
   cash: { available: boolean };
   bit: { available: boolean; destination?: string };
   paybox: { available: boolean; destination?: string; link?: string };

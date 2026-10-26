@@ -30,7 +30,11 @@ assert.doesNotMatch(personal, /מזומן|PayBox|\bBit\b/);
 
 // 2. Wallet shows payment receiving methods
 assert.match(walletPage, /SitterPayoutWalletCards/);
-assert.match(walletCards, /אמצעי קבלת התשלום/);
+assert.match(walletCards, /אמצעי קבלת תשלום/);
+assert.match(
+  walletCards,
+  /בחרי אילו אמצעי תשלום יהיו זמינים לקבלת תשלומים מההורים\./
+);
 assert.match(walletCards, /SitterManualReceivingDestinationsSection/);
 assert.match(walletCards, /data-tour="sitter-payment-methods"/);
 assert.match(receiving, /kind="cash"/);
@@ -64,15 +68,19 @@ assert.match(payoutLib, /payout_bit_phone/);
 assert.match(payoutLib, /payout_paybox_phone/);
 assert.match(payoutLib, /payout_paybox_link/);
 
-// 7–8. Preferred method loads and can be changed from Wallet
-assert.match(receiving, /preferredReceivingMethodLabel\(methods\.preferred\)/);
-assert.match(receiving, /savePreferredMethod/);
-assert.match(receiving, /preferredButton\("cash"\)/);
-assert.match(receiving, /preferredButton\("bit"\)/);
-assert.match(receiving, /preferredButton\("paybox"\)/);
+// 7–8. Enabled methods load and can be changed independently from Wallet
+assert.match(receiving, /displayedPayoutEnabledMethods\(methods\.enabledMethods\)/);
+assert.match(receiving, /saveEnabledMethod/);
+assert.match(receiving, /enableToggle\("cash"\)/);
+assert.match(receiving, /enableToggle\("bit"\)/);
+assert.match(receiving, /enableToggle\("paybox"\)/);
+assert.match(receiving, /זמין לקבלת תשלומים/);
+assert.match(receiving, /preferred: false/);
 assert.match(walletCards, /preferredReceivingMethodLabel\(methods\.preferred\)/);
-assert.match(payoutRoute, /preferredOnly/);
-assert.match(payoutRoute, /preferred: kind/);
+assert.match(payoutRoute, /togglePayoutEnabledMethod/);
+assert.match(payoutRoute, /\{ enabledMethods \}/);
+assert.doesNotMatch(payoutRoute, /preferred: bitPhone/);
+assert.match(payoutLib, /payout_enabled_methods/);
 assert.match(payoutLib, /payout_preferred_method/);
 
 // 9. Parent-facing preferred method behavior is unchanged

@@ -66,9 +66,9 @@ export function SitterPayoutWalletCards({ sitterId, reloadToken = 0 }: SitterPay
       data-tour="sitter-payment-methods"
       className="min-w-0 max-w-full rounded-3xl border border-[#0B3C5D]/10 bg-white p-4 text-right shadow-soft"
     >
-      <h2 className="text-sm font-bold text-navy-header">אמצעי קבלת התשלום</h2>
+      <h2 className="text-sm font-bold text-navy-header">אמצעי קבלת תשלום</h2>
       <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
-        בחרו את אמצעי קבלת התשלום המועדף. ההורים יראו אותו בפרופיל שלכם.
+        בחרי אילו אמצעי תשלום יהיו זמינים לקבלת תשלומים מההורים.
       </p>
       <p className="sr-only" aria-hidden="true">
         Bit ו-PayBox הם אמצעי קבלה מההורים.

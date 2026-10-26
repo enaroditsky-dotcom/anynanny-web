@@ -161,8 +161,8 @@ export const SITTER_TOUR_STEPS: readonly ProductTourStep[] = [
     route: SITTER_TOUR_WALLET_PATH,
     targetSelector: SITTER_TOUR_SELECTORS.preferredPayment,
     fallbackSelector: SITTER_TOUR_SELECTORS.paymentMethods,
-    title: "אמצעי תשלום מועדף",
-    description: "אפשר לבחור אמצעי תשלום מועדף — וההורים יראו את ההעדפה שלך.",
+    title: "זמין לקבלת תשלומים",
+    description: "אפשר להפעיל מזומן, Bit ו-PayBox בנפרד. שמירת מספר לא מפעילה את האמצעי.",
     advanceMode: "next-button",
     placement: "bottom",
     blockTargetAction: true
