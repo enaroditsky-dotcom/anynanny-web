@@ -46,8 +46,62 @@ export function preferredReceivingMethodLabel(raw: unknown): string | null {
   return kind ? PREFERRED_RECEIVING_METHOD_LABELS[kind] : null;
 }
 
+export const PAYOUT_ENABLED_METHOD_ORDER = ["cash", "bit", "paybox"] as const;
+export type PayoutEnabledMethod = (typeof PAYOUT_ENABLED_METHOD_ORDER)[number];
+
+/** NULL means the enabled set was never stored. An array, including empty, was stored. */
+export function parsePayoutEnabledMethods(raw: unknown): PayoutEnabledMethod[] | null {
+  if (raw == null) return null;
+  const values = Array.isArray(raw) ? raw : [raw];
+  const selected = new Set<PayoutEnabledMethod>();
+  for (const item of values) {
+    const value = String(item ?? "").trim().toLowerCase();
+    if (value === "cash" || value === "bit" || value === "paybox") selected.add(value);
+  }
+  return PAYOUT_ENABLED_METHOD_ORDER.filter((method) => selected.has(method));
+}
+
+/**
+ * Read-time display of a stored enabled set.
+ * NULL and [] are cash. A non-empty set is shown as stored.
+ */
+export function displayedPayoutEnabledMethods(
+  raw: readonly PayoutEnabledMethod[] | null | undefined
+): PayoutEnabledMethod[] {
+  if (raw == null || raw.length === 0) return ["cash"];
+  return PAYOUT_ENABLED_METHOD_ORDER.filter((method) => raw.includes(method));
+}
+
+/**
+ * One-time read of a legacy single preference.
+ * cash, bit, and paybox map to that one method. NULL, blank, bank, and card stay unset.
+ */
+export function enabledMethodsFromLegacyPreferred(preferred: unknown): PayoutEnabledMethod[] | null {
+  const value = parsePreferredReceivingMethod(preferred);
+  if (value === "cash" || value === "bit" || value === "paybox") return [value];
+  return null;
+}
+
+/**
+ * NULL or [] starts from cash, so the first added method keeps the cash fallback.
+ * A non-empty set is edited exactly. The result may be empty.
+ */
+export function togglePayoutEnabledMethod(
+  current: readonly PayoutEnabledMethod[] | null | undefined,
+  method: PayoutEnabledMethod,
+  enabled: boolean
+): PayoutEnabledMethod[] {
+  const base = current == null || current.length === 0 ? (["cash"] as const) : current;
+  const next = new Set<PayoutEnabledMethod>(base);
+  if (enabled) next.add(method);
+  else next.delete(method);
+  return PAYOUT_ENABLED_METHOD_ORDER.filter((item) => next.has(item));
+}
+
 export type SitterPayoutMethods = {
   preferred: SitterPreferredPayoutMethod | null;
+  /** NULL means unset. Phones and links are not membership in this set. */
+  enabledMethods: PayoutEnabledMethod[] | null;
   bitPhone: string;
   payboxPhone: string;
   /** Optional private PayBox personal payment HTTPS link. */
@@ -64,6 +118,7 @@ export type SitterPayoutMethods = {
 
 export const EMPTY_SITTER_PAYOUT_METHODS: SitterPayoutMethods = {
   preferred: null,
+  enabledMethods: null,
   bitPhone: "",
   payboxPhone: "",
   payboxLink: "",
@@ -79,16 +134,20 @@ export const EMPTY_SITTER_PAYOUT_METHODS: SitterPayoutMethods = {
 export const HYP_SITTER_PAYOUT_METHOD_PREFIX = "SitterPayoutMethod_" as const;
 
 /** Direct table SELECT must not request payout_bit_phone / payout_paybox_phone / payout_paybox_link (column privileges). */
-const PUBLIC_SELECT_COLS =
-  "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number, payout_card_brand, payout_hyp_tokef, payout_hyp_trans_id";
-
-const PUBLIC_SELECT_FALLBACKS = [
-  PUBLIC_SELECT_COLS,
+const PUBLIC_SELECT_WITHOUT_ENABLED = [
+  "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number, payout_card_brand, payout_hyp_tokef, payout_hyp_trans_id",
   "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year, payout_card_id_number",
   "payout_preferred_method, payout_card_holder, payout_card_last4, payout_card_exp_month, payout_card_exp_year",
   "payout_preferred_method, payout_card_holder, payout_card_last4",
   "payout_preferred_method, payout_card_holder",
   "payout_preferred_method"
+] as const;
+
+const PUBLIC_SELECT_COLS = `payout_enabled_methods, ${PUBLIC_SELECT_WITHOUT_ENABLED[0]}`;
+
+const PUBLIC_SELECT_FALLBACKS = [
+  ...PUBLIC_SELECT_WITHOUT_ENABLED.map((cols) => `payout_enabled_methods, ${cols}`),
+  ...PUBLIC_SELECT_WITHOUT_ENABLED
 ];
 
 function normalizePhone(raw: string): string {
@@ -230,8 +289,12 @@ function mapRow(row: Record<string, unknown> | null): SitterPayoutMethods {
       String(row.payout_hyp_trans_id ?? "").trim() ||
       String(row.payout_hyp_token ?? "").trim()
   );
+  const enabledKnown = Object.prototype.hasOwnProperty.call(row, "payout_enabled_methods");
   return {
     preferred,
+    enabledMethods: enabledKnown
+      ? parsePayoutEnabledMethods(row.payout_enabled_methods)
+      : enabledMethodsFromLegacyPreferred(row.payout_preferred_method),
     bitPhone: String(row.payout_bit_phone ?? ""),
     payboxPhone: String(row.payout_paybox_phone ?? ""),
     payboxLink: parseAuthorizedPayboxPaymentLink(String(row.payout_paybox_link ?? "")) ?? "",
@@ -258,6 +321,7 @@ function isMissingSchema(message: string | undefined): boolean {
     isPostgrestMissingColumnError(msg, "payout_paybox_phone") ||
     isPostgrestMissingColumnError(msg, "payout_paybox_link") ||
     isPostgrestMissingColumnError(msg, "payout_card_last4") ||
+    isPostgrestMissingColumnError(msg, "payout_enabled_methods") ||
     isPostgrestMissingColumnError(msg, "payout_preferred_method") ||
     isPostgrestMissingColumnError(msg, "payout_card_id_number") ||
     isPostgrestMissingColumnError(msg, "payout_hyp_token") ||
@@ -387,6 +451,9 @@ function buildUpdatePayload(patch: SitterPayoutSavePatch): Record<string, unknow
   if (patch.preferred !== undefined) {
     row.payout_preferred_method = patch.preferred || null;
   }
+  if (patch.enabledMethods !== undefined) {
+    row.payout_enabled_methods = patch.enabledMethods;
+  }
   if (patch.bitPhone !== undefined) {
     row.payout_bit_phone = normalizePhone(patch.bitPhone) || null;
   }
@@ -494,7 +561,9 @@ export async function saveSitterPayoutMethods(
     ok: true,
     methods: {
       ...loaded.methods,
-      preferred: patch.preferred !== undefined ? patch.preferred : loaded.methods.preferred
+      preferred: patch.preferred !== undefined ? patch.preferred : loaded.methods.preferred,
+      enabledMethods:
+        patch.enabledMethods !== undefined ? patch.enabledMethods : loaded.methods.enabledMethods
     }
   };
 }

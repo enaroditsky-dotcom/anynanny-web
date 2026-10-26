@@ -40,6 +40,7 @@
     "test:manual-payment-dispute-ui": "npx --yes tsx scripts/test-manual-payment-dispute-ui.ts",
     "test:manual-payment-bit-paybox": "npx --yes tsx scripts/test-manual-payment-bit-paybox.ts",
     "test:payment-method-availability": "npx --yes tsx scripts/test-payment-method-availability.ts",
+    "test:payment-cash-default": "npx --yes tsx scripts/test-payment-cash-default.ts",
     "test:sitter-personal-area-model": "npx --yes tsx scripts/test-sitter-personal-area-model.ts",
     "test:welcome-charter-flow": "npx --yes tsx scripts/test-welcome-charter-flow.ts",
     "test:homepage-welcome-video": "npx --yes tsx scripts/test-homepage-welcome-video.ts",
