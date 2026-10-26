@@ -109,9 +109,12 @@ button {
   box-shadow: 0 0 0 3px rgba(0, 31, 63, 0.18);
 }
 
-/* Keep paired date inputs from overflowing native picker chrome on narrow mobile. */
+/* Keep paired date inputs from overflowing native picker chrome on narrow mobile.
+   color-scheme forces the native calendar popup onto a light, white surface. */
 .parent-search-date {
   min-width: 0;
+  color-scheme: light;
+  background-color: #ffffff;
 }
 
 .parent-search-date::-webkit-calendar-picker-indicator {
