@@ -21,6 +21,29 @@ function asPayload(value: unknown): CanonicalNotificationPayload {
   return value as CanonicalNotificationPayload;
 }
 
+/** Written only by submit_broadcast_question_response. Clients cannot insert notifications or update this column. */
+export const SMART_REPLY_PUSH_DEDUPE_PREFIX = "smart-reply:";
+
+const SMART_REPLY_DEDUPE_KEY = new RegExp(
+  `^${SMART_REPLY_PUSH_DEDUPE_PREFIX}([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$`,
+  "i"
+);
+
+/**
+ * True only for the row the answer function stores: dedupe key smart-reply:<question uuid>
+ * and the same question id inside the server payload. A client-supplied boolean is not enough.
+ */
+export function isServerSmartReplyNotification(
+  row: { dedupe_key?: unknown; payload?: unknown } | null | undefined
+): boolean {
+  const key = typeof row?.dedupe_key === "string" ? row.dedupe_key.trim() : "";
+  const match = SMART_REPLY_DEDUPE_KEY.exec(key);
+  if (!match) return false;
+  const payload = asPayload(row?.payload);
+  const sourceQuestionId = String(payload.source_question_id ?? "").trim().toLowerCase();
+  return payload.smart_reply === true && sourceQuestionId === match[1].toLowerCase();
+}
+
 export async function claimNotificationPushDispatch(
   admin: SupabaseClient,
   notificationId: string
@@ -71,17 +94,9 @@ export async function deliverCanonicalNotificationPush(
   const id = notificationId.trim();
   if (!id) return { skipped: true, sent: 0, removed: 0, reason: "missing id" };
 
-  const claimed = await claimNotificationPushDispatch(deps.admin, id);
-  if (!claimed) {
-    return { skipped: true, sent: 0, removed: 0, reason: "duplicate" };
-  }
-  // Regular Broadcasts and Broadcast questions share this path.
-  // An existing notification_push_dispatches row, including historical
-  // admin_broadcast claims, returns above and is not sent again.
-
   const { data: notification, error: notificationError } = await deps.admin
     .from(NOTIFICATIONS_TABLE)
-    .select("id, user_id, kind, payload")
+    .select("id, user_id, kind, payload, dedupe_key")
     .eq("id", id)
     .maybeSingle();
 
@@ -89,6 +104,20 @@ export async function deliverCanonicalNotificationPush(
   if (!notification?.user_id) {
     return { skipped: true, sent: 0, removed: 0, reason: "missing notification" };
   }
+
+  // The notifications INSERT webhook still calls this route. Smart Replies stop
+  // here, before a dispatch row or a device send. Other kinds keep the claim below.
+  if (isServerSmartReplyNotification(notification)) {
+    return { skipped: true, sent: 0, removed: 0, reason: "smart_reply" };
+  }
+
+  const claimed = await claimNotificationPushDispatch(deps.admin, id);
+  if (!claimed) {
+    return { skipped: true, sent: 0, removed: 0, reason: "duplicate" };
+  }
+  // Regular Broadcasts and Broadcast questions share this path.
+  // An existing notification_push_dispatches row, including historical
+  // admin_broadcast claims, returns above and is not sent again.
 
   const userId = String(notification.user_id);
   const { data: profile, error: profileError } = await deps.admin

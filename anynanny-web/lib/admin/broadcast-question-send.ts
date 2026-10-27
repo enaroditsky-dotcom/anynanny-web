@@ -1,7 +1,7 @@
 import "server-only";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { audienceForLegacyQuestionRpc } from "@/lib/admin/broadcast-audience";
-import type { ValidatedBroadcastQuestion } from "@/lib/admin/broadcast-question-validation";
+import { smartReplyRpcArgs, type ValidatedBroadcastQuestion } from "@/lib/admin/broadcast-question-validation";
 import {
   readSelectedRecipientPreview,
   SELECTED_RECIPIENTS_REJECTED_MESSAGE
@@ -35,6 +35,7 @@ export async function sendAdminBroadcastQuestion(input: {
     throw new Error("Missing user id.");
   }
 
+  const smartReplies = smartReplyRpcArgs(input.message.smartReplies);
   const supabase = getSupabaseServiceRoleClient();
   const { data, error } = await supabase.rpc(ADMIN_SEND_BROADCAST_QUESTION_RPC, {
     p_audience: audienceForLegacyQuestionRpc({
@@ -47,7 +48,11 @@ export async function sendAdminBroadcastQuestion(input: {
     p_options: input.message.options,
     p_idempotency_key: input.message.idempotencyKey,
     p_is_test: input.isTest,
-    p_test_user_id: input.isTest ? testUserId : null
+    p_test_user_id: input.isTest ? testUserId : null,
+    p_smart_replies_enabled: smartReplies.enabled,
+    p_smart_reply_mode: smartReplies.mode,
+    p_smart_reply_text: smartReplies.text,
+    p_option_replies: smartReplies.replies
   });
   if (error) {
     throw new Error(error.message || "Failed to send question.");
@@ -89,6 +94,7 @@ export async function sendSelectedAdminBroadcastQuestion(input: {
   if (!input.message.idempotencyKey) {
     throw new Error("Missing idempotency key.");
   }
+  const smartReplies = smartReplyRpcArgs(input.message.smartReplies);
   const supabase = getSupabaseServiceRoleClient();
   const { data, error } = await supabase.rpc("admin_send_selected_broadcast_question", {
     p_public_ids: input.publicIds,
@@ -96,7 +102,11 @@ export async function sendSelectedAdminBroadcastQuestion(input: {
     p_question_format: input.message.questionFormat,
     p_selection_mode: input.message.selectionMode,
     p_options: input.message.options,
-    p_idempotency_key: input.message.idempotencyKey
+    p_idempotency_key: input.message.idempotencyKey,
+    p_smart_replies_enabled: smartReplies.enabled,
+    p_smart_reply_mode: smartReplies.mode,
+    p_smart_reply_text: smartReplies.text,
+    p_option_replies: smartReplies.replies
   });
   if (error) {
     if (/selected recipients are invalid/i.test(error.message || "")) {

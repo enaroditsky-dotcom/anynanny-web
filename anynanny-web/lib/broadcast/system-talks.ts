@@ -6,6 +6,18 @@ import { markNotificationsRead } from "@/lib/notifications/read-state";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 
 export const NANNY_IMAGE_SRC = "/brand/BROADCAST%20NANNY.png";
+/** Thumbs-up Nanny for an automatic reply after a survey answer. Same canvas as the Broadcast illustration, so the shared frame classes match her size. */
+export const NANNY_THUMBS_UP_IMAGE_SRC = "/brand/nanny-thumbs-up.png";
+
+export function isThumbsUpNannyPayload(payload: object | null | undefined): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const record = payload as { nanny_variant?: unknown; smart_reply?: unknown };
+  return record.nanny_variant === "thumbs_up" || record.smart_reply === true;
+}
+
+export function nannyTalkImageSrc(payload: object | null | undefined): string {
+  return isThumbsUpNannyPayload(payload) ? NANNY_THUMBS_UP_IMAGE_SRC : NANNY_IMAGE_SRC;
+}
 export const EXPLICIT_BROADCAST_REMOVAL_LABEL = "סגור ומחק את ההודעה";
 export const ANYNANNY_SYSTEM_CONVERSATION_TITLE = "AnyNanny — הודעות מערכת";
 export const BROADCAST_TALKS_HREF = "/broadcast/talks";
@@ -18,6 +30,9 @@ export type SystemTalkItem = {
   createdAt: string;
   href: string;
   pending: boolean;
+  /** Full text shown in the talk. The list uses `title` when this is longer. */
+  message?: string;
+  nannyVariant?: "broadcast" | "thumbs_up";
 };
 
 export function broadcastPendingBadge(questionCount: number, regularCount: number): string | null {
@@ -93,17 +108,23 @@ export async function loadSystemTalkItems(
 
   const regular = await fetchUnreadAdminBroadcastNotifications(supabase, uid);
   if (regular.error) return { items: questions, error: "לא הצלחנו לטעון את כל הודעות המערכת." };
-  const broadcasts: SystemTalkItem[] = regular.notifications.map((row) => ({
-    id: row.id,
-    kind: "broadcast" as const,
-    title: row.body && row.body !== row.title ? `${row.title} — ${row.body}` : row.title,
-    createdAt: row.created_at,
-    href: (() => {
-      const route = String(row.payload.cta_route ?? "").trim();
-      return isInternalBroadcastCtaRoute(route) ? route : "";
-    })(),
-    pending: true
-  }));
+  const broadcasts: SystemTalkItem[] = regular.notifications.map((row) => {
+    const thumbsUp = isThumbsUpNannyPayload(row.payload);
+    const fullText = row.body?.trim() ? row.body : row.title;
+    return {
+      id: row.id,
+      kind: "broadcast" as const,
+      title: thumbsUp ? row.title : row.body && row.body !== row.title ? `${row.title} — ${row.body}` : row.title,
+      message: thumbsUp ? fullText : undefined,
+      createdAt: row.created_at,
+      href: (() => {
+        const route = String(row.payload.cta_route ?? "").trim();
+        return isInternalBroadcastCtaRoute(route) ? route : "";
+      })(),
+      pending: true,
+      nannyVariant: thumbsUp ? ("thumbs_up" as const) : ("broadcast" as const)
+    };
+  });
 
   const items = [...questions, ...broadcasts].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   return { items, error: null };

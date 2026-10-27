@@ -31,6 +31,8 @@ import {
   BROADCAST_REMOVED_EVENT,
   BROADCAST_TALKS_HREF,
   EXPLICIT_BROADCAST_REMOVAL_LABEL,
+  isThumbsUpNannyPayload,
+  nannyTalkImageSrc,
   removeOwnRegularBroadcast
 } from "@/lib/broadcast/system-talks";
 import { isInternalBroadcastCtaRoute } from "@/lib/admin/broadcast-cta";
@@ -240,6 +242,7 @@ export function GlobalCoordinationNotifications() {
       if (!questionId) return;
       answeredQuestionIdsRef.current.add(questionId);
       setItems((prev) => prev.filter((row) => broadcastQuestionIdFromPayload(row.payload) !== questionId));
+      setInboxRefresh((current) => current + 1);
     };
     window.addEventListener(BROADCAST_QUESTION_ANSWERED_EVENT, onAnswered);
     return () => window.removeEventListener(BROADCAST_QUESTION_ANSWERED_EVENT, onAnswered);
@@ -620,11 +623,23 @@ export function GlobalCoordinationNotifications() {
       </NannyTalksFrame>
     ) : null}
     {showRegularTalk && regularBroadcast ? (
-      <NannyTalksFrame title="AnyNanny" onDismiss={dismissRegularTalk}>
-        {regularBroadcast.title ? <p className="text-base font-semibold leading-snug">{regularBroadcast.title}</p> : null}
-        {regularBroadcast.body && regularBroadcast.body !== regularBroadcast.title ? (
-          <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed">{regularBroadcast.body}</p>
-        ) : null}
+      <NannyTalksFrame
+        title="AnyNanny"
+        imageSrc={nannyTalkImageSrc(regularBroadcast.payload)}
+        onDismiss={dismissRegularTalk}
+      >
+        {isThumbsUpNannyPayload(regularBroadcast.payload) ? (
+          <p className="whitespace-pre-wrap text-base leading-relaxed">
+            {regularBroadcast.body || regularBroadcast.title}
+          </p>
+        ) : (
+          <>
+            {regularBroadcast.title ? <p className="text-base font-semibold leading-snug">{regularBroadcast.title}</p> : null}
+            {regularBroadcast.body && regularBroadcast.body !== regularBroadcast.title ? (
+              <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed">{regularBroadcast.body}</p>
+            ) : null}
+          </>
+        )}
         {isInternalBroadcastCtaRoute(String(regularBroadcast.payload.cta_route ?? "")) ? (
           <Link
             href={String(regularBroadcast.payload.cta_route)}

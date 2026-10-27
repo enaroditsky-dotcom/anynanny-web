@@ -8,7 +8,12 @@ import {
   pushSettingsStatusCopy,
   resolveEffectivePush
 } from "../lib/push/capability";
-import { sendPushToSubscriptions } from "../lib/push/deliver-notification";
+import {
+  deliverCanonicalNotificationPush,
+  isServerSmartReplyNotification,
+  sendPushToSubscriptions,
+  SMART_REPLY_PUSH_DEDUPE_PREFIX
+} from "../lib/push/deliver-notification";
 import { PUSH_NOTIFICATION_KIND_LIST } from "../lib/push/kind-list";
 import type { CanonicalNotificationPayload } from "../lib/notifications/kinds";
 import { buildPrivacySafePushPayload, privacySafeBodyForKind, pushHrefForKind } from "../lib/push/payload";
@@ -418,6 +423,138 @@ const android = detectPushCapability({
   navigatorStandalone: false
 });
 assert.equal(android.canSubscribe, true);
+
+const deliverBody = deliver.slice(deliver.indexOf("export async function deliverCanonicalNotificationPush"));
+assert.ok(deliverBody.indexOf("isServerSmartReplyNotification") < deliverBody.indexOf("claimNotificationPushDispatch"));
+assert.match(deliverRoute, /deliverCanonicalNotificationPush/);
+assert.doesNotMatch(deliverBody, /kind === ["']admin_broadcast["']/);
+
+const questionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+assert.equal(
+  isServerSmartReplyNotification({
+    dedupe_key: `${SMART_REPLY_PUSH_DEDUPE_PREFIX}${questionId}`,
+    payload: { smart_reply: true, source_question_id: questionId, nanny_variant: "thumbs_up" }
+  }),
+  true
+);
+assert.equal(
+  isServerSmartReplyNotification({
+    dedupe_key: questionId,
+    payload: { smart_reply: true, source_question_id: questionId }
+  }),
+  false
+);
+
+type PushRow = Record<string, unknown>;
+function pushAdmin(notification: PushRow, subscriptions: PushRow[]) {
+  const ops: string[] = [];
+  const from = (table: string) => {
+    let head = false;
+    const api = {
+      select(_columns?: string, options?: { head?: boolean }) {
+        head = Boolean(options?.head);
+        return api;
+      },
+      eq() {
+        return api;
+      },
+      is() {
+        return api;
+      },
+      neq() {
+        return api;
+      },
+      insert() {
+        ops.push(`insert:${table}`);
+        return Promise.resolve({ error: null });
+      },
+      delete() {
+        ops.push(`delete:${table}`);
+        return api;
+      },
+      maybeSingle() {
+        ops.push(`read:${table}`);
+        const data =
+          table === "notifications"
+            ? notification
+            : table === "profiles"
+              ? { role: "parent", push_enabled: true }
+              : null;
+        return Promise.resolve({ data, error: null });
+      },
+      then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
+        ops.push(`list:${table}`);
+        const value = head
+          ? { count: 0, data: null, error: null }
+          : { data: table === "push_subscriptions" ? subscriptions : [], error: null };
+        return Promise.resolve(value).then(resolve, reject);
+      }
+    };
+    return api;
+  };
+  return { admin: { from } as never, ops };
+}
+
+const subscription = [{ id: "sub-1", endpoint: "https://push.example/1", p256dh: "p", auth: "a" }];
+const smartAdmin = pushAdmin(
+  {
+    id: "smart-1",
+    user_id: "user-1",
+    kind: "admin_broadcast",
+    dedupe_key: `${SMART_REPLY_PUSH_DEDUPE_PREFIX}${questionId}`,
+    payload: { smart_reply: true, nanny_variant: "thumbs_up", source_question_id: questionId }
+  },
+  subscription
+);
+let smartSends = 0;
+const smartResult = await deliverCanonicalNotificationPush("smart-1", {
+  admin: smartAdmin.admin,
+  send: async () => {
+    smartSends += 1;
+    return { ok: true };
+  }
+});
+assert.deepEqual(smartResult, { skipped: true, sent: 0, removed: 0, reason: "smart_reply" });
+assert.equal(smartSends, 0);
+assert.deepEqual(smartAdmin.ops, ["read:notifications"]);
+
+async function expectEligible(notification: PushRow) {
+  const harness = pushAdmin(notification, subscription);
+  let sends = 0;
+  const result = await deliverCanonicalNotificationPush(String(notification.id), {
+    admin: harness.admin,
+    send: async () => {
+      sends += 1;
+      return { ok: true };
+    }
+  });
+  assert.equal(result.skipped, false);
+  assert.equal(result.sent, 1);
+  assert.equal(sends, 1);
+  assert.ok(harness.ops.includes("insert:notification_push_dispatches"));
+}
+
+await expectEligible({
+  id: "broadcast-1",
+  user_id: "user-1",
+  kind: "admin_broadcast",
+  dedupe_key: questionId,
+  payload: { question_id: questionId, broadcast_id: questionId }
+});
+await expectEligible({
+  id: "forged-1",
+  user_id: "user-1",
+  kind: "admin_broadcast",
+  dedupe_key: "campaign-1",
+  payload: { smart_reply: true, source_question_id: questionId }
+});
+await expectEligible({
+  id: "booking-1",
+  user_id: "user-1",
+  kind: "booking_request",
+  dedupe_key: "booking-1",
+  payload: { booking_id: "booking-1" }
+});
 
 console.log("web push PUSH-2 checks passed.");
 })().catch((err) => {

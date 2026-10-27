@@ -4,7 +4,7 @@ import {
   isBroadcastAudienceType,
   type BroadcastAudienceType
 } from "@/lib/admin/broadcast-audience";
-import { BROADCAST_IDEMPOTENCY_KEY_MAX_LENGTH } from "@/lib/admin/broadcast-validation";
+import { BROADCAST_BODY_MAX_LENGTH, BROADCAST_IDEMPOTENCY_KEY_MAX_LENGTH } from "@/lib/admin/broadcast-validation";
 
 export const BROADCAST_QUESTION_PROMPT_MAX_LENGTH = 2000;
 export const BROADCAST_QUESTION_OPTION_MAX_LENGTH = 80;
@@ -14,9 +14,26 @@ export const YES_NO_OPTIONS = ["כן", "לא"] as const;
 
 export const BROADCAST_QUESTION_FORMATS = ["yes_no", "custom"] as const;
 export const BROADCAST_QUESTION_SELECTION_MODES = ["single", "multiple"] as const;
+export const BROADCAST_SMART_REPLY_MODES = ["general", "by_answer"] as const;
+export const BROADCAST_SMART_REPLY_MAX_LENGTH = BROADCAST_BODY_MAX_LENGTH;
+export const BROADCAST_SMART_REPLY_DEFAULT =
+  "תודה שענית! 💚 התשובה שלך עוזרת לנו להפוך את AnyNanny לטובה יותר.";
 
 export type BroadcastQuestionFormat = (typeof BROADCAST_QUESTION_FORMATS)[number];
 export type BroadcastQuestionSelectionMode = (typeof BROADCAST_QUESTION_SELECTION_MODES)[number];
+export type BroadcastSmartReplyMode = (typeof BROADCAST_SMART_REPLY_MODES)[number];
+
+export type ValidatedSmartReplies =
+  | { enabled: false }
+  | { enabled: true; mode: "general"; text: string }
+  | { enabled: true; mode: "by_answer"; repliesByLabel: Record<string, string> };
+
+export type SmartReplyInput = {
+  enabled?: unknown;
+  mode?: unknown;
+  generalText?: unknown;
+  repliesByLabel?: unknown;
+};
 
 const HTML_OR_CONTROL = /[<>\u0000-\u0008\u000B\u000C\u000E-\u001F]/;
 
@@ -27,6 +44,7 @@ export type BroadcastQuestionInput = {
   selectionMode: unknown;
   options: unknown;
   idempotencyKey?: unknown;
+  smartReplies?: SmartReplyInput | null;
 };
 
 export type ValidatedBroadcastQuestion = {
@@ -37,6 +55,7 @@ export type ValidatedBroadcastQuestion = {
   selectionMode: BroadcastQuestionSelectionMode;
   options: string[];
   idempotencyKey: string | null;
+  smartReplies: ValidatedSmartReplies;
 };
 
 export type BroadcastQuestionDraft = {
@@ -45,6 +64,8 @@ export type BroadcastQuestionDraft = {
   questionFormat: BroadcastQuestionFormat;
   selectionMode: BroadcastQuestionSelectionMode;
   customOptions: string[];
+  smartRepliesEnabled?: boolean;
+  smartReplyText?: string;
 };
 
 export function canAddQuestionOption(count: number): boolean {
@@ -64,8 +85,71 @@ export function isBroadcastQuestionDraftDirty(draft: BroadcastQuestionDraft): bo
     draft.prompt.trim() !== "" ||
     draft.questionFormat !== "yes_no" ||
     draft.selectionMode !== "single" ||
-    customDirty
+    customDirty ||
+    Boolean(draft.smartRepliesEnabled) ||
+    Boolean(draft.smartReplyText?.trim())
   );
+}
+
+function asSmartReplyText(value: unknown): string | { error: string } {
+  if (typeof value !== "string") return { error: "נא לכתוב את התגובה האוטומטית." };
+  const text = value.replace(/\r\n/g, "\n").trim();
+  if (!text) return { error: "נא לכתוב את התגובה האוטומטית." };
+  if (text.length > BROADCAST_SMART_REPLY_MAX_LENGTH) return { error: "התגובה האוטומטית ארוכה מדי." };
+  if (HTML_OR_CONTROL.test(text)) return { error: "התגובה האוטומטית חייבת להיות טקסט פשוט." };
+  return text;
+}
+
+export function validateSmartReplies(
+  input: SmartReplyInput | null | undefined,
+  options: string[]
+): { ok: true; value: ValidatedSmartReplies } | { ok: false; error: string } {
+  if (!input || input.enabled !== true) {
+    return { ok: true, value: { enabled: false } };
+  }
+
+  if (input.mode !== "general" && input.mode !== "by_answer") {
+    return { ok: false, error: "יש לבחור איך לשלוח את התגובה האוטומטית." };
+  }
+
+  if (input.mode === "general") {
+    const text = asSmartReplyText(input.generalText);
+    if (typeof text !== "string") return { ok: false, error: text.error };
+    return { ok: true, value: { enabled: true, mode: "general", text } };
+  }
+
+  if (!input.repliesByLabel || typeof input.repliesByLabel !== "object" || Array.isArray(input.repliesByLabel)) {
+    return { ok: false, error: "יש לכתוב תגובה לכל תשובה." };
+  }
+
+  const record = input.repliesByLabel as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (keys.length !== options.length || options.some((label) => !Object.prototype.hasOwnProperty.call(record, label))) {
+    return { ok: false, error: "יש לכתוב תגובה לכל תשובה." };
+  }
+
+  const repliesByLabel: Record<string, string> = {};
+  for (const label of options) {
+    const reply = asSmartReplyText(record[label]);
+    if (typeof reply !== "string") return { ok: false, error: reply.error };
+    repliesByLabel[label] = reply;
+  }
+  return { ok: true, value: { enabled: true, mode: "by_answer", repliesByLabel } };
+}
+
+export function smartReplyRpcArgs(value: ValidatedSmartReplies): {
+  enabled: boolean;
+  mode: string | null;
+  text: string | null;
+  replies: Record<string, string>;
+} {
+  if (!value.enabled) {
+    return { enabled: false, mode: null, text: null, replies: {} };
+  }
+  if (value.mode === "general") {
+    return { enabled: true, mode: "general", text: value.text, replies: {} };
+  }
+  return { enabled: true, mode: "by_answer", text: null, replies: value.repliesByLabel };
 }
 
 export function broadcastQuestionConfirmMessage(audienceLabel: string, recipientCount: number): string {
@@ -144,6 +228,9 @@ export function validateBroadcastQuestion(
     return { ok: false, error: "שאלת כן/לא כוללת רק את האפשרויות כן ולא." };
   }
 
+  const smartReplies = validateSmartReplies(input.smartReplies, options);
+  if (!smartReplies.ok) return { ok: false, error: smartReplies.error };
+
   let idempotencyKey: string | null = null;
   if (input.idempotencyKey != null && String(input.idempotencyKey).trim()) {
     const key = String(input.idempotencyKey).trim();
@@ -162,7 +249,8 @@ export function validateBroadcastQuestion(
       questionFormat: input.questionFormat,
       selectionMode: input.selectionMode,
       options,
-      idempotencyKey
+      idempotencyKey,
+      smartReplies: smartReplies.value
     }
   };
 }

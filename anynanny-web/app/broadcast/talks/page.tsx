@@ -7,6 +7,7 @@ import { NannyTalksFrame } from "@/components/broadcast/nanny-talks-frame";
 import {
   ANYNANNY_SYSTEM_CONVERSATION_TITLE,
   EXPLICIT_BROADCAST_REMOVAL_LABEL,
+  NANNY_THUMBS_UP_IMAGE_SRC,
   loadSystemTalkItems,
   removeOwnRegularBroadcast,
   type SystemTalkItem
@@ -72,8 +73,12 @@ export default function BroadcastTalksPage() {
         ))}
       </ul>
       {selected ? (
-        <NannyTalksFrame title="AnyNanny" onDismiss={() => setSelected(null)}>
-          <p className="whitespace-pre-wrap text-base leading-relaxed">{selected.title}</p>
+        <NannyTalksFrame
+          title="AnyNanny"
+          imageSrc={selected.nannyVariant === "thumbs_up" ? NANNY_THUMBS_UP_IMAGE_SRC : undefined}
+          onDismiss={() => setSelected(null)}
+        >
+          <p className="whitespace-pre-wrap text-base leading-relaxed">{selected.message ?? selected.title}</p>
           {selected.href.startsWith("/") ? (
             <Link href={selected.href} className="mt-3 inline-flex min-h-11 items-center text-sm font-bold underline">
               לפתיחה

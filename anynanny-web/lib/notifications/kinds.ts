@@ -75,6 +75,9 @@ export type CanonicalNotificationPayload = {
   cta_label?: string | null;
   is_test?: boolean | null;
   question_id?: string | null;
+  smart_reply?: boolean | null;
+  nanny_variant?: "thumbs_up" | null;
+  source_question_id?: string | null;
 };
 
 export function isCanonicalNotificationKind(

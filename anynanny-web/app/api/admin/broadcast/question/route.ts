@@ -32,6 +32,10 @@ type RequestBody = {
   options?: unknown;
   idempotency_key?: unknown;
   public_ids?: unknown;
+  smart_replies_enabled?: unknown;
+  smart_reply_mode?: unknown;
+  smart_reply_text?: unknown;
+  smart_reply_by_label?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -56,7 +60,13 @@ export async function POST(request: Request) {
     questionFormat: body.question_format,
     selectionMode: body.selection_mode,
     options: body.options,
-    idempotencyKey: body.idempotency_key
+    idempotencyKey: body.idempotency_key,
+    smartReplies: {
+      enabled: body.smart_replies_enabled,
+      mode: body.smart_reply_mode,
+      generalText: body.smart_reply_text,
+      repliesByLabel: body.smart_reply_by_label
+    }
   });
   if (!parsed.ok) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });

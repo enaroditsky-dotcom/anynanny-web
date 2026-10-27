@@ -8,11 +8,14 @@ import { NANNY_IMAGE_SRC } from "@/lib/broadcast/system-talks";
 export function NannyTalksFrame({
   title,
   onDismiss,
-  children
+  children,
+  imageSrc = NANNY_IMAGE_SRC
 }: {
   title: string;
   onDismiss: () => void;
   children: ReactNode;
+  /** Defaults to the Broadcast Nanny. Pass NANNY_THUMBS_UP_IMAGE_SRC for the survey variant. */
+  imageSrc?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
@@ -68,7 +71,7 @@ export function NannyTalksFrame({
           </div>
         </div>
         <img
-          src={NANNY_IMAGE_SRC}
+          src={imageSrc}
           alt=""
           aria-hidden
           data-nanny-character

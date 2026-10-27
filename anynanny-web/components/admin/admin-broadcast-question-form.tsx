@@ -9,6 +9,7 @@ import {
   isBroadcastAudienceType,
   type BroadcastAudienceType
 } from "@/lib/admin/broadcast-audience";
+import { AdminBroadcastSmartReplyFields } from "@/components/admin/admin-broadcast-smart-reply-fields";
 import { SelectedPublicIdField } from "@/components/admin/selected-public-id-field";
 import {
   parseSelectedPublicIdList,
@@ -20,16 +21,18 @@ import {
   BROADCAST_QUESTION_OPTION_MAX_COUNT,
   BROADCAST_QUESTION_OPTION_MAX_LENGTH,
   BROADCAST_QUESTION_PROMPT_MAX_LENGTH,
+  BROADCAST_SMART_REPLY_DEFAULT,
   YES_NO_OPTIONS,
   broadcastQuestionConfirmMessage,
   canAddQuestionOption,
   canRemoveQuestionOption,
   isBroadcastQuestionDraftDirty,
   type BroadcastQuestionFormat,
-  type BroadcastQuestionSelectionMode
+  type BroadcastQuestionSelectionMode,
+  type BroadcastSmartReplyMode
 } from "@/lib/admin/broadcast-question-validation";
 
-type OptionDraft = { id: string; label: string };
+type OptionDraft = { id: string; label: string; reply: string };
 
 type PreviewState = {
   audience_label: string;
@@ -57,8 +60,8 @@ function newIdempotencyKey(): string {
 
 function emptyCustomOptions(): OptionDraft[] {
   return [
-    { id: "option-1", label: "" },
-    { id: "option-2", label: "" }
+    { id: "option-1", label: "", reply: "" },
+    { id: "option-2", label: "", reply: "" }
   ];
 }
 
@@ -73,6 +76,13 @@ export function AdminBroadcastQuestionForm() {
   const [questionFormat, setQuestionFormat] = useState<BroadcastQuestionFormat>("yes_no");
   const [selectionMode, setSelectionMode] = useState<BroadcastQuestionSelectionMode>("single");
   const [customOptions, setCustomOptions] = useState<OptionDraft[]>(emptyCustomOptions);
+  const [smartRepliesEnabled, setSmartRepliesEnabled] = useState(false);
+  const [smartReplyMode, setSmartReplyMode] = useState<BroadcastSmartReplyMode>("general");
+  const [generalReply, setGeneralReply] = useState(BROADCAST_SMART_REPLY_DEFAULT);
+  const [yesNoReplies, setYesNoReplies] = useState<Record<string, string>>({
+    כן: "",
+    לא: ""
+  });
   const [confirmNew, setConfirmNew] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [busy, setBusy] = useState<"preview" | "test" | "send" | null>(null);
@@ -96,16 +106,38 @@ export function AdminBroadcastQuestionForm() {
   const effectiveSelection: BroadcastQuestionSelectionMode =
     questionFormat === "yes_no" ? "single" : selectionMode;
 
-  const payload = useMemo(
-    () => ({
+  const payload = useMemo(() => {
+    const replies: Record<string, string> = {};
+    if (smartRepliesEnabled && smartReplyMode === "by_answer") {
+      if (questionFormat === "yes_no") {
+        for (const label of YES_NO_OPTIONS) replies[label] = yesNoReplies[label];
+      } else {
+        for (const option of customOptions) replies[option.label.trim()] = option.reply;
+      }
+    }
+    return {
       audience,
       prompt,
       question_format: questionFormat,
       selection_mode: effectiveSelection,
-      options
-    }),
-    [audience, effectiveSelection, options, prompt, questionFormat]
-  );
+      options,
+      smart_replies_enabled: smartRepliesEnabled,
+      smart_reply_mode: smartRepliesEnabled ? smartReplyMode : null,
+      smart_reply_text: smartRepliesEnabled && smartReplyMode === "general" ? generalReply : null,
+      smart_reply_by_label: replies
+    };
+  }, [
+    audience,
+    customOptions,
+    effectiveSelection,
+    generalReply,
+    options,
+    prompt,
+    questionFormat,
+    smartRepliesEnabled,
+    smartReplyMode,
+    yesNoReplies
+  ]);
 
   const selectedRequest = () =>
     audience === SELECTED_BROADCAST_AUDIENCE ? { public_ids: selectedIds } : {};
@@ -128,6 +160,10 @@ export function AdminBroadcastQuestionForm() {
     setQuestionFormat("yes_no");
     setSelectionMode("single");
     setCustomOptions(emptyCustomOptions());
+    setSmartRepliesEnabled(false);
+    setSmartReplyMode("general");
+    setGeneralReply(BROADCAST_SMART_REPLY_DEFAULT);
+    setYesNoReplies({ כן: "", לא: "" });
     nextOptionId.current = 3;
     setPreview(null);
     setError(null);
@@ -143,7 +179,13 @@ export function AdminBroadcastQuestionForm() {
       prompt,
       questionFormat,
       selectionMode,
-      customOptions: customOptions.map((option) => option.label)
+      customOptions: customOptions.map((option) => option.label),
+      smartRepliesEnabled,
+      smartReplyText: [
+        generalReply === BROADCAST_SMART_REPLY_DEFAULT ? "" : generalReply,
+        ...Object.values(yesNoReplies),
+        ...customOptions.map((option) => option.reply)
+      ].join("")
     });
     if (!dirty) {
       resetForm();
@@ -261,7 +303,7 @@ export function AdminBroadcastQuestionForm() {
     if (!canAddQuestionOption(customOptions.length)) return;
     const id = `option-${nextOptionId.current}`;
     nextOptionId.current += 1;
-    setCustomOptions((current) => [...current, { id, label: "" }]);
+    setCustomOptions((current) => [...current, { id, label: "", reply: "" }]);
     clearPreview();
   };
 
@@ -428,6 +470,38 @@ export function AdminBroadcastQuestionForm() {
             </button>
           </div>
         )}
+
+        <AdminBroadcastSmartReplyFields
+          enabled={smartRepliesEnabled}
+          mode={smartReplyMode}
+          generalText={generalReply}
+          disabled={busy !== null}
+          options={
+            questionFormat === "yes_no"
+              ? YES_NO_OPTIONS.map((label) => ({ key: label, label, reply: yesNoReplies[label] }))
+              : customOptions.map((option) => ({ key: option.id, label: option.label, reply: option.reply }))
+          }
+          onEnabledChange={(next) => {
+            setSmartRepliesEnabled(next);
+            clearPreview();
+          }}
+          onModeChange={(next) => {
+            setSmartReplyMode(next);
+            clearPreview();
+          }}
+          onGeneralTextChange={(text) => {
+            setGeneralReply(text);
+            clearPreview();
+          }}
+          onOptionReplyChange={(key, reply) => {
+            if (questionFormat === "yes_no") {
+              setYesNoReplies((current) => ({ ...current, [key]: reply }));
+            } else {
+              setCustomOptions((current) => current.map((option) => (option.id === key ? { ...option, reply } : option)));
+            }
+            clearPreview();
+          }}
+        />
 
         <div className="flex flex-wrap gap-2">
           <button

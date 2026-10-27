@@ -66,6 +66,7 @@
     "test:broadcast-selected-recipients": "npx --yes tsx scripts/test-broadcast-selected-recipients.ts",
     "test:broadcast-v2-questions": "npx --yes tsx scripts/test-broadcast-v2-questions.ts",
     "test:broadcast-question-answer": "npx --yes tsx scripts/test-broadcast-question-answer.ts",
+    "test:broadcast-smart-replies": "npx --yes tsx scripts/test-broadcast-smart-replies.ts",
     "test:broadcast-question-results": "npx --yes tsx scripts/test-broadcast-question-results.ts",
     "test:broadcast-question-inbox": "npx --yes tsx scripts/test-broadcast-question-inbox.ts",
     "test:broadcast-question-visibility": "npx --yes tsx scripts/test-broadcast-question-visibility.ts",

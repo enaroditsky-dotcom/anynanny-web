@@ -15,6 +15,7 @@ import {
   BROADCAST_TALKS_HREF,
   EXPLICIT_BROADCAST_REMOVAL_LABEL,
   NANNY_IMAGE_SRC,
+  NANNY_THUMBS_UP_IMAGE_SRC,
   broadcastPendingBadge,
   systemConversationVisible
 } from "../lib/broadcast/system-talks";
@@ -22,6 +23,20 @@ import {
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 assert.equal(NANNY_IMAGE_SRC, "/brand/BROADCAST%20NANNY.png");
+assert.equal(NANNY_THUMBS_UP_IMAGE_SRC, "/brand/nanny-thumbs-up.png");
+assert.notEqual(NANNY_THUMBS_UP_IMAGE_SRC, NANNY_IMAGE_SRC);
+
+function pngSize(relativePath: string) {
+  const buf = readFileSync(new URL(`../${relativePath}`, import.meta.url));
+  assert.equal(buf.toString("ascii", 12, 16), "IHDR");
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+const broadcastPng = pngSize("public/brand/BROADCAST NANNY.png");
+const thumbsPng = pngSize("public/brand/nanny-thumbs-up.png");
+assert.equal(broadcastPng.width, 1287);
+assert.equal(broadcastPng.height, 1222);
+assert.deepEqual(thumbsPng, broadcastPng);
 assert.equal(EXPLICIT_BROADCAST_REMOVAL_LABEL, "סגור ומחק את ההודעה");
 assert.equal(ANYNANNY_SYSTEM_CONVERSATION_TITLE, "AnyNanny — הודעות מערכת");
 assert.equal(broadcastPendingBadge(0, 0), null);
@@ -46,7 +61,10 @@ assert.match(frame, /max-h-\[min\(70dvh,34rem\)\]/);
 assert.match(frame, /object-contain/);
 assert.match(frame, /createPortal/);
 assert.match(frame, /document\.body/);
-assert.match(frame, /NANNY_IMAGE_SRC/);
+assert.match(frame, /imageSrc = NANNY_IMAGE_SRC/);
+assert.match(frame, /src=\{imageSrc\}/);
+assert.match(frame, /h-16 w-auto max-w-\[4\.25rem\] shrink-0 object-contain object-bottom sm:h-\[5\.25rem\] sm:max-w-\[5rem\]/);
+assert.equal(frame.match(/<img/g)?.length, 1);
 assert.match(frame, /dir="rtl"/);
 assert.match(frame, /text-right/);
 assert.match(frame, /data-nanny-speech-bubble[\s\S]*data-nanny-character/);
@@ -61,6 +79,11 @@ assert.match(overlay, /broadcast_question_recipients/);
 assert.match(overlay, /pathname, inboxRefresh/);
 assert.doesNotMatch(overlay, /current \?\? nextId/);
 assert.match(overlay, /NannyTalksFrame/);
+assert.match(overlay, /nannyTalkImageSrc\(regularBroadcast\.payload\)/);
+assert.match(
+  read("app/broadcast/talks/page.tsx"),
+  /selected\.nannyVariant === "thumbs_up" \? NANNY_THUMBS_UP_IMAGE_SRC : undefined/
+);
 assert.match(overlay, /BroadcastQuestionAnswer/);
 assert.match(overlay, /dismissUnansweredQuestionCard/);
 assert.match(overlay, /setHiddenBroadcastIds/);
