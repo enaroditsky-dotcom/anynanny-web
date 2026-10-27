@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useAdminQuery } from "@/components/admin/use-admin-query";
 import {
   BROADCAST_AUDIENCE_LABELS,
   BROADCAST_AUDIENCE_TYPES,
   DEFAULT_BROADCAST_AUDIENCE,
+  isBroadcastAudienceType,
   type BroadcastAudienceType
 } from "@/lib/admin/broadcast-audience";
 import { SelectedPublicIdField } from "@/components/admin/selected-public-id-field";
@@ -48,7 +50,11 @@ function newIdempotencyKey(): string {
 }
 
 export function AdminBroadcastForm() {
-  const [audience, setAudience] = useState<BroadcastAudienceType>(DEFAULT_BROADCAST_AUDIENCE);
+  const { params, replaceQuery } = useAdminQuery();
+  const audienceParam = params.get("audience");
+  const audience: BroadcastAudienceType = isBroadcastAudienceType(audienceParam)
+    ? audienceParam
+    : DEFAULT_BROADCAST_AUDIENCE;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -61,6 +67,13 @@ export function AdminBroadcastForm() {
   const [success, setSuccess] = useState<string | null>(null);
   const sendKeyRef = useRef<string>(newIdempotencyKey());
   const sendingLockRef = useRef(false);
+  const [seenAudience, setSeenAudience] = useState(audience);
+  if (seenAudience !== audience) {
+    setSeenAudience(audience);
+    setPreview(null);
+    setError(null);
+    setSuccess(null);
+  }
 
   const payload = useMemo(
     () => ({
@@ -82,7 +95,7 @@ export function AdminBroadcastForm() {
   };
 
   const resetForm = () => {
-    setAudience(DEFAULT_BROADCAST_AUDIENCE);
+    replaceQuery({ audience: null });
     setSelectedIds([]);
     setTitle("");
     setBody("");
@@ -226,8 +239,9 @@ export function AdminBroadcastForm() {
   const resetDisabled = busy !== null;
 
   return (
-    <div className="space-y-5" dir="rtl">
+    <div className="scroll-mt-28 space-y-5 outline-none" dir="rtl" id="admin-broadcast-message" tabIndex={-1}>
       <div className="space-y-3 rounded-xl border border-navy-200 bg-white p-5 shadow-sm">
+        <div id="admin-broadcast-message-audience" tabIndex={-1} className="scroll-mt-28 outline-none">
         <label className="block text-sm font-medium text-navy-900" htmlFor="broadcastAudience">
           קהל יעד
         </label>
@@ -236,8 +250,8 @@ export function AdminBroadcastForm() {
           className="w-full rounded-lg border border-navy-200 p-2 text-sm"
           value={audience}
           onChange={(event) => {
-            setAudience(event.target.value as BroadcastAudienceType);
-            setPreview(null);
+            const value = event.target.value;
+            replaceQuery({ audience: value === DEFAULT_BROADCAST_AUDIENCE ? null : value });
           }}
         >
           {BROADCAST_AUDIENCE_TYPES.map((value) => (
@@ -246,13 +260,17 @@ export function AdminBroadcastForm() {
             </option>
           ))}
         </select>
+        </div>
         {audience === SELECTED_BROADCAST_AUDIENCE ? (
-          <SelectedPublicIdField
-            ids={selectedIds}
-            entries={preview?.audience === audience ? preview.entries : []}
-            disabled={busy !== null}
-            onChange={changeSelectedIds}
-          />
+          <div id="admin-broadcast-message-recipients" tabIndex={-1} className="scroll-mt-28 outline-none">
+            <SelectedPublicIdField
+              inputId="broadcastSelectedPublicIds"
+              ids={selectedIds}
+              entries={preview?.audience === audience ? preview.entries : []}
+              disabled={busy !== null}
+              onChange={changeSelectedIds}
+            />
+          </div>
         ) : null}
 
         <label className="block text-sm font-medium text-navy-900" htmlFor="broadcastTitle">
@@ -283,7 +301,7 @@ export function AdminBroadcastForm() {
           }}
         />
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div id="admin-broadcast-message-cta" tabIndex={-1} className="grid scroll-mt-28 gap-3 outline-none sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-navy-900" htmlFor="broadcastCtaLabel">
               תווית CTA (אופציונלי)
@@ -321,6 +339,7 @@ export function AdminBroadcastForm() {
 
         <div className="flex flex-wrap gap-2">
           <button
+            id="admin-broadcast-message-preview"
             className="rounded-xl bg-navy-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             type="button"
             onClick={() => void handlePreview()}
@@ -329,6 +348,7 @@ export function AdminBroadcastForm() {
             {busy === "preview" ? "טוען…" : "תצוגה מקדימה"}
           </button>
           <button
+            id="admin-broadcast-message-test"
             className="rounded-xl border border-navy-200 bg-white px-4 py-2 text-sm font-semibold text-navy-800 disabled:cursor-not-allowed disabled:opacity-60"
             type="button"
             onClick={() => void handleTest()}
@@ -337,6 +357,7 @@ export function AdminBroadcastForm() {
             {busy === "test" ? "שולח בדיקה…" : "שליחת הודעת בדיקה לעצמי"}
           </button>
           <button
+            id="admin-broadcast-message-new"
             className="rounded-xl border border-navy-200 bg-white px-4 py-2 text-sm font-semibold text-navy-800 disabled:cursor-not-allowed disabled:opacity-60"
             type="button"
             onClick={requestNewBroadcast}

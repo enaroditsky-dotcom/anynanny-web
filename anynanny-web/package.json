@@ -60,6 +60,7 @@
     "test:personal-area-onboarding-fields": "npx --yes tsx scripts/test-personal-area-onboarding-fields.ts",
     "test:didit-kyc": "npx --yes tsx scripts/test-didit-kyc.ts",
     "test:admin-broadcast": "npx --yes tsx scripts/test-admin-broadcast.ts",
+    "test:admin-search-back-results": "npx --yes tsx scripts/test-admin-search-back-results.ts",
     "test:admin-login-security": "npx --yes tsx scripts/test-admin-login-security.ts",
     "test:admin-broadcast-question": "npx --yes tsx scripts/test-admin-broadcast-question.ts",
     "test:broadcast-selected-recipients": "npx --yes tsx scripts/test-broadcast-selected-recipients.ts",

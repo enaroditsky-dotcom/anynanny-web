@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useAdminQuery } from "@/components/admin/use-admin-query";
 import type { ChatInitiationLog, ChatPlatform } from "@/lib/chat/types";
 
 type Props = {
@@ -8,7 +9,18 @@ type Props = {
 };
 
 export function ChatLogsTable({ logs }: Props) {
-  const [platform, setPlatform] = useState<"all" | ChatPlatform>("all");
+  return (
+    <Suspense fallback={null}>
+      <ChatLogsTableBody logs={logs} />
+    </Suspense>
+  );
+}
+
+function ChatLogsTableBody({ logs }: Props) {
+  const { params, replaceQuery } = useAdminQuery();
+  const platformParam = params.get("platform");
+  const platform: "all" | ChatPlatform =
+    platformParam === "whatsapp" || platformParam === "telegram" ? platformParam : "all";
   const [bookingIdQuery, setBookingIdQuery] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -44,13 +56,16 @@ export function ChatLogsTable({ logs }: Props) {
 
   return (
     <div>
-      <div className="mb-4 grid gap-3 rounded-xl border border-navy-200 bg-white p-4 md:grid-cols-4">
+      <div id="admin-chat-log-filters" tabIndex={-1} className="mb-4 grid scroll-mt-28 gap-3 rounded-xl border border-navy-200 bg-white p-4 outline-none md:grid-cols-4">
         <label className="text-xs text-navy-800">
           Platform
           <select
             className="mt-1 block w-full rounded-lg border border-navy-200 p-2 text-sm"
             value={platform}
-            onChange={(event) => setPlatform(event.target.value as "all" | ChatPlatform)}
+            onChange={(event) => {
+              const value = event.target.value;
+              replaceQuery({ platform: value === "whatsapp" || value === "telegram" ? value : null });
+            }}
           >
             <option value="all">All</option>
             <option value="whatsapp">WhatsApp</option>

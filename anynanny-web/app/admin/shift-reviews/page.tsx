@@ -29,7 +29,7 @@ export default async function AdminShiftReviewsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl p-6 md:py-16">
+    <main id="admin-shift-reviews" tabIndex={-1} className="mx-auto max-w-5xl scroll-mt-28 p-6 outline-none md:py-16">
       <h1 className="mb-2 text-2xl font-semibold text-navy-900">Shift reviews</h1>
       <p className="mb-6 text-sm text-navy-700">
         Read-only operator queue for started shifts released from a stuck live UI. No amount,

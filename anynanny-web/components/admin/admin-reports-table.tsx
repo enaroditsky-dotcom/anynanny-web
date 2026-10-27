@@ -48,13 +48,17 @@ export function AdminReportsTable({ initialReports }: { initialReports: AdminRep
   };
 
   if (reports.length === 0) {
-    return <p className="text-sm text-navy-700">No reports yet.</p>;
+    return (
+      <p id="admin-reports-table" tabIndex={-1} className="scroll-mt-28 text-sm text-navy-700 outline-none">
+        No reports yet.
+      </p>
+    );
   }
 
   return (
     <div className="space-y-3">
       {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p> : null}
-      <div className="overflow-x-auto rounded-xl border border-navy-200 bg-white">
+      <div id="admin-reports-table" tabIndex={-1} className="scroll-mt-28 overflow-x-auto rounded-xl border border-navy-200 bg-white outline-none">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>

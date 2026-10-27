@@ -74,7 +74,7 @@ export default async function AdminReportsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl p-6 md:py-16">
+    <main id="admin-reports" tabIndex={-1} className="mx-auto max-w-5xl scroll-mt-28 p-6 outline-none md:py-16">
       <h1 className="mb-2 text-2xl font-semibold text-navy-900">User reports</h1>
       <p className="mb-6 text-sm text-navy-700">
         Review in-app reports, mark them resolved, and suspend or unsuspend the reported account.

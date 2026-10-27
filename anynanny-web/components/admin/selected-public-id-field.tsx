@@ -11,8 +11,10 @@ export function SelectedPublicIdField(props: {
   ids: string[];
   entries?: SelectedPublicIdEntry[];
   disabled?: boolean;
+  inputId?: string;
   onChange: (ids: string[]) => void;
 }) {
+  const inputId = props.inputId ?? "selectedPublicIds";
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const status = new Map((props.entries ?? []).map((entry) => [entry.publicId, entry]));
@@ -30,12 +32,12 @@ export function SelectedPublicIdField(props: {
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-navy-900" htmlFor="selectedPublicIds">
+      <label className="block text-sm font-medium text-navy-900" htmlFor={inputId}>
         מזהים ציבוריים
       </label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <textarea
-          id="selectedPublicIds"
+          id={inputId}
           className="min-h-20 w-full rounded-lg border border-navy-200 p-2 text-sm"
           placeholder={"RP-1001, RAN-1004\nP-1002"}
           value={draft}

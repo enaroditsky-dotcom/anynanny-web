@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense } from "react";
 import { AdminBroadcastForm } from "@/components/admin/admin-broadcast-form";
 import { AdminBroadcastQuestionForm } from "@/components/admin/admin-broadcast-question-form";
+import { useAdminQuery } from "@/components/admin/use-admin-query";
 
 type BroadcastComposerMode = "message" | "question";
 
@@ -11,11 +12,12 @@ const MODES: Array<{ value: BroadcastComposerMode; label: string }> = [
   { value: "question", label: "Broadcast — שאלה אמריקאית" }
 ];
 
-export function AdminBroadcastComposer() {
-  const [mode, setMode] = useState<BroadcastComposerMode>("message");
+function AdminBroadcastComposerBody() {
+  const { params, replaceQuery } = useAdminQuery();
+  const mode: BroadcastComposerMode = params.get("composer") === "question" ? "question" : "message";
 
   return (
-    <div className="space-y-5" dir="rtl">
+    <div className="space-y-5" dir="rtl" id="admin-broadcast-composer">
       <fieldset className="space-y-2">
         <legend className="mb-2 text-sm font-medium text-navy-900">סוג Broadcast</legend>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -34,7 +36,7 @@ export function AdminBroadcastComposer() {
                   name="broadcastType"
                   value={item.value}
                   checked={selected}
-                  onChange={() => setMode(item.value)}
+                  onChange={() => replaceQuery({ composer: item.value })}
                 />
                 {item.label}
               </label>
@@ -50,5 +52,13 @@ export function AdminBroadcastComposer() {
         <AdminBroadcastQuestionForm />
       </div>
     </div>
+  );
+}
+
+export function AdminBroadcastComposer() {
+  return (
+    <Suspense fallback={null}>
+      <AdminBroadcastComposerBody />
+    </Suspense>
   );
 }
