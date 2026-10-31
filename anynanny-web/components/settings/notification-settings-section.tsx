@@ -78,8 +78,11 @@ export function NotificationSettingsSection() {
       }
 
       if (!next) {
-        await unsubscribeCurrentPushSubscription();
+        const released = await unsubscribeCurrentPushSubscription();
         await refreshDevice();
+        if (!released.ok) {
+          setHint("לא הצלחנו לנתק את התראות החשבון במכשיר. נסו שוב.");
+        }
         return;
       }
 

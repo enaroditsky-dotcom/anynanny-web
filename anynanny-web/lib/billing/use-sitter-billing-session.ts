@@ -10,7 +10,8 @@ import {
 } from "@/lib/billing/session-types";
 import { computeLiveElapsedSecondsActive, formatElapsed } from "@/lib/session/protocol";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
@@ -34,6 +35,7 @@ function hourlyRateFromRow(row: BillingSessionRow): number {
 }
 
 export function useSitterBillingSession() {
+  const authRetry = useOnlineRetryNonce();
   const [sitterId, setSitterId] = useState<string | null>(null);
   const [pendingRow, setPendingRow] = useState<BillingSessionRow | null>(null);
   const [activeShiftRow, setActiveShiftRow] = useState<BillingSessionRow | null>(null);
@@ -120,14 +122,22 @@ export function useSitterBillingSession() {
     void (async () => {
       const auth = await resolveBrowserAuth();
       if (!auth.ok) {
+        if (auth.reason === "unavailable") {
+          authRetry.noteUnavailable();
+          if (!cancelled && authRetry.exhausted) {
+            setLoading(false);
+            setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לראות משמרות."));
+          }
+          return;
+        }
+        authRetry.noteSettled();
         if (!cancelled) {
           setLoading(false);
-          setBanner(
-            auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לראות משמרות."
-          );
+          setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לראות משמרות."));
         }
         return;
       }
+      authRetry.noteSettled();
       if (cancelled) return;
       setSitterId(auth.userId);
       await refreshForUser(auth.supabase, auth.userId);
@@ -137,7 +147,7 @@ export function useSitterBillingSession() {
     return () => {
       cancelled = true;
     };
-  }, [refreshForUser]);
+  }, [authRetry.exhausted, authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, refreshForUser]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -232,7 +242,7 @@ export function useSitterBillingSession() {
 
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני אישור משמרת.");
+      setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר לפני אישור משמרת."));
       return;
     }
     if (auth.userId !== sitterId) {

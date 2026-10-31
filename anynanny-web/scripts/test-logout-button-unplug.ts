@@ -43,11 +43,10 @@ assert.match(logoutButton, /<LogoutButtonContent label=\{busy \? "מתנתק…"
 const dashboard = read("components/parent/parent-dashboard-client.tsx");
 assert.match(dashboard, /LOGOUT_BUTTON_CLASS/);
 assert.match(dashboard, /<LogoutButtonContent \/>/);
-assert.match(dashboard, /supabase\.auth\.signOut\(\)/);
-assert.match(dashboard, /window\.location\.href = "\/login"/);
+assert.match(dashboard, /logoutAndRedirect\(router, "\/login"\)/);
+assert.doesNotMatch(dashboard, /supabase\.auth\.signOut\(\)/);
 assert.doesNotMatch(dashboard, /\bUnplug\b/);
 assert.doesNotMatch(dashboard, /\bLogOut\b/);
-assert.doesNotMatch(dashboard, /logoutAndRedirect/);
 
 const logoutButtonUsages = [
   "app/parent/settings/page.tsx",

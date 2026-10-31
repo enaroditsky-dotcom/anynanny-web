@@ -1,11 +1,12 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { PasswordPeekField } from "@/components/auth/password-peek-field";
 import { PageBackButton, PageBackRow } from "@/components/navigation/page-back-link";
 import { navigateAfterAuth } from "@/lib/auth/redirect-after-sign-in";
+import { planAuthRetry } from "@/lib/auth/auth-retry";
 import { resolveValidAuthUser } from "@/lib/auth/valid-session";
 import {
   readLastUsedEmail,
@@ -13,6 +14,11 @@ import {
   setReturningUserFlag,
   setUserRoleChoice
 } from "@/lib/auth/returning-user";
+import {
+  LOGOUT_PUSH_CLEANUP_FAILED_MESSAGE,
+  LOGOUT_PUSH_CLEANUP_QUERY,
+  LOGOUT_PUSH_CLEANUP_QUERY_VALUE
+} from "@/lib/auth/logout";
 import { forgotPasswordHref, forwardExplicitRecoveryCallback, readAuthCallbackParams, resetPasswordCallbackHref } from "@/lib/auth/password-reset";
 import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -31,12 +37,15 @@ function LoginInner() {
   const emailFromQuery = searchParams.get("email");
   const roleFromQuery = searchParams.get("role");
   const trackFromQuery = (searchParams.get("track") || "").trim().toLowerCase();
+  const pushCleanupWarning = searchParams.get(LOGOUT_PUSH_CLEANUP_QUERY) === LOGOUT_PUSH_CLEANUP_QUERY_VALUE;
 
   const [bypassLogin, setBypassLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sessionCheckExhausted, setSessionCheckExhausted] = useState(false);
+  const retrySessionCheckRef = useRef<() => void>(() => {});
 
   const supabase = getSupabaseBrowserClient();
 
@@ -77,6 +86,14 @@ function LoginInner() {
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
+    let retryTimer: number | null = null;
+    let retryAttempt = 0;
+    const clearRetry = () => {
+      if (retryTimer != null) {
+        window.clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+    };
 
     const redirectIfSignedIn = async () => {
       if (forwardExplicitRecoveryCallback()) return;
@@ -89,6 +106,22 @@ function LoginInner() {
         return;
       }
       const resolved = await resolveValidAuthUser(supabase);
+      if (!cancelled && !resolved.ok && resolved.reason === "unavailable" && retryTimer == null) {
+        const plan = planAuthRetry(retryAttempt);
+        if (plan.action === "schedule") {
+          retryAttempt = plan.nextAttempt;
+          retryTimer = window.setTimeout(() => {
+            retryTimer = null;
+            void redirectIfSignedIn();
+          }, plan.delayMs);
+        } else {
+          setSessionCheckExhausted(true);
+        }
+      } else if (resolved.ok) {
+        retryAttempt = 0;
+        clearRetry();
+        setSessionCheckExhausted(false);
+      }
       if (cancelled || !resolved.ok) return;
       setBypassLogin(true);
       await navigateAfterAuth(
@@ -100,7 +133,20 @@ function LoginInner() {
       );
     };
 
+    retrySessionCheckRef.current = () => {
+      retryAttempt = 0;
+      clearRetry();
+      setSessionCheckExhausted(false);
+      void redirectIfSignedIn();
+    };
     void redirectIfSignedIn();
+    const onOnline = () => {
+      retryAttempt = 0;
+      clearRetry();
+      setSessionCheckExhausted(false);
+      void redirectIfSignedIn();
+    };
+    window.addEventListener("online", onOnline);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
@@ -134,7 +180,9 @@ function LoginInner() {
 
     return () => {
       cancelled = true;
+      clearRetry();
       subscription.unsubscribe();
+      window.removeEventListener("online", onOnline);
     };
   }, [nextPath, supabase, roleFromQuery, router]);
 
@@ -192,6 +240,22 @@ function LoginInner() {
           <AnyNannyLogo variant="header" />
         </div>
         <h1 className="text-center text-2xl font-bold text-navy-header">{loginHeadline}</h1>
+        {pushCleanupWarning ? (
+          <p role="status" className="mt-4 rounded-lg bg-amber-50 p-3 text-center text-sm text-amber-950">
+            {LOGOUT_PUSH_CLEANUP_FAILED_MESSAGE}
+          </p>
+        ) : null}
+        {sessionCheckExhausted ? (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => retrySessionCheckRef.current()}
+              className="w-full rounded-xl border border-navy-header py-2 text-sm font-bold text-navy-header"
+            >
+              נסו שוב
+            </button>
+          </div>
+        ) : null}
         {roleFromQuery === "sitter" && trackFromQuery === "expert" ? (
           <p className="mt-1 text-center text-xs text-slate-500">הנקה · שינה · דולה</p>
         ) : null}

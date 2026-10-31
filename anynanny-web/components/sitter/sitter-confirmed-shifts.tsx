@@ -18,6 +18,7 @@ import {
 import { useShiftCancellationFlow } from "@/lib/bookings/use-shift-cancellation-flow";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 function toCancellationShift(shift: ConfirmedShiftView): CancellationShiftLike {
@@ -155,6 +156,7 @@ export function SitterConfirmedShifts({
   disabled = false
 }: SitterConfirmedShiftsProps) {
   const router = useRouter();
+  const authRetry = useOnlineRetryNonce();
   const [sitterId, setSitterId] = useState<string | null>(sitterIdProp);
   const [shifts, setShifts] = useState<ConfirmedShiftView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,17 +179,33 @@ export function SitterConfirmedShifts({
       setLoading(false);
       return;
     }
+    let cancelled = false;
     void (async () => {
       const auth = await resolveBrowserAuth();
+      if (cancelled) return;
       if (!auth.ok) {
+        if (auth.reason === "unavailable") {
+          authRetry.noteUnavailable();
+          if (authRetry.exhausted) {
+            setError("אין חיבור כרגע. נסו שוב בעוד רגע.");
+            setLoading(false);
+          }
+          return;
+        }
+        authRetry.noteSettled();
         setError("יש להתחבר כדי לראות משמרות.");
+        setShifts([]);
         setLoading(false);
         return;
       }
+      authRetry.noteSettled();
       setSitterId(auth.userId);
       await load(auth.userId);
     })();
-  }, [disabled, load]);
+    return () => {
+      cancelled = true;
+    };
+  }, [authRetry.exhausted, authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, disabled, load]);
 
   const effectiveSitterId = sitterIdProp ?? sitterId;
 
