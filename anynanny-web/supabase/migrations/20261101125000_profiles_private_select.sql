@@ -32,9 +32,11 @@
 -- child medical columns. Search, notifications, messages, and service_role
 -- admin access are unchanged.
 --
--- Not applied to Production by this change. Rollback:
--- sql/rollback_profiles_private_select.sql
--- That rollback restores the public read. Use it only to recover a broken release.
+-- Production public.profiles.serial_id is integer. booking_partner_display
+-- returns that same type.
+--
+-- Not applied to Production by this change.
+-- Rollback: sql/rollback_profiles_keep_private.sql
 
 alter table public.profiles enable row level security;
 
@@ -93,7 +95,7 @@ returns table (
   identity_verified boolean,
   parent_serial text,
   public_id text,
-  serial_id bigint
+  serial_id integer
 )
 language plpgsql
 stable

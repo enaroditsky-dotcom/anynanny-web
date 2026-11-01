@@ -48,6 +48,10 @@ const CROSS_USER_FILES = [
   "lib/ratings/repository.ts"
 ] as const;
 
+assert.match(migration, /sql\/rollback_profiles_keep_private\.sql/);
+assert.doesNotMatch(migration, /rollback_profiles_private_select/);
+assert.match(migration, /serial_id integer/);
+assert.doesNotMatch(migration, /serial_id bigint/);
 assert.match(migration, /profiles_select_own/);
 assert.match(migration, /booking_partner_display/);
 assert.match(migration, /booking_parent_service_addresses/);
@@ -282,7 +286,7 @@ try {
       identity_verification_status text,
       parent_serial text,
       public_id text,
-      serial_id bigint,
+      serial_id integer,
       role text
     );
     alter table public.profiles enable row level security;
@@ -522,6 +526,21 @@ try {
   );
   assert.equal(hiddenLegacy.rows.length, 0);
 
+  const declared = await db.query<{ result: string; column_type: string }>(`
+    select pg_get_function_result(p.oid) as result,
+           c.data_type as column_type
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    join information_schema.columns c
+      on c.table_schema = 'public'
+     and c.table_name = 'profiles'
+     and c.column_name = 'serial_id'
+    where n.nspname = 'public'
+      and p.proname = 'booking_partner_display'
+  `);
+  assert.match(declared.rows[0]?.result ?? "", /serial_id integer/);
+  assert.equal(declared.rows[0]?.column_type, "integer");
+
   const pendingCard = await asRole("authenticated", SITTER, () =>
     db.query<Record<string, unknown>>(
       `select * from public.booking_partner_display($1::uuid[])`,
@@ -530,6 +549,27 @@ try {
   );
   assert.equal(pendingCard.rows.length, 1);
   assert.equal(pendingCard.rows[0]?.first_name, "Dana");
+  assert.equal(pendingCard.rows[0]?.serial_id, 7);
+  const pendingTypes = await asRole("authenticated", SITTER, () =>
+    db.query<{
+      serial_type: string;
+      name_type: string;
+      verified_type: string;
+      serial_id: number;
+    }>(
+      `select pg_typeof(serial_id)::text as serial_type,
+              pg_typeof(first_name)::text as name_type,
+              pg_typeof(identity_verified)::text as verified_type,
+              serial_id
+       from public.booking_partner_display($1::uuid[])`,
+      [[PARENT]]
+    )
+  );
+  assert.equal(pendingTypes.rows.length, 1);
+  assert.equal(pendingTypes.rows[0]?.serial_type, "integer");
+  assert.equal(pendingTypes.rows[0]?.name_type, "text");
+  assert.equal(pendingTypes.rows[0]?.verified_type, "boolean");
+  assert.equal(pendingTypes.rows[0]?.serial_id, 7);
   const pendingEncoded = JSON.stringify(pendingCard.rows[0]);
   assert.doesNotMatch(pendingEncoded, /phone|identity_id_number|child_special|apartment|doorCode/);
   assert.doesNotMatch(pendingEncoded, new RegExp(PHONE));

@@ -65,7 +65,7 @@ create table public.profiles (
   identity_verification_status text,
   parent_serial text,
   public_id text,
-  serial_id bigint,
+  serial_id integer,
   role text
 );
 alter table public.profiles enable row level security;
@@ -259,12 +259,15 @@ async function main(): Promise<void> {
     assert.equal(infra.rows[0]?.phone, PHONE);
 
     const card = await asRole(db, "authenticated", SITTER, () =>
-      db.query<{ first_name: string }>(
-        `select first_name from public.booking_partner_display($1::uuid[])`,
+      db.query<{ first_name: string; serial_id: number; serial_type: string }>(
+        `select first_name, serial_id, pg_typeof(serial_id)::text as serial_type
+         from public.booking_partner_display($1::uuid[])`,
         [[PARENT]]
       )
     );
     assert.equal(card.rows[0]?.first_name, "Dana");
+    assert.equal(card.rows[0]?.serial_id, 7);
+    assert.equal(card.rows[0]?.serial_type, "integer");
     const address = await asRole(db, "authenticated", SITTER, () =>
       db.query(`select parent_id from public.booking_parent_service_addresses($1::uuid[])`, [[PARENT]])
     );
