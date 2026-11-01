@@ -3,31 +3,14 @@ import type { NannyProfile, NannyRating } from "@/lib/ratings/types";
 
 // --- ניהול פרופילים מול ה-Database ---
 
+/** Legacy helper. profiles is owner-row only and is not a nanny directory. */
 export async function listProfiles(): Promise<NannyProfile[]> {
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) return [];
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*');
-
-  if (error) {
-    console.error("Error fetching profiles:", error);
-    return [];
-  }
-  return data as NannyProfile[];
+  return [];
 }
 
-export async function saveProfiles(entries: NannyProfile[]): Promise<void> {
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) return;
-
-  // שימוש ב-upsert כדי לעדכן או ליצור רשומות
-  const { error } = await supabase
-    .from('profiles')
-    .upsert(entries, { onConflict: 'anyNannyId' });
-    
-  if (error) console.error("Error saving profiles:", error);
+/** Legacy helper. Do not upsert arbitrary rows into public.profiles. */
+export async function saveProfiles(_entries: NannyProfile[]): Promise<void> {
+  return;
 }
 
 // --- ניהול דירוגים מול ה-Database ---

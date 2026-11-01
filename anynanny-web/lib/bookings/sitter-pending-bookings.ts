@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BOOKING_SELECT_MINIMAL } from "@/lib/bookings/booking-status-update";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
-import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import {
+  bookingPartnerDisplayName,
+  fetchBookingPartnerDisplays
+} from "@/lib/profile/booking-partner-access";
 import { PARENT_PAYMENT_DISPUTE_BLOCKS_NEW_BOOKING_MESSAGE } from "@/lib/billing/manual-payment-lifecycle";
 import { assertMarketplacePairAllowed } from "@/lib/safety/enforcement";
 
@@ -75,23 +78,11 @@ export async function fetchPendingBookingsForSitter(
   }
 
   const parentIds = [...new Set(bookings.map((b) => b.parent_id))];
-  const { data: profiles, error: profileError } = await supabase
-    .from(PROFILES_TABLE)
-    .select("id, first_name, last_name")
-    .in("id", parentIds);
-
-  if (profileError) {
-    console.warn("[sitter bookings] parent profiles:", profileError.message);
-  }
-
+  const profiles = await fetchBookingPartnerDisplays(supabase, parentIds);
   const nameByParentId = new Map<string, string>();
-  for (const p of profiles ?? []) {
-    if (p && typeof p === "object" && "id" in p) {
-      const id = String((p as { id: string }).id);
-      const row = p as { first_name?: string | null; last_name?: string | null };
-      const name = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
-      if (name) nameByParentId.set(id, name);
-    }
+  for (const [id, profile] of profiles) {
+    const name = bookingPartnerDisplayName(profile);
+    if (name) nameByParentId.set(id, name);
   }
 
   return {

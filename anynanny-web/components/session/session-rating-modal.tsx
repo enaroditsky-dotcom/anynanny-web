@@ -10,7 +10,10 @@ import {
   publicSitterDisplayName
 } from "@/lib/sitter/fetch-parent-sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import {
+  bookingPartnerDisplayName,
+  fetchBookingPartnerDisplays
+} from "@/lib/profile/booking-partner-access";
 
 export type SessionRatingModalProps = {
   open: boolean;
@@ -63,16 +66,8 @@ export function SessionRatingModal({ open, role, sessionId, onResolved }: Sessio
       const profile = await fetchPublicSitterProfileViaRpc(supabase, otherId);
       setCounterpartyName(publicSitterDisplayName(profile) || "הבייביסיטר");
     } else {
-      const { data: p } = await supabase
-        .from(PROFILES_TABLE)
-        .select("first_name, last_name")
-        .eq("id", otherId)
-        .maybeSingle();
-      const n =
-        p && typeof p === "object"
-          ? `${(p as { first_name?: string | null }).first_name ?? ""} ${(p as { last_name?: string | null }).last_name ?? ""}`.trim()
-          : "";
-      setCounterpartyName(n || "ההורה");
+      const profiles = await fetchBookingPartnerDisplays(supabase, [otherId]);
+      setCounterpartyName(bookingPartnerDisplayName(profiles.get(otherId)) || "ההורה");
     }
   }, [role, sessionId]);
 
