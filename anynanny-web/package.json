@@ -75,7 +75,8 @@
     "test:register-supabase-client": "npx --yes tsx scripts/test-register-supabase-client.ts",
     "test:chat-emoji-picker": "npx --yes tsx scripts/test-chat-emoji-picker.ts",
     "test:parent-favorite-sitters": "npx --yes tsx scripts/test-parent-favorite-sitters.ts",
-    "test:chat-inbox-ux": "npx --yes tsx scripts/test-chat-inbox-ux.ts"
+    "test:chat-inbox-ux": "npx --yes tsx scripts/test-chat-inbox-ux.ts",
+    "test:profiles-private-select": "npx --yes tsx scripts/test-profiles-private-select.ts"
   },
   "dependencies": {
     "@didit-protocol/sdk-web": "^0.3.0",

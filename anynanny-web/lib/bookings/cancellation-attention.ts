@@ -14,7 +14,10 @@ import {
   fetchPublicSitterProfilesViaRpc,
   publicSitterDisplayName
 } from "@/lib/sitter/fetch-parent-sitter-profile";
-import { PROFILES_TABLE } from "@/lib/supabase/profiles";
+import {
+  bookingPartnerDisplayName,
+  fetchBookingPartnerDisplays
+} from "@/lib/profile/booking-partner-access";
 
 const ATTENTION_BASE_SELECT = "id, parent_id, sitter_id, booking_date, start_time, end_time, status";
 
@@ -33,10 +36,6 @@ export type CancellationAttentionItem = {
   endTime: string;
   status: BookingStatus;
 } & BookingCancellationFields;
-
-function profileDisplayName(row: { first_name?: string | null; last_name?: string | null }): string {
-  return `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
-}
 
 function compareAttentionItems(a: CancellationAttentionItem, b: CancellationAttentionItem): number {
   const aStart = Date.parse(a.startTime) || 0;
@@ -68,11 +67,9 @@ async function loadNameById(
 
   if (otherIds.length === 0) return map;
 
-  const { data } = await supabase.from(PROFILES_TABLE).select("id, first_name, last_name").in("id", otherIds);
-  for (const profile of data ?? []) {
-    if (!profile || typeof profile !== "object" || !("id" in profile)) continue;
-    const id = String((profile as { id: string }).id);
-    const name = profileDisplayName(profile as { first_name?: string | null; last_name?: string | null });
+  const profiles = await fetchBookingPartnerDisplays(supabase, otherIds);
+  for (const [id, profile] of profiles) {
+    const name = bookingPartnerDisplayName(profile);
     if (name) map.set(id, name);
   }
   return map;
