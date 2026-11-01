@@ -15,7 +15,7 @@ import {
   fetchBookingPartnerDisplays
 } from "@/lib/profile/booking-partner-access";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
-import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/use-shift-activation-status";
+import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/booking-status-normalize";
 import {
   fetchPublicSitterProfileViaRpc,
   publicSitterDisplayName
