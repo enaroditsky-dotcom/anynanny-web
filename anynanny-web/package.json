@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:domain-separation": "npx --yes tsx scripts/test-domain-separation.ts",
     "test:sitter-ownership": "node scripts/test-sitter-discovery-ownership.mjs",
     "test:sitter-profiles-private": "npx --yes tsx scripts/test-sitter-profiles-private-select.ts",
     "test:public-sitter-rpc-avatar": "npx --yes tsx scripts/test-public-sitter-rpc-avatar-source.ts",
