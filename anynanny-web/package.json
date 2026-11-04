@@ -76,7 +76,8 @@
     "test:register-supabase-client": "npx --yes tsx scripts/test-register-supabase-client.ts",
     "test:chat-emoji-picker": "npx --yes tsx scripts/test-chat-emoji-picker.ts",
     "test:parent-favorite-sitters": "npx --yes tsx scripts/test-parent-favorite-sitters.ts",
-    "test:chat-inbox-ux": "npx --yes tsx scripts/test-chat-inbox-ux.ts"
+    "test:chat-inbox-ux": "npx --yes tsx scripts/test-chat-inbox-ux.ts",
+    "test:profiles-private-select": "npx --yes tsx scripts/test-profiles-private-select.ts"
   },
   "dependencies": {
     "@didit-protocol/sdk-web": "^0.3.0",
@@ -84,7 +85,7 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.112.4",
     "lucide-react": "^1.14.0",
-    "next": "^15.2.0",
+    "next": "15.5.28",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "web-push": "^3.6.7"

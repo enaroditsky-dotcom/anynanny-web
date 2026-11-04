@@ -100,8 +100,10 @@ import {
 } from "@/lib/supabase/postgrest-schema";
 
 import {
-  PROFILES_TABLE
-} from "@/lib/supabase/profiles";
+  bookingPartnerDisplayName,
+  fetchBookingParentServiceAddresses,
+  fetchBookingPartnerDisplays
+} from "@/lib/profile/booking-partner-access";
 
 import {
   removeRealtimeChannel,
@@ -421,129 +423,16 @@ async function loadParentDetailsByIds(
     };
   }
 
-  let profileRows:
-    | Array<
-        Record<
-          string,
-          unknown
-        >
-      >
-    | null = null;
-
-  const withAddress =
-    await supabase
-      .from(
-        PROFILES_TABLE
-      )
-      .select(
-        "id, first_name, last_name, address"
-      )
-      .in(
-        "id",
-        parentIds
-      );
-
-  if (withAddress.error) {
-    if (
-      isPostgrestMissingColumnError(
-        withAddress.error.message,
-        "address"
-      ) ||
-      /column|schema cache|could not find/i.test(
-        withAddress.error.message
-      )
-    ) {
-      const fallback =
-        await supabase
-          .from(
-            PROFILES_TABLE
-          )
-          .select(
-            "id, first_name, last_name"
-          )
-          .in(
-            "id",
-            parentIds
-          );
-
-      if (fallback.error) {
-        console.warn(
-          "Could not load parent profiles for shifts:",
-          fallback.error.message
-        );
-
-        return {
-          names,
-          addresses
-        };
-      }
-
-      profileRows =
-        (fallback.data as
-          | Array<
-              Record<
-                string,
-                unknown
-              >
-            >
-          | null) ?? [];
-    } else {
-      console.warn(
-        "Could not load parent profiles for shifts:",
-        withAddress.error.message
-      );
-
-      return {
-        names,
-        addresses
-      };
-    }
-  } else {
-    profileRows =
-      (withAddress.data as
-        | Array<
-            Record<
-              string,
-              unknown
-            >
-          >
-        | null) ?? [];
+  const profiles = await fetchBookingPartnerDisplays(supabase, parentIds);
+  for (const [id, profile] of profiles) {
+    const name = bookingPartnerDisplayName(profile);
+    if (name) names.set(id, name);
   }
 
-  for (
-    const profile
-    of profileRows
-  ) {
-    const id =
-      String(
-        profile.id ?? ""
-      );
-
-    if (!id) {
-      continue;
-    }
-
-    const name =
-      `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
-
-    if (name) {
-      names.set(
-        id,
-        name
-      );
-    }
-
-    const address =
-      formatParentProfileAddress(
-        profile.address
-      );
-
-    if (address) {
-      addresses.set(
-        id,
-        address
-      );
-    }
+  const serviceAddresses = await fetchBookingParentServiceAddresses(supabase, parentIds);
+  for (const [id, address] of serviceAddresses) {
+    const label = formatParentProfileAddress(address);
+    if (label) addresses.set(id, label);
   }
 
   return {

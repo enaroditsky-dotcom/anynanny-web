@@ -32,6 +32,39 @@ export async function getExistingPushSubscription(): Promise<PushSubscription | 
   }
 }
 
+const DEVICE_PUSH_ENDPOINT_KEY = "anynanny_push_endpoint_v1";
+
+export type PushReleaseResult =
+  | { ok: true; removed: boolean }
+  | { ok: false; reason: "server" | "browser"; endpoint: string };
+
+function rememberPushEndpoint(endpoint: string): void {
+  if (typeof window === "undefined" || !endpoint) return;
+  try {
+    localStorage.setItem(DEVICE_PUSH_ENDPOINT_KEY, endpoint);
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function readRememberedPushEndpoint(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return localStorage.getItem(DEVICE_PUSH_ENDPOINT_KEY)?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function clearRememberedPushEndpoint(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(DEVICE_PUSH_ENDPOINT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 async function persistSubscription(sub: PushSubscription): Promise<{ ok: boolean; error?: string }> {
   const keys = subscriptionKeys(sub);
   if (!keys) return { ok: false, error: "incomplete subscription" };
@@ -48,16 +81,30 @@ async function persistSubscription(sub: PushSubscription): Promise<{ ok: boolean
   if (error) {
     return { ok: false, error: readSupabaseErrorMessage(error) };
   }
+  rememberPushEndpoint(keys.endpoint);
   return { ok: true };
 }
 
-async function deleteSubscriptionRow(endpoint: string): Promise<void> {
+/** Browser unsubscribe does not prove the server row is gone. */
+async function deleteOwnPushEndpoint(endpoint: string): Promise<{ ok: boolean }> {
   const supabase = getSupabaseBrowserClient();
-  if (!supabase || !endpoint) return;
-  const { error } = await supabase.from(PUSH_SUBSCRIPTIONS_TABLE).delete().eq("endpoint", endpoint);
-  if (error) {
-    console.warn("[push] delete subscription:", readSupabaseErrorMessage(error));
+  if (!supabase || !endpoint) return { ok: false };
+  const removed = await supabase.from(PUSH_SUBSCRIPTIONS_TABLE).delete().eq("endpoint", endpoint);
+  if (removed.error) {
+    console.warn("[push] delete subscription:", readSupabaseErrorMessage(removed.error));
+    return { ok: false };
   }
+  const stillThere = await supabase
+    .from(PUSH_SUBSCRIPTIONS_TABLE)
+    .select("id")
+    .eq("endpoint", endpoint)
+    .maybeSingle();
+  if (stillThere.error) {
+    console.warn("[push] confirm subscription delete:", readSupabaseErrorMessage(stillThere.error));
+    return { ok: false };
+  }
+  if (stillThere.data) return { ok: false };
+  return { ok: true };
 }
 
 /**
@@ -129,15 +176,53 @@ export async function enablePushFromUserGesture(): Promise<PushSubscribeResult> 
   }
 }
 
-export async function unsubscribeCurrentPushSubscription(): Promise<void> {
+/**
+ * Remove this device from the signed-in account.
+ * A live subscription is claimed first, so a previous account's row can be
+ * moved with the existing upsert and then deleted. Browser unsubscribe is
+ * not treated as server cleanup.
+ */
+export async function unsubscribeCurrentPushSubscription(): Promise<PushReleaseResult> {
   const sub = await getExistingPushSubscription();
-  const endpoint = sub?.endpoint ?? "";
-  try {
-    if (sub) await sub.unsubscribe();
-  } catch {
-    /* already gone */
+  if (sub?.endpoint) {
+    const claimed = await persistSubscription(sub);
+    if (!claimed.ok) return { ok: false, reason: "server", endpoint: sub.endpoint };
   }
-  if (endpoint) await deleteSubscriptionRow(endpoint);
+
+  let browserFailed = false;
+  if (sub) {
+    try {
+      await sub.unsubscribe();
+    } catch {
+      browserFailed = true;
+    }
+  }
+
+  const endpoint = (sub?.endpoint || readRememberedPushEndpoint()).trim();
+  if (!endpoint) return { ok: true, removed: false };
+
+  const deleted = await deleteOwnPushEndpoint(endpoint);
+  if (!deleted.ok) return { ok: false, reason: "server", endpoint };
+  if (browserFailed) return { ok: false, reason: "browser", endpoint };
+  clearRememberedPushEndpoint();
+  return { ok: true, removed: true };
+}
+
+/**
+ * The signed-in user must own this device before any preference check.
+ * push_enabled false still claims and then removes a subscription left by
+ * the previous account. It does not leave that row in place.
+ */
+export async function alignDevicePushOwnership(pushEnabled: boolean): Promise<PushReleaseResult> {
+  const sub = await getExistingPushSubscription();
+  if (sub) {
+    const claimed = await persistSubscription(sub);
+    if (!claimed.ok) return { ok: false, reason: "server", endpoint: sub.endpoint };
+    if (!pushEnabled) return unsubscribeCurrentPushSubscription();
+    return { ok: true, removed: false };
+  }
+  if (pushEnabled) await reconcilePushSubscription(true);
+  return { ok: true, removed: false };
 }
 
 /** If OS permission is already granted and preference is on, (re)save this device. Does not prompt. */

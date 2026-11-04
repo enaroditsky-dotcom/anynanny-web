@@ -9,13 +9,17 @@ import {
   todayDateISO
 } from "@/lib/bookings/booking-date-utils";
 import { BOOKINGS_TABLE, type BookingRow, type BookingStatus } from "@/lib/bookings/constants";
+import {
+  bookingPartnerDisplayName,
+  fetchBookingParentServiceAddresses,
+  fetchBookingPartnerDisplays
+} from "@/lib/profile/booking-partner-access";
 import { formatBookingSchedule } from "@/lib/bookings/sitter-pending-bookings";
-import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/use-shift-activation-status";
+import { normalizeBookingStatus, type BookingStatusInput } from "@/lib/bookings/booking-status-normalize";
 import {
   fetchPublicSitterProfileViaRpc,
   publicSitterDisplayName
 } from "@/lib/sitter/fetch-parent-sitter-profile";
-import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { safeSupabaseRead } from "@/lib/supabase/safe-supabase-read";
 import { reconcileUnstartedPastBookings } from "@/lib/bookings/missed-shift-client";
@@ -155,36 +159,10 @@ async function enrichLinkedBookingView(
       partnerName = publicSitterDisplayName(publicProfile);
     }
   } else {
-    let profileRead = safeSupabaseRead(
-      await supabase
-        .from(PROFILES_TABLE)
-        .select("first_name, last_name, address")
-        .eq("id", partnerId)
-        .maybeSingle(),
-      "partner profile name"
-    );
-
-    if (
-      profileRead.error &&
-      (isPostgrestMissingColumnError(profileRead.error, "address") ||
-        /column|schema cache|could not find/i.test(String(profileRead.error)))
-    ) {
-      profileRead = safeSupabaseRead(
-        await supabase.from(PROFILES_TABLE).select("first_name, last_name").eq("id", partnerId).maybeSingle(),
-        "partner profile name fallback"
-      );
-    }
-
-    partnerName =
-      profileRead.data && typeof profileRead.data === "object"
-        ? `${(profileRead.data as { first_name?: string | null }).first_name ?? ""} ${(profileRead.data as { last_name?: string | null }).last_name ?? ""}`.trim() ||
-          null
-        : null;
-
-    partnerAddress =
-      profileRead.data && typeof profileRead.data === "object"
-        ? formatParentProfileAddress((profileRead.data as { address?: unknown }).address)
-        : null;
+    const profiles = await fetchBookingPartnerDisplays(supabase, [partnerId]);
+    partnerName = bookingPartnerDisplayName(profiles.get(partnerId));
+    const addresses = await fetchBookingParentServiceAddresses(supabase, [partnerId]);
+    partnerAddress = formatParentProfileAddress(addresses.get(partnerId));
   }
 
   return {

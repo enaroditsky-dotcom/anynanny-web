@@ -220,7 +220,12 @@ assert.match(
   latestSearch,
   /else upper\(regexp_replace\(trim\(p_search_nanny_id\), '\\s\+', '', 'g'\)\)/
 );
-assert.match(read("lib/chat/booking-messages.ts"), /parent_serial, public_id, serial_id/);
+const chatPartnerIds = read("lib/chat/booking-messages.ts");
+assert.match(chatPartnerIds, /fetchBookingPartnerDisplays/);
+assert.match(chatPartnerIds, /parent_serial: profile\.parentSerial/);
+assert.match(chatPartnerIds, /public_id: profile\.publicId/);
+assert.match(chatPartnerIds, /serial_id: profile\.serialId/);
+assert.doesNotMatch(chatPartnerIds, /\.from\(\s*(?:PROFILES_TABLE|"profiles")\s*\)/);
 assert.doesNotMatch(read("lib/public/sequential-display-id.ts"), /(?<![A-Za-z0-9_])parent_public_id\b/);
 assert.doesNotMatch(read("lib/supabase/profiles.ts"), /(?<![A-Za-z0-9_])parent_public_id\b/);
 
