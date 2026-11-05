@@ -388,7 +388,7 @@ export function ParentSearchFiltersBar({
         </div>
       </div>
 
-      <div className={`${SECTION_SURFACE} relative z-10 space-y-3`}>
+      <div className={`${SECTION_SURFACE} space-y-3`}>
         <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
             <Calendar className="h-4 w-4" />
