@@ -137,16 +137,42 @@ function ParentSearchResultsInner() {
   const showWait = !authSettled || (signedIn && effectiveRole === null);
   const redirectingToLogin = authSettled && !signedIn;
 
+  const resultsCountLabel = listLoading
+    ? "טוען תוצאות…"
+    : `סה״כ נמצאו ${sitters.length} תוצאות`;
+
   return (
-    <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] py-2 pb-24" dir="rtl">
-      <div className="px-1">
-        <Link
-          href={parentSearchFiltersPath(filters)}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-navy-header/15 bg-white px-4 py-3.5 text-sm font-bold text-[#001F3F] shadow-soft transition hover:border-navy-header/25 hover:bg-brand-cream active:scale-[0.99]"
-        >
-          <span aria-hidden>←</span>
-          חזרה לשינוי תנאי החיפוש
-        </Link>
+    <main className="mx-auto w-full max-w-md space-y-4 bg-[#FDFBF6] pb-24 pt-2" dir="rtl">
+      {showContent ? (
+        <header className="space-y-1 px-1 text-right">
+          <h1 className="text-xl font-bold text-[#001F3F]">
+            {filters.serviceType === "lactation_consultant"
+              ? "יועצות הנקה זמינות"
+              : filters.serviceType === "sleep_consultant"
+                ? "יועצות שינה זמינות"
+                : filters.serviceType === "doula"
+                  ? "דולות זמינות"
+                  : "בייביסיטריות זמינות"}
+          </h1>
+          <p data-results-count className="text-sm font-semibold text-[#001F3F]">
+            {resultsCountLabel}
+          </p>
+          {!listLoading && !visibleSearchError && !serialLookupActive && sitters.length > 0 ? (
+            <p className="text-xs text-slate-600">ממוינים לפי דירוג ממוצע (גבוה קודם).</p>
+          ) : null}
+        </header>
+      ) : null}
+      {/* justify-end on this RTL page places the link on the physical left. */}
+      <div className="sticky top-0 z-20 bg-[#FDFBF6] px-1 py-1">
+        <div className="flex justify-end">
+          <Link
+            href={parentSearchFiltersPath(filters)}
+            className="inline-flex min-h-11 max-w-full items-center justify-center gap-1 rounded-xl border border-navy-header/15 bg-white px-2.5 py-1.5 text-xs font-semibold leading-tight text-[#001F3F] shadow-soft transition hover:border-navy-header/25 hover:bg-brand-cream active:scale-[0.99]"
+          >
+            <span aria-hidden>←</span>
+            חזרה לשינוי תנאי החיפוש
+          </Link>
+        </div>
       </div>
 
       {showWait ? (
@@ -159,21 +185,6 @@ function ParentSearchResultsInner() {
 
       {showContent ? (
         <>
-          <header className="space-y-1 px-1 text-right">
-            <h1 className="text-xl font-bold text-[#001F3F]">
-              {filters.serviceType === "lactation_consultant"
-                ? "יועצות הנקה זמינות"
-                : filters.serviceType === "sleep_consultant"
-                  ? "יועצות שינה זמינות"
-                  : filters.serviceType === "doula"
-                    ? "דולות זמינות"
-                    : "בייביסיטריות זמינות"}
-            </h1>
-            {!listLoading && !visibleSearchError && !serialLookupActive && sitters.length > 0 ? (
-              <p className="text-xs text-slate-600">ממוינים לפי דירוג ממוצע (גבוה קודם).</p>
-            ) : null}
-          </header>
-
           {listLoading ? (
             <p className="px-1 text-right text-sm text-slate-600">טוען תוצאות…</p>
           ) : (
