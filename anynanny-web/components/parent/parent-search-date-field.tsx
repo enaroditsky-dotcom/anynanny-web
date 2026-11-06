@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { useAnchoredOverlay } from "@/lib/ui/anchored-overlay";
 import { parentSearchLocalCalendarDate } from "@/lib/sitter/parent-search-datetime";
 import {
   formatParentSearchDateLabel,
@@ -48,8 +50,12 @@ export function ParentSearchDateField({
 }) {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const dayRefs = useRef(new Map<string, HTMLButtonElement>());
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const panelBox = useAnchoredOverlay(open, triggerRef, 320, align, 440);
   const [cursor, setCursor] = useState(() => {
     return parentSearchCalendarMonthOf(value || min) ?? {
       year: now.getFullYear(),
@@ -63,9 +69,16 @@ export function ParentSearchDateField({
   const flatDays = weeks.flat();
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -123,8 +136,9 @@ export function ParentSearchDateField({
   const label = value ? formatParentSearchDateLabel(value) : "בחרו תאריך";
 
   return (
-    <div ref={rootRef} className={`relative ${open ? "z-30" : ""}`} data-parent-search-date="">
+    <div ref={rootRef} data-parent-search-date="">
       <button
+        ref={triggerRef}
         type="button"
         className={`${className} flex items-center justify-between gap-2 text-right`}
         disabled={disabled}
@@ -138,16 +152,24 @@ export function ParentSearchDateField({
         <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
       </button>
 
-      {open ? (
+      {open && mounted && panelBox
+        ? createPortal(
         <div
+          ref={panelRef}
           id={panelId}
           role="dialog"
           aria-label="לוח שנה"
           dir="rtl"
-          style={{ backgroundColor: "#FFFFFF" }}
-          className={`absolute z-40 mt-1 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-slate-200 bg-white p-3 text-[#001F3F] shadow-soft ${
-            align === "end" ? "end-0" : "start-0"
-          }`}
+          data-parent-search-date=""
+          style={{
+            backgroundColor: "#FFFFFF",
+            top: panelBox.placement === "below" ? panelBox.top : undefined,
+            bottom: panelBox.placement === "above" ? panelBox.bottom : undefined,
+            left: panelBox.left,
+            width: panelBox.width,
+            maxHeight: panelBox.maxHeight
+          }}
+          className="fixed z-[60] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-3 text-[#001F3F] shadow-soft"
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <button
@@ -250,8 +272,10 @@ export function ParentSearchDateField({
               נקה
             </button>
           ) : null}
-        </div>
-      ) : null}
+        </div>,
+        document.body
+        )
+        : null}
     </div>
   );
 }
