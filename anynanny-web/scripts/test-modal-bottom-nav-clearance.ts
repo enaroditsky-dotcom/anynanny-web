@@ -89,7 +89,6 @@ const modified = {
   "availability": read("components/sitter/sitter-availability-manager.tsx"),
   "parent-details": read("components/sitter/parent-details-modal.tsx"),
   "broadcast-alert": read("components/sitter/SitterBroadcastAlertModal.tsx"),
-  "settings-sheet": read("components/settings/mobile-settings-ui.tsx"),
   "cancel-request": read("components/bookings/shift-cancellation-request-modal.tsx"),
   "cancel-incoming": read("components/bookings/shift-cancellation-incoming-modal.tsx"),
   "cancel-approved": read("components/bookings/shift-cancellation-approved-modal.tsx"),
@@ -169,5 +168,46 @@ for (const vp of VIEWPORTS) {
     `${vp.w}x${vp.h}: last action can scroll fully into the ${BOTTOM_INSET_PX}px bottom inset`
   );
 }
+
+const settingsSheet = read("components/settings/mobile-settings-ui.tsx");
+const settingsSheetCss = read("app/globals.css");
+const notificationSettings = read("components/settings/notification-settings-section.tsx");
+
+assert.doesNotMatch(settingsSheet, /absolute inset-0/, "settings-sheet: no full-screen close trap");
+assert.doesNotMatch(settingsSheet, /sticky bottom|fixed bottom/, "settings-sheet: no sticky/fixed action footer");
+assert.match(
+  settingsSheet,
+  /pb-\[calc\(8rem\+var\(--anynanny-now-dock,0px\)\+env\(safe-area-inset-bottom,0px\)\)\]/,
+  "settings-sheet: BottomNav clearance is the shared modal inset"
+);
+assert.match(settingsSheet, /safe-area-inset-top/, "settings-sheet: top safe area");
+assert.match(settingsSheet, /grid-rows-\[minmax\(0,1fr\)\]/, "settings-sheet: band is the free viewport");
+assert.match(settingsSheet, /overflow-hidden/, "settings-sheet: overlay itself does not scroll");
+assert.match(settingsSheet, /items-end/, "settings-sheet: short mobile sheet stays at the bottom of the free band");
+assert.match(settingsSheet, /sm:items-center/, "settings-sheet: desktop sheet stays centered");
+assert.match(settingsSheet, /createPortal/, "settings-sheet: escapes the app-shell scrollport");
+assert.match(settingsSheet, /appShellScrollElement/, "settings-sheet: locks the settings scroller");
+assert.match(settingsSheet, /data-settings-modal-body/);
+assert.match(
+  settingsSheet,
+  /data-settings-modal-body[\s\S]*overflow-y-auto overscroll-contain px-5 pb-5/,
+  "settings-sheet: only the body scrolls, with its own bottom padding"
+);
+const titleAt = settingsSheet.indexOf('id="settings-modal-title"');
+const bodyAt = settingsSheet.indexOf("data-settings-modal-body");
+assert.ok(titleAt > 0 && bodyAt > titleAt, "settings-sheet: title stays outside the scrolling body");
+assert.match(settingsSheet, /settings-modal-sheet-card/);
+assert.match(settingsSheetCss, /\.settings-modal-sheet-card/);
+assert.match(settingsSheetCss, /max-height:\s*calc\(\s*100vh/);
+assert.match(settingsSheetCss, /max-height:\s*calc\(\s*100dvh/);
+assert.match(settingsSheetCss, /max\(1rem, env\(safe-area-inset-top, 0px\)\)/);
+assert.match(settingsSheetCss, /8rem - var\(--anynanny-now-dock, 0px\)/);
+assert.match(settingsSheetCss, /env\(safe-area-inset-bottom, 0px\)/);
+assert.match(settingsSheetCss, /flex:\s*1 1 auto/);
+assert.doesNotMatch(notificationSettings, /pb-\[calc\(8rem|mb-\[calc\(8rem|scroll-pb-\[calc\(8rem/);
+assert.match(notificationSettings, /SettingsModalSheet/);
+assert.match(notificationSettings, /אילו התראות אקבל\?/);
+assert.match(read("app/parent/settings/page.tsx"), /NotificationSettingsSection/);
+assert.match(read("app/sitter/settings/page.tsx"), /NotificationSettingsSection/);
 
 console.log("modal bottom-nav clearance contract ok");
