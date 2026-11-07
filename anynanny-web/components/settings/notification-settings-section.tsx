@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
   RetroToggle,
-  SettingsModalSheet,
   SettingsRowGroup,
   SettingsSubRow
 } from "@/components/settings/mobile-settings-ui";
@@ -15,7 +14,6 @@ import {
   readBrowserPushCapability,
   resolveEffectivePush
 } from "@/lib/push/capability";
-import { PUSH_NOTIFICATION_KIND_LIST } from "@/lib/push/kind-list";
 import { loadNotificationPreferencesForUser, saveNotificationPreferencesForUser } from "@/lib/push/preferences";
 import {
   enablePushFromUserGesture,
@@ -32,7 +30,6 @@ export function NotificationSettingsSection() {
   const [prefs, setPrefs] = useState<NotificationPreferences>(readNotificationPreferences());
   const [hydrated, setHydrated] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
-  const [kindsOpen, setKindsOpen] = useState(false);
   const [hasSubscription, setHasSubscription] = useState(false);
   const [permission, setPermission] = useState(currentNotificationPermission());
 
@@ -127,14 +124,14 @@ export function NotificationSettingsSection() {
           הגדרות התראות
         </h2>
         <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-          בחרו אילו התראות תרצו לקבל בזמן משמרת ובהודעות חדשות
+          שליטה בהתראות למכשיר ובצלילים בתוך האפליקציה
         </p>
       </div>
 
       <SettingsRowGroup>
         <SettingsSubRow
           label="התראות דחיפה"
-          hint="העדפה לקבלת התראות מערכת כאשר AnyNanny סגורה. פעיל רק אחרי אישור במכשיר."
+          hint="התראות למכשיר על משמרות, הודעות, ביטולים ועדכוני תשלום. נשלחות רק אחרי אישור בהתראות של המכשיר או הדפדפן."
           trailing={
             <span className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700">
@@ -162,14 +159,8 @@ export function NotificationSettingsSection() {
         />
 
         <SettingsSubRow
-          label="אילו התראות אקבל?"
-          hint="רשימת עדכונים שניתן לקבל כהתראת מערכת"
-          onClick={() => setKindsOpen(true)}
-        />
-
-        <SettingsSubRow
           label="התראות קוליות"
-          hint="שולט בצלילים וברטט בתוך האפליקציה בזמן ש-AnyNanny פתוחה. לא שולט בצליל התראת המערכת במסך הנעילה."
+          hint="צלילים ורטט בתוך האפליקציה כשהיא פתוחה. לא שולט בצליל התראת המערכת במסך הנעילה."
           trailing={
             <span className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700">
@@ -193,20 +184,6 @@ export function NotificationSettingsSection() {
           התראות המערכת פעילות במכשיר זה
         </p>
       ) : null}
-
-      <SettingsModalSheet
-        open={kindsOpen}
-        title="אילו התראות אקבל?"
-        onClose={() => setKindsOpen(false)}
-      >
-        <ul className="space-y-2 text-right text-sm text-[#001F3F]">
-          {PUSH_NOTIFICATION_KIND_LIST.map((item) => (
-            <li key={item} className="rounded-xl bg-slate-50 px-3 py-2">
-              {item}
-            </li>
-          ))}
-        </ul>
-      </SettingsModalSheet>
     </section>
   );
 }

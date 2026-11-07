@@ -191,28 +191,6 @@ button {
   }
 }
 
-/*
- * Notification-preferences sheet. The overlay already insets the BottomNav
- * (8rem + Now dock + safe-area). Cap the card to that same band. 100vh is
- * the fallback for webviews that do not understand dvh.
- */
-.settings-modal-sheet-card {
-  max-height: calc(
-    100vh - max(1rem, env(safe-area-inset-top, 0px)) - 8rem - var(--anynanny-now-dock, 0px) -
-      env(safe-area-inset-bottom, 0px)
-  );
-  max-height: calc(
-    100dvh - max(1rem, env(safe-area-inset-top, 0px)) - 8rem - var(--anynanny-now-dock, 0px) -
-      env(safe-area-inset-bottom, 0px)
-  );
-}
-
-.settings-modal-sheet-card > [data-settings-modal-body] {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-parent-wizard-in-forward,
   .animate-parent-wizard-out-forward,

@@ -86,14 +86,14 @@ export function MarketingConsentSection() {
           {MARKETING_CONSENT_SETTINGS_LABEL}
         </h2>
         <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-          עדכונים, טיפים, הטבות והצעות מיוחדות ב-SMS, בדוא״ל ובהתראות דיגיטליות. לא משפיע על הודעות שירות כמו אימות, הזמנות וביטולים.
+          הסכמה אופציונלית לעדכונים ולהטבות. לא מכבה הודעות שירות על משמרות, ביטולים ותשלומים.
         </p>
       </div>
 
       <SettingsRowGroup>
         <SettingsSubRow
           label={MARKETING_CONSENT_SETTINGS_LABEL}
-          hint="ניתן לבטל בכל עת. הודעות תפעוליות ימשיכו להישלח."
+          hint="ניתן לבטל בכל עת. הודעות על משמרות, ביטולים ותשלומים ימשיכו להגיע."
           trailing={
             <span className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700">

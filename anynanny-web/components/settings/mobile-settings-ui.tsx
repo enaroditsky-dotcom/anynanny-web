@@ -7,9 +7,7 @@ import {
   ChevronRight,
   LogOut
 } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { appShellScrollElement } from "@/lib/ui/app-shell";
+import type { ReactNode } from "react";
 
 const APP_VERSION = "v0.1.0";
 
@@ -163,73 +161,6 @@ export function RetroToggle({
         }`}
       />
     </button>
-  );
-}
-
-export function SettingsModalSheet({
-  open,
-  title,
-  onClose,
-  children
-}: {
-  open: boolean;
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open) return;
-    const scroller = appShellScrollElement();
-    if (!scroller) return;
-    const previousOverflow = scroller.style.overflow;
-    scroller.style.overflow = "hidden";
-    return () => {
-      scroller.style.overflow = previousOverflow;
-    };
-  }, [open]);
-
-  if (!open || typeof document === "undefined") return null;
-
-  return createPortal(
-    <div
-      data-settings-modal-sheet
-      className="fixed inset-0 z-[120] grid grid-rows-[minmax(0,1fr)] overflow-hidden overscroll-contain bg-black/40 px-4 pt-[max(1rem,env(safe-area-inset-top,0px))] pb-[calc(8rem+var(--anynanny-now-dock,0px)+env(safe-area-inset-bottom,0px))]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-modal-title"
-      dir="rtl"
-      onClick={onClose}
-    >
-      <div className="flex h-full min-h-0 w-full items-end justify-center sm:items-center">
-        <div
-          className="settings-modal-sheet-card flex min-h-0 w-full max-w-md flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 rounded-2xl border border-[#001F3F]/12 bg-white shadow-xl shadow-[#001F3F]/15 duration-200"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <h2
-            id="settings-modal-title"
-            className="shrink-0 px-5 pt-5 text-right text-base font-bold text-[#001F3F]"
-          >
-            {title}
-          </h2>
-          <div
-            data-settings-modal-body
-            className="mt-4 min-h-0 touch-pan-y overflow-y-auto overscroll-contain px-5 pb-5 [-webkit-overflow-scrolling:touch]"
-          >
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
   );
 }
 
