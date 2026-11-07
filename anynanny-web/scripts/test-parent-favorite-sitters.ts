@@ -163,8 +163,8 @@ assert.equal(PARENT_SEARCH_FAVORITES_ONLY_LABEL, "הצג רק בייביסיטר
 assert.match(searchFilters, /favoritesOnly: e\.target\.checked/);
 
 const favoritesIdx = personal.indexOf("<ParentFavoriteSittersSection");
-const welcomeIdx = personal.indexOf("<WelcomeReplayCard");
-assert.ok(favoritesIdx >= 0 && welcomeIdx > favoritesIdx);
+assert.ok(favoritesIdx >= 0);
+assert.doesNotMatch(personal, /WelcomeReplayCard|welcome-replay-card/);
 assert.equal(PARENT_FAVORITES_ACCORDION_TITLE, "❤️ הבייביסיטריות המועדפות שלי");
 assert.match(favoritesSection, /title=\{PARENT_FAVORITES_ACCORDION_TITLE\}/);
 assert.match(favoritesSection, /PersonalAreaSection/);

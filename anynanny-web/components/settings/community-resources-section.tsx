@@ -1,6 +1,6 @@
-import { BookOpen, PlayCircle } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { getCharterDocument } from "@/lib/charter/content";
-import { charterFullHref, welcomeHref } from "@/lib/charter/routing";
+import { charterFullHref } from "@/lib/charter/routing";
 import type { ProfileRole } from "@/lib/supabase/profiles";
 
 export function CommunityResourcesSection({ role }: { role: ProfileRole }) {
@@ -12,20 +12,8 @@ export function CommunityResourcesSection({ role }: { role: ProfileRole }) {
       <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">קהילת AnyNanny</h2>
 
       <a
-        href={welcomeHref(role, "replay")}
-        className="flex items-center justify-between rounded-xl p-2.5 transition hover:bg-slate-50"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
-            <PlayCircle className="h-4 w-4" />
-          </div>
-          <span className="text-sm font-bold text-slate-700">ברוכים הבאים ל-AnyNanny</span>
-        </div>
-      </a>
-
-      <a
         href={charterFullHref(role, settingsPath)}
-        className="flex items-center justify-between rounded-xl border-t border-slate-100 p-2.5 transition hover:bg-slate-50"
+        className="flex items-center justify-between rounded-xl p-2.5 transition hover:bg-slate-50"
       >
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700">

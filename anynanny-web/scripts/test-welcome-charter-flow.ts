@@ -62,7 +62,6 @@ const sitterOnboardingPage = read("app/sitter/onboarding/page.tsx");
 const landing = read("app/page.tsx");
 const parentPersonal = read("components/parent/parent-personal-area.tsx");
 const sitterPersonal = read("components/sitter/sitter-personal-area.tsx");
-const replayCard = read("components/welcome/welcome-replay-card.tsx");
 
 // 1–2. Sign Up → role → Welcome → existing signup/auth
 assert.equal(welcomeHref("parent"), "/welcome?role=parent");
@@ -198,16 +197,16 @@ assert.match(welcomeFlow, /nextPathAfterWelcome\(role, nextParam\)/);
 assert.doesNotMatch(welcomeFlow, /continueToCharter/);
 assert.doesNotMatch(welcomeFlow, /handleMandatoryComplete[\s\S]{0,500}\/auth\/login/);
 
-// 13–15 + Personal Area replay card
-assert.match(community, /ברוכים הבאים ל-AnyNanny/);
-assert.match(parentSettings, /CommunityResourcesSection/);
-assert.match(sitterSettings, /CommunityResourcesSection/);
-assert.match(parentPersonal, /WelcomeReplayCard role="parent"/);
-assert.match(sitterPersonal, /WelcomeReplayCard role="sitter"/);
-assert.match(replayCard, /ברוכים הבאים ל-AnyNanny/);
-assert.match(replayCard, /צפו שוב בסרטון ההיכרות של AnyNanny/);
-assert.match(replayCard, /welcomeReplayHref/);
-assert.doesNotMatch(replayCard, /\/api\/charter\/accept|onboarding/);
+// 13–15. Private account UI does not offer the welcome-video replay.
+assert.doesNotMatch(community, /ברוכים הבאים ל-AnyNanny|welcomeHref|PlayCircle/);
+assert.match(community, /קהילת AnyNanny/);
+assert.match(community, /charterFullHref/);
+assert.match(parentSettings, /CommunityResourcesSection role="parent"/);
+assert.match(sitterSettings, /CommunityResourcesSection role="sitter"/);
+assert.doesNotMatch(parentSettings, /ברוכים הבאים ל-AnyNanny|welcomeHref\(|WelcomeReplayCard/);
+assert.doesNotMatch(sitterSettings, /ברוכים הבאים ל-AnyNanny|welcomeHref\(|WelcomeReplayCard/);
+assert.doesNotMatch(parentPersonal, /WelcomeReplayCard|welcome-replay-card|ברוכים הבאים ל-AnyNanny/);
+assert.doesNotMatch(sitterPersonal, /WelcomeReplayCard|welcome-replay-card|ברוכים הבאים ל-AnyNanny/);
 assert.match(welcomeFlow, /mode === "replay"/);
 assert.match(welcomeFlow, /חזרה לאזור האישי/);
 assert.match(welcomeFlow, /AnyNannyLogo/);

@@ -9,7 +9,6 @@ import {
   OnboardingYesNo
 } from "@/components/onboarding/onboarding-fields";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
-import { WelcomeReplayCard } from "@/components/welcome/welcome-replay-card";
 import { IdentityPersonalSection } from "@/components/identity/identity-personal-section";
 import { IdentityVerifiedBadgeLive } from "@/components/identity/verified-user-badge";
 import {
@@ -769,8 +768,6 @@ export function SitterPersonalArea({ userId }: Props) {
           </div>
         </div>
       </section>
-
-      <WelcomeReplayCard role="sitter" />
 
       {error ? (
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>

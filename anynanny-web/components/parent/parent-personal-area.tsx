@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { Loader2, Plus, Trash2, User, Wallet } from "lucide-react";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import { ParentFavoriteSittersSection } from "@/components/parent/parent-favorite-sitters-section";
-import { WelcomeReplayCard } from "@/components/welcome/welcome-replay-card";
 import { IdentityPersonalSection } from "@/components/identity/identity-personal-section";
 import { IdentityVerifiedBadgeLive } from "@/components/identity/verified-user-badge";
 import {
@@ -659,8 +658,6 @@ export function ParentPersonalArea() {
       </section>
 
       <ParentFavoriteSittersSection />
-
-      <WelcomeReplayCard role="parent" />
 
       {error ? (
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>
