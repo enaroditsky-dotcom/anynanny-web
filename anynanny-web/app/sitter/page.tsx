@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
 import { getSitterOnboardingGateRedirect, SITTER_DASHBOARD_PATH } from "@/lib/auth/post-auth-destination";
-import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
+import { classifyPortalAccess, readProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { createServerClient } from "@/lib/supabase/server";
 
 /** Sitter home — incomplete sitters go to onboarding; others to the dashboard. */
@@ -18,8 +19,12 @@ export default async function SitterPage() {
     redirect(SITTER_DASHBOARD_PATH);
   }
 
-  const ownership = await loadProductProfileOwnership(supabase, user.id);
-  if (!ownership?.hasSitter) {
+  const read = await readProductProfileOwnership(supabase, user.id);
+  const access = classifyPortalAccess(read, "sitter");
+  if (access === "unreadable") {
+    redirect(onboardingUnreadableHref("sitter"));
+  }
+  if (access === "unowned") {
     redirect(roleMismatchHref("sitter"));
   }
 

@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { hasSitterCompletedOnboarding, SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
+import {
+  classifyOnboardingRead,
+  classifySitterOnboardingRead,
+  type OnboardingRead,
+  type OnboardingReadState
+} from "@/lib/auth/onboarding-state";
+import { SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
 import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
 
@@ -14,7 +20,14 @@ export type ProductProfileOwnership = {
   hasSitter: boolean;
   parentOnboardingComplete: boolean;
   sitterOnboardingComplete: boolean;
+  parentOnboardingState: OnboardingReadState;
+  sitterOnboardingState: OnboardingReadState;
 };
+
+export type ProductProfileRead =
+  | { status: "ready"; ownership: ProductProfileOwnership }
+  | { status: "missing" }
+  | { status: "unreadable" };
 
 function secondRoleStorageKey(userId: string): string {
   return `anynanny_second_role_in_progress:${userId}`;
@@ -25,18 +38,50 @@ export function interpretProductProfileOwnership(input: {
   role?: string | null;
   parent_onboarding_completed_at?: string | null;
   sitter_onboarding_completed_at?: string | null;
+  parentOnboardingState?: OnboardingReadState;
+  sitterOnboardingState?: OnboardingReadState;
 }): ProductProfileOwnership {
   const role = isProfileRole(input.role) ? input.role : null;
-  const parentOnboardingComplete = Boolean(input.parent_onboarding_completed_at?.trim());
-  const sitterOnboardingComplete = Boolean(input.sitter_onboarding_completed_at?.trim());
+  const parentOnboardingState =
+    input.parentOnboardingState ??
+    (input.parent_onboarding_completed_at?.trim() ? "complete" : "incomplete");
+  const sitterOnboardingState =
+    input.sitterOnboardingState ??
+    (input.sitter_onboarding_completed_at?.trim() ? "complete" : "incomplete");
+  const parentOnboardingComplete = parentOnboardingState === "complete";
+  const sitterOnboardingComplete = sitterOnboardingState === "complete";
 
   return {
     role,
     hasParent: role === "parent" || parentOnboardingComplete,
     hasSitter: role === "sitter" || sitterOnboardingComplete,
     parentOnboardingComplete,
-    sitterOnboardingComplete
+    sitterOnboardingComplete,
+    parentOnboardingState,
+    sitterOnboardingState
   };
+}
+
+export function onboardingStateForRole(
+  ownership: ProductProfileOwnership,
+  role: ProfileRole
+): OnboardingReadState {
+  return role === "parent" ? ownership.parentOnboardingState : ownership.sitterOnboardingState;
+}
+
+/**
+ * Portal entry decision.
+ * An unreadable onboarding read is not the same as lacking that product.
+ */
+export function classifyPortalAccess(
+  read: ProductProfileRead,
+  portal: ProfileRole
+): "ready" | "unowned" | "unreadable" {
+  if (read.status === "unreadable") return "unreadable";
+  if (read.status === "missing") return "unowned";
+  if (onboardingStateForRole(read.ownership, portal) === "unreadable") return "unreadable";
+  const owns = portal === "parent" ? read.ownership.hasParent : read.ownership.hasSitter;
+  return owns ? "ready" : "unowned";
 }
 
 export function roleMismatchHref(requested: ProfileRole): string {
@@ -83,27 +128,33 @@ export function isSecondRoleOnboardingAllowed(userId: string, role: ProfileRole)
   return readSecondRoleInProgress(userId) === role;
 }
 
-async function loadSitterOnboardingCompletedAt(
+export async function readSitterOnboardingState(
   supabase: SupabaseClient,
   userId: string
-): Promise<string | null> {
+): Promise<OnboardingRead> {
   const fk = SITTER_PROFILES_USER_COLUMN;
   const full = await supabase
     .from(SITTER_PROFILES_TABLE)
-    .select("onboarding_completed_at")
+    .select("onboarding_completed_at, is_public")
     .eq(fk, userId)
     .maybeSingle();
 
-  if (full.error) return null;
-
-  const at = (full.data as { onboarding_completed_at?: string | null } | null)?.onboarding_completed_at;
-  return typeof at === "string" && at.trim() ? at : null;
+  const row = full.data as { onboarding_completed_at?: string | null; is_public?: boolean | null } | null;
+  return classifySitterOnboardingRead({
+    error: full.error,
+    completedAt: row?.onboarding_completed_at,
+    isPublic: row?.is_public
+  });
 }
 
-export async function loadProductProfileOwnership(
+/**
+ * Read product ownership without collapsing query failures into "no profile" or "not onboarded".
+ * A missing profile row is `missing`. Permission, schema, database, and network errors are `unreadable`.
+ */
+export async function readProductProfileOwnership(
   supabase: SupabaseClient,
   userId: string
-): Promise<ProductProfileOwnership | null> {
+): Promise<ProductProfileRead> {
   const full = await supabase
     .from(PROFILES_TABLE)
     .select("role, parent_onboarding_completed_at")
@@ -111,30 +162,50 @@ export async function loadProductProfileOwnership(
     .maybeSingle();
 
   let role: string | null = null;
-  let parentOnboarding: string | null = null;
+  let parentRead: OnboardingRead;
 
-  if (!full.error && full.data && typeof full.data === "object") {
+  if (full.error && isPostgrestMissingColumnError(full.error.message, "parent_onboarding_completed_at")) {
+    const roleOnly = await supabase.from(PROFILES_TABLE).select("role").eq("id", userId).maybeSingle();
+    if (roleOnly.error) return { status: "unreadable" };
+    if (roleOnly.data == null) return { status: "missing" };
+    role =
+      typeof (roleOnly.data as { role?: string | null }).role === "string"
+        ? (roleOnly.data as { role: string }).role
+        : null;
+    parentRead = { state: "unreadable", completedAt: null };
+  } else if (full.error) {
+    return { status: "unreadable" };
+  } else if (full.data == null) {
+    return { status: "missing" };
+  } else {
     const row = full.data as { role?: string | null; parent_onboarding_completed_at?: string | null };
     role = typeof row.role === "string" ? row.role : null;
-    parentOnboarding =
-      typeof row.parent_onboarding_completed_at === "string" ? row.parent_onboarding_completed_at : null;
-  } else if (full.error && isPostgrestMissingColumnError(full.error.message, "parent_onboarding_completed_at")) {
-    const roleOnly = await supabase.from(PROFILES_TABLE).select("role").eq("id", userId).maybeSingle();
-    if (roleOnly.error || roleOnly.data == null) return null;
-    role = typeof (roleOnly.data as { role?: string | null }).role === "string"
-      ? (roleOnly.data as { role: string }).role
-      : null;
-  } else if (full.error || full.data == null) {
-    return null;
+    parentRead = classifyOnboardingRead({ error: null, completedAt: row.parent_onboarding_completed_at });
   }
 
-  const sitterCompletedAt = await loadSitterOnboardingCompletedAt(supabase, userId);
+  const sitterRead = await readSitterOnboardingState(supabase, userId);
 
-  return interpretProductProfileOwnership({
-    role,
-    parent_onboarding_completed_at: parentOnboarding,
-    sitter_onboarding_completed_at: hasSitterCompletedOnboarding({ onboarding_completed_at: sitterCompletedAt })
-      ? sitterCompletedAt
-      : null
-  });
+  return {
+    status: "ready",
+    ownership: interpretProductProfileOwnership({
+      role,
+      parent_onboarding_completed_at: parentRead.completedAt,
+      sitter_onboarding_completed_at: sitterRead.completedAt,
+      parentOnboardingState: parentRead.state,
+      sitterOnboardingState: sitterRead.state
+    })
+  };
+}
+
+/**
+ * Ownership when the profile row was readable.
+ * Routing must use `readProductProfileOwnership`: a null result is either a missing
+ * profile or a failed read, and a ready result can still carry an unreadable role state.
+ */
+export async function loadProductProfileOwnership(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<ProductProfileOwnership | null> {
+  const read = await readProductProfileOwnership(supabase, userId);
+  return read.status === "ready" ? read.ownership : null;
 }

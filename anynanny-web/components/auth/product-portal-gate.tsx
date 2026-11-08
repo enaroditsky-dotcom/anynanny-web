@@ -3,17 +3,18 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
 import {
   getParentOnboardingGateRedirect,
   getSitterOnboardingGateRedirect,
   isSitterOnboardingPath
 } from "@/lib/auth/post-auth-destination";
 import {
+  classifyPortalAccess,
   isParentOnboardingPath,
   isSecondRoleOnboardingAllowed,
-  loadProductProfileOwnership,
-  roleMismatchHref,
-  type ProductProfileOwnership
+  readProductProfileOwnership,
+  roleMismatchHref
 } from "@/lib/auth/product-profiles";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import type { ProfileRole } from "@/lib/supabase/profiles";
@@ -24,10 +25,6 @@ function LoadingScreen() {
       <p className="text-center text-sm text-slate-600">טוענים…</p>
     </main>
   );
-}
-
-function ownsPortal(ownership: ProductProfileOwnership, portal: ProfileRole): boolean {
-  return portal === "parent" ? ownership.hasParent : ownership.hasSitter;
 }
 
 export function ProductPortalGate({
@@ -46,40 +43,50 @@ export function ProductPortalGate({
     setAllowed(false);
 
     void (async () => {
-      const auth = await resolveBrowserAuth();
-      if (!auth.ok) {
-        if (!cancelled) setAllowed(true);
-        return;
-      }
-
-      const ownership = await loadProductProfileOwnership(auth.supabase, auth.userId);
-      if (cancelled) return;
-
-      const onboardingPath =
-        portal === "sitter" ? isSitterOnboardingPath(pathname) : isParentOnboardingPath(pathname);
-
-      if (!ownership || !ownsPortal(ownership, portal)) {
-        if (onboardingPath && isSecondRoleOnboardingAllowed(auth.userId, portal)) {
+      try {
+        const auth = await resolveBrowserAuth();
+        if (!auth.ok) {
           if (!cancelled) setAllowed(true);
           return;
         }
-        router.replace(roleMismatchHref(portal));
-        return;
+
+        const read = await readProductProfileOwnership(auth.supabase, auth.userId);
+        if (cancelled) return;
+
+        const access = classifyPortalAccess(read, portal);
+        if (access === "unreadable") {
+          router.replace(onboardingUnreadableHref(portal));
+          return;
+        }
+
+        const onboardingPath =
+          portal === "sitter" ? isSitterOnboardingPath(pathname) : isParentOnboardingPath(pathname);
+
+        if (access === "unowned") {
+          if (onboardingPath && isSecondRoleOnboardingAllowed(auth.userId, portal)) {
+            if (!cancelled) setAllowed(true);
+            return;
+          }
+          router.replace(roleMismatchHref(portal));
+          return;
+        }
+
+        const dest =
+          portal === "sitter"
+            ? await getSitterOnboardingGateRedirect(auth.supabase, auth.userId, pathname)
+            : await getParentOnboardingGateRedirect(auth.supabase, auth.userId, pathname);
+
+        if (cancelled) return;
+
+        if (dest && dest !== pathname) {
+          router.replace(dest);
+          return;
+        }
+
+        setAllowed(true);
+      } catch {
+        if (!cancelled) router.replace(onboardingUnreadableHref(portal));
       }
-
-      const dest =
-        portal === "sitter"
-          ? await getSitterOnboardingGateRedirect(auth.supabase, auth.userId, pathname)
-          : await getParentOnboardingGateRedirect(auth.supabase, auth.userId, pathname);
-
-      if (cancelled) return;
-
-      if (dest && dest !== pathname) {
-        router.replace(dest);
-        return;
-      }
-
-      setAllowed(true);
     })();
 
     return () => {

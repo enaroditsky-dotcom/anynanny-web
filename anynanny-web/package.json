@@ -43,6 +43,7 @@
     "test:payment-cash-default": "npx --yes tsx scripts/test-payment-cash-default.ts",
     "test:sitter-personal-area-model": "npx --yes tsx scripts/test-sitter-personal-area-model.ts",
     "test:welcome-charter-flow": "npx --yes tsx scripts/test-welcome-charter-flow.ts",
+    "test:existing-user-onboarding-redirect": "npx --yes tsx scripts/test-existing-user-onboarding-redirect.ts",
     "test:homepage-welcome-video": "npx --yes tsx scripts/test-homepage-welcome-video.ts",
     "test:settings-legal-documents": "npx --yes tsx scripts/test-settings-legal-documents.ts",
     "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts",

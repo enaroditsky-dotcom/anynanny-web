@@ -13,7 +13,8 @@ import {
 } from "@/lib/auth/post-auth-destination";
 import { setUserRoleChoice } from "@/lib/auth/returning-user";
 import { ensureProfile } from "@/lib/auth/supabase-profile";
-import { loadProductProfileOwnership, secondRoleHref } from "@/lib/auth/product-profiles";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
+import { readProductProfileOwnership, secondRoleHref } from "@/lib/auth/product-profiles";
 import { resolveNamePartsFromAuthUser } from "@/lib/user/greeting-display-name";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveValidAuthUser } from "@/lib/auth/valid-session";
@@ -93,7 +94,20 @@ function RoleSelectionInner() {
         }
         const user = resolved.user;
 
-        const ownership = await loadProductProfileOwnership(supabase, user.id);
+        const read = await readProductProfileOwnership(supabase, user.id);
+        if (read.status === "unreadable") {
+          window.location.assign(onboardingUnreadableHref(role));
+          return;
+        }
+        const ownership = read.status === "ready" ? read.ownership : null;
+        if (
+          ownership &&
+          ((role === "parent" && ownership.parentOnboardingState === "unreadable" && !ownership.hasParent) ||
+            (role === "sitter" && ownership.sitterOnboardingState === "unreadable" && !ownership.hasSitter))
+        ) {
+          window.location.assign(onboardingUnreadableHref(role));
+          return;
+        }
         if (ownership?.hasParent || ownership?.hasSitter) {
           if ((role === "parent" && ownership.hasParent) || (role === "sitter" && ownership.hasSitter)) {
             const dest = await resolvePostAuthPath(supabase, user.id, nextParam, {

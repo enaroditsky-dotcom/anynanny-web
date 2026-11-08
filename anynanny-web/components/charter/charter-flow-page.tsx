@@ -4,10 +4,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { CharterAcceptanceScreen } from "@/components/charter/charter-acceptance-screen";
 import { CharterFullDocument } from "@/components/charter/charter-full-document";
-import { hasAcceptedCurrentCharter } from "@/lib/charter/acceptance";
+import { readCurrentCharterAcceptance } from "@/lib/charter/acceptance";
 import { nextPathAfterCharterAcceptance, parseCharterMode, resolveFlowRole } from "@/lib/charter/routing";
 import { isCharterType } from "@/lib/charter/versions";
-import { loadProductProfileOwnership } from "@/lib/auth/product-profiles";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
+import { onboardingStateForRole, readProductProfileOwnership } from "@/lib/auth/product-profiles";
 import type { ProfileRole } from "@/lib/supabase/profiles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -37,7 +38,13 @@ function CharterFlowInner() {
         return;
       }
 
-      const ownership = await loadProductProfileOwnership(supabase, user.id);
+      const read = await readProductProfileOwnership(supabase, user.id);
+      if (read.status === "unreadable" && mode !== "readonly") {
+        router.replace(onboardingUnreadableHref(isCharterType(queryRole) ? queryRole : null));
+        return;
+      }
+
+      const ownership = read.status === "ready" ? read.ownership : null;
       const nextRole = resolveFlowRole(queryRole, ownership?.role ?? null);
       if (!nextRole) {
         router.replace("/auth/role-selection");
@@ -52,18 +59,24 @@ function CharterFlowInner() {
         return;
       }
 
-      const onboardingComplete =
-        nextRole === "parent"
-          ? Boolean(ownership?.parentOnboardingComplete)
-          : Boolean(ownership?.sitterOnboardingComplete);
-
-      if (onboardingComplete) {
-        router.replace(nextRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
-        return;
+      if (ownership) {
+        const onboardingState = onboardingStateForRole(ownership, nextRole);
+        if (onboardingState === "unreadable") {
+          router.replace(onboardingUnreadableHref(nextRole));
+          return;
+        }
+        if (onboardingState === "complete") {
+          router.replace(nextRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
+          return;
+        }
       }
 
-      const accepted = await hasAcceptedCurrentCharter(supabase, user.id, nextRole);
-      if (accepted) {
+      const accepted = await readCurrentCharterAcceptance(supabase, user.id, nextRole);
+      if (accepted === "unreadable") {
+        router.replace(onboardingUnreadableHref(nextRole));
+        return;
+      }
+      if (accepted === "accepted") {
         router.replace(nextPathAfterCharterAcceptance(nextRole));
         return;
       }

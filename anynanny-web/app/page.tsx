@@ -4,11 +4,12 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
 import {
   getParentOnboardingGateRedirect,
   getSitterOnboardingGateRedirect
 } from "@/lib/auth/post-auth-destination";
-import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
+import { classifyPortalAccess, readProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
 import { AnyNannyEntryBrand } from "@/components/brand/anynanny-entry-brand";
 import { welcomeSignupHref } from "@/lib/charter/routing";
@@ -115,18 +116,19 @@ function HomeInner() {
             router.replace(activeRole === "parent" ? "/login?role=parent" : "/login?role=sitter");
             return;
           }
-          const ownership = await loadProductProfileOwnership(supabase, user.id);
-          if (activeRole === "parent") {
-            if (!ownership?.hasParent) {
-              router.replace(roleMismatchHref("parent"));
-              return;
-            }
-            const dest = await getParentOnboardingGateRedirect(supabase, user.id, "/parent/dashboard");
-            router.replace(dest ?? "/parent/dashboard");
+          const read = await readProductProfileOwnership(supabase, user.id);
+          const access = classifyPortalAccess(read, activeRole);
+          if (access === "unreadable") {
+            router.replace(onboardingUnreadableHref(activeRole));
             return;
           }
-          if (!ownership?.hasSitter) {
-            router.replace(roleMismatchHref("sitter"));
+          if (access === "unowned") {
+            router.replace(roleMismatchHref(activeRole));
+            return;
+          }
+          if (activeRole === "parent") {
+            const dest = await getParentOnboardingGateRedirect(supabase, user.id, "/parent/dashboard");
+            router.replace(dest ?? "/parent/dashboard");
             return;
           }
           const dest = await getSitterOnboardingGateRedirect(supabase, user.id, "/sitter/dashboard");

@@ -3,7 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { WelcomeVideoPlayer } from "@/components/welcome/welcome-video-player";
-import { loadProductProfileOwnership } from "@/lib/auth/product-profiles";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
+import { onboardingStateForRole, readProductProfileOwnership } from "@/lib/auth/product-profiles";
 import {
   nextPathAfterWelcome,
   parseWelcomeMode,
@@ -88,14 +89,21 @@ function WelcomeFlowInner() {
           data: { user }
         } = await supabase.auth.getUser();
         if (user) {
-          const ownership = await loadProductProfileOwnership(supabase, user.id);
-          const onboardingComplete =
-            nextRole === "parent"
-              ? Boolean(ownership?.parentOnboardingComplete)
-              : Boolean(ownership?.sitterOnboardingComplete);
-          if (onboardingComplete) {
-            router.replace(nextRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
+          const read = await readProductProfileOwnership(supabase, user.id);
+          if (read.status === "unreadable") {
+            router.replace(onboardingUnreadableHref(nextRole));
             return;
+          }
+          if (read.status === "ready") {
+            const onboardingState = onboardingStateForRole(read.ownership, nextRole);
+            if (onboardingState === "unreadable") {
+              router.replace(onboardingUnreadableHref(nextRole));
+              return;
+            }
+            if (onboardingState === "complete") {
+              router.replace(nextRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
+              return;
+            }
           }
         }
       }

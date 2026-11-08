@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { LogoutButton } from "@/components/account/logout-button";
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
 import { SitterPersonalArea } from "@/components/sitter/sitter-personal-area";
-import { loadProductProfileOwnership } from "@/lib/auth/product-profiles";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
+import { classifyPortalAccess, readProductProfileOwnership } from "@/lib/auth/product-profiles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function SitterProfilePage() {
@@ -34,11 +35,17 @@ export default function SitterProfilePage() {
         return;
       }
 
-      const ownership = await loadProductProfileOwnership(supabase, user.id);
+      const read = await readProductProfileOwnership(supabase, user.id);
 
       if (cancelled) return;
 
-      if (!ownership?.hasSitter) {
+      const access = classifyPortalAccess(read, "sitter");
+      if (access === "unreadable") {
+        router.replace(onboardingUnreadableHref("sitter"));
+        return;
+      }
+
+      if (access === "unowned") {
         router.replace("/auth/role-mismatch?requested=sitter");
         return;
       }

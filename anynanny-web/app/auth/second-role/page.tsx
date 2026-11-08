@@ -9,12 +9,12 @@ import {
 } from "@/components/auth/terms-acceptance-checkbox";
 import { PageBackButton, PageBackRow } from "@/components/navigation/page-back-link";
 import { ACCOUNT_TYPE_ENTRY_HREF } from "@/lib/auth/age-eligibility";
-import { SITTER_DASHBOARD_PATH, SITTER_ONBOARDING_PATH } from "@/lib/auth/post-auth-destination";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
+import { resolvePostAuthPath, SITTER_ONBOARDING_PATH } from "@/lib/auth/post-auth-destination";
 import {
-  loadProductProfileOwnership,
   markSecondRoleInProgress,
-  PARENT_DASHBOARD_PATH,
   PARENT_ONBOARDING_PATH,
+  readProductProfileOwnership,
   roleMismatchHref
 } from "@/lib/auth/product-profiles";
 import { createLegalAcceptanceRecord, persistLegalAcceptanceIfUnset } from "@/lib/legal/acceptance";
@@ -72,18 +72,28 @@ function SecondRoleInner() {
         return;
       }
 
-      const ownership = await loadProductProfileOwnership(supabase, user.id);
+      const read = await readProductProfileOwnership(supabase, user.id);
       if (cancelled) return;
 
-      if (role === "sitter" && ownership?.hasSitter) {
+      if (read.status === "unreadable") {
         setSessionState("redirecting");
-        router.replace(ownership.sitterOnboardingComplete ? SITTER_DASHBOARD_PATH : SITTER_ONBOARDING_PATH);
+        router.replace(onboardingUnreadableHref(role));
         return;
       }
 
-      if (role === "parent" && ownership?.hasParent) {
+      const ownership = read.status === "ready" ? read.ownership : null;
+      const ownsRequested =
+        role === "sitter"
+          ? Boolean(ownership?.hasSitter) || ownership?.sitterOnboardingState === "unreadable"
+          : Boolean(ownership?.hasParent) || ownership?.parentOnboardingState === "unreadable";
+
+      if (ownsRequested) {
         setSessionState("redirecting");
-        router.replace(ownership.parentOnboardingComplete ? PARENT_DASHBOARD_PATH : PARENT_ONBOARDING_PATH);
+        const dest = await resolvePostAuthPath(supabase, user.id, null, {
+          requestedRole: role,
+          userEmail: user.email
+        });
+        if (!cancelled) router.replace(dest);
         return;
       }
 
