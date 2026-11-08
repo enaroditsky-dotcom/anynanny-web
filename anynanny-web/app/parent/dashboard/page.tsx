@@ -1,4 +1,7 @@
+import { redirect } from "next/navigation";
 import { ParentDashboardClient } from "@/components/parent/parent-dashboard-client";
+import { AUTH_RETRY_MESSAGE, AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
+import { protectedScreenGate, resolveValidAuthUser } from "@/lib/auth/valid-session";
 import type { BookingRow } from "@/lib/bookings/constants";
 import type { NannyProfile } from "@/lib/ratings/types";
 import type { ParentPreferences, ParentBusySlot } from "@/lib/parent/types";
@@ -23,38 +26,36 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ParentDashboardPage() {
-  const supabase = await createServerClient();
-  if (!supabase) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     return (
-      <ParentDashboardClient
-        initialProfiles={[]}
-        initialPreferences={{
-          parentName: "הורה",
-          parentSerial: "",
-          favoriteSitterId: "",
-          locationLabel: "ישראל",
-          minRate: 30,
-          maxRate: 150,
-          preferredGender: "all",
-          transportMode: "taxi",
-          minAge: 18,
-          minExperienceYears: 0,
-          minRating: 0,
-          reassurancePingEnabled: true,
-          calendarSyncGoogle: false,
-          calendarSyncPhone: false
-        }}
-        initialBusySlots={[]}
-        initialActiveBooking={null}
-        initialAvatarUrl={null}
-      />
+      <main className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center px-4" dir="rtl">
+        <p className="text-center text-sm text-slate-600">{AUTH_SERVICE_UNAVAILABLE_MESSAGE}</p>
+      </main>
     );
   }
 
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-  const parentId = user?.id ?? null;
+  const supabase = await createServerClient();
+  if (!supabase) {
+    return (
+      <main className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center px-4" dir="rtl">
+        <p className="text-center text-sm text-slate-600">{AUTH_SERVICE_UNAVAILABLE_MESSAGE}</p>
+      </main>
+    );
+  }
+
+  const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
+  if (gate.status === "unavailable") {
+    return (
+      <main className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center px-4" dir="rtl">
+        <p className="text-center text-sm text-slate-600">{AUTH_RETRY_MESSAGE} רעננו את הדף כדי לנסות שוב.</p>
+      </main>
+    );
+  }
+  if (gate.status !== "verified") {
+    redirect("/auth/login?next=/parent/dashboard");
+  }
+  const user = gate.user;
+  const parentId = user.id;
 
   let initialPreferences: ParentPreferences & { parentSerial?: string } = {
     parentName: user?.email?.split("@")[0] || "הורה",

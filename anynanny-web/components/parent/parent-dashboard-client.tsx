@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { ParentOnboardingWizard } from "@/components/parent/parent-onboarding-wizard";
@@ -14,6 +15,7 @@ import { AddFavoriteSitterPrompt } from "@/components/parent/add-favorite-sitter
 import { resolvePostSettlementFavoritePrompt } from "@/lib/favorites/parent-favorites";
 import { DoubleShakeCircleButton } from "@/components/session/double-shake-circle-button";
 import { ManualPaymentPanel } from "@/components/billing/ManualPaymentPanel";
+import { useAuth } from "@/components/auth-provider";
 import { useSession } from "@/context/SessionContext";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 import { parentApproveSitterStart } from "@/lib/bookings/parent-approve-sitter-start";
@@ -130,7 +132,8 @@ import {
   fetchLatestParentSessionRow,
   fetchSessionForBooking
 } from "@/lib/session/sessions-query";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { LOGOUT_SIGN_OUT_FAILED_MESSAGE, logoutAndRedirect } from "@/lib/auth/logout";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   removeRealtimeChannel,
@@ -139,7 +142,6 @@ import {
 import { LOGOUT_BUTTON_CLASS, LogoutButtonContent } from "@/components/account/logout-button";
 import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
 import { LongPrimaryCtaContent } from "@/components/ui/long-primary-cta";
-import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
 import {
   LONG_PRIMARY_CTA_CLASS,
   LONG_PRIMARY_CTA_ICON_CLASS,
@@ -528,6 +530,14 @@ export function ParentDashboardClient({
   initialAvatarUrl?: string | null;
 }) {
   const { nowMs } = useSession();
+  const router = useRouter();
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const { user: authUser, signedIn, isLoading: authLoading } = useAuth();
+  const accountUserIdRef = useRef<string | null>(null);
+  if (!authLoading) {
+    accountUserIdRef.current = signedIn ? authUser?.id ?? null : null;
+  }
   const [prefs, setPrefs] = useState(initialPreferences);
   const [parentSerial, setParentSerial] = useState<string>(initialPreferences.parentSerial || "");
   const [parentAvatarUrl, setParentAvatarUrl] = useState<string | null>(
@@ -1226,7 +1236,10 @@ export function ParentDashboardClient({
     try {
       const auth = await resolveBrowserAuth();
       if (!auth.ok) {
-        const message = RELEASE_STUCK_SHIFT_COPY.genericFailure;
+        const message =
+          auth.reason === "unavailable"
+            ? browserAuthFailureMessage(auth.reason, RELEASE_STUCK_SHIFT_COPY.genericFailure)
+            : RELEASE_STUCK_SHIFT_COPY.genericFailure;
         setReleaseStuckModalError(message);
         setShiftError(message);
         return;
@@ -1304,28 +1317,66 @@ export function ParentDashboardClient({
     };
 
     const onNewBooking = (event: Event) => {
-      applyNewBooking((event as CustomEvent<NewBookingEventDetail>).detail);
+      const accountId = accountUserIdRef.current;
+      const detail = (event as CustomEvent<NewBookingEventDetail>).detail;
+      if (!accountId) return;
+      if (detail?.parentId && detail.parentId !== accountId) return;
+      applyNewBooking(detail);
     };
     window.addEventListener(ANYNANNY_NEW_BOOKING_EVENT, onNewBooking);
 
-    const pendingMarker = consumeNewBookingMarker();
-    if (pendingMarker) applyNewBooking(pendingMarker);
+    if (accountUserIdRef.current) {
+      const pendingMarker = consumeNewBookingMarker();
+      if (
+        pendingMarker &&
+        (!pendingMarker.parentId || pendingMarker.parentId === accountUserIdRef.current)
+      ) {
+        applyNewBooking(pendingMarker);
+      }
+    }
 
     return () => window.removeEventListener(ANYNANNY_NEW_BOOKING_EVENT, onNewBooking);
-  }, [clearToIdleDashboard, parentId, refreshLiveShiftState]);
+  }, [authLoading, authUser?.id, clearToIdleDashboard, parentId, refreshLiveShiftState, signedIn]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!signedIn || !authUser?.id) {
+      setParentId(null);
+      clearToIdleDashboard();
+      return;
+    }
+    const expectedId = authUser.id;
+    let cancelled = false;
     void (async () => {
       const auth = await resolveBrowserAuth();
-      if (!auth.ok) return;
-      setParentId(auth.userId);
-      if (auth.supabase) {
-        await refreshParentOnboardingStatus(auth.supabase, auth.userId);
-        await refreshLiveShiftState(auth.userId);
-        await refreshParentRatingSummary(auth.userId);
+      if (cancelled || accountUserIdRef.current !== expectedId) return;
+      if (!auth.ok) {
+        if (auth.reason === "unavailable") return;
+        setParentId(null);
+        clearToIdleDashboard();
+        return;
       }
+      if (auth.userId !== expectedId) return;
+      setParentId(auth.userId);
+      if (!auth.supabase) return;
+      await refreshParentOnboardingStatus(auth.supabase, auth.userId);
+      if (cancelled || accountUserIdRef.current !== expectedId) return;
+      await refreshLiveShiftState(auth.userId);
+      if (cancelled || accountUserIdRef.current !== expectedId) return;
+      await refreshParentRatingSummary(auth.userId);
     })();
-  }, [refreshParentOnboardingStatus, refreshLiveShiftState, refreshParentRatingSummary]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authLoading,
+    authUser?.id,
+    clearToIdleDashboard,
+    refreshLiveShiftState,
+    refreshParentOnboardingStatus,
+    refreshParentRatingSummary,
+    signedIn
+  ]);
 
   useEffect(() => {
     if (!parentId) return;
@@ -2673,12 +2724,23 @@ export function ParentDashboardClient({
                     {releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}
                   </button>
                 ) : null}
+                {logoutError ? (
+                  <p role="alert" className="text-center text-xs text-rose-800">
+                    {logoutError}
+                  </p>
+                ) : null}
                 <button
                   type="button"
+                  disabled={logoutBusy}
                   onClick={() => {
-                    const supabase = getSupabaseBrowserClient();
-                    setBroadcastMinimized(false);
-                    if (supabase) void supabase.auth.signOut().then(() => (window.location.href = "/login"));
+                    if (logoutBusy) return;
+                    setLogoutBusy(true);
+                    setLogoutError(null);
+                    void logoutAndRedirect(router, "/login").then((result) => {
+                      if (result.ok) return;
+                      setLogoutError(LOGOUT_SIGN_OUT_FAILED_MESSAGE);
+                      setLogoutBusy(false);
+                    });
                   }}
                   className={LOGOUT_BUTTON_CLASS}
                 >

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { AuthRetryStatus } from "@/lib/auth/use-online-retry-nonce";
 import { broadcastQuestionHomeHref } from "@/lib/broadcast/question-link";
 import { EXPLICIT_BROADCAST_REMOVAL_LABEL, removeOwnBroadcastQuestion } from "@/lib/broadcast/system-talks";
 import {
@@ -24,7 +25,7 @@ export function BroadcastQuestionAnswer({
   embedded?: boolean;
 }) {
   const router = useRouter();
-  const { isLoading, signedIn, user, effectiveRole } = useAuth();
+  const { isLoading, signedIn, user, effectiveRole, authRetryExhausted, retryAuthentication } = useAuth();
   const userId = signedIn && user?.id ? user.id : null;
   const validId = QUESTION_ID.test(questionId) ? questionId : null;
   const [question, setQuestion] = useState<BroadcastQuestionView | null>(null);
@@ -139,7 +140,13 @@ export function BroadcastQuestionAnswer({
 
   const body = (
     <>
-      {validId && (loading || isLoading) ? <p className="mt-6 text-sm text-[#001F3F]/80">טוען את השאלה…</p> : null}
+      {authRetryExhausted && isLoading && !userId ? (
+        <div className="mt-6">
+          <AuthRetryStatus exhausted onRetry={() => void retryAuthentication()} pending="טוען את השאלה…" />
+        </div>
+      ) : validId && (loading || isLoading) ? (
+        <p className="mt-6 text-sm text-[#001F3F]/80">טוען את השאלה…</p>
+      ) : null}
       {!isLoading && !validId ? (
         <p className="mt-6 text-sm text-rose-700" role="alert">
           השאלה לא זמינה עבורך.

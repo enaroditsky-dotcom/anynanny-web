@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { deleteCurrentUserAccount } from "@/lib/account/delete-current-user";
+import { notePushCleanupResult } from "@/lib/auth/logout";
 import { clearDeviceAuthHints } from "@/lib/auth/returning-user";
+import { clearNewBookingMarker } from "@/lib/bookings/new-booking-reset";
+import { unsubscribeCurrentPushSubscription } from "@/lib/push/register-push";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function DeleteAccountSection() {
@@ -35,6 +38,9 @@ export function DeleteAccountSection() {
     setBusy(true);
     setError(null);
 
+    const push = await unsubscribeCurrentPushSubscription();
+    notePushCleanupResult(push, "delete-account");
+
     const result = await deleteCurrentUserAccount(supabase);
     if (!result.ok) {
       setError(result.message);
@@ -42,7 +48,12 @@ export function DeleteAccountSection() {
       return;
     }
 
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (signOutError) {
+      console.warn("[delete-account] signOut after confirmed delete:", signOutError);
+    }
+    clearNewBookingMarker();
     clearDeviceAuthHints();
     window.location.assign("/");
   }, []);

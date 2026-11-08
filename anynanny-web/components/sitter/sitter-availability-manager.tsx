@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { X, Plus, Trash2 } from "lucide-react";
 import {
   AUTH_MODAL_BODY_SCROLL,
@@ -117,6 +118,7 @@ function isHourCovered(hour: number, ranges: TimeRange[], fullyAvailable: boolea
 }
 
 export function SitterAvailabilityManager() {
+  const authRetry = useOnlineRetryNonce();
   const today = new Date();
   const [sitterId, setSitterId] = useState<string | null>(null);
   const [calendarMode, setCalendarMode] = useState<CalendarMode>("all_except_blocked");
@@ -138,17 +140,31 @@ export function SitterAvailabilityManager() {
   const todayISO = todayDateISO();
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
+      let holdForRetry = false;
       try {
         const auth = await resolveBrowserAuth();
+        if (cancelled) return;
         if (!auth.ok) {
-          setMessage("יש להתחבר כדי לנהל זמינות.");
+          if (auth.reason === "unavailable") {
+            authRetry.noteUnavailable();
+            if (!authRetry.exhausted) {
+              holdForRetry = true;
+              return;
+            }
+            setMessage(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לנהל זמינות."));
+            return;
+          }
+          authRetry.noteSettled();
+          setMessage(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לנהל זמינות."));
           return;
         }
+        authRetry.noteSettled();
         setSitterId(auth.userId);
 
         const supabase = getSupabaseBrowserClient();
-        if (!supabase) return;
+        if (!supabase || cancelled) return;
 
         // Unconfigured days should appear in search as available — prefer open-by-default mode.
         const modeResult = await fetchSitterCalendarMode(supabase, auth.userId);
@@ -162,10 +178,13 @@ export function SitterAvailabilityManager() {
         console.warn("[sitter_availability] init failed:", err);
         setMessage("שגיאה בטעינת המערכת.");
       } finally {
-        setLoading(false);
+        if (!cancelled && !holdForRetry) setLoading(false);
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [authRetry.exhausted, authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable]);
 
   const reloadMonth = useCallback(async () => {
     if (!sitterId) return;

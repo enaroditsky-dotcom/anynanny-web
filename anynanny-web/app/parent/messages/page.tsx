@@ -4,26 +4,37 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
 import { AnynannySystemConversation } from "@/components/broadcast/anynanny-system-conversation";
 import { ParentBookingChatInbox } from "@/components/chat/booking-chat-inbox";
 import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 function ParentMessagesInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sitterIdFromQuery = searchParams.get("sitter_id")?.trim() ?? "";
   const { isLoading, signedIn, effectiveRole } = useAuth();
+  const authRetry = useOnlineRetryNonce();
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
 
   const openChatWithSitter = useCallback(
     async (sitterId: string) => {
       const auth = await resolveBrowserAuth();
       if (!auth.ok) {
-        setDeepLinkError("יש להתחבר מחדש");
+        if (auth.reason === "unavailable") {
+          authRetry.noteUnavailable();
+          if (authRetry.exhausted) {
+            setDeepLinkError(browserAuthFailureMessage(auth.reason, "יש להתחבר מחדש"));
+          }
+          return;
+        }
+        authRetry.noteSettled();
+        setDeepLinkError(browserAuthFailureMessage(auth.reason, "יש להתחבר מחדש"));
         return;
       }
+      authRetry.noteSettled();
 
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {
@@ -39,7 +50,7 @@ function ParentMessagesInner() {
 
       router.replace(`/parent/chat/${encodeURIComponent(bookingId)}`);
     },
-    [router]
+    [authRetry.exhausted, authRetry.noteSettled, authRetry.noteUnavailable, router]
   );
 
   useEffect(() => {
@@ -47,7 +58,7 @@ function ParentMessagesInner() {
     if (sitterIdFromQuery) {
       void openChatWithSitter(sitterIdFromQuery);
     }
-  }, [isLoading, signedIn, effectiveRole, sitterIdFromQuery, openChatWithSitter]);
+  }, [authRetry.nonce, effectiveRole, isLoading, openChatWithSitter, signedIn, sitterIdFromQuery]);
 
   if (sitterIdFromQuery && !deepLinkError) {
     return (
