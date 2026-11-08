@@ -16,6 +16,7 @@ import {
   readProductProfileOwnership,
   roleMismatchHref
 } from "@/lib/auth/product-profiles";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import type { ProfileRole } from "@/lib/supabase/profiles";
 
@@ -36,6 +37,7 @@ export function ProductPortalGate({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const authRetry = useOnlineRetryNonce();
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
@@ -45,10 +47,17 @@ export function ProductPortalGate({
     void (async () => {
       try {
         const auth = await resolveBrowserAuth();
+        if (cancelled) return;
         if (!auth.ok) {
+          if (auth.reason === "unavailable") {
+            authRetry.noteUnavailable();
+            return;
+          }
+          authRetry.noteSettled();
           if (!cancelled) setAllowed(true);
           return;
         }
+        authRetry.noteSettled();
 
         const read = await readProductProfileOwnership(auth.supabase, auth.userId);
         if (cancelled) return;
@@ -92,9 +101,18 @@ export function ProductPortalGate({
     return () => {
       cancelled = true;
     };
-  }, [pathname, portal, router]);
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, pathname, portal, router]);
 
-  if (!allowed) return <LoadingScreen />;
+  if (!allowed) {
+    if (authRetry.exhausted) {
+      return (
+        <main className="mx-auto flex min-h-[70vh] w-full max-w-lg flex-col items-center justify-center px-4 py-10" dir="rtl">
+          <AuthRetryStatus exhausted onRetry={() => authRetry.retryNow()} />
+        </main>
+      );
+    }
+    return <LoadingScreen />;
+  }
 
   return <>{children}</>;
 }

@@ -1,15 +1,12 @@
 ﻿"use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { restoreHomeSession } from "@/lib/auth/home-session-restore";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
-import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
-import {
-  getParentOnboardingGateRedirect,
-  getSitterOnboardingGateRedirect
-} from "@/lib/auth/post-auth-destination";
-import { classifyPortalAccess, readProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
 import { AnyNannyEntryBrand } from "@/components/brand/anynanny-entry-brand";
 import { welcomeSignupHref } from "@/lib/charter/routing";
@@ -69,9 +66,13 @@ function HomeInner() {
   const searchParams = useSearchParams();
   const isManual = searchParams.get("manual") === "true";
   const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [restorePending, setRestorePending] = useState(false);
+  const [serviceMissing, setServiceMissing] = useState(false);
+  const authRetry = useOnlineRetryNonce();
   const hasRecoveryCallback = searchParams.get("type")?.toLowerCase() === "recovery";
 
   useEffect(() => {
+    let cancelled = false;
     const hash = window.location.hash;
     const search = window.location.search;
     const callback = readAuthCallbackParams(search, hash);
@@ -97,48 +98,61 @@ function HomeInner() {
       return;
     }
 
-    if (isManual) return;
-
-    try {
-      const activeRole = localStorage.getItem("active_role");
-
-      if (activeRole === "parent" || activeRole === "sitter") {
-        void (async () => {
-          const supabase = getSupabaseBrowserClient();
-          if (!supabase) {
-            router.replace(activeRole === "parent" ? "/parent/dashboard" : "/sitter/dashboard");
-            return;
-          }
-          const {
-            data: { user }
-          } = await supabase.auth.getUser();
-          if (!user) {
-            router.replace(activeRole === "parent" ? "/login?role=parent" : "/login?role=sitter");
-            return;
-          }
-          const read = await readProductProfileOwnership(supabase, user.id);
-          const access = classifyPortalAccess(read, activeRole);
-          if (access === "unreadable") {
-            router.replace(onboardingUnreadableHref(activeRole));
-            return;
-          }
-          if (access === "unowned") {
-            router.replace(roleMismatchHref(activeRole));
-            return;
-          }
-          if (activeRole === "parent") {
-            const dest = await getParentOnboardingGateRedirect(supabase, user.id, "/parent/dashboard");
-            router.replace(dest ?? "/parent/dashboard");
-            return;
-          }
-          const dest = await getSitterOnboardingGateRedirect(supabase, user.id, "/sitter/dashboard");
-          router.replace(dest ?? "/sitter/dashboard");
-        })();
-      }
-    } catch {
-      /* ignore */
+    if (isManual) {
+      setRestorePending(false);
+      return;
     }
-  }, [isManual, router, searchParams]);
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      if (!cancelled) {
+        setRestorePending(false);
+        setServiceMissing(true);
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!cancelled) setServiceMissing(false);
+
+    let savedRole: string | null = null;
+    try {
+      savedRole = localStorage.getItem("active_role");
+    } catch {
+      savedRole = null;
+    }
+
+    setRestorePending(true);
+    void (async () => {
+      const result = await restoreHomeSession({ manual: false, supabase, savedRole });
+      if (cancelled) return;
+      if (result.status === "unavailable") {
+        authRetry.noteUnavailable();
+        return;
+      }
+      authRetry.noteSettled();
+      if (result.status === "welcome" || result.status === "no_client" || result.status === "manual") {
+        setRestorePending(false);
+        return;
+      }
+      if (result.status === "login") {
+        router.replace(result.role === "parent" ? "/login?role=parent" : "/login?role=sitter");
+        return;
+      }
+      if (result.activeRole) {
+        try {
+          localStorage.setItem("active_role", result.activeRole);
+        } catch {
+          /* ignore quota */
+        }
+      }
+      router.replace(result.href);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, isManual, router, searchParams]);
 
   const navigateWithPath = (
     action: "login" | "register",
@@ -170,6 +184,14 @@ function HomeInner() {
     router.push(`/login?${qs.toString()}`);
   };
 
+  if (restorePending && !hasRecoveryCallback) {
+    return (
+      <main className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF6] px-4" dir="rtl">
+        <AuthRetryStatus exhausted={authRetry.exhausted} onRetry={authRetry.retryNow} pending="טוען…" />
+      </main>
+    );
+  }
+
   if (hasRecoveryCallback) {
     return (
       <main
@@ -188,6 +210,11 @@ function HomeInner() {
     >
       <div className="mx-auto flex min-h-[calc(100dvh-0.75rem)] w-full max-w-md flex-col items-center justify-start gap-0 pt-0 sm:min-h-0 sm:gap-[0.65rem] sm:pt-1">
         {/* Brand — illustration, then official wordmark. */}
+        {serviceMissing ? (
+          <p className="mb-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
+            {AUTH_SERVICE_UNAVAILABLE_MESSAGE}
+          </p>
+        ) : null}
         <div className="w-full min-w-0 shrink-0 text-center">
           <AnyNannyEntryBrand />
 

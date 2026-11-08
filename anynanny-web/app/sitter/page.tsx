@@ -1,24 +1,39 @@
 import { redirect } from "next/navigation";
+import { AUTH_RETRY_MESSAGE, AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
 import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
 import { getSitterOnboardingGateRedirect, SITTER_DASHBOARD_PATH } from "@/lib/auth/post-auth-destination";
 import { classifyPortalAccess, readProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
+import { protectedScreenGate, resolveValidAuthUser } from "@/lib/auth/valid-session";
 import { createServerClient } from "@/lib/supabase/server";
+
+function AuthHold({ message }: { message: string }) {
+  return (
+    <main className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center px-4" dir="rtl">
+      <p className="text-center text-sm text-slate-600">{message}</p>
+    </main>
+  );
+}
 
 /** Sitter home — incomplete sitters go to onboarding; others to the dashboard. */
 export default async function SitterPage() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return <AuthHold message={AUTH_SERVICE_UNAVAILABLE_MESSAGE} />;
+  }
+
   const supabase = await createServerClient();
   if (!supabase) {
-    redirect(SITTER_DASHBOARD_PATH);
+    return <AuthHold message={AUTH_SERVICE_UNAVAILABLE_MESSAGE} />;
   }
 
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect(SITTER_DASHBOARD_PATH);
+  const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
+  if (gate.status === "unavailable") {
+    return <AuthHold message={`${AUTH_RETRY_MESSAGE} רעננו את הדף כדי לנסות שוב.`} />;
+  }
+  if (gate.status !== "verified") {
+    redirect("/auth/login?next=/sitter");
   }
 
+  const user = gate.user;
   const read = await readProductProfileOwnership(supabase, user.id);
   const access = classifyPortalAccess(read, "sitter");
   if (access === "unreadable") {

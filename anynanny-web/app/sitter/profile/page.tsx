@@ -5,14 +5,19 @@ import { useRouter } from "next/navigation";
 import { LogoutButton } from "@/components/account/logout-button";
 import { SitterPageShell } from "@/components/sitter/sitter-page-shell";
 import { SitterPersonalArea } from "@/components/sitter/sitter-personal-area";
+import { AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
 import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
 import { classifyPortalAccess, readProductProfileOwnership } from "@/lib/auth/product-profiles";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { protectedScreenGate, resolveValidAuthUser } from "@/lib/auth/valid-session";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function SitterProfilePage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [serviceMissing, setServiceMissing] = useState(false);
+  const authRetry = useOnlineRetryNonce();
 
   useEffect(() => {
     let cancelled = false;
@@ -20,20 +25,23 @@ export default function SitterProfilePage() {
     void (async () => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {
-        if (!cancelled) setAuthReady(true);
+        if (!cancelled) setServiceMissing(true);
         return;
       }
+      if (!cancelled) setServiceMissing(false);
 
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-
+      const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
       if (cancelled) return;
-
-      if (!user) {
+      if (gate.status === "unavailable") {
+        authRetry.noteUnavailable();
+        return;
+      }
+      authRetry.noteSettled();
+      if (gate.status === "signed_out") {
         router.replace("/auth/login?next=/sitter/profile");
         return;
       }
+      const user = gate.user;
 
       const read = await readProductProfileOwnership(supabase, user.id);
 
@@ -57,14 +65,22 @@ export default function SitterProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, router]);
 
   return (
     <SitterPageShell
       title="אזור אישי"
       subtitle="כל פרטי השאלון והפרופיל המקצועי — ניתן לערוך ולשמור בכל עת."
     >
-      {authReady ? <SitterPersonalArea userId={userId} /> : null}
+      {serviceMissing ? (
+        <p className="py-8 text-center text-sm text-slate-600">{AUTH_SERVICE_UNAVAILABLE_MESSAGE}</p>
+      ) : authReady ? (
+        <SitterPersonalArea userId={userId} />
+      ) : (
+        <div className="py-8">
+          <AuthRetryStatus exhausted={authRetry.exhausted} onRetry={authRetry.retryNow} pending="טוען…" />
+        </div>
+      )}
       {authReady ? (
         <div className="mt-4 shrink-0 border-t border-slate-100 pt-4">
           <LogoutButton />

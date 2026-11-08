@@ -9,6 +9,8 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 import { AnynannySystemConversation } from "@/components/broadcast/anynanny-system-conversation";
 import { SitterBookingChatInbox } from "@/components/chat/booking-chat-inbox";
@@ -16,8 +18,6 @@ import { SitterBookingChatInbox } from "@/components/chat/booking-chat-inbox";
 import { findChatBookingForParentSitter } from "@/lib/chat/booking-messages";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 
 
@@ -30,6 +30,7 @@ function SitterMessagesInner() {
   const parentIdFromQuery = searchParams.get("parentId")?.trim() ?? "";
 
   const { isLoading, signedIn, effectiveRole } = useAuth();
+  const authRetry = useOnlineRetryNonce();
 
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
 
@@ -42,12 +43,18 @@ function SitterMessagesInner() {
       const auth = await resolveBrowserAuth();
 
       if (!auth.ok) {
-
-        setDeepLinkError("יש להתחבר מחדש");
-
+        if (auth.reason === "unavailable") {
+          authRetry.noteUnavailable();
+          if (authRetry.exhausted) {
+            setDeepLinkError(browserAuthFailureMessage(auth.reason, "יש להתחבר מחדש"));
+          }
+          return;
+        }
+        authRetry.noteSettled();
+        setDeepLinkError(browserAuthFailureMessage(auth.reason, "יש להתחבר מחדש"));
         return;
-
       }
+      authRetry.noteSettled();
 
 
 
@@ -79,7 +86,7 @@ function SitterMessagesInner() {
 
     },
 
-    [router]
+    [authRetry.exhausted, authRetry.noteSettled, authRetry.noteUnavailable, router]
 
   );
 
@@ -95,7 +102,7 @@ function SitterMessagesInner() {
 
     }
 
-  }, [isLoading, signedIn, effectiveRole, parentIdFromQuery, openChatWithParent]);
+  }, [authRetry.nonce, effectiveRole, isLoading, openChatWithParent, parentIdFromQuery, signedIn]);
 
 
 

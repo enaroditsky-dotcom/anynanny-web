@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import { AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
 import { RoleSelectionScreen } from "@/components/auth/role-selection-screen";
 import {
   AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT,
@@ -32,14 +34,18 @@ function RoleSelectionInner() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<ProfileRole | null>(null);
   const [sessionGate, setSessionGate] = useState<SessionGate>("checking");
+  const [serviceMissing, setServiceMissing] = useState(false);
+  const authRetry = useOnlineRetryNonce();
 
   useEffect(() => {
     let cancelled = false;
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setSessionGate("anon");
+      setServiceMissing(true);
+      setSessionGate("checking");
       return;
     }
+    setServiceMissing(false);
 
     void (async () => {
       const resolved = await resolveValidAuthUser(supabase);
@@ -47,10 +53,17 @@ function RoleSelectionInner() {
       if (cancelled) return;
 
       if (!resolved.ok) {
+        if (resolved.reason === "unavailable") {
+          setSessionGate("checking");
+          authRetry.noteUnavailable();
+          return;
+        }
+        authRetry.noteSettled();
         setSessionGate("anon");
         router.replace(AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT);
         return;
       }
+      authRetry.noteSettled();
 
       const user = resolved.user;
 
@@ -75,7 +88,7 @@ function RoleSelectionInner() {
     return () => {
       cancelled = true;
     };
-  }, [router, nextParam]);
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, nextParam, router]);
 
   const choose = useCallback(
     async (role: ProfileRole) => {
@@ -89,6 +102,10 @@ function RoleSelectionInner() {
       try {
         const resolved = await resolveValidAuthUser(supabase);
         if (!resolved.ok) {
+          if (resolved.reason === "unavailable") {
+            setMessage("אין חיבור כרגע. נסו שוב בעוד רגע.");
+            return;
+          }
           router.replace(AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT);
           return;
         }
@@ -174,7 +191,20 @@ function RoleSelectionInner() {
   if (sessionGate === "checking") {
     return (
       <main className="mx-auto flex min-h-[70vh] w-full max-w-lg flex-col items-center justify-center px-4 py-10" dir="rtl">
-        <p className="text-center text-sm text-slate-600">טוענים…</p>
+        {serviceMissing ? (
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-center text-sm text-slate-600">{AUTH_SERVICE_UNAVAILABLE_MESSAGE}</p>
+            <button
+              type="button"
+              onClick={authRetry.retryNow}
+              className="rounded-xl bg-navy-header px-4 py-2 text-sm font-bold text-white"
+            >
+              נסו שוב
+            </button>
+          </div>
+        ) : (
+          <AuthRetryStatus exhausted={authRetry.exhausted} onRetry={authRetry.retryNow} pending="טוענים…" />
+        )}
       </main>
     );
   }

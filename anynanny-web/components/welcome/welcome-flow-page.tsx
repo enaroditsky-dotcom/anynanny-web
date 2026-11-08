@@ -2,6 +2,9 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { protectedScreenGate, resolveValidAuthUser } from "@/lib/auth/valid-session";
 import { WelcomeVideoPlayer } from "@/components/welcome/welcome-video-player";
 import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
 import { onboardingStateForRole, readProductProfileOwnership } from "@/lib/auth/product-profiles";
@@ -28,6 +31,8 @@ function WelcomeFlowInner() {
   const fromParam = searchParams.get("from");
   const [role, setRole] = useState<ProfileRole | null>(isCharterType(queryRole) ? queryRole : null);
   const [ready, setReady] = useState(false);
+  const [serviceMissing, setServiceMissing] = useState(false);
+  const authRetry = useOnlineRetryNonce();
 
   const replayReturnPath = useMemo(() => {
     if (fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//")) {
@@ -51,13 +56,18 @@ function WelcomeFlowInner() {
       if (mode === "replay") {
         const supabase = getSupabaseBrowserClient();
         if (!supabase) {
-          router.replace("/auth/login");
+          if (!cancelled) setServiceMissing(true);
           return;
         }
-        const {
-          data: { user }
-        } = await supabase.auth.getUser();
-        if (!user) {
+        if (!cancelled) setServiceMissing(false);
+        const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
+        if (cancelled) return;
+        if (gate.status === "unavailable") {
+          authRetry.noteUnavailable();
+          return;
+        }
+        authRetry.noteSettled();
+        if (gate.status === "signed_out") {
           const replayRole = nextRole ?? "parent";
           const login = new URL("/auth/login", "http://local");
           login.searchParams.set("next", welcomeHref(replayRole, "replay"));
@@ -85,10 +95,15 @@ function WelcomeFlowInner() {
 
       const supabase = getSupabaseBrowserClient();
       if (supabase && !sanitizeSignupNext(nextParam)) {
-        const {
-          data: { user }
-        } = await supabase.auth.getUser();
-        if (user) {
+        const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
+        if (cancelled) return;
+        if (gate.status === "unavailable") {
+          authRetry.noteUnavailable();
+          return;
+        }
+        authRetry.noteSettled();
+        if (gate.status === "verified") {
+          const user = gate.user;
           const read = await readProductProfileOwnership(supabase, user.id);
           if (read.status === "unreadable") {
             router.replace(onboardingUnreadableHref(nextRole));
@@ -117,7 +132,7 @@ function WelcomeFlowInner() {
     return () => {
       cancelled = true;
     };
-  }, [mode, nextParam, queryRole, router]);
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, mode, nextParam, queryRole, router]);
 
   const handleMandatoryComplete = useCallback(() => {
     if (!role) {
@@ -128,10 +143,18 @@ function WelcomeFlowInner() {
     router.replace(nextPathAfterWelcome(role, nextParam));
   }, [nextParam, role, router, signupDestination]);
 
+  if (serviceMissing) {
+    return (
+      <main className="mx-auto flex min-h-dvh w-full max-w-md items-center justify-center bg-[#FDFBF6] px-4" dir="rtl">
+        <p className="text-center text-sm text-slate-600">{AUTH_SERVICE_UNAVAILABLE_MESSAGE}</p>
+      </main>
+    );
+  }
+
   if (!ready || !role) {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md items-center justify-center bg-[#FDFBF6] px-4" dir="rtl">
-        <p className="text-sm text-slate-600">טוענים…</p>
+        <AuthRetryStatus exhausted={authRetry.exhausted} onRetry={authRetry.retryNow} pending="טוענים…" />
       </main>
     );
   }

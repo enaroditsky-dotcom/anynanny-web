@@ -2,6 +2,9 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { protectedScreenGate, resolveValidAuthUser } from "@/lib/auth/valid-session";
 import { CharterAcceptanceScreen } from "@/components/charter/charter-acceptance-screen";
 import { CharterFullDocument } from "@/components/charter/charter-full-document";
 import { readCurrentCharterAcceptance } from "@/lib/charter/acceptance";
@@ -19,6 +22,8 @@ function CharterFlowInner() {
   const queryRole = searchParams.get("role");
   const [role, setRole] = useState<ProfileRole | null>(isCharterType(queryRole) ? queryRole : null);
   const [ready, setReady] = useState(false);
+  const [serviceMissing, setServiceMissing] = useState(false);
+  const authRetry = useOnlineRetryNonce();
 
   useEffect(() => {
     let cancelled = false;
@@ -26,17 +31,23 @@ function CharterFlowInner() {
     void (async () => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {
-        router.replace("/auth/login");
+        if (!cancelled) setServiceMissing(true);
         return;
       }
+      if (!cancelled) setServiceMissing(false);
 
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) {
+      const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
+      if (cancelled) return;
+      if (gate.status === "unavailable") {
+        authRetry.noteUnavailable();
+        return;
+      }
+      authRetry.noteSettled();
+      if (gate.status === "signed_out") {
         router.replace(`/auth/login?next=/charter${queryRole ? `&role=${queryRole}` : ""}`);
         return;
       }
+      const user = gate.user;
 
       const read = await readProductProfileOwnership(supabase, user.id);
       if (read.status === "unreadable" && mode !== "readonly") {
@@ -90,12 +101,20 @@ function CharterFlowInner() {
     return () => {
       cancelled = true;
     };
-  }, [mode, queryRole, router]);
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, mode, queryRole, router]);
+
+  if (serviceMissing) {
+    return (
+      <main className="mx-auto flex min-h-dvh w-full max-w-md items-center justify-center bg-[#FDFBF6] px-4" dir="rtl">
+        <p className="text-center text-sm text-slate-600">{AUTH_SERVICE_UNAVAILABLE_MESSAGE}</p>
+      </main>
+    );
+  }
 
   if (!ready || !role) {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md items-center justify-center bg-[#FDFBF6]" dir="rtl">
-        <p className="text-sm text-slate-600">טוענים…</p>
+        <AuthRetryStatus exhausted={authRetry.exhausted} onRetry={authRetry.retryNow} pending="טוענים…" />
       </main>
     );
   }
