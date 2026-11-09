@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { DOMAIN_SEPARATION_ENABLED } from "@/lib/hosts/site-classifier";
+import { WEB_APP_ORIGIN } from "@/lib/marketing/general-acquisition";
 import {
   PARENTS_LANDING_ALREADY_INSTALLED_NOTE,
   PARENTS_LANDING_IOS_INSTALL_NOTE
@@ -12,12 +14,29 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+function isCurrentWebAppOrigin(): boolean {
+  return window.location.origin === WEB_APP_ORIGIN;
+}
+
+/** Browsers install only the document origin. Refuse every other host. */
+function assignWebAppEntry(href: string) {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return;
+  }
+  if (url.origin !== WEB_APP_ORIGIN || url.username || url.password) return;
+  window.location.assign(url.href);
+}
+
 /**
  * Green hero control for the parent landing.
- * The project has no shared deferred-install helper. This button captures
- * `beforeinstallprompt` on the page and calls it. iOS uses the existing
- * Home Screen instruction. Other browsers without a prompt open the existing
- * Web App entry (`/`), never an app store.
+ * While domain separation is off, this captures `beforeinstallprompt` on the
+ * current origin, shows the iOS Home Screen note, and otherwise opens `/`.
+ * Once separation is on, install runs only on `app.anynanny.org`. On the
+ * marketing origin the control opens that app entry instead of installing www.
+ * It never opens an app store.
  */
 export function ParentsWebAppInstallButton({
   className,
@@ -32,6 +51,7 @@ export function ParentsWebAppInstallButton({
   const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
+    if (DOMAIN_SEPARATION_ENABLED && !isCurrentWebAppOrigin()) return;
     const onPrompt = (event: Event) => {
       event.preventDefault();
       promptRef.current = event as BeforeInstallPromptEvent;
@@ -41,6 +61,11 @@ export function ParentsWebAppInstallButton({
   }, []);
 
   async function onClick() {
+    if (DOMAIN_SEPARATION_ENABLED && !isCurrentWebAppOrigin()) {
+      assignWebAppEntry(fallbackHref);
+      return;
+    }
+
     const deferred = promptRef.current;
     if (deferred) {
       promptRef.current = null;

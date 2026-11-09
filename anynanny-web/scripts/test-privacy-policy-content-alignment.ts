@@ -21,7 +21,7 @@ const parentSettings = read("app/parent/settings/page.tsx");
 const sitterSettings = read("app/sitter/settings/page.tsx");
 const deleteAccount = read("lib/account/delete-current-user.ts");
 const login = read("app/auth/login/page.tsx");
-const landing = read("app/page.tsx");
+const landing = read("components/home/application-home-page.tsx");
 
 assert.match(page, /export default function PrivacyPage/);
 assert.match(page, /PrivacyPageView/);

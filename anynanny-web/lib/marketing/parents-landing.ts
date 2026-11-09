@@ -1,3 +1,4 @@
+import { DOMAIN_SEPARATION_ENABLED } from "@/lib/hosts/site-classifier";
 import { appLandingSignupHref, APP_LANDING_APP_STORE_URL, APP_LANDING_GOOGLE_PLAY_URL } from "@/lib/marketing/app-landing";
 import { generalWebAppHref } from "@/lib/marketing/general-acquisition";
 import { utmSearchFromRecord as readUtmSearchFromRecord } from "@/lib/marketing/student-jobs";
@@ -93,13 +94,19 @@ export function utmSearchFromRecord(
 }
 
 /** Existing parent welcome → register hop. */
-export function parentsLandingSignupHref(search: string | URLSearchParams = ""): string {
-  return appLandingSignupHref("parent", search);
+export function parentsLandingSignupHref(
+  search: string | URLSearchParams = "",
+  domainSeparationEnabled: boolean = DOMAIN_SEPARATION_ENABLED
+): string {
+  return appLandingSignupHref("parent", search, domainSeparationEnabled);
 }
 
-/** Existing Web App entry (`/` / manifest start_url) when install prompt is unavailable. */
-export function parentsWebAppFallbackHref(search: string | URLSearchParams = ""): string {
-  return generalWebAppHref(search);
+/** Application-origin Web App entry when this marketing page cannot install it. */
+export function parentsWebAppFallbackHref(
+  search: string | URLSearchParams = "",
+  domainSeparationEnabled: boolean = DOMAIN_SEPARATION_ENABLED
+): string {
+  return generalWebAppHref(search, domainSeparationEnabled);
 }
 
 export function buildParentsLandingStructuredData() {

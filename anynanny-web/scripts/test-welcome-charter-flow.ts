@@ -59,7 +59,7 @@ const acceptRoute = read("app/api/charter/accept/route.ts");
 const migration = read("supabase/migrations/20260902190000_user_charter_acceptances.sql");
 const parentOnboardingPage = read("app/parent/onboarding/page.tsx");
 const sitterOnboardingPage = read("app/sitter/onboarding/page.tsx");
-const landing = read("app/page.tsx");
+const landing = read("components/home/application-home-page.tsx");
 const parentPersonal = read("components/parent/parent-personal-area.tsx");
 const sitterPersonal = read("components/sitter/sitter-personal-area.tsx");
 

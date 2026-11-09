@@ -11,9 +11,12 @@ import {
   APP_LANDING_OG_WIDTH,
   APP_LANDING_TITLE,
   appLandingSignupHref,
+  APP_LANDING_SITE_URL,
   buildAppLandingStructuredData,
   utmSearchFromRecord
 } from "@/lib/marketing/app-landing";
+import { DOMAIN_SEPARATION_ENABLED } from "@/lib/hosts/site-classifier";
+import { generalWebAppHref } from "@/lib/marketing/general-acquisition";
 
 export const metadata: Metadata = {
   title: APP_LANDING_TITLE,
@@ -62,6 +65,7 @@ export default async function AppLandingPage({ searchParams }: AppLandingPagePro
   const utm = utmSearchFromRecord(params);
   const parentHref = appLandingSignupHref("parent", utm);
   const sitterHref = appLandingSignupHref("sitter", utm);
+  const webAppHref = DOMAIN_SEPARATION_ENABLED ? generalWebAppHref(utm) : APP_LANDING_SITE_URL;
   const structuredData = buildAppLandingStructuredData();
 
   return (
@@ -72,7 +76,7 @@ export default async function AppLandingPage({ searchParams }: AppLandingPagePro
           __html: JSON.stringify(structuredData).replace(/</g, "\\u003c")
         }}
       />
-      <AppLanding parentHref={parentHref} sitterHref={sitterHref} />
+      <AppLanding parentHref={parentHref} sitterHref={sitterHref} webAppHref={webAppHref} />
     </>
   );
 }

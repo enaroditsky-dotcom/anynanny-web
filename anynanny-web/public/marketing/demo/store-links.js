@@ -7,6 +7,8 @@
 const GOOGLE_PLAY_URL = "";
 const APP_STORE_URL = "";
 const WEB_APP_URL = "";
+/** Keep aligned with DOMAIN_SEPARATION_ENABLED in lib/hosts/site-classifier.ts. */
+const DOMAIN_SEPARATION_ENABLED = false;
 
 const STORE_UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
 
@@ -63,7 +65,8 @@ function sitterSignupHref() {
     next: `/register?${next.toString()}`
   });
   utm.forEach((value, key) => welcome.set(key, value));
-  return `/welcome?${welcome.toString()}`;
+  const path = `/welcome?${welcome.toString()}`;
+  return DOMAIN_SEPARATION_ENABLED ? `https://app.anynanny.org${path}` : path;
 }
 
 document.querySelectorAll("[data-sitter-web-app]").forEach((link) => {

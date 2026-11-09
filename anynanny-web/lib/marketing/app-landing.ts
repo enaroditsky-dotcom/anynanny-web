@@ -1,4 +1,6 @@
 import { signupPathForRole, welcomeSignupHref } from "@/lib/charter/routing";
+import { toAppEntryHref } from "@/lib/hosts/app-entry";
+import { DOMAIN_SEPARATION_ENABLED } from "@/lib/hosts/site-classifier";
 import { readStudentJobsUtm, utmSearchFromRecord as readUtmSearchFromRecord } from "@/lib/marketing/student-jobs";
 
 export const APP_LANDING_PATH = "/app";
@@ -122,7 +124,8 @@ export function utmSearchFromRecord(
  */
 export function appLandingSignupHref(
   role: "parent" | "sitter",
-  search: string | URLSearchParams = ""
+  search: string | URLSearchParams = "",
+  domainSeparationEnabled: boolean = DOMAIN_SEPARATION_ENABLED
 ): string {
   const utm = readStudentJobsUtm(search);
   const nextUrl = new URL(signupPathForRole(role), APP_LANDING_SITE_URL);
@@ -135,7 +138,7 @@ export function appLandingSignupHref(
     welcome.searchParams.set(key, value);
   });
   const qs = welcome.searchParams.toString();
-  return qs ? `${welcome.pathname}?${qs}` : welcome.pathname;
+  return toAppEntryHref(qs ? `${welcome.pathname}?${qs}` : welcome.pathname, domainSeparationEnabled);
 }
 
 export function buildAppLandingStructuredData() {

@@ -218,7 +218,7 @@ async function main() {
   assert.equal(activeRoleForRestoredPath("/charter?role=sitter"), "sitter");
   assert.equal(activeRoleForRestoredPath("/auth/role-selection"), null);
 
-  const home = read("app/page.tsx");
+  const home = read("components/home/application-home-page.tsx");
   const logout = read("lib/auth/logout.ts");
   assert.match(home, /searchParams\.get\("manual"\) === "true"/);
   assert.ok(home.indexOf('searchParams.get("manual") === "true"') < home.indexOf("setRestorePending(true)"));

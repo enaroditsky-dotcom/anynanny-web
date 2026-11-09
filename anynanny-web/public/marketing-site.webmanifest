@@ -1,0 +1,8 @@
+{
+  "name": "AnyNanny",
+  "short_name": "AnyNanny",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#FDFBF6",
+  "theme_color": "#001F3F"
+}

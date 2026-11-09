@@ -186,8 +186,13 @@ assert.ok(sitemap.some((entry) => entry.url === "https://www.anynanny.org/jobs/s
 assert.equal(GENERAL_WEB_APP_PATH, "/");
 
 const plainWeb = new URL(generalWebAppHref(), "https://www.anynanny.org");
+assert.equal(plainWeb.origin, "https://www.anynanny.org");
 assert.equal(plainWeb.pathname, "/");
 assert.equal(plainWeb.search, "");
+const separatedPlainWeb = new URL(generalWebAppHref("", true));
+assert.equal(separatedPlainWeb.origin, "https://app.anynanny.org");
+assert.equal(separatedPlainWeb.pathname, "/");
+assert.equal(separatedPlainWeb.search, "");
 
 const webWithUtm = new URL(
   generalWebAppHref(
@@ -195,7 +200,16 @@ const webWithUtm = new URL(
   ),
   "https://www.anynanny.org"
 );
+assert.equal(webWithUtm.origin, "https://www.anynanny.org");
 assert.equal(webWithUtm.pathname, "/");
+const separatedWebWithUtm = new URL(
+  generalWebAppHref(
+    "utm_source=facebook&utm_medium=cpc&utm_campaign=babysitter&utm_content=hero&utm_term=nanny&code=secret&type=recovery&access_token=abc&refresh_token=xyz&unrelated=drop",
+    true
+  )
+);
+assert.equal(separatedWebWithUtm.origin, "https://app.anynanny.org");
+assert.equal(separatedWebWithUtm.search, webWithUtm.search);
 assert.equal(webWithUtm.searchParams.get("utm_source"), "facebook");
 assert.equal(webWithUtm.searchParams.get("utm_medium"), "cpc");
 assert.equal(webWithUtm.searchParams.get("utm_campaign"), "babysitter");
@@ -251,6 +265,21 @@ const fromRecord = generalWebAppHref(
   })
 );
 const recordUrl = new URL(fromRecord, "https://www.anynanny.org");
+assert.equal(recordUrl.origin, "https://www.anynanny.org");
+const separatedRecord = new URL(
+  generalWebAppHref(
+    utmSearchFromRecord({
+      utm_source: "instagram",
+      utm_medium: ["reel"],
+      utm_campaign: "babysitter",
+      code: "secret",
+      access_token: "nope"
+    }),
+    true
+  )
+);
+assert.equal(separatedRecord.origin, "https://app.anynanny.org");
+assert.equal(separatedRecord.search, recordUrl.search);
 assert.equal(recordUrl.searchParams.get("utm_source"), "instagram");
 assert.equal(recordUrl.searchParams.get("utm_medium"), "reel");
 assert.equal(recordUrl.searchParams.get("utm_campaign"), "babysitter");

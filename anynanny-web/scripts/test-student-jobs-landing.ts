@@ -146,6 +146,10 @@ assert.doesNotMatch(demoWithUtm.toString(), /role=parent/);
 
 const plain = studentSitterSignupHref();
 assert.equal(plain, welcomeSignupHref("sitter"));
+const separatedPlain = new URL(studentSitterSignupHref("", true));
+assert.equal(separatedPlain.origin, "https://app.anynanny.org");
+assert.equal(separatedPlain.pathname, "/welcome");
+assert.equal(separatedPlain.search, new URL(welcomeSignupHref("sitter"), "https://app.anynanny.org").search);
 const plainUrl = new URL(plain, "https://www.anynanny.org");
 assert.equal(plainUrl.pathname, "/welcome");
 assert.equal(plainUrl.searchParams.get("role"), "sitter");
@@ -165,6 +169,11 @@ for (const sample of [
 ]) {
   const href = studentSitterSignupHref(sample);
   const url = new URL(href, "https://www.anynanny.org");
+  assert.equal(url.origin, "https://www.anynanny.org");
+  const separated = new URL(studentSitterSignupHref(sample, true));
+  assert.equal(separated.origin, "https://app.anynanny.org");
+  assert.equal(separated.pathname, "/welcome");
+  assert.equal(separated.search, url.search);
   assert.equal(url.pathname, "/welcome");
   assert.equal(url.searchParams.get("role"), "sitter");
   assert.equal(url.searchParams.get("utm_campaign"), "students");

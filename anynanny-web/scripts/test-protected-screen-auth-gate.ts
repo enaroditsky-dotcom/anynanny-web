@@ -101,7 +101,7 @@ async function main() {
   assert.match(profile, /authReady \? \([\s\S]*<SitterPersonalArea/);
   const personal = read("components/parent/parent-personal-area.tsx");
   assert.ok(personal.indexOf('gate.status === "unavailable"') < personal.indexOf("setForm(parsed)"));
-  const home = read("app/page.tsx");
+  const home = read("components/home/application-home-page.tsx");
   const restore = read("lib/auth/home-session-restore.ts");
   assert.match(home, /restorePending/);
   assert.match(home, /useOnlineRetryNonce/);

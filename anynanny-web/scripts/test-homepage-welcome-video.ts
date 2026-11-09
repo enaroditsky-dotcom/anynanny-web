@@ -13,7 +13,7 @@ function read(relativePath: string): string {
   return readFileSync(resolve(root, relativePath), "utf8");
 }
 
-const landing = read("app/page.tsx");
+const landing = read("components/home/application-home-page.tsx");
 const homepageVideo = read("components/welcome/homepage-welcome-video.tsx");
 const welcomePlayer = read("components/welcome/welcome-video-player.tsx");
 const welcomeFlow = read("components/welcome/welcome-flow-page.tsx");

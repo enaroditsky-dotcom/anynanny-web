@@ -24,10 +24,12 @@ import styles from "./app-landing.module.css";
 
 export function AppLanding({
   parentHref,
-  sitterHref
+  sitterHref,
+  webAppHref
 }: {
   parentHref: string;
   sitterHref: string;
+  webAppHref: string;
 }) {
   return (
     <div className={styles.page} dir="rtl">
@@ -51,7 +53,7 @@ export function AppLanding({
           />
           <a
             className={styles.heroEntry}
-            href={APP_LANDING_SITE_URL}
+            href={webAppHref}
             aria-label="להרשמה ולהורדה"
             data-hero-hit="entry"
           >

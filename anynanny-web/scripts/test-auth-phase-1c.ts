@@ -123,7 +123,7 @@ async function main() {
   assert.equal(roleDashboardHref("parent", user.id), "/parent/dashboard");
   assert.equal(roleDashboardHref("sitter", user.id), "/sitter/dashboard");
 
-  const home = read("app/page.tsx");
+  const home = read("components/home/application-home-page.tsx");
   const restore = read("lib/auth/home-session-restore.ts");
   const missingBranch = home.slice(home.indexOf("if (!supabase)"), home.indexOf("await restoreHomeSession"));
   assert.doesNotMatch(missingBranch, /dashboard/);
