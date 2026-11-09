@@ -8,7 +8,10 @@ import {
 } from "../lib/hosts/site-classifier";
 import { resolveRootEntry } from "../lib/hosts/root-entry";
 import { generalWebAppHref } from "../lib/marketing/general-acquisition";
-import { MARKETING_HOME_OPEN_APP_LABEL } from "../lib/marketing/marketing-home";
+import {
+  MARKETING_HOME_DESCRIPTION,
+  MARKETING_HOME_TITLE
+} from "../lib/marketing/marketing-home";
 
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(webRoot, "..");
@@ -107,15 +110,20 @@ assert.equal(openApp.searchParams.get("type"), null);
 
 const page = read("app/page.tsx");
 const marketing = read("components/marketing/marketing-home-page.tsx");
+const story = read("components/marketing/marketing-home.tsx");
 const application = read("components/home/application-home-page.tsx");
 const rootEntry = read("lib/hosts/root-entry.ts");
 assert.match(page, /resolveRootEntry/);
 assert.match(page, /DOMAIN_SEPARATION_ENABLED/);
 assert.match(page, /WWW_MARKETING_ROOT_ENABLED/);
-assert.equal(MARKETING_HOME_OPEN_APP_LABEL, "כבר נרשמתם? פתחו את AnyNanny");
-assert.match(marketing, /\{MARKETING_HOME_OPEN_APP_LABEL\}/);
-assert.match(marketing, /data-cta="open-app"/);
-assert.match(marketing, /href=\{openAppHref\}/);
+assert.equal(MARKETING_HOME_TITLE, "AnyNanny — פשוט למצוא זמן לחיים");
+assert.match(MARKETING_HOME_DESCRIPTION, /משפחות ובייביסיטריות נפגשות/);
+assert.match(page, /href=\{MARKETING_HOME_CANONICAL\}/);
+assert.match(marketing, /openAppHref/);
+assert.match(story, /data-app-move-notice/);
+assert.match(story, /כניסה לאפליקציה/);
+assert.match(story, /href=\{openAppHref\}/);
+assert.doesNotMatch(story, /getParentOnboardingGateRedirect|getSitterOnboardingGateRedirect|getSupabaseBrowserClient/);
 assert.doesNotMatch(marketing, /getParentOnboardingGateRedirect|getSitterOnboardingGateRedirect/);
 assert.match(application, /HomepageWelcomeVideo/);
 assert.match(application, /welcomeSignupHref\(profileRole/);

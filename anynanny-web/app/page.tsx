@@ -62,8 +62,7 @@ export async function generateMetadata({
   return {
     ...(await marketingDocumentMetadata()),
     title: MARKETING_HOME_TITLE,
-    description: MARKETING_HOME_DESCRIPTION,
-    alternates: { canonical: MARKETING_HOME_CANONICAL }
+    description: MARKETING_HOME_DESCRIPTION
   };
 }
 
@@ -75,10 +74,21 @@ export default async function HomePage({
   if (!marketingRootActive()) return <ApplicationHomePage />;
   const params = await searchParams;
   if ((await currentRootEntry(params)) === "marketing") {
+    const campaign = utmSearchFromRecord(params);
     return (
-      <MarketingHomeAuthHandoff>
-        <MarketingHomePage openAppHref={generalWebAppHref(utmSearchFromRecord(params))} />
-      </MarketingHomeAuthHandoff>
+      <>
+        {/*
+          Next.js metadata turns a root canonical into the origin without a
+          trailing slash. This is the single self-canonical for the story homepage.
+        */}
+        <link rel="canonical" href={MARKETING_HOME_CANONICAL} />
+        <MarketingHomeAuthHandoff>
+          <MarketingHomePage
+            openAppHref={generalWebAppHref(campaign)}
+            campaignSearch={campaign.toString()}
+          />
+        </MarketingHomeAuthHandoff>
+      </>
     );
   }
   return <ApplicationHomePage />;
