@@ -1,5 +1,5 @@
 import { LogIn, UserPlus } from "lucide-react";
-import { COMING_SOON_LABEL } from "@/lib/marketing/site-nav";
+import { COMING_SOON_LABEL, IPHONE_APP_STORE_URL, withStoreCampaign } from "@/lib/marketing/site-nav";
 import styles from "./marketing-home.module.css";
 
 function AppleMark({ className }: { className?: string }) {
@@ -23,39 +23,54 @@ function GooglePlayMark({ className }: { className?: string }) {
 
 function StoreAction({
   store,
-  label
+  label,
+  href
 }: {
   store: "play" | "apple";
   label: string;
+  href?: string;
 }) {
+  const mark =
+    store === "play" ? (
+      <GooglePlayMark className={styles.mobileStoreMark} />
+    ) : (
+      <AppleMark className={styles.mobileStoreMark} />
+    );
+  const text = <span className={styles.mobileStoreLabel}>{label}</span>;
+  if (!href) {
+    return (
+      <button
+        type="button"
+        className={styles.mobileStoreAction}
+        disabled
+        aria-label={`${label} להורדה, ${COMING_SOON_LABEL}`}
+      >
+        {mark}
+        {text}
+      </button>
+    );
+  }
   return (
-    <button
-      type="button"
-      className={styles.mobileStoreAction}
-      disabled
-      aria-label={`${label} להורדה, ${COMING_SOON_LABEL}`}
-    >
-      {store === "play" ? (
-        <GooglePlayMark className={styles.mobileStoreMark} />
-      ) : (
-        <AppleMark className={styles.mobileStoreMark} />
-      )}
-      <span className={styles.mobileStoreLabel}>{label}</span>
-    </button>
+    <a className={styles.mobileStoreAction} href={href} aria-label={`${label} להורדה`}>
+      {mark}
+      {text}
+    </a>
   );
 }
 
 export function MarketingMobileActions({
   registerHref,
-  loginHref
+  loginHref,
+  campaignSearch = ""
 }: {
   registerHref: string;
   loginHref: string;
+  campaignSearch?: string;
 }) {
   return (
     <nav className={styles.mobileActionBar} aria-label="הורדה, הרשמה והתחברות" dir="rtl">
       <StoreAction store="play" label="Android" />
-      <StoreAction store="apple" label="iPhone" />
+      <StoreAction store="apple" label="iPhone" href={withStoreCampaign(IPHONE_APP_STORE_URL, campaignSearch)} />
       <a href={registerHref} className={`${styles.mobileAccountAction} ${styles.mobileRegister}`}>
         <UserPlus aria-hidden className={styles.mobileAccountIcon} />
         <span>הרשמה</span>

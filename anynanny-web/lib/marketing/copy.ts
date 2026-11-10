@@ -164,7 +164,7 @@ export const MARKETING_TOGETHER = {
   registerLabel: "הרשמה ל־AnyNanny",
   loginLabel: "כניסה לאפליקציה",
   comingSoon:
-    "אפשר להצטרף ולהשתמש גם דרך הדפדפן. גרסאות Google Play ו־App Store — בקרוב."
+    "אפשר להצטרף ולהשתמש גם דרך הדפדפן. גרסת Google Play — בקרוב."
 } as const;
 
 export const MARKETING_PARENT_CHARTER_SUMMARY = "לקריאת אמנת ההורה של AnyNanny";

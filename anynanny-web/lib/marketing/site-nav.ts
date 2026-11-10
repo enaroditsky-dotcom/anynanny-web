@@ -1,7 +1,24 @@
 import { MARKETING_CHAPTERS, type MarketingChapterId } from "@/lib/marketing/chapters";
 import { ANYNANNY_SUPPORT_EMAIL } from "@/lib/legal/contact";
+import { readStudentJobsUtm } from "@/lib/marketing/student-jobs";
 
 export const COMING_SOON_LABEL = "בקרוב";
+export const IPHONE_APP_STORE_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
+
+/** App Store listing with the five campaign params. Other stores stay unchanged. */
+export function withStoreCampaign(href: string, search: string | URLSearchParams = ""): string {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return href;
+  }
+  if (url.origin !== "https://apps.apple.com") return href;
+  readStudentJobsUtm(search).forEach((value, key) => {
+    url.searchParams.set(key, value);
+  });
+  return url.toString();
+}
 export const MARKETING_SITE_NAV_ID = "marketing-site-nav";
 /** www App Store / Web App landing. Login and signup leave through the application host. */
 export const APP_ENTRY_HREF = "/app";
@@ -172,7 +189,7 @@ export const SITE_NAV_DOWNLOADS: SiteNavLink[] = [
     id: "download-iphone",
     label: "iPhone",
     icon: "iphone",
-    destination: { kind: "soon" }
+    destination: { kind: "href", href: IPHONE_APP_STORE_URL }
   }
 ];
 

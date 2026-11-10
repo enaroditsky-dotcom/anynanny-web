@@ -16,7 +16,10 @@ import {
 import {
   APP_ENTRY_HREF,
   DEFAULT_OPEN_NAV_IDS,
+  IPHONE_APP_STORE_URL,
+  SITE_NAV_DOWNLOADS,
   SITE_NAV_ITEMS,
+  withStoreCampaign,
   collectDestinations,
   destinationHref
 } from "../lib/marketing/site-nav";
@@ -97,6 +100,21 @@ for (const destination of soon) {
 assert.match(siteNav, /פורום AnyNanny/);
 assert.match(siteNav, /AnyNanny Marketplace/);
 assert.doesNotMatch(sidebar, /play\.google\.com|apps\.apple\.com/);
+const iphoneDownload = SITE_NAV_DOWNLOADS.find((item) => item.id === "download-iphone");
+const androidDownload = SITE_NAV_DOWNLOADS.find((item) => item.id === "download-android");
+assert.equal(iphoneDownload?.destination.kind, "href");
+if (iphoneDownload?.destination.kind === "href") {
+  assert.equal(iphoneDownload.destination.href, IPHONE_APP_STORE_URL);
+}
+assert.equal(
+  withStoreCampaign(IPHONE_APP_STORE_URL, "?utm_source=ig&utm_medium=cpc&code=secret"),
+  "https://apps.apple.com/il/app/anynanny/id6813214477?utm_source=ig&utm_medium=cpc"
+);
+assert.equal(androidDownload?.destination.kind, "soon");
+assert.match(read("components/marketing/marketing-sidebar.tsx"), /AnyNanny%20logo%20new\.png/);
+assert.doesNotMatch(read("components/marketing/marketing-sidebar.tsx"), /anynanny-clean-transparent/);
+assert.match(read("lib/marketing/copy.ts"), /גרסת Google Play — בקרוב/);
+assert.doesNotMatch(read("lib/marketing/copy.ts"), /App Store — בקרוב/);
 
 assert.equal(storyLoginHref("?utm_source=ig&type=recovery", false), "/login?utm_source=ig");
 assert.equal(storyLoginHref("?utm_source=ig&type=recovery"), "https://app.anynanny.org/login?utm_source=ig");

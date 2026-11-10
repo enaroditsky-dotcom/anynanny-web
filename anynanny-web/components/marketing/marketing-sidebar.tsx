@@ -19,7 +19,6 @@ import {
   X
 } from "lucide-react";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
-import { AnynannyMascotPortrait } from "@/components/brand/anynanny-mascot-portrait";
 import type { MarketingChapterId } from "@/lib/marketing/chapters";
 import {
   COMING_SOON_LABEL,
@@ -28,6 +27,7 @@ import {
   SITE_NAV_DOWNLOADS,
   SITE_NAV_ITEMS,
   destinationHref,
+  withStoreCampaign,
   type SiteNavDestination,
   type SiteNavIconName,
   type SiteNavLink,
@@ -89,16 +89,20 @@ function nodeMatchesQuery(node: SiteNavNode, query: string): boolean {
   return false;
 }
 
+const OFFICIAL_ANNY_SRC = "/brand/AnyNanny%20logo%20new.png";
+
 export function MarketingSidebar({
   open,
   onClose,
   activeChapterId,
-  onChapter
+  onChapter,
+  campaignSearch = ""
 }: {
   open: boolean;
   onClose: () => void;
   activeChapterId: MarketingChapterId;
   onChapter: (id: MarketingChapterId) => void;
+  campaignSearch?: string;
 }) {
   const searchId = useId();
   const closeRef = useRef<HTMLButtonElement | null>(null);
@@ -256,9 +260,11 @@ export function MarketingSidebar({
             >
               <AnyNannyLogo variant="header" />
             </a>
-            <AnynannyMascotPortrait
-              framed={false}
-              decorative
+            <img
+              src={OFFICIAL_ANNY_SRC}
+              alt=""
+              aria-hidden
+              draggable={false}
               className={styles.sidebarMascot}
             />
             {isCompact ? (
@@ -307,7 +313,7 @@ export function MarketingSidebar({
           {visibleDownloads.length > 0 ? (
             <div className={styles.sidebarDownloads}>
               {visibleDownloads.map((item) => (
-                <DownloadRow key={item.id} item={item} />
+                <DownloadRow key={item.id} item={item} campaignSearch={campaignSearch} />
               ))}
             </div>
           ) : null}
@@ -446,13 +452,15 @@ function NavLeafRow({
   );
 }
 
-function DownloadRow({ item }: { item: SiteNavLink }) {
+function DownloadRow({ item, campaignSearch }: { item: SiteNavLink; campaignSearch: string }) {
   const platform = item.icon === "iphone" ? "iphone" : "android";
   const label = DOWNLOAD_LABELS[platform];
-
-  return (
-    <div className={styles.sidebarDownload} dir="ltr" aria-disabled="true">
-      <span className={styles.soonBadge}>{COMING_SOON_LABEL}</span>
+  const href = destinationHref(item.destination);
+  const content = (
+    <>
+      {item.destination.kind === "soon" ? (
+        <span className={styles.soonBadge}>{COMING_SOON_LABEL}</span>
+      ) : null}
       <Download aria-hidden className={styles.sidebarDownloadGlyph} />
       <span className={styles.sidebarDownloadLabel}>{label}</span>
       {platform === "iphone" ? (
@@ -460,6 +468,20 @@ function DownloadRow({ item }: { item: SiteNavLink }) {
       ) : (
         <AndroidMark className={styles.sidebarIcon} />
       )}
-    </div>
+    </>
+  );
+
+  if (!href || item.destination.kind === "soon") {
+    return (
+      <div className={styles.sidebarDownload} dir="ltr" aria-disabled="true">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <a className={styles.sidebarDownload} dir="ltr" href={withStoreCampaign(href, campaignSearch)}>
+      {content}
+    </a>
   );
 }

@@ -185,6 +185,7 @@ export function MarketingHome({
         onClose={closeNav}
         activeChapterId={activeId}
         onChapter={(id) => goToChapter(id)}
+        campaignSearch={campaignSearch}
       />
       <div className={styles.contentColumn}>
       <aside className={styles.appMoveNotice} data-app-move-notice>
@@ -448,6 +449,7 @@ export function MarketingHome({
       <MarketingMobileActions
         registerHref={openAppHref}
         loginHref={storyLoginHref(campaignSearch)}
+        campaignSearch={campaignSearch}
       />
       </div>
     </div>
