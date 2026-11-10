@@ -1,7 +1,15 @@
+/**
+ * Stored likes stay off until `20260910140000_marketing_homepage_likes.sql`
+ * is applied in a later release. The heart remains on the page and does not
+ * call the API while this is false.
+ */
+export const MARKETING_LIKES_PERSISTENCE_ENABLED = false;
+
 export const MARKETING_LIKE_TOKEN_BYTES = 32;
 export const MARKETING_LIKE_TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 export const MARKETING_LIKE_TOKEN_STORAGE_KEY = "anynanny.marketing.like.token";
 export const MARKETING_LIKE_CONFIRMED_STORAGE_KEY = "anynanny.marketing.like.confirmed";
+export const MARKETING_LIKE_UNAVAILABLE_STORAGE_KEY = "anynanny.marketing.like.unavailable";
 export const MARKETING_LIKE_MAX_BODY_BYTES = 512;
 
 export const MARKETING_LIKE_SUCCESS_MESSAGE = "תודה על הלב!";
@@ -30,6 +38,17 @@ export function generateMarketingLikeToken(): string {
   }
   globalThis.crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** One missing-table response is enough. Later clicks must not call the API again. */
+export function canSubmitMarketingLike(input: {
+  persistenceEnabled?: boolean;
+  pressed: boolean;
+  pending: boolean;
+  unavailable: boolean;
+}): boolean {
+  const persistenceEnabled = input.persistenceEnabled ?? MARKETING_LIKES_PERSISTENCE_ENABLED;
+  return persistenceEnabled && !input.pressed && !input.pending && !input.unavailable;
 }
 
 export function parseLikeRequestBody(body: unknown): ParsedLikeToken {

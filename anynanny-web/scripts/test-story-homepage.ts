@@ -60,6 +60,7 @@ assert.match(home, /מחפשים את אפליקציית AnyNanny\?/);
 assert.match(home, /האפליקציה עברה לכתובת חדשה/);
 assert.match(home, /app\.anynanny\.org/);
 assert.match(home, /כניסה לאפליקציה/);
+assert.doesNotMatch(home, /MarketingAnalytics|@vercel\/analytics/);
 assert.match(home, /href=\{openAppHref\}/);
 assert.equal(DEFAULT_OPEN_NAV_IDS.length, 0);
 assert.match(siteNav, /DEFAULT_OPEN_NAV_IDS = \[\]/);

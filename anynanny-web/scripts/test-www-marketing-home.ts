@@ -126,6 +126,7 @@ assert.match(story, /href=\{openAppHref\}/);
 assert.doesNotMatch(story, /getParentOnboardingGateRedirect|getSitterOnboardingGateRedirect|getSupabaseBrowserClient/);
 assert.doesNotMatch(marketing, /getParentOnboardingGateRedirect|getSitterOnboardingGateRedirect/);
 assert.match(application, /HomepageWelcomeVideo/);
+assert.match(application, /restoreHomeSession/);
 assert.match(application, /welcomeSignupHref\(profileRole/);
 assert.match(application, /router\.push\(`\/login\?\$\{qs\.toString\(\)\}`\)/);
 assert.doesNotMatch(rootEntry, /userAgent|user-agent|WebView/);

@@ -31,7 +31,7 @@ export const GENERAL_ACQUISITION_WEB_APP_CTA = "להורדת Web App";
 /**
  * Application origin. Marketing pages stay on www; open, download, and install
  * links use the app host only after domain separation is enabled.
- * `app/manifest.ts` start_url remains `/` on that origin.
+ * `public/manifest.webmanifest` start_url remains `/` on that origin.
  * This is not a file download or a store URL.
  */
 

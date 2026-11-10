@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { Heart } from "lucide-react";
 import {
+  canSubmitMarketingLike,
   generateMarketingLikeToken,
   MARKETING_LIKE_CONFIRMED_STORAGE_KEY,
   MARKETING_LIKE_ERROR_MESSAGE,
   MARKETING_LIKE_SUCCESS_MESSAGE,
   MARKETING_LIKE_TOKEN_STORAGE_KEY,
-  MARKETING_LIKE_UNAVAILABLE_MESSAGE
+  MARKETING_LIKE_UNAVAILABLE_STORAGE_KEY
 } from "@/lib/marketing/likes";
 import styles from "./marketing-home.module.css";
 
@@ -28,17 +29,35 @@ function writeStorage(key: string, value: string): void {
   }
 }
 
+function readSession(key: string): string | null {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSession(key: string, value: string): void {
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    /* ignore private mode */
+  }
+}
+
 export function MarketingHeartButton() {
   const [pressed, setPressed] = useState(false);
   const [pending, setPending] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
   const [status, setStatus] = useState("");
 
   useEffect(() => {
     setPressed(readStorage(MARKETING_LIKE_CONFIRMED_STORAGE_KEY) === "1");
+    setUnavailable(readSession(MARKETING_LIKE_UNAVAILABLE_STORAGE_KEY) === "1");
   }, []);
 
   const onClick = async () => {
-    if (pressed || pending) return;
+    if (!canSubmitMarketingLike({ pressed, pending, unavailable })) return;
     setPending(true);
     setStatus("");
     let token = readStorage(MARKETING_LIKE_TOKEN_STORAGE_KEY);
@@ -55,11 +74,12 @@ export function MarketingHeartButton() {
       });
       if (!response.ok) {
         setPressed(false);
-        setStatus(
-          response.status === 503
-            ? MARKETING_LIKE_UNAVAILABLE_MESSAGE
-            : MARKETING_LIKE_ERROR_MESSAGE
-        );
+        if (response.status === 503) {
+          writeSession(MARKETING_LIKE_UNAVAILABLE_STORAGE_KEY, "1");
+          setUnavailable(true);
+          return;
+        }
+        setStatus(MARKETING_LIKE_ERROR_MESSAGE);
         return;
       }
       writeStorage(MARKETING_LIKE_CONFIRMED_STORAGE_KEY, "1");

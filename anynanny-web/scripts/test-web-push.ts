@@ -414,6 +414,7 @@ assert.match(settings, /לא שולט בצליל התראת המערכת/);
 assert.match(bottomNav, /hasUnreadMessages/);
 assert.match(swRegister, /shouldRegisterPushServiceWorker/);
 assert.match(swRegister, /navigator\.serviceWorker/);
+assert.doesNotMatch(swRegister, /serviceWorker\.unregister|registration\.unregister/);
 assert.equal(shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parents"), true);
 assert.equal(shouldRegisterPushServiceWorker("https://www.anynanny.org", "/"), true);
 assert.equal(shouldRegisterPushServiceWorker("https://app.anynanny.org", "/"), true);
@@ -433,6 +434,13 @@ assert.equal(
   shouldRegisterPushServiceWorker("https://www.anynanny.org", "/app", { domainSeparationEnabled: true }),
   false
 );
+for (const pathname of ["/privacy", "/terms", "/delete-account"]) {
+  assert.equal(
+    shouldRegisterPushServiceWorker("https://www.anynanny.org", pathname, { domainSeparationEnabled: true }),
+    false,
+    pathname
+  );
+}
 assert.equal(
   shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parent/dashboard", { domainSeparationEnabled: true }),
   true

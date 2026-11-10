@@ -15,7 +15,6 @@ import {
 import type { MarketingChapterId } from "@/lib/marketing/chapters";
 import { storyLoginHref } from "@/lib/marketing/story-entry";
 import { ANYNANNY_SUPPORT_EMAIL } from "@/lib/legal/contact";
-import { MarketingAnalytics } from "@/components/marketing/marketing-analytics";
 import { MarketingHeartButton } from "@/components/marketing/marketing-heart";
 import { MarketingHeader, MarketingAccountChoices } from "@/components/marketing/marketing-header";
 import { MarketingSidebar } from "@/components/marketing/marketing-sidebar";
@@ -181,7 +180,6 @@ export function MarketingHome({
       {STORY_FONT_FILES.map((href) => (
         <link key={href} rel="preload" href={href} as="font" type="font/ttf" crossOrigin="anonymous" />
       ))}
-      <MarketingAnalytics />
       <MarketingSidebar
         open={navOpen}
         onClose={closeNav}

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BABYSITTER_CITY_SLUGS } from "../lib/marketing/babysitter-cities";
@@ -16,6 +16,7 @@ import {
   resolvePublicSiteHost
 } from "../lib/hosts/site-classifier";
 import { resolveRootEntry } from "../lib/hosts/root-entry";
+import { resolveMarketingDocumentMetadata } from "../lib/marketing/marketing-document";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -357,10 +358,52 @@ assert.doesNotMatch(middleware, /DOMAIN_SEPARATION_ENABLED\s*=\s*true/);
 assert.doesNotMatch(middleware, /wwwMarketingRootEnabled/);
 assert.doesNotMatch(middleware, /userAgent|user-agent|WebView/);
 
-const untouched = ["app/layout.tsx", "app/manifest.ts", "next.config.ts", "public/sw.js"]
+const untouched = ["app/layout.tsx", "public/manifest.webmanifest", "next.config.ts", "public/sw.js"]
   .map(read)
   .join("\n");
 assert.doesNotMatch(untouched, /site-classifier|classifySiteRequest|DOMAIN_SEPARATION_ENABLED|WWW_MARKETING_ROOT_ENABLED/);
+assert.equal(existsSync(resolve(root, "app/manifest.ts")), false);
+const appManifest = JSON.parse(read("public/manifest.webmanifest")) as {
+  display?: string;
+  start_url?: string;
+  icons?: unknown[];
+};
+assert.equal(appManifest.display, "standalone");
+assert.equal(appManifest.start_url, "/");
+assert.ok((appManifest.icons?.length ?? 0) >= 2);
+const marketingManifest = JSON.parse(read("public/marketing-site.webmanifest")) as {
+  display?: string;
+  icons?: unknown;
+};
+assert.equal(marketingManifest.display, "browser");
+assert.equal(marketingManifest.icons, undefined);
+assert.match(read("app/layout.tsx"), /manifest: "\/manifest\.webmanifest"/);
+const wwwMarketingMetadata = resolveMarketingDocumentMetadata({
+  domainSeparationEnabled: true,
+  host: "www.anynanny.org"
+});
+assert.equal(wwwMarketingMetadata.manifest, "/marketing-site.webmanifest");
+const appleWebApp = wwwMarketingMetadata.appleWebApp;
+assert.equal(typeof appleWebApp, "object");
+assert.ok(appleWebApp);
+if (typeof appleWebApp !== "object" || appleWebApp === null) {
+  throw new Error("Expected an Apple web app metadata object.");
+}
+assert.equal(appleWebApp.capable, false);
+assert.deepEqual(
+  resolveMarketingDocumentMetadata({
+    domainSeparationEnabled: true,
+    host: "app.anynanny.org"
+  }),
+  {}
+);
+assert.deepEqual(
+  resolveMarketingDocumentMetadata({
+    domainSeparationEnabled: false,
+    host: "www.anynanny.org"
+  }),
+  {}
+);
 
 const home = read("app/page.tsx");
 assert.match(home, /resolveRootEntry/);

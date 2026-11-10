@@ -5,14 +5,19 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  canSubmitMarketingLike,
   isMarketingLikeToken,
+  MARKETING_LIKE_UNAVAILABLE_MESSAGE,
+  MARKETING_LIKES_PERSISTENCE_ENABLED,
   parseLikeRequestBody
 } from "../lib/marketing/likes";
 import { hashMarketingLikeToken } from "../lib/marketing/likes-hash";
 import {
   createFileLikeStore,
   createMemoryLikeStore,
-  resolveMarketingLikesStoreMode
+  createSupabaseLikeStore,
+  resolveMarketingLikesStoreMode,
+  setMarketingLikeTestStore
 } from "../lib/marketing/likes-store";
 import {
   allowMarketingLikeRequest,
@@ -57,6 +62,33 @@ assert.match(route, /parseLikeRequestBody/);
 assert.match(route, /hashMarketingLikeToken/);
 assert.match(route, /getMarketingLikeStore/);
 assert.match(route, /allowMarketingLikeRequest/);
+assert.equal(MARKETING_LIKES_PERSISTENCE_ENABLED, false);
+assert.equal(canSubmitMarketingLike({ pressed: false, pending: false, unavailable: false }), false);
+assert.equal(
+  canSubmitMarketingLike({
+    persistenceEnabled: true,
+    pressed: false,
+    pending: false,
+    unavailable: false
+  }),
+  true
+);
+assert.equal(
+  canSubmitMarketingLike({
+    persistenceEnabled: true,
+    pressed: false,
+    pending: false,
+    unavailable: true
+  }),
+  false
+);
+const heart = readFileSync(resolve(root, "components/marketing/marketing-heart.tsx"), "utf8");
+assert.match(heart, /canSubmitMarketingLike/);
+assert.match(heart, /response\.status === 503/);
+assert.doesNotMatch(heart, /MARKETING_LIKE_UNAVAILABLE_MESSAGE/);
+assert.doesNotMatch(heart, /setInterval|while\s*\(/);
+assert.match(route, /MARKETING_LIKE_UNAVAILABLE_MESSAGE/);
+assert.doesNotMatch(route, /NextResponse\.json\(\{[^}]*error\.message/);
 assert.doesNotMatch(route, /auth\.getUser/);
 assert.match(migration, /enable row level security/);
 assert.match(migration, /revoke all on table public.marketing_homepage_likes from anon/);
@@ -77,6 +109,54 @@ async function main() {
   assert.equal(await fileStore.insert("hash-1"), "duplicate");
   const saved = JSON.parse(await readFile(filePath, "utf8")) as Record<string, string>;
   assert.ok(saved["hash-1"]);
+
+  const missingTable = createSupabaseLikeStore({
+    from(table: string) {
+      return {
+        insert() {
+          return {
+            select() {
+              return {
+                async maybeSingle() {
+                  return {
+                    data: null,
+                    error: {
+                      code: "42P01",
+                      message: `relation "public.${table}" does not exist`
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  });
+  await assert.rejects(() => missingTable.insert("hash"), /does not exist/);
+
+  setMarketingLikeTestStore({
+    async insert() {
+      throw new Error('relation "public.marketing_homepage_likes" does not exist');
+    }
+  });
+  try {
+    const { POST } = await import("../app/api/marketing/like/route");
+    const response = await POST(
+      new Request("https://www.anynanny.org/api/marketing/like", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: validToken })
+      })
+    );
+    assert.equal(response.status, 503);
+    const body = (await response.json()) as { ok: boolean; error: string };
+    assert.equal(body.ok, false);
+    assert.equal(body.error, MARKETING_LIKE_UNAVAILABLE_MESSAGE);
+    assert.doesNotMatch(JSON.stringify(body), /relation|does not exist|42P01/);
+  } finally {
+    setMarketingLikeTestStore(null);
+  }
 
   console.log("test-marketing-likes: PASS");
 }
