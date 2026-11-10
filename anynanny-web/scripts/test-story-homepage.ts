@@ -99,6 +99,20 @@ for (const destination of soon) {
 }
 assert.match(siteNav, /פורום AnyNanny/);
 assert.match(siteNav, /AnyNanny Marketplace/);
+const findBabysitterNav = SITE_NAV_ITEMS[0];
+const babysitterWorkNav = SITE_NAV_ITEMS[1];
+assert.deepEqual(
+  findBabysitterNav?.type === "link"
+    ? { label: findBabysitterNav.label, destination: findBabysitterNav.destination }
+    : null,
+  { label: "מציאת בייביסיטר", destination: { kind: "href", href: "/parents" } }
+);
+assert.deepEqual(
+  babysitterWorkNav?.type === "link"
+    ? { label: babysitterWorkNav.label, destination: babysitterWorkNav.destination }
+    : null,
+  { label: "עבודה כבייביסיטרית", destination: { kind: "href", href: "/babysitter" } }
+);
 assert.doesNotMatch(sidebar, /play\.google\.com|apps\.apple\.com/);
 const iphoneDownload = SITE_NAV_DOWNLOADS.find((item) => item.id === "download-iphone");
 const androidDownload = SITE_NAV_DOWNLOADS.find((item) => item.id === "download-android");

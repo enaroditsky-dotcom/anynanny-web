@@ -73,6 +73,20 @@ export const ORG_NAV_CHAPTERS: SiteNavLink[] = MARKETING_CHAPTERS.map((chapter) 
 
 export const SITE_NAV_ITEMS: SiteNavNode[] = [
   {
+    type: "link",
+    id: "find-babysitter",
+    label: "מציאת בייביסיטר",
+    icon: "parent",
+    destination: { kind: "href", href: "/parents" }
+  },
+  {
+    type: "link",
+    id: "babysitter-work",
+    label: "עבודה כבייביסיטרית",
+    icon: "sitter",
+    destination: { kind: "href", href: "/babysitter" }
+  },
+  {
     type: "accordion",
     id: "org",
     label: "AnyNanny.org",
