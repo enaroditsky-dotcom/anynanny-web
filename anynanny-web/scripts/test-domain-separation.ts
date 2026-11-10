@@ -24,8 +24,8 @@ function read(relativePath: string): string {
   return readFileSync(resolve(root, relativePath), "utf8");
 }
 
-assert.equal(DOMAIN_SEPARATION_ENABLED, false);
-assert.equal(WWW_MARKETING_ROOT_ENABLED, false);
+assert.equal(DOMAIN_SEPARATION_ENABLED, true);
+assert.equal(WWW_MARKETING_ROOT_ENABLED, true);
 assert.equal(DOMAIN_SEPARATION_REDIRECT_STATUS, 308);
 assert.equal(SITE_HOSTS.www, "www.anynanny.org");
 assert.equal(SITE_HOSTS.app, "app.anynanny.org");
@@ -117,7 +117,7 @@ const samples: Array<[string, string]> = [
 
 for (const host of hosts) {
   for (const [pathname, search] of samples) {
-    const result = classifySiteRequest({ host, pathname, search });
+    const result = classifySiteRequest({ host, pathname, search, domainSeparationEnabled: false });
     assert.equal(result.domainSeparationEnabled, false);
     assert.deepEqual(result.serving, { mode: "combined" });
     assert.equal(result.search, search);
@@ -129,10 +129,13 @@ const omitted = classifySiteRequest({
   pathname: "/parents",
   search: "?utm_source=ig"
 });
-assert.equal(omitted.domainSeparationEnabled, false);
+assert.equal(omitted.domainSeparationEnabled, true);
 assert.equal(omitted.hostRole, "app");
 assert.equal(omitted.pathKind, "marketing");
-assert.deepEqual(omitted.serving, { mode: "combined" });
+assert.deepEqual(omitted.serving, {
+  mode: "redirect-to-www",
+  location: "https://www.anynanny.org/parents?utm_source=ig"
+});
 
 const explicitOff = classifySiteRequest({
   host: "anynanny.org",
@@ -150,7 +153,8 @@ function enabled(host: string, pathname: string, search = "") {
     host,
     pathname,
     search,
-    domainSeparationEnabled: true
+    domainSeparationEnabled: true,
+    wwwMarketingRootEnabled: false
   });
 }
 
@@ -291,7 +295,12 @@ for (const pathname of legacyWwwRoutes) {
 
 for (const host of ["www.anynanny.org", "app.anynanny.org", "anynanny.org"]) {
   for (const pathname of ["/api/webhooks/didit", "/api/verify", "/api/billing/israel-deposit"]) {
-    const disabled = classifySiteRequest({ host, pathname, search: "?attempt=1" });
+    const disabled = classifySiteRequest({
+      host,
+      pathname,
+      search: "?attempt=1",
+      domainSeparationEnabled: false
+    });
     assert.equal(disabled.pathKind, "api");
     assert.deepEqual(disabled.serving, { mode: "combined" });
     const active = enabled(host, pathname, "?attempt=1");
@@ -347,7 +356,7 @@ const embeddedQuery = classifySiteRequest({
 assert.equal(embeddedQuery.pathname, "/jobs/students");
 assert.equal(embeddedQuery.search, "?utm_campaign=students");
 assert.equal(embeddedQuery.pathKind, "marketing");
-assert.deepEqual(embeddedQuery.serving, { mode: "combined" });
+assert.deepEqual(embeddedQuery.serving, { mode: "marketing" });
 
 const middleware = read("middleware.ts");
 assert.match(middleware, /if \(DOMAIN_SEPARATION_ENABLED\)/);
@@ -420,11 +429,11 @@ assert.equal(source.includes("userAgent"), false);
 assert.equal(source.includes("user-agent"), false);
 assert.equal(source.includes("WebView"), false);
 assert.equal(source.includes("process.env"), false);
-assert.match(source, /DOMAIN_SEPARATION_ENABLED = false/);
-assert.match(source, /WWW_MARKETING_ROOT_ENABLED = false/);
+assert.match(source, /DOMAIN_SEPARATION_ENABLED = true/);
+assert.match(source, /WWW_MARKETING_ROOT_ENABLED = true/);
 
 const storeLinks = read("public/marketing/demo/store-links.js");
-assert.match(storeLinks, /const DOMAIN_SEPARATION_ENABLED = false/);
+assert.match(storeLinks, /const DOMAIN_SEPARATION_ENABLED = true/);
 assert.match(storeLinks, /const APP_STORE_URL = ""/);
 assert.match(storeLinks, /const path = `\/welcome\?\$\{welcome\.toString\(\)\}`;/);
 assert.match(storeLinks, /DOMAIN_SEPARATION_ENABLED \? `https:\/\/app\.anynanny\.org\$\{path\}` : path/);
@@ -487,7 +496,7 @@ assert.equal(
       forwardedHost: "app.anynanny.org"
     })
   }),
-  "application"
+  "marketing"
 );
 
 assert.match(middleware, /resolvePublicSiteHost/);

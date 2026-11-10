@@ -415,8 +415,16 @@ assert.match(bottomNav, /hasUnreadMessages/);
 assert.match(swRegister, /shouldRegisterPushServiceWorker/);
 assert.match(swRegister, /navigator\.serviceWorker/);
 assert.doesNotMatch(swRegister, /serviceWorker\.unregister|registration\.unregister/);
-assert.equal(shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parents"), true);
-assert.equal(shouldRegisterPushServiceWorker("https://www.anynanny.org", "/"), true);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parents", { domainSeparationEnabled: false }),
+  true
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/", { domainSeparationEnabled: false }),
+  true
+);
+assert.equal(shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parents"), false);
+assert.equal(shouldRegisterPushServiceWorker("https://www.anynanny.org", "/"), false);
 assert.equal(shouldRegisterPushServiceWorker("https://app.anynanny.org", "/"), true);
 assert.equal(
   shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parents", { domainSeparationEnabled: true }),
@@ -446,7 +454,10 @@ assert.equal(
   true
 );
 assert.equal(
-  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/", { domainSeparationEnabled: true }),
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/", {
+    domainSeparationEnabled: true,
+    wwwMarketingRootEnabled: false
+  }),
   true
 );
 assert.equal(

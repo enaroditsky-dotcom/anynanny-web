@@ -1,27 +1,26 @@
 /**
  * Host/path classification for the www / app / apex split.
  *
- * `DOMAIN_SEPARATION_ENABLED` is false. Middleware consults this module only
- * inside that flag, so every current host keeps today's combined site.
+ * `DOMAIN_SEPARATION_ENABLED` is on. Middleware consults this module only
+ * inside that flag. While it is off, every host keeps the combined site.
  *
- * `WWW_MARKETING_ROOT_ENABLED` stays false until launch. While it is false,
- * www `/` remains the application entry even if domain separation is on.
- * This module does not inspect the client. When the marketing-root flag is
- * also enabled, every client that opens www `/` — including an already-released
- * iOS app — receives the marketing homepage. Existing users continue through
- * that page's link to https://app.anynanny.org/.
+ * `WWW_MARKETING_ROOT_ENABLED` is on. This module does not inspect the client.
+ * Every client that opens www `/` — including an already-released iOS app —
+ * receives the marketing homepage. Existing users continue through that
+ * page's link to https://app.anynanny.org/. While the marketing-root flag is
+ * off, www `/` remains the application entry even if domain separation is on.
  *
  * This module does not read environment variables or cookies.
  */
 
-export const DOMAIN_SEPARATION_ENABLED = false;
+export const DOMAIN_SEPARATION_ENABLED = true;
 
 /**
- * Prepared www `/` marketing switch. Leave false until the marketing launch.
- * Enabling it shows the marketing homepage at www `/` to every client.
+ * www `/` marketing switch. On for the approved marketing launch.
+ * It shows the marketing homepage at www `/` to every client.
  * Already-released iOS clients are not detected or redirected elsewhere.
  */
-export const WWW_MARKETING_ROOT_ENABLED = false;
+export const WWW_MARKETING_ROOT_ENABLED = true;
 
 /** Permanent redirect that keeps the original method, path, and query. */
 export const DOMAIN_SEPARATION_REDIRECT_STATUS = 308;
@@ -63,7 +62,7 @@ export type ClassifySiteRequestInput = {
   domainSeparationEnabled?: boolean;
   /**
    * Test-only preview of the www marketing root. Middleware must not set this.
-   * Defaults to `WWW_MARKETING_ROOT_ENABLED` (false).
+   * Defaults to `WWW_MARKETING_ROOT_ENABLED`.
    */
   wwwMarketingRootEnabled?: boolean;
 };

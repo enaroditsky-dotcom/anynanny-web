@@ -185,7 +185,7 @@ assert.ok(sitemap.some((entry) => entry.url === "https://www.anynanny.org/jobs/s
 
 assert.equal(GENERAL_WEB_APP_PATH, "/");
 
-const plainWeb = new URL(generalWebAppHref(), "https://www.anynanny.org");
+const plainWeb = new URL(generalWebAppHref("", false), "https://www.anynanny.org");
 assert.equal(plainWeb.origin, "https://www.anynanny.org");
 assert.equal(plainWeb.pathname, "/");
 assert.equal(plainWeb.search, "");
@@ -196,7 +196,8 @@ assert.equal(separatedPlainWeb.search, "");
 
 const webWithUtm = new URL(
   generalWebAppHref(
-    "utm_source=facebook&utm_medium=cpc&utm_campaign=babysitter&utm_content=hero&utm_term=nanny&code=secret&type=recovery&access_token=abc&refresh_token=xyz&unrelated=drop"
+    "utm_source=facebook&utm_medium=cpc&utm_campaign=babysitter&utm_content=hero&utm_term=nanny&code=secret&type=recovery&access_token=abc&refresh_token=xyz&unrelated=drop",
+    false
   ),
   "https://www.anynanny.org"
 );
@@ -262,7 +263,8 @@ const fromRecord = generalWebAppHref(
     utm_campaign: "babysitter",
     code: "secret",
     access_token: "nope"
-  })
+  }),
+  false
 );
 const recordUrl = new URL(fromRecord, "https://www.anynanny.org");
 assert.equal(recordUrl.origin, "https://www.anynanny.org");

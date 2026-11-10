@@ -8,7 +8,7 @@ const GOOGLE_PLAY_URL = "";
 const APP_STORE_URL = "";
 const WEB_APP_URL = "";
 /** Keep aligned with DOMAIN_SEPARATION_ENABLED in lib/hosts/site-classifier.ts. */
-const DOMAIN_SEPARATION_ENABLED = false;
+const DOMAIN_SEPARATION_ENABLED = true;
 
 const STORE_UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
 

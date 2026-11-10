@@ -5,14 +5,13 @@ export type RootEntry = "marketing" | "application";
 /**
  * What `/` renders.
  *
- * Both domain-separation flags stay false until Preview and an explicit
- * Production approval. While they are false, every host keeps the application
- * entry, including www `/`.
+ * Both domain-separation flags are on for the approved marketing launch.
+ * While either flag is off, www `/` stays the application entry.
  *
  * The decision uses only the host and the flags. A released iOS client that
- * opens www `/` cannot be recognized, so enabling both flags replaces that
- * entry with the marketing homepage. The homepage link to
- * https://app.anynanny.org/ is the entry for people who already have the app.
+ * opens www `/` cannot be recognized, so both flags replace that entry with
+ * the marketing homepage. The homepage link to https://app.anynanny.org/ is
+ * the entry for people who already have the app.
  */
 export function resolveRootEntry(input: {
   host?: string | null;

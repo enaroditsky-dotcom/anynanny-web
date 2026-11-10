@@ -51,8 +51,8 @@ assert.equal(APP_LANDING_PARENT_CTA, "לחיפוש בייביסיטר");
 assert.equal(APP_LANDING_PARENT_ENTRY_CTA, "אני מחפש/ת בייביסיטר");
 assert.equal(APP_LANDING_SITTER_ENTRY_CTA, "אני רוצה לעבוד כבייביסיטרית");
 
-const parentHref = appLandingSignupHref("parent");
-const sitterHref = appLandingSignupHref("sitter");
+const parentHref = appLandingSignupHref("parent", "", false);
+const sitterHref = appLandingSignupHref("sitter", "", false);
 assert.match(parentHref, /^\/welcome\?/);
 assert.match(appLandingSignupHref("parent", "", true), /^https:\/\/app\.anynanny\.org\/welcome\?/);
 assert.match(appLandingSignupHref("sitter", "", true), /^https:\/\/app\.anynanny\.org\/welcome\?/);
@@ -63,7 +63,7 @@ assert.match(sitterHref, /track%3Dbabysitter|track=babysitter/);
 assert.doesNotMatch(parentHref, /role=sitter/);
 assert.doesNotMatch(sitterHref, /role=parent/);
 
-const withUtm = appLandingSignupHref("sitter", "utm_source=facebook&utm_campaign=groups&ignored=1");
+const withUtm = appLandingSignupHref("sitter", "utm_source=facebook&utm_campaign=groups&ignored=1", false);
 assert.match(withUtm, /utm_source=facebook/);
 assert.match(withUtm, /utm_campaign=groups/);
 assert.doesNotMatch(withUtm, /ignored=/);

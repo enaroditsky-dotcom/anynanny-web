@@ -46,10 +46,10 @@ function scan(dir: string, extensions: Set<string>, hits: string[]) {
   }
 }
 
-assert.equal(DOMAIN_SEPARATION_ENABLED, false);
-assert.equal(WWW_MARKETING_ROOT_ENABLED, false);
+assert.equal(DOMAIN_SEPARATION_ENABLED, true);
+assert.equal(WWW_MARKETING_ROOT_ENABLED, true);
 
-assert.equal(resolveRootEntry({ host: "www.anynanny.org" }), "application");
+assert.equal(resolveRootEntry({ host: "www.anynanny.org" }), "marketing");
 assert.equal(resolveRootEntry({ host: "app.anynanny.org" }), "application");
 assert.equal(
   resolveRootEntry({
@@ -98,8 +98,12 @@ const enabled = {
   wwwMarketingRootEnabled: true
 };
 assert.equal(
-  generalWebAppHref("?utm_source=ig&utm_medium=cpc&type=recovery"),
+  generalWebAppHref("?utm_source=ig&utm_medium=cpc&type=recovery", false),
   "/?utm_source=ig&utm_medium=cpc"
+);
+assert.equal(
+  generalWebAppHref("?utm_source=ig&utm_medium=cpc&type=recovery"),
+  "https://app.anynanny.org/?utm_source=ig&utm_medium=cpc"
 );
 const openApp = new URL(generalWebAppHref("?utm_source=ig&utm_medium=cpc&type=recovery", true));
 assert.equal(openApp.origin, "https://app.anynanny.org");

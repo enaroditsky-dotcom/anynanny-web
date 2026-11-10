@@ -30,8 +30,8 @@ function read(relativePath: string): string {
   return readFileSync(resolve(root, relativePath), "utf8");
 }
 
-assert.equal(DOMAIN_SEPARATION_ENABLED, false);
-assert.equal(WWW_MARKETING_ROOT_ENABLED, false);
+assert.equal(DOMAIN_SEPARATION_ENABLED, true);
+assert.equal(WWW_MARKETING_ROOT_ENABLED, true);
 
 assert.equal(MARKETING_CHAPTERS.length, 10);
 assert.deepEqual(
@@ -98,7 +98,8 @@ assert.match(siteNav, /פורום AnyNanny/);
 assert.match(siteNav, /AnyNanny Marketplace/);
 assert.doesNotMatch(sidebar, /play\.google\.com|apps\.apple\.com/);
 
-assert.equal(storyLoginHref("?utm_source=ig&type=recovery"), "/login?utm_source=ig");
+assert.equal(storyLoginHref("?utm_source=ig&type=recovery", false), "/login?utm_source=ig");
+assert.equal(storyLoginHref("?utm_source=ig&type=recovery"), "https://app.anynanny.org/login?utm_source=ig");
 assert.equal(storyLoginHref("?utm_source=ig", true), "https://app.anynanny.org/login?utm_source=ig");
 const register = new URL(storyAccountHref("register", "parent", "?utm_source=ig&code=secret", true));
 assert.equal(register.origin, "https://app.anynanny.org");
@@ -109,7 +110,7 @@ assert.equal(register.searchParams.get("code"), null);
 assert.match(register.searchParams.get("next") ?? "", /^\/register\?/);
 assert.equal(storyAccountHref("login", "sitter", "", false), "/login?role=sitter&track=babysitter");
 assert.equal(MARKETING_TOGETHER.loginLabel, "כניסה לאפליקציה");
-assert.match(read("public/marketing/demo/store-links.js"), /const DOMAIN_SEPARATION_ENABLED = false/);
+assert.match(read("public/marketing/demo/store-links.js"), /const DOMAIN_SEPARATION_ENABLED = true/);
 
 assert.match(read("app/robots.ts"), /buildPublicRobots/);
 assert.match(read("app/sitemap.ts"), /buildPublicSitemap/);

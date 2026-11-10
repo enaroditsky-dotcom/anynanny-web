@@ -66,16 +66,16 @@ assert.equal(PARENTS_LANDING_GOOGLE_PLAY_URL, APP_LANDING_GOOGLE_PLAY_URL);
 assert.equal(PARENTS_LANDING_OG_PATH, "/SEO pages/parents-landing-og.png");
 assert.equal(PARENTS_LANDING_OG_URL, "https://www.anynanny.org/SEO%20pages/parents-landing-og.png");
 
-const parentHref = parentsLandingSignupHref();
+const parentHref = parentsLandingSignupHref("", false);
 assert.match(parentHref, /^\/welcome\?/);
 assert.match(parentHref, /role=parent/);
 assert.match(parentHref, /register/);
 assert.doesNotMatch(parentHref, /role=sitter/);
 assert.doesNotMatch(parentHref, /track=babysitter/);
-assert.equal(parentsWebAppFallbackHref(), "/");
+assert.equal(parentsWebAppFallbackHref("", false), "/");
 assert.equal(parentsWebAppFallbackHref("", true), "https://app.anynanny.org/");
 assert.match(parentsLandingSignupHref("", true), /^https:\/\/app\.anynanny\.org\/welcome\?/);
-assert.doesNotMatch(parentsWebAppFallbackHref(), /apps\.apple\.com|play\.google/);
+assert.doesNotMatch(parentsWebAppFallbackHref("", false), /apps\.apple\.com|play\.google/);
 assert.doesNotMatch(parentsWebAppFallbackHref("", true), /www\.anynanny\.org|apps\.apple\.com|play\.google/);
 
 const page = read("app/parents/page.tsx");
