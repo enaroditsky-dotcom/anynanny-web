@@ -325,9 +325,13 @@ a.joinButton {
 }
 
 .sidebarLink[aria-current="location"] {
-  background: rgba(43, 126, 150, 0.14);
-  color: var(--marketing-navy);
-  font-weight: 400;
+  background: rgba(58, 154, 68, 0.16);
+  color: #145c28;
+  font-weight: 800;
+}
+
+.sidebarLink[aria-current="location"] .sidebarLabel {
+  font-weight: 800;
 }
 
 .sidebarFolder,
@@ -378,6 +382,7 @@ a.joinButton {
   height: 1rem;
   flex-shrink: 0;
   color: var(--marketing-teal);
+  transition: transform 160ms ease;
 }
 
 .sidebarChevronOpen {
@@ -473,6 +478,94 @@ a.sidebarDownload {
   font-weight: 700;
   line-height: 1;
   padding: 0.28rem 0.45rem;
+}
+
+.sidebarOffer {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.7rem 0.1rem 0.35rem;
+  padding: 0.72rem 0.75rem;
+  border-radius: 1.05rem;
+  background: linear-gradient(145deg, #237a32 0%, #3a9a44 58%, #79c36a 100%);
+  color: #fff;
+  box-shadow:
+    0 0 0 1px rgba(212, 168, 67, 0.72),
+    0 0 18px rgba(58, 154, 68, 0.45),
+    0 10px 22px rgba(35, 122, 50, 0.28);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.sidebarOfferGlow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 32%, rgba(255, 244, 214, 0.55) 48%, transparent 64%);
+  transform: translateX(130%);
+  animation: sidebarOfferSweep 5.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.sidebarOfferIcon,
+.sidebarOfferSparkle {
+  position: relative;
+  z-index: 1;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  color: #ffe7a3;
+}
+
+.sidebarOfferSparkle {
+  animation: sidebarOfferTwinkle 5.2s ease-in-out infinite;
+}
+
+.sidebarOfferLabel {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+@keyframes sidebarOfferSweep {
+  0%,
+  58% {
+    transform: translateX(130%);
+  }
+
+  78%,
+  100% {
+    transform: translateX(-130%);
+  }
+}
+
+@keyframes sidebarOfferTwinkle {
+  0%,
+  64%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+
+  74% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebarChevron,
+  .sidebarOfferGlow,
+  .sidebarOfferSparkle {
+    transition: none;
+    animation: none;
+  }
 }
 
 @media (min-width: 64rem) {

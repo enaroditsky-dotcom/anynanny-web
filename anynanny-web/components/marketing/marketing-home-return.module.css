@@ -1,0 +1,37 @@
+.wrap {
+  margin: 0 0 0.85rem;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0.3rem 0.95rem;
+  border-radius: 999px;
+  background: #fff;
+  color: #001f3f;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  box-shadow: 0 8px 18px rgba(0, 31, 63, 0.08);
+}
+
+.link svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.link:hover {
+  background: #f4f8f2;
+}
+
+.link:focus-visible {
+  outline: 3px solid #001f3f;
+  outline-offset: 3px;
+}

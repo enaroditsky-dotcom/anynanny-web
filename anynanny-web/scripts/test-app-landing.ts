@@ -79,6 +79,8 @@ assert.equal(landing.match(/<h1 /g)?.length, 1);
 assert.match(landing, /<h2 /);
 assert.match(landing, /<ul>/);
 assert.match(landing, /APP_LANDING_HERO_SRC/);
+assert.ok(landing.indexOf("APP_LANDING_HERO_SRC") < landing.indexOf("<h1"));
+assert.doesNotMatch(landing, /AnyNannyLogo/);
 assert.match(landing, /APP_LANDING_HERO_ALT/);
 assert.match(landing, /heroEntry[\s\S]{0,160}href=\{webAppHref\}/);
 assert.match(landing, /href=\{APP_LANDING_SITE_URL\}/);

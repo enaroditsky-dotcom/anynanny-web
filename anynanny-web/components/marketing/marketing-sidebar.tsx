@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
   ChevronDown,
-  Download,
   Gift,
   Globe,
+  House,
   LayoutGrid,
   LifeBuoy,
   MessageSquare,
@@ -19,15 +20,13 @@ import {
   X
 } from "lucide-react";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
-import type { MarketingChapterId } from "@/lib/marketing/chapters";
+import { type MarketingChapterId } from "@/lib/marketing/chapters";
 import {
   COMING_SOON_LABEL,
   DEFAULT_OPEN_NAV_IDS,
   MARKETING_SITE_NAV_ID,
-  SITE_NAV_DOWNLOADS,
   SITE_NAV_ITEMS,
   destinationHref,
-  withStoreCampaign,
   type SiteNavDestination,
   type SiteNavIconName,
   type SiteNavLink,
@@ -37,6 +36,7 @@ import { sidebarHeebo } from "@/components/marketing/sidebar-heebo";
 import styles from "./marketing-home.module.css";
 
 const ICONS: Record<Exclude<SiteNavIconName, "android" | "iphone">, LucideIcon> = {
+  home: House,
   globe: Globe,
   app: LayoutGrid,
   users: Users,
@@ -52,30 +52,8 @@ const ICONS: Record<Exclude<SiteNavIconName, "android" | "iphone">, LucideIcon> 
   giveaway: Gift
 };
 
-function AppleMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="currentColor">
-      <path d="M16.365 12.84c.03 3.23 2.83 4.31 2.86 4.32-.02.08-.445 1.52-1.47 3.01-.88 1.28-1.8 2.56-3.24 2.59-1.42.03-1.88-.84-3.5-.84-1.63 0-2.13.82-3.48.87-1.39.05-2.45-1.39-3.34-2.67C2.3 17.4.91 12.57 2.79 9.31c.93-1.62 2.59-2.65 4.39-2.68 1.37-.03 2.66.92 3.5.92.84 0 2.41-1.14 4.06-.97.69.03 2.63.28 3.88 2.11-.1.06-2.32 1.35-2.29 4.15zm-2.15-6.32c.74-.9 1.24-2.14 1.1-3.38-1.07.04-2.36.71-3.12 1.61-.68.79-1.28 2.05-1.12 3.26 1.18.09 2.39-.6 3.14-1.49z" />
-    </svg>
-  );
-}
-
-function AndroidMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="currentColor">
-      <path d="M17.6 9.48 19.44 6.3c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24c-2.86-1.21-6.08-1.21-8.94 0L5.65 5.67c-.19-.29-.54-.37-.85-.22-.3.16-.42.54-.26.85l1.84 3.18C3.86 11.17 2.5 13.58 2.5 16.2v.3c0 .83.67 1.5 1.5 1.5h16c.83 0 1.5-.67 1.5-1.5v-.3c0-2.62-1.36-5.03-3.9-6.72ZM7 14.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Zm10 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Z" />
-    </svg>
-  );
-}
-
-const DOWNLOAD_LABELS: Record<"android" | "iphone", string> = {
-  android: "Android להורדה",
-  iphone: "iPhone להורדה"
-};
-
 function NavGlyph({ name }: { name: SiteNavIconName }) {
-  if (name === "iphone") return <AppleMark className={styles.sidebarIcon} />;
-  if (name === "android") return <AndroidMark className={styles.sidebarIcon} />;
+  if (name === "iphone" || name === "android") return null;
   const Icon = ICONS[name];
   return <Icon aria-hidden className={styles.sidebarIcon} />;
 }
@@ -90,17 +68,27 @@ function nodeMatchesQuery(node: SiteNavNode, query: string): boolean {
 }
 
 const OFFICIAL_ANNY_SRC = "/brand/AnyNanny%20logo%20new.png";
+const EXPLORE_PATHS = ["/story", "/marketing/trust", "/marketing/respect", "/marketing/preview"];
+
+function initialOpenIds(activePath: string): Record<string, boolean> {
+  const open: Record<string, boolean> = Object.fromEntries(DEFAULT_OPEN_NAV_IDS.map((id) => [id, true]));
+  if (EXPLORE_PATHS.some((path) => activePath === path || activePath.startsWith(`${path}/`))) {
+    open.explore = true;
+  }
+  return open;
+}
 
 export function MarketingSidebar({
   open,
   onClose,
   activeChapterId,
-  onChapter,
-  campaignSearch = ""
+  activePath = "",
+  onChapter
 }: {
   open: boolean;
   onClose: () => void;
-  activeChapterId: MarketingChapterId;
+  activeChapterId: MarketingChapterId | null;
+  activePath?: string;
   onChapter: (id: MarketingChapterId) => void;
   campaignSearch?: string;
 }) {
@@ -110,9 +98,7 @@ export function MarketingSidebar({
   const searchButtonRef = useRef<HTMLButtonElement | null>(null);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [openIds, setOpenIds] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(DEFAULT_OPEN_NAV_IDS.map((id) => [id, true]))
-  );
+  const [openIds, setOpenIds] = useState<Record<string, boolean>>(() => initialOpenIds(activePath));
   const [isCompact, setIsCompact] = useState(false);
   const normalizedQuery = query.trim().toLowerCase();
   const showSearchField = searchOpen || Boolean(normalizedQuery);
@@ -161,6 +147,11 @@ export function MarketingSidebar({
     };
   }, [open, isCompact, onClose]);
 
+  useEffect(() => {
+    if (!EXPLORE_PATHS.some((path) => activePath === path || activePath.startsWith(`${path}/`))) return;
+    setOpenIds((current) => (current.explore ? current : { ...current, explore: true }));
+  }, [activePath]);
+
   const toggleOpen = (id: string) => {
     setOpenIds((current) => ({ ...current, [id]: !current[id] }));
   };
@@ -180,13 +171,6 @@ export function MarketingSidebar({
     () => SITE_NAV_ITEMS.filter((item) => nodeMatchesQuery(item, normalizedQuery)),
     [normalizedQuery]
   );
-  const visibleDownloads = useMemo(
-    () => SITE_NAV_DOWNLOADS.filter((item) => nodeMatchesQuery(item, normalizedQuery)),
-    [normalizedQuery]
-  );
-  const infoIndex = visibleItems.findIndex((item) => item.id === "info");
-  const itemsBeforeSearch = infoIndex === -1 ? visibleItems : visibleItems.slice(0, infoIndex);
-  const itemsFromInfo = infoIndex === -1 ? [] : visibleItems.slice(infoIndex);
 
   const toggleSearch = () => {
     if (showSearchField) {
@@ -250,16 +234,15 @@ export function MarketingSidebar({
       >
         <div className={styles.sidebarBrand}>
           <div className={styles.sidebarBrandRow} dir="ltr">
-            <a
-              href="#home"
+            <Link
+              href="/"
               className={styles.sidebarLogoLink}
-              onClick={(event) => {
-                event.preventDefault();
-                handleDestination({ kind: "chapter", chapterId: "home" });
+              onClick={() => {
+                if (isCompact) onClose();
               }}
             >
               <AnyNannyLogo variant="header" />
-            </a>
+            </Link>
             <img
               src={OFFICIAL_ANNY_SRC}
               alt=""
@@ -282,7 +265,7 @@ export function MarketingSidebar({
         </div>
 
         <nav className={styles.sidebarScroll} aria-label="ניווט AnyNanny">
-          {itemsBeforeSearch.map((item) => (
+          {visibleItems.map((item) => (
             <NavNode
               key={item.id}
               node={item}
@@ -290,33 +273,13 @@ export function MarketingSidebar({
               isSectionOpen={isSectionOpen}
               onToggle={toggleOpen}
               activeChapterId={activeChapterId}
+              activePath={activePath}
               onDestination={handleDestination}
               query={normalizedQuery}
             />
           ))}
 
           {searchControls}
-
-          {itemsFromInfo.map((item) => (
-            <NavNode
-              key={item.id}
-              node={item}
-              depth={0}
-              isSectionOpen={isSectionOpen}
-              onToggle={toggleOpen}
-              activeChapterId={activeChapterId}
-              onDestination={handleDestination}
-              query={normalizedQuery}
-            />
-          ))}
-
-          {visibleDownloads.length > 0 ? (
-            <div className={styles.sidebarDownloads}>
-              {visibleDownloads.map((item) => (
-                <DownloadRow key={item.id} item={item} campaignSearch={campaignSearch} />
-              ))}
-            </div>
-          ) : null}
         </nav>
       </aside>
     </>
@@ -329,6 +292,7 @@ function NavNode({
   isSectionOpen,
   onToggle,
   activeChapterId,
+  activePath,
   onDestination,
   query
 }: {
@@ -336,7 +300,8 @@ function NavNode({
   depth: number;
   isSectionOpen: (id: string) => boolean;
   onToggle: (id: string) => void;
-  activeChapterId: MarketingChapterId;
+  activeChapterId: MarketingChapterId | null;
+  activePath: string;
   onDestination: (destination: SiteNavDestination) => void;
   query: string;
 }) {
@@ -346,6 +311,7 @@ function NavNode({
         item={node}
         nested={depth > 0}
         activeChapterId={activeChapterId}
+        activePath={activePath}
         onDestination={onDestination}
       />
     );
@@ -386,6 +352,7 @@ function NavNode({
               isSectionOpen={isSectionOpen}
               onToggle={onToggle}
               activeChapterId={activeChapterId}
+              activePath={activePath}
               onDestination={onDestination}
               query={query}
             />
@@ -396,21 +363,41 @@ function NavNode({
   );
 }
 
+function isCurrentMarketingPath(href: string, pathname: string): boolean {
+  const path = href.split("#")[0]?.split("?")[0] ?? "";
+  if (!path.startsWith("/") || path.startsWith("//")) return false;
+  if (path === "/") return pathname === "/";
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
 function NavLeafRow({
   item,
   nested = false,
   activeChapterId,
+  activePath,
   onDestination
 }: {
   item: SiteNavLink;
   nested?: boolean;
-  activeChapterId: MarketingChapterId;
+  activeChapterId: MarketingChapterId | null;
+  activePath: string;
   onDestination: (destination: SiteNavDestination) => void;
 }) {
   const destination = item.destination;
+  if (item.tone === "offer") {
+    return (
+      <div className={styles.sidebarOffer} aria-disabled="true">
+        <span className={styles.sidebarOfferGlow} aria-hidden="true" />
+        <Gift aria-hidden className={styles.sidebarOfferIcon} />
+        <span className={styles.sidebarOfferLabel}>{item.label}</span>
+        <Sparkles aria-hidden className={styles.sidebarOfferSparkle} />
+      </div>
+    );
+  }
   const href = destinationHref(destination);
   const active =
-    destination.kind === "chapter" && destination.chapterId === activeChapterId;
+    (destination.kind === "chapter" && destination.chapterId === activeChapterId) ||
+    (destination.kind === "href" && Boolean(href) && isCurrentMarketingPath(href ?? "", activePath));
   const rowClass = nested
     ? `${styles.sidebarLink} ${styles.sidebarChild}`
     : `${styles.sidebarLink} ${styles.sidebarTopItem}`;
@@ -435,6 +422,19 @@ function NavLeafRow({
     );
   }
 
+  if (destination.kind !== "chapter" && href?.startsWith("/") && !href.startsWith("//")) {
+    return (
+      <Link
+        href={href}
+        className={rowClass}
+        aria-current={active ? "location" : undefined}
+        onClick={() => onDestination(destination)}
+      >
+        {content}
+      </Link>
+    );
+  }
+
   return (
     <a
       href={href}
@@ -447,40 +447,6 @@ function NavLeafRow({
         onDestination(destination);
       }}
     >
-      {content}
-    </a>
-  );
-}
-
-function DownloadRow({ item, campaignSearch }: { item: SiteNavLink; campaignSearch: string }) {
-  const platform = item.icon === "iphone" ? "iphone" : "android";
-  const label = DOWNLOAD_LABELS[platform];
-  const href = destinationHref(item.destination);
-  const content = (
-    <>
-      {item.destination.kind === "soon" ? (
-        <span className={styles.soonBadge}>{COMING_SOON_LABEL}</span>
-      ) : null}
-      <Download aria-hidden className={styles.sidebarDownloadGlyph} />
-      <span className={styles.sidebarDownloadLabel}>{label}</span>
-      {platform === "iphone" ? (
-        <AppleMark className={styles.sidebarIcon} />
-      ) : (
-        <AndroidMark className={styles.sidebarIcon} />
-      )}
-    </>
-  );
-
-  if (!href || item.destination.kind === "soon") {
-    return (
-      <div className={styles.sidebarDownload} dir="ltr" aria-disabled="true">
-        {content}
-      </div>
-    );
-  }
-
-  return (
-    <a className={styles.sidebarDownload} dir="ltr" href={withStoreCampaign(href, campaignSearch)}>
       {content}
     </a>
   );

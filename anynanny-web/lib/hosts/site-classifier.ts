@@ -74,7 +74,8 @@ const MARKETING_EXACT_PATHS = new Set([
   "/app",
   "/privacy",
   "/terms",
-  "/delete-account"
+  "/delete-account",
+  "/story"
 ]);
 
 const AUTH_PREFIXES = ["/auth", "/login", "/register", "/reset-password"] as const;

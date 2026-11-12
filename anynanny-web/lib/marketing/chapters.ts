@@ -21,7 +21,32 @@ export function isMarketingChapterId(value: string | null | undefined): value is
   return MARKETING_CHAPTER_IDS.includes(value as MarketingChapterId);
 }
 
+export const MARKETING_STORY_PATH = "/story";
+
+/** In-story anchor that is not one of the ten chapters. */
+export const MARKETING_STORY_EXTRA_ANCHOR = "charters";
+
 export function chapterIdFromHash(hash: string): MarketingChapterId | null {
   const id = hash.replace(/^#/, "").trim();
   return isMarketingChapterId(id) ? id : null;
+}
+
+export function storyChapterHref(id: MarketingChapterId): string {
+  return `${MARKETING_STORY_PATH}#${id}`;
+}
+
+/**
+ * Chapter hashes, plus the in-page charter anchor, that used to live on `/`.
+ * Auth and recovery fragments are not story anchors.
+ */
+export function storyAnchorFromHash(hash: string): string | null {
+  const chapterId = chapterIdFromHash(hash);
+  if (chapterId) return chapterId;
+  const id = hash.replace(/^#/, "").trim();
+  return id === MARKETING_STORY_EXTRA_ANCHOR ? id : null;
+}
+
+export function storyLocationForAnchor(anchor: string, search = ""): string {
+  const query = !search || search === "?" ? "" : search.startsWith("?") ? search : `?${search}`;
+  return `${MARKETING_STORY_PATH}${query}#${anchor}`;
 }

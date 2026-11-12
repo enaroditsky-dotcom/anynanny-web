@@ -3,6 +3,7 @@
 import type { RefObject } from "react";
 import { Menu } from "lucide-react";
 import { MARKETING_TOGETHER } from "@/lib/marketing/copy";
+import { storyChapterHref } from "@/lib/marketing/chapters";
 import { MARKETING_SITE_NAV_ID } from "@/lib/marketing/site-nav";
 import { storyAccountHref, type StoryAccountAction } from "@/lib/marketing/story-entry";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
@@ -19,8 +20,8 @@ export function MarketingAccountChoices({
 }) {
   return (
     <div className={styles.roleChoices} id={id}>
-      <a href={storyAccountHref(action, "parent", campaignSearch)}>הורים</a>
-      <a href={storyAccountHref(action, "sitter", campaignSearch)}>בייביסיטר</a>
+      <a href={storyAccountHref(action, "parent", campaignSearch)} data-press="">הורים</a>
+      <a href={storyAccountHref(action, "sitter", campaignSearch)} data-press="">בייביסיטר</a>
     </div>
   );
 }
@@ -30,19 +31,23 @@ export function MarketingHeader({
   onToggleNav,
   menuButtonRef,
   onHome,
-  loginHref
+  homeHref = storyChapterHref("home"),
+  loginHref,
+  headerClassName
 }: {
   navOpen: boolean;
   onToggleNav: () => void;
   menuButtonRef: RefObject<HTMLButtonElement | null>;
   onHome: () => void;
+  homeHref?: string;
   loginHref: string;
+  headerClassName?: string;
 }) {
   return (
-    <header className={styles.header} data-marketing-header>
+    <header className={headerClassName ? `${styles.header} ${headerClassName}` : styles.header} data-marketing-header>
       <div className={styles.headerInner}>
         <a
-          href="#home"
+          href={homeHref}
           className={styles.headerBrand}
           onClick={(event) => {
             event.preventDefault();

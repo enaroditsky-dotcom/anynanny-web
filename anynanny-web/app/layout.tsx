@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { headers } from "next/headers";
 import { Varela_Round } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
 import { AppShellGate } from "@/components/app-shell-gate";
@@ -32,13 +33,18 @@ export const metadata: Metadata = {
   }
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const headerList = await headers();
+  const hostHeader = headerList.get("host")?.trim() || "";
+  const forwardedHost = headerList.get("x-forwarded-host")?.split(",")[0]?.trim() || "";
+  const siteHost = hostHeader || forwardedHost;
+
   return (
     <html lang="he" className={varelaRound.variable} suppressHydrationWarning>
       <body className={`${varelaRound.className} bg-[#FDFBF6] font-sans antialiased`} suppressHydrationWarning>
         <ServiceWorkerRegister />
         <AuthProvider>
-          <AppShellGate>{children}</AppShellGate>
+          <AppShellGate siteHost={siteHost}>{children}</AppShellGate>
         </AuthProvider>
       </body>
     </html>

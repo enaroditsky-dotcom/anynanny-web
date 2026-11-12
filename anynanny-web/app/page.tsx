@@ -1,19 +1,25 @@
 ﻿import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { ApplicationHomePage } from "@/components/home/application-home-page";
+import { ConversionHome } from "@/components/marketing/conversion-home";
 import { MarketingHomeAuthHandoff } from "@/components/marketing/marketing-home-auth-handoff";
-import { MarketingHomePage } from "@/components/marketing/marketing-home-page";
+import { StoryChapterHandoff } from "@/components/marketing/story-chapter-handoff";
 import {
   DOMAIN_SEPARATION_ENABLED,
   WWW_MARKETING_ROOT_ENABLED,
   resolvePublicSiteHost
 } from "@/lib/hosts/site-classifier";
 import { resolveRootEntry } from "@/lib/hosts/root-entry";
-import { generalWebAppHref, utmSearchFromRecord } from "@/lib/marketing/general-acquisition";
 import {
   MARKETING_HOME_CANONICAL,
   MARKETING_HOME_DESCRIPTION,
-  MARKETING_HOME_TITLE
+  MARKETING_HOME_OG_ALT,
+  MARKETING_HOME_OG_HEIGHT,
+  MARKETING_HOME_OG_TITLE,
+  MARKETING_HOME_OG_URL,
+  MARKETING_HOME_OG_WIDTH,
+  MARKETING_HOME_TITLE,
+  buildMarketingHomeStructuredData
 } from "@/lib/marketing/marketing-home";
 import { marketingDocumentMetadata } from "@/lib/marketing/marketing-document";
 
@@ -62,7 +68,37 @@ export async function generateMetadata({
   return {
     ...(await marketingDocumentMetadata()),
     title: MARKETING_HOME_TITLE,
-    description: MARKETING_HOME_DESCRIPTION
+    description: MARKETING_HOME_DESCRIPTION,
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true
+      }
+    },
+    openGraph: {
+      title: MARKETING_HOME_OG_TITLE,
+      description: MARKETING_HOME_DESCRIPTION,
+      url: MARKETING_HOME_CANONICAL,
+      siteName: "AnyNanny",
+      locale: "he_IL",
+      type: "website",
+      images: [
+        {
+          url: MARKETING_HOME_OG_URL,
+          width: MARKETING_HOME_OG_WIDTH,
+          height: MARKETING_HOME_OG_HEIGHT,
+          alt: MARKETING_HOME_OG_ALT
+        }
+      ]
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: MARKETING_HOME_OG_TITLE,
+      description: MARKETING_HOME_DESCRIPTION,
+      images: [MARKETING_HOME_OG_URL]
+    }
   };
 }
 
@@ -74,19 +110,23 @@ export default async function HomePage({
   if (!marketingRootActive()) return <ApplicationHomePage />;
   const params = await searchParams;
   if ((await currentRootEntry(params)) === "marketing") {
-    const campaign = utmSearchFromRecord(params);
+    const structuredData = buildMarketingHomeStructuredData();
     return (
       <>
         {/*
           Next.js metadata turns a root canonical into the origin without a
-          trailing slash. This is the single self-canonical for the story homepage.
+          trailing slash. This is the single self-canonical for the marketing homepage.
         */}
         <link rel="canonical" href={MARKETING_HOME_CANONICAL} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData).replace(/</g, "\\u003c")
+          }}
+        />
         <MarketingHomeAuthHandoff>
-          <MarketingHomePage
-            openAppHref={generalWebAppHref(campaign)}
-            campaignSearch={campaign.toString()}
-          />
+          <StoryChapterHandoff />
+          <ConversionHome />
         </MarketingHomeAuthHandoff>
       </>
     );

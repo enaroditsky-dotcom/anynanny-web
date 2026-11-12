@@ -27,6 +27,41 @@ export const PUBLIC_HOME_PAGE: PublicSitemapPage = {
  */
 export const SEO_LANDING_PAGES: readonly PublicSitemapPage[] = [
   {
+    path: "/story",
+    changeFrequency: "monthly",
+    priority: 0.6
+  },
+  {
+    path: "/marketing/meet",
+    changeFrequency: "monthly",
+    priority: 0.7
+  },
+  {
+    path: "/marketing/life",
+    changeFrequency: "monthly",
+    priority: 0.7
+  },
+  {
+    path: "/marketing/trust",
+    changeFrequency: "monthly",
+    priority: 0.7
+  },
+  {
+    path: "/marketing/preview",
+    changeFrequency: "monthly",
+    priority: 0.7
+  },
+  {
+    path: "/marketing/respect",
+    changeFrequency: "monthly",
+    priority: 0.7
+  },
+  {
+    path: "/marketing/sitters",
+    changeFrequency: "monthly",
+    priority: 0.7
+  },
+  {
     path: "/jobs/students",
     changeFrequency: "weekly",
     priority: 0.8

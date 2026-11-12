@@ -1,4 +1,8 @@
-import { MARKETING_CHAPTERS, type MarketingChapterId } from "@/lib/marketing/chapters";
+import {
+  MARKETING_CHAPTERS,
+  storyChapterHref,
+  type MarketingChapterId
+} from "@/lib/marketing/chapters";
 import { ANYNANNY_SUPPORT_EMAIL } from "@/lib/legal/contact";
 import { readStudentJobsUtm } from "@/lib/marketing/student-jobs";
 
@@ -25,6 +29,7 @@ export const APP_ENTRY_HREF = "/app";
 export const SUPPORT_MAILTO = `mailto:${ANYNANNY_SUPPORT_EMAIL}`;
 
 export type SiteNavIconName =
+  | "home"
   | "globe"
   | "app"
   | "users"
@@ -52,6 +57,7 @@ export type SiteNavLink = {
   label: string;
   icon?: SiteNavIconName;
   destination: SiteNavDestination;
+  tone?: "offer";
 };
 
 export type SiteNavAccordion = {
@@ -74,6 +80,13 @@ export const ORG_NAV_CHAPTERS: SiteNavLink[] = MARKETING_CHAPTERS.map((chapter) 
 export const SITE_NAV_ITEMS: SiteNavNode[] = [
   {
     type: "link",
+    id: "home",
+    label: "דף הבית",
+    icon: "home",
+    destination: { kind: "href", href: "/" }
+  },
+  {
+    type: "link",
     id: "find-babysitter",
     label: "מציאת בייביסיטר",
     icon: "parent",
@@ -88,105 +101,54 @@ export const SITE_NAV_ITEMS: SiteNavNode[] = [
   },
   {
     type: "accordion",
-    id: "org",
-    label: "AnyNanny.org",
-    icon: "globe",
-    children: ORG_NAV_CHAPTERS
-  },
-  {
-    type: "link",
-    id: "app",
-    label: "AnyNanny.app",
-    icon: "app",
-    destination: { kind: "href", href: APP_ENTRY_HREF }
-  },
-  {
-    type: "accordion",
-    id: "community",
-    label: "קהילת AnyNanny",
-    icon: "users",
-    children: [
-      {
-        type: "accordion",
-        id: "forum",
-        label: "פורום AnyNanny",
-        icon: "messages",
-        children: [
-          {
-            type: "link",
-            id: "forum-parents",
-            label: "הורים",
-            icon: "parent",
-            destination: { kind: "soon" }
-          },
-          {
-            type: "link",
-            id: "forum-sitters",
-            label: "בייביסיטריות",
-            icon: "sitter",
-            destination: { kind: "soon" }
-          }
-        ]
-      },
-      {
-        type: "accordion",
-        id: "marketplace",
-        label: "AnyNanny Marketplace",
-        icon: "store",
-        children: [
-          {
-            type: "link",
-            id: "marketplace-buy",
-            label: "AnyNanny BUY",
-            icon: "buy",
-            destination: { kind: "soon" }
-          },
-          {
-            type: "link",
-            id: "marketplace-giveaway",
-            label: "למסירה / מכירה",
-            icon: "giveaway",
-            destination: { kind: "soon" }
-          }
-        ]
-      }
-    ]
-  },
-  {
-    type: "accordion",
-    id: "info",
-    label: "מידע ושירות",
+    id: "explore",
+    label: "להכיר את AnyNanny",
     icon: "book",
     children: [
       {
         type: "link",
-        id: "knowledge",
-        label: "מרכז ידע",
+        id: "our-story",
+        label: "הסיפור שלנו",
         icon: "book",
-        destination: { kind: "soon" }
+        destination: { kind: "href", href: "/story" }
       },
       {
         type: "link",
-        id: "safety",
-        label: "בטיחות ואמון",
+        id: "trust",
+        label: "להכיר ולהיות בטוחים",
         icon: "shield",
-        destination: { kind: "chapter", chapterId: "respect" }
+        destination: { kind: "href", href: "/marketing/trust" }
       },
       {
         type: "link",
-        id: "whats-new",
-        label: "מה חדש ב־AnyNanny",
+        id: "respect",
+        label: "כבוד והדדיות",
+        icon: "users",
+        destination: { kind: "href", href: "/marketing/respect" }
+      },
+      {
+        type: "link",
+        id: "preview",
+        label: "בואו נציץ פנימה",
         icon: "sparkles",
-        destination: { kind: "soon" }
-      },
-      {
-        type: "link",
-        id: "support",
-        label: "עזרה ותמיכה",
-        icon: "help",
-        destination: { kind: "href", href: SUPPORT_MAILTO }
+        destination: { kind: "href", href: "/marketing/preview" }
       }
     ]
+  },
+  {
+    type: "link",
+    id: "offers",
+    label: "ANYNANNY-מבצעים וקופונים",
+    icon: "sparkles",
+    tone: "offer",
+    destination: { kind: "soon" }
+  },
+  {
+    type: "link",
+    id: "app-entry",
+    label: "לכניסה ולהורדת האפליקציה",
+    icon: "app",
+    destination: { kind: "href", href: APP_ENTRY_HREF }
   }
 ];
 
@@ -210,7 +172,7 @@ export const SITE_NAV_DOWNLOADS: SiteNavLink[] = [
 export const DEFAULT_OPEN_NAV_IDS = [] as const;
 
 export function destinationHref(destination: SiteNavDestination): string | null {
-  if (destination.kind === "chapter") return `#${destination.chapterId}`;
+  if (destination.kind === "chapter") return storyChapterHref(destination.chapterId);
   if (destination.kind === "href") return destination.href;
   return null;
 }

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { memo, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import { classifySiteHost, classifySitePath, resolvePublicSiteHost, type SiteHostRole } from "@/lib/hosts/site-classifier";
 import { APP_SHELL_SCROLL_ID } from "@/lib/ui/app-shell";
 
 import { AppShellHeader } from "@/components/app-shell-header";
@@ -16,6 +17,7 @@ import { MarketingConsentPrompt } from "@/components/marketing/marketing-consent
 import { PushPermissionBanner } from "@/components/push/push-permission-banner";
 import { PushRuntime } from "@/components/push/push-runtime";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
+import { MarketingPortal } from "@/components/marketing/marketing-portal";
 import SessionProvider from "@/context/SessionContext";
 
 const CHROMELESS_PREFIXES = [
@@ -35,6 +37,7 @@ const CHROMELESS_PREFIXES = [
   "/babysitter",
   "/app",
   "/parents",
+  "/story",
   "/welcome",
   "/charter",
   "/sitter/onboarding"
@@ -78,20 +81,31 @@ const StableBottomNav = memo(BottomNav);
 // so /parent/broadcast → dashboard minimize can show the compact bar.
 
 
+export function isMarketingPortalPath(pathname: string, hostRole: SiteHostRole): boolean {
+  if (hostRole === "app" || hostRole === "apex") return false;
+  const kind = classifySitePath(pathname);
+  if (kind === "marketing") return true;
+  return kind === "entry" && hostRole === "www";
+}
+
 export function AppShellGate({
-  children
+  children,
+  siteHost = ""
 }: {
   children: ReactNode;
+  siteHost?: string;
 }) {
   const pathname = usePathname();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hostRole: SiteHostRole = classifySiteHost(resolvePublicSiteHost({ host: siteHost }));
+  const portal = isMarketingPortalPath(pathname, hostRole);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
   }, [pathname]);
 
   useEffect(() => {
-    if (isChromelessAuthPath(pathname)) return;
+    if (portal || isChromelessAuthPath(pathname)) return;
     const html = document.documentElement;
     const body = document.body;
     const previousHtml = html.style.overflow;
@@ -102,14 +116,14 @@ export function AppShellGate({
       html.style.overflow = previousHtml;
       body.style.overflow = previousBody;
     };
-  }, [pathname]);
+  }, [pathname, portal]);
 
   const chromeless = isChromelessAuthPath(pathname);
 
   /**
    * Auth / landing pages manage their own layout.
    */
-  if (chromeless) {
+  if (portal || chromeless) {
     return (
       <SessionProvider>
         <AppShellSessionHydration />
@@ -117,7 +131,7 @@ export function AppShellGate({
         <MarketingConsentPrompt />
 
         <RouteTransitionShell>
-          {children}
+          {portal ? <MarketingPortal>{children}</MarketingPortal> : children}
         </RouteTransitionShell>
       </SessionProvider>
     );

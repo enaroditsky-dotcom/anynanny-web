@@ -51,6 +51,10 @@ assert.equal(classifySitePath("/app"), "marketing");
 assert.equal(classifySitePath("/privacy"), "marketing");
 assert.equal(classifySitePath("/terms"), "marketing");
 assert.equal(classifySitePath("/delete-account"), "marketing");
+assert.equal(classifySitePath("/story"), "marketing");
+assert.equal(classifySitePath("/story/"), "marketing");
+assert.equal(classifySitePath("/story/extra"), "other");
+assert.equal(classifySitePath("/storybook"), "other");
 assert.equal(classifySitePath("/marketing/demo/index.html"), "marketing");
 assert.equal(classifySitePath("/application"), "other");
 assert.equal(classifySitePath("/parents-extra"), "other");
@@ -211,6 +215,29 @@ assert.deepEqual(appParents.serving, {
   location: "https://www.anynanny.org/parents?utm_source=ig"
 });
 
+const wwwStory = enabled("www.anynanny.org", "/story", "?utm_source=ig");
+assert.equal(wwwStory.pathKind, "marketing");
+assert.deepEqual(wwwStory.serving, { mode: "marketing" });
+assert.equal(wwwStory.search, "?utm_source=ig");
+assert.equal(domainSeparationRedirectTarget({
+  host: "www.anynanny.org",
+  pathname: "/story",
+  search: "?utm_source=ig",
+  domainSeparationEnabled: true
+}), null);
+
+const appStory = enabled("app.anynanny.org", "/story", "?utm_source=ig");
+assert.deepEqual(appStory.serving, {
+  mode: "redirect-to-www",
+  location: "https://www.anynanny.org/story?utm_source=ig"
+});
+assert.equal(domainSeparationRedirectTarget({
+  host: "app.anynanny.org",
+  pathname: "/story",
+  search: "?utm_source=ig",
+  domainSeparationEnabled: true
+}), "https://www.anynanny.org/story?utm_source=ig");
+
 const appCity = enabled("app.anynanny.org", "/babysitter/haifa");
 assert.deepEqual(appCity.serving, {
   mode: "redirect-to-www",
@@ -226,6 +253,13 @@ const appRecovery = enabled("app.anynanny.org", "/", "?type=recovery&code=abc");
 assert.equal(appRecovery.authCallback, true);
 assert.deepEqual(appRecovery.serving, { mode: "auth" });
 assert.equal(appRecovery.search, "?type=recovery&code=abc");
+
+const apexStory = enabled("anynanny.org", "/story");
+assert.equal(apexStory.hostRole, "apex");
+assert.deepEqual(apexStory.serving, {
+  mode: "redirect-to-www",
+  location: "https://www.anynanny.org/story"
+});
 
 const apexParents = enabled("anynanny.org", "/parents", "?utm_source=ig");
 assert.equal(apexParents.hostRole, "apex");
@@ -419,7 +453,8 @@ assert.match(home, /resolveRootEntry/);
 assert.match(home, /DOMAIN_SEPARATION_ENABLED/);
 assert.match(home, /WWW_MARKETING_ROOT_ENABLED/);
 assert.match(home, /ApplicationHomePage/);
-assert.match(home, /MarketingHomePage/);
+assert.match(home, /ConversionHome/);
+assert.doesNotMatch(home, /MarketingHomePage/);
 assert.doesNotMatch(home, /DOMAIN_SEPARATION_ENABLED\s*=\s*true/);
 assert.doesNotMatch(home, /WWW_MARKETING_ROOT_ENABLED\s*=\s*true/);
 assert.doesNotMatch(home, /userAgent|user-agent|WebView/);

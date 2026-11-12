@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MARKETING_CHAPTERS } from "../lib/marketing/chapters";
+import { MARKETING_CHAPTERS, storyChapterHref } from "../lib/marketing/chapters";
 import {
   MARKETING_APP,
   MARKETING_HERO,
@@ -51,6 +51,10 @@ const page = read("app/page.tsx");
 
 for (const chapter of MARKETING_CHAPTERS) {
   assert.match(`${home}\n${demo}`, new RegExp(`id="${chapter.id}"`));
+  assert.equal(
+    destinationHref({ kind: "chapter", chapterId: chapter.id }),
+    storyChapterHref(chapter.id)
+  );
 }
 
 assert.equal(MARKETING_HERO.appCta, "כניסה לאפליקציה");
@@ -68,11 +72,18 @@ assert.match(home, /href=\{openAppHref\}/);
 assert.equal(DEFAULT_OPEN_NAV_IDS.length, 0);
 assert.match(siteNav, /DEFAULT_OPEN_NAV_IDS = \[\]/);
 assert.match(sidebar, /DEFAULT_OPEN_NAV_IDS/);
-assert.match(home, /useState\(false\)/);
+assert.match(read("components/marketing/marketing-portal.tsx"), /useState\(false\)/);
 assert.doesNotMatch(home, /href="\/login"|href="\/register"|router\.push/);
 assert.doesNotMatch(read("components/marketing/marketing-header.tsx"), /href="\/login"|\/auth\/login/);
 assert.doesNotMatch(mobile, /href="\/login"|APP_LOGIN_HREF|\/auth\/login/);
 assert.match(page, /if \(!marketingRootActive\(\)\) return <ApplicationHomePage \/>/);
+assert.match(page, /ConversionHome/);
+assert.doesNotMatch(page, /MarketingHomePage/);
+assert.match(read("app/story/page.tsx"), /MarketingHomePage/);
+assert.match(sidebar, /href="\/"/);
+assert.match(read("components/marketing/marketing-portal.tsx"), /storyChapterHref/);
+assert.match(read("components/marketing/marketing-header.tsx"), /storyChapterHref\("home"\)/);
+assert.match(read("components/app-shell-gate.tsx"), /"\/story"/);
 assert.equal(APP_ENTRY_HREF, "/app");
 assert.match(read("app/app/page.tsx"), /AppLanding|app-landing|APP_LANDING/);
 
@@ -93,14 +104,19 @@ for (const filename of [
 }
 
 const soon = collectDestinations(SITE_NAV_ITEMS).filter((destination) => destination.kind === "soon");
-assert.ok(soon.length >= 4);
-for (const destination of soon) {
-  assert.equal(destinationHref(destination), null);
-}
-assert.match(siteNav, /פורום AnyNanny/);
-assert.match(siteNav, /AnyNanny Marketplace/);
-const findBabysitterNav = SITE_NAV_ITEMS[0];
-const babysitterWorkNav = SITE_NAV_ITEMS[1];
+assert.equal(soon.length, 1);
+assert.equal(destinationHref(soon[0]), null);
+assert.doesNotMatch(JSON.stringify(SITE_NAV_ITEMS), /פורום AnyNanny|AnyNanny Marketplace|קהילת AnyNanny|מגזין/);
+const findBabysitterNav = SITE_NAV_ITEMS.find((item) => item.id === "find-babysitter");
+const babysitterWorkNav = SITE_NAV_ITEMS.find((item) => item.id === "babysitter-work");
+const homeNav = SITE_NAV_ITEMS.find((item) => item.id === "home");
+const appNav = SITE_NAV_ITEMS.find((item) => item.id === "app-entry");
+const offersNav = SITE_NAV_ITEMS.find((item) => item.id === "offers");
+const exploreNav = SITE_NAV_ITEMS.find((item) => item.id === "explore");
+assert.deepEqual(
+  homeNav?.type === "link" ? { label: homeNav.label, destination: homeNav.destination } : null,
+  { label: "דף הבית", destination: { kind: "href", href: "/" } }
+);
 assert.deepEqual(
   findBabysitterNav?.type === "link"
     ? { label: findBabysitterNav.label, destination: findBabysitterNav.destination }
@@ -113,7 +129,28 @@ assert.deepEqual(
     : null,
   { label: "עבודה כבייביסיטרית", destination: { kind: "href", href: "/babysitter" } }
 );
+assert.equal(appNav?.type === "link" ? appNav.label : "", "לכניסה ולהורדת האפליקציה");
+assert.deepEqual(appNav?.type === "link" ? appNav.destination : null, { kind: "href", href: "/app" });
+assert.equal(offersNav?.type === "link" ? offersNav.label : "", "ANYNANNY-מבצעים וקופונים");
+assert.equal(offersNav?.type === "link" ? offersNav.tone : "", "offer");
+assert.equal(offersNav?.type === "link" ? destinationHref(offersNav.destination) : "linked", null);
+assert.equal(exploreNav?.type, "accordion");
+assert.deepEqual(
+  exploreNav?.type === "accordion"
+    ? exploreNav.children.map((child) => (child.type === "link" ? child.destination : null))
+    : [],
+  [
+    { kind: "href", href: "/story" },
+    { kind: "href", href: "/marketing/trust" },
+    { kind: "href", href: "/marketing/respect" },
+    { kind: "href", href: "/marketing/preview" }
+  ]
+);
 assert.doesNotMatch(sidebar, /play\.google\.com|apps\.apple\.com/);
+assert.doesNotMatch(sidebar, /כניסה לאפליקציה/);
+assert.match(read("components/marketing/marketing-press.css"), /scale\(0\.97\)/);
+assert.match(read("components/marketing/marketing-press.css"), /prefers-reduced-motion/);
+assert.match(read("components/marketing/marketing-portal.tsx"), /data-marketing-portal/);
 const iphoneDownload = SITE_NAV_DOWNLOADS.find((item) => item.id === "download-iphone");
 const androidDownload = SITE_NAV_DOWNLOADS.find((item) => item.id === "download-android");
 assert.equal(iphoneDownload?.destination.kind, "href");
@@ -152,7 +189,7 @@ assert.match(read("app/delete-account/page.tsx"), /canonical: absoluteSiteUrl\("
 const robots = buildPublicRobots();
 assert.equal(robots.sitemap, "https://www.anynanny.org/sitemap.xml");
 const urls = buildPublicSitemap().map((entry) => entry.url);
-for (const path of ["/", "/parents", "/babysitter", "/jobs/students", "/app", "/privacy", "/terms", "/delete-account"]) {
+for (const path of ["/", "/story", "/parents", "/babysitter", "/jobs/students", "/app", "/privacy", "/terms", "/delete-account"]) {
   assert.equal(urls.includes(`https://www.anynanny.org${path === "/" ? "/" : path}`), true, path);
 }
 assert.equal(urls.some((url) => url.includes("/parent/")), false);

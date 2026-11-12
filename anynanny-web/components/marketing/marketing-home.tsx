@@ -12,19 +12,18 @@ import {
   MARKETING_SLOGAN,
   MARKETING_TOGETHER
 } from "@/lib/marketing/copy";
-import type { MarketingChapterId } from "@/lib/marketing/chapters";
+import { storyChapterHref, type MarketingChapterId } from "@/lib/marketing/chapters";
 import { storyLoginHref } from "@/lib/marketing/story-entry";
 import { ANYNANNY_SUPPORT_EMAIL } from "@/lib/legal/contact";
 import { MarketingHeartButton } from "@/components/marketing/marketing-heart";
-import { MarketingHeader, MarketingAccountChoices } from "@/components/marketing/marketing-header";
-import { MarketingSidebar } from "@/components/marketing/marketing-sidebar";
+import { MarketingAccountChoices } from "@/components/marketing/marketing-header";
 import { MarketingMobileActions } from "@/components/marketing/marketing-mobile-actions";
 import { StoryAppDemo } from "@/components/marketing/story-app-demo";
 import { StoryCharterDialogs } from "@/components/marketing/story-charter-dialogs";
 import { StoryOrnament } from "@/components/marketing/story-ornament";
 import { STORY_FONT_FILES } from "@/components/marketing/story-rubik";
 import { useChapterNavigation } from "@/components/marketing/use-chapter-navigation";
-import { Fragment, useCallback, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import styles from "./marketing-home.module.css";
 
 function Paragraphs({ texts }: { texts: readonly string[] }) {
@@ -171,23 +170,16 @@ export function MarketingHome({
 }) {
   const { activeId, goToChapter } = useChapterNavigation();
   const [joinAction, setJoinAction] = useState<"login" | "register" | null>("register");
-  const [navOpen, setNavOpen] = useState(false);
-  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
-  const closeNav = useCallback(() => setNavOpen(false), []);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("anynanny-active-chapter", { detail: activeId }));
+  }, [activeId]);
 
   return (
-    <div className={styles.page} dir="rtl">
+    <div dir="rtl">
       {STORY_FONT_FILES.map((href) => (
         <link key={href} rel="preload" href={href} as="font" type="font/ttf" crossOrigin="anonymous" />
       ))}
-      <MarketingSidebar
-        open={navOpen}
-        onClose={closeNav}
-        activeChapterId={activeId}
-        onChapter={(id) => goToChapter(id)}
-        campaignSearch={campaignSearch}
-      />
-      <div className={styles.contentColumn}>
       <aside className={styles.appMoveNotice} data-app-move-notice>
         <div className={styles.appMoveNoticeCopy}>
           <p className={styles.appMoveNoticeTitle}>מחפשים את אפליקציית AnyNanny?</p>
@@ -198,17 +190,10 @@ export function MarketingHome({
             </strong>
           </p>
         </div>
-        <a className={styles.appMoveNoticeButton} href={openAppHref}>
+        <a className={styles.appMoveNoticeButton} href={openAppHref} data-press="">
           כניסה לאפליקציה
         </a>
       </aside>
-      <MarketingHeader
-        navOpen={navOpen}
-        onToggleNav={() => setNavOpen((current) => !current)}
-        menuButtonRef={menuButtonRef}
-        onHome={() => goToChapter("home")}
-        loginHref={openAppHref}
-      />
 
       <main className={styles.main}>
         <section id="home" className={styles.heroStage} aria-labelledby="home-heading">
@@ -228,6 +213,7 @@ export function MarketingHome({
               href={openAppHref}
               className={styles.heroCtaHotspot}
               aria-label={MARKETING_HERO.appCta}
+              data-press=""
             >
               <span className={styles.heroHeading}>{MARKETING_HERO.appCta}</span>
             </a>
@@ -248,8 +234,9 @@ export function MarketingHome({
           actions={
             <div className={styles.openingActions}>
               <a
-                href="#parents"
+                href={storyChapterHref("parents")}
                 className={`${styles.openingCta} ${styles.openingCtaNavy}`}
+                data-press=""
                 onClick={(event) => {
                   event.preventDefault();
                   goToChapter("parents");
@@ -258,8 +245,9 @@ export function MarketingHome({
                 {MARKETING_ABOUT.parentCta}
               </a>
               <a
-                href="#sitters"
+                href={storyChapterHref("sitters")}
                 className={`${styles.openingCta} ${styles.openingCtaGreen}`}
+                data-press=""
                 onClick={(event) => {
                   event.preventDefault();
                   goToChapter("sitters");
@@ -283,7 +271,7 @@ export function MarketingHome({
           artAlt={MARKETING_FOUNDER.artAlt}
           actions={
             <div className={styles.openingActions}>
-              <a href={openAppHref} className={`${styles.openingCta} ${styles.openingCtaNavy}`}>
+              <a href={openAppHref} className={`${styles.openingCta} ${styles.openingCtaNavy}`} data-press="">
                 {MARKETING_FOUNDER.loginCta}
               </a>
             </div>
@@ -420,7 +408,7 @@ export function MarketingHome({
               >
                 {MARKETING_TOGETHER.registerLabel}
               </button>
-              <a href={openAppHref} className={`${styles.joinButton} ${styles.joinSecondary}`}>
+              <a href={openAppHref} className={`${styles.joinButton} ${styles.joinSecondary}`} data-press="">
                 {MARKETING_TOGETHER.loginLabel}
               </a>
             </div>
@@ -451,7 +439,6 @@ export function MarketingHome({
         loginHref={storyLoginHref(campaignSearch)}
         campaignSearch={campaignSearch}
       />
-      </div>
     </div>
   );
 }
