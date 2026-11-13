@@ -386,7 +386,7 @@ function NavLeafRow({
   const destination = item.destination;
   if (item.tone === "offer") {
     return (
-      <div className={styles.sidebarOffer} aria-disabled="true">
+      <div className={styles.sidebarOffer} aria-disabled="true" data-press="">
         <span className={styles.sidebarOfferGlow} aria-hidden="true" />
         <Gift aria-hidden className={styles.sidebarOfferIcon} />
         <span className={styles.sidebarOfferLabel}>{item.label}</span>

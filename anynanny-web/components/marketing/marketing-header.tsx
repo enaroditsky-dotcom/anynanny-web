@@ -75,6 +75,11 @@ export function MarketingHeader({
           </button>
         </div>
       </div>
+      <p className={styles.headerSlogan}>
+        <span className={styles.headerSloganMotion}>
+          <span className={styles.headerSloganText}>פשוט למצוא זמן לחיים!</span>
+        </span>
+      </p>
     </header>
   );
 }

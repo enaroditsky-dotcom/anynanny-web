@@ -6,7 +6,7 @@ import { Heebo } from "next/font/google";
  */
 export const sidebarHeebo = Heebo({
   subsets: ["hebrew", "latin"],
-  weight: ["400", "700", "800"],
+  weight: ["400", "700", "800", "900"],
   display: "swap",
   variable: "--font-sidebar-heebo",
   fallback: ["Arial", "sans-serif"]

@@ -34,6 +34,22 @@
   margin: 0 auto;
 }
 
+.doodleWash,
+.familyHero,
+.familyFooter {
+  display: none;
+}
+
+.cloudTilt,
+.cloudBody {
+  display: contents;
+}
+
+.cloudShape,
+.cloudIcon {
+  display: none;
+}
+
 .stage {
   position: relative;
   flex: 1 1 auto;
@@ -61,42 +77,57 @@
 }
 
 .downloads {
-  position: absolute;
+  position: relative;
   z-index: 3;
-  right: 0.75rem;
-  bottom: 0.55rem;
+  order: 2;
+  align-self: center;
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  max-width: calc(100% - 1.5rem);
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 1rem;
+  max-width: calc(100% - 2rem);
+  margin: 0.4rem auto 0.9rem;
 }
 
 .storeLink,
 .androidLink {
   display: inline-flex;
   align-items: center;
-  min-height: 2.625rem;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 3.75rem;
   text-decoration: none;
 }
 
 .storeLink img {
   display: block;
-  height: 2.45rem;
+  height: 3.75rem;
   width: auto;
+  object-fit: contain;
 }
 
 .androidLink {
-  gap: 0.4rem;
-  padding: 0.2rem 0.65rem 0.2rem 0.55rem;
-  border-radius: 0.55rem;
-  background: #001f3f;
   color: #fff;
-  box-shadow: 0 8px 16px rgba(0, 31, 63, 0.16);
 }
 
-.androidLink svg {
-  width: 1.15rem;
-  height: 1.15rem;
+.androidFace {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 13.125rem;
+  height: 3.75rem;
+  gap: 0.5rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 0.75rem;
+  background: #001f3f;
+  box-shadow: 0 10px 18px rgba(0, 31, 63, 0.16);
+}
+
+.androidFace svg {
+  width: 1.55rem;
+  height: 1.55rem;
   flex-shrink: 0;
   fill: currentColor;
 }
@@ -108,41 +139,14 @@
 }
 
 .androidTitle {
-  font-size: 0.78rem;
+  font-size: 1.02rem;
   font-weight: 800;
 }
 
 .androidNote {
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 500;
   opacity: 0.82;
-}
-
-@media (min-width: 64rem) and (max-height: 780px) {
-  .downloads {
-    bottom: 0.3rem;
-  }
-
-  .storeLink,
-  .androidLink {
-    min-height: 1.9rem;
-  }
-
-  .storeLink img {
-    height: 1.9rem;
-  }
-
-  .androidLink {
-    padding-block: 0.08rem;
-  }
-
-  .androidTitle {
-    font-size: 0.7rem;
-  }
-
-  .androidNote {
-    font-size: 0.58rem;
-  }
 }
 
 .welcomeTitle,
@@ -204,26 +208,14 @@
 }
 
 .cloud:hover .cloudFront,
-.cloud:focus-visible .cloudFront {
-  opacity: 1;
-  transform: translateY(-7px) scale(1.03);
-  box-shadow: 0 16px 22px rgba(42, 74, 52, 0.18);
-}
-
+.cloud:focus-visible .cloudFront,
+.cloud:active .cloudFront,
 .cloud:hover .cloudRear,
-.cloud:focus-visible .cloudRear {
-  opacity: 0.95;
-  transform: translateY(6px) scale(0.98);
-}
-
-.cloud:active .cloudFront {
-  opacity: 1;
-  transform: translateY(-13px) scale(1.04);
-}
-
+.cloud:focus-visible .cloudRear,
 .cloud:active .cloudRear {
-  opacity: 1;
-  transform: translateY(12px) scale(0.94);
+  opacity: 0;
+  transform: none;
+  box-shadow: none;
 }
 
 .cloud:focus-visible {
@@ -294,11 +286,79 @@
   .screen {
     height: auto;
     min-height: 0;
-    background-color: #f4f7ef;
+    overflow-x: clip;
+    background-color: #f6f3ea;
     background-image:
       radial-gradient(circle at 8% 6%, rgba(190, 216, 178, 0.55), transparent 26%),
       radial-gradient(circle at 94% 16%, rgba(196, 218, 236, 0.5), transparent 24%),
       radial-gradient(circle at 78% 96%, rgba(214, 228, 196, 0.45), transparent 28%);
+  }
+
+  .doodleWash {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: url("/brand/%D7%98%D7%A4%D7%98%20%D7%AA%D7%99%D7%A0%D7%95%D7%A7%D7%95%D7%AA%20%D7%99%D7%A8%D7%95%D7%A7%20%D7%A4%D7%A1%D7%98%D7%9C%D7%99%20doodle.png");
+    background-repeat: repeat;
+    background-size: 28rem auto;
+    opacity: 0.2;
+  }
+
+  .familyHero,
+  .familyFooter {
+    display: flex;
+    gap: 0.2rem;
+    height: 8.6rem;
+    margin-inline: -0.9rem;
+    pointer-events: none;
+  }
+
+  .familyHero {
+    margin-top: -0.55rem;
+    margin-bottom: 0.15rem;
+  }
+
+  .familyFooter {
+    height: 9.1rem;
+    margin-top: 0.35rem;
+    margin-bottom: 0.15rem;
+  }
+
+  .familyShotLeft,
+  .familyShotRight,
+  .familyFootLeft,
+  .familyFootRight {
+    flex: 1 1 50%;
+    min-width: 0;
+    background-image: url("/brand/anynanny-family-collage-clean.png");
+    background-repeat: no-repeat;
+    background-size: 248% auto;
+  }
+
+  .familyShotLeft {
+    background-position: 0% 10%;
+    -webkit-mask-image: radial-gradient(125% 120% at 0% 0%, #000 42%, transparent 76%);
+    mask-image: radial-gradient(125% 120% at 0% 0%, #000 42%, transparent 76%);
+  }
+
+  .familyShotRight {
+    background-position: 100% 0%;
+    -webkit-mask-image: radial-gradient(125% 120% at 100% 0%, #000 44%, transparent 78%);
+    mask-image: radial-gradient(125% 120% at 100% 0%, #000 44%, transparent 78%);
+  }
+
+  .familyFootLeft {
+    background-position: 2% 100%;
+    -webkit-mask-image: radial-gradient(130% 125% at 0% 100%, #000 46%, transparent 80%);
+    mask-image: radial-gradient(130% 125% at 0% 100%, #000 46%, transparent 80%);
+  }
+
+  .familyFootRight {
+    background-position: 100% 100%;
+    -webkit-mask-image: radial-gradient(130% 125% at 100% 100%, #000 46%, transparent 80%);
+    mask-image: radial-gradient(130% 125% at 100% 100%, #000 46%, transparent 80%);
   }
 
   .main {
@@ -310,11 +370,25 @@
 
   .logo {
     display: block;
+    order: 2;
+    margin-top: 0.15rem;
   }
 
   .logoImage {
     width: min(14.75rem, 68%);
-    margin: 0.1rem auto 0;
+    margin: 0 auto;
+  }
+
+  .familyHero {
+    order: 4;
+  }
+
+  .stage {
+    order: 3;
+  }
+
+  .familyFooter {
+    order: 5;
   }
 
   .stage {
@@ -365,22 +439,57 @@
 
   .cloudRear,
   .cloudFront {
+    display: none;
+  }
+
+  .cloudTilt {
     display: block;
-    opacity: 1;
-    filter: none;
-    transform: none;
+    position: relative;
+    transform: rotate(var(--tilt, 0deg));
+    transition: transform 180ms ease, filter 180ms ease;
   }
 
-  .cloudRear {
-    inset: 0;
-    background: #fffdf8;
-    box-shadow: 0 8px 16px rgba(42, 74, 52, 0.08);
+  .cloudShape {
+    display: block;
+    position: absolute;
+    inset: -12% -4% -14%;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    pointer-events: none;
+    filter: drop-shadow(0 9px 10px rgba(42, 74, 52, 0.15));
   }
 
-  .cloudFront {
-    inset: 10% 8% auto;
-    height: 42%;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0));
+  .cloudShade {
+    fill: var(--cloud-shade, #d5e4c8);
+  }
+
+  .cloudFill {
+    fill: var(--cloud-fill, #f7fbf3);
+  }
+
+  .cloudSheen {
+    fill: #fff;
+    opacity: 0.55;
+  }
+
+  .cloudBody {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 3.35rem;
+    padding: 1.05rem 1.05rem 1.15rem;
+  }
+
+  .cloudIcon {
+    display: block;
+    width: 1.15rem;
+    height: 1.15rem;
+    flex-shrink: 0;
+    color: var(--cloud-accent, #2f6f4a);
   }
 
   .cloud {
@@ -389,8 +498,8 @@
     top: auto;
     width: auto;
     height: auto;
-    min-height: 3rem;
-    padding: 0.8rem 1.05rem;
+    min-height: 0;
+    padding: 0.15rem 0;
     color: #001f3f;
     background: transparent;
     box-sizing: border-box;
@@ -399,147 +508,155 @@
   .cloudLabel {
     display: block;
     overflow: visible;
+    font-size: 0.98rem;
+    font-weight: 800;
     line-height: 1.35;
     white-space: normal;
   }
 
-  .cloud:hover,
-  .cloud:hover .cloudFront,
-  .cloud:hover .cloudRear,
-  .cloud:focus-visible .cloudFront,
-  .cloud:focus-visible .cloudRear,
-  .cloud:active .cloudFront,
-  .cloud:active .cloudRear {
-    transform: none;
-    opacity: 1;
+  .cloud:hover .cloudTilt {
+    transform: rotate(var(--tilt, 0deg)) translateY(-3px);
+    filter: brightness(1.03);
   }
 
-  .cloud:active {
-    transform: scale(0.97);
-  }
-
-  .cloud:active .cloudRear {
-    box-shadow: inset 0 2px 7px rgba(0, 31, 63, 0.14);
+  .cloud:active .cloudTilt {
+    transform: rotate(var(--tilt, 0deg)) scale(0.975) translateY(1px);
+    filter: brightness(0.97);
   }
 
   .meet {
+    --tilt: -1.2deg;
+    --cloud-fill: #e7f4ff;
+    --cloud-shade: #b7d4ee;
+    --cloud-accent: #2d6f9c;
     align-self: flex-end;
-    width: 94%;
-    margin: 0;
-    border-radius: 48% 52% 46% 54% / 58% 46% 54% 42%;
-  }
-
-  .meet .cloudRear {
-    background: #f3faf1;
+    width: 93%;
+    margin: 0.15rem 0 0;
   }
 
   .life {
+    --tilt: 1.35deg;
+    --cloud-fill: #fff6d6;
+    --cloud-shade: #ead28a;
+    --cloud-accent: #c48912;
     align-self: flex-start;
-    width: 84%;
-    margin: 0;
-    border-radius: 54% 46% 52% 48% / 46% 58% 42% 54%;
-  }
-
-  .life .cloudRear {
-    background: #f4f8fd;
+    width: 78%;
+    margin-block: 0.35rem 0;
+    margin-inline-start: 0.15rem;
   }
 
   .trust {
-    align-self: flex-end;
-    width: 90%;
-    margin: 0;
-    border-radius: 46% 54% 50% 50% / 52% 44% 56% 48%;
-  }
-
-  .trust .cloudRear {
-    background: #fffaf3;
+    --tilt: -0.7deg;
+    --cloud-fill: #fde9f1;
+    --cloud-shade: #e4c0ce;
+    --cloud-accent: #b85a78;
+    align-self: center;
+    width: 86%;
+    margin: 0.45rem 0 0;
   }
 
   .parents {
+    --tilt: 1.05deg;
+    --cloud-fill: #e7f6ea;
+    --cloud-shade: #b7d8be;
+    --cloud-accent: #2f8a46;
     align-self: flex-start;
-    width: 88%;
-    margin: 0;
-    border-radius: 52% 48% 44% 56% / 48% 56% 44% 52%;
-  }
-
-  .parents .cloudRear {
-    background: #f1f8f2;
+    width: 90%;
+    margin-block: 0.2rem 0;
+    margin-inline-end: 0.15rem;
   }
 
   .sitters {
+    --tilt: -1.05deg;
+    --cloud-fill: #f3eafc;
+    --cloud-shade: #d4c4ea;
+    --cloud-accent: #7454a8;
     align-self: flex-end;
-    width: 96%;
-    margin: 0;
-    border-radius: 44% 56% 50% 50% / 56% 44% 52% 48%;
-  }
-
-  .sitters .cloudRear {
-    background: #f8fbf3;
+    width: 97%;
+    margin: 0.35rem 0 0;
   }
 
   .peek {
-    align-self: flex-start;
-    width: 80%;
-    margin: 0;
-    border-radius: 50% 50% 46% 54% / 44% 56% 48% 52%;
-  }
-
-  .peek .cloudRear {
-    background: #f3faf8;
+    --tilt: 0.85deg;
+    --cloud-fill: #e8f8df;
+    --cloud-shade: #bdd9ae;
+    --cloud-accent: #3d9442;
+    align-self: center;
+    width: 72%;
+    margin: 0.15rem 0 0;
   }
 
   .respect {
-    align-self: flex-end;
+    --tilt: -1.3deg;
+    --cloud-fill: #e6f2fb;
+    --cloud-shade: #b9d4ea;
+    --cloud-accent: #356fa6;
+    align-self: flex-start;
     width: 92%;
-    margin: 0;
-    border-radius: 56% 44% 52% 48% / 50% 46% 54% 50%;
-  }
-
-  .respect .cloudRear {
-    background: #eef6fb;
+    margin-block: 0.4rem 0.1rem;
+    margin-inline-start: 0.1rem;
   }
 
   .downloads {
     position: static;
-    right: auto;
-    bottom: auto;
-    align-self: stretch;
+    order: 1;
+    align-self: center;
     justify-content: center;
-    flex-wrap: wrap;
-    gap: 0.55rem;
-    margin-top: 0.35rem;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+    width: auto;
+    max-width: 100%;
+    margin: 0.15rem auto 0;
   }
 
   .storeLink,
   .androidLink {
-    min-height: 3rem;
-    justify-content: center;
+    min-height: 2.75rem;
+    height: auto;
+    padding: 0.45rem 0.1rem;
   }
 
   .storeLink img {
-    height: 2.6rem;
+    height: 1.625rem;
+    width: auto;
+    object-fit: contain;
   }
 
-  .androidLink {
-    padding-block: 0.35rem;
-  }
-}
-
-@media (max-width: 23.75rem) {
-  .downloads {
-    flex-direction: column;
-    align-items: center;
+  .androidFace {
+    width: auto;
+    height: 1.625rem;
+    gap: 0.22rem;
+    padding: 0.05rem 0.42rem;
+    border-radius: 0.4rem;
+    box-shadow: 0 4px 8px rgba(0, 31, 63, 0.14);
   }
 
-  .androidLink {
-    width: min(100%, 18.5rem);
+  .androidFace svg {
+    width: 0.78rem;
+    height: 0.78rem;
+  }
+
+  .androidTitle,
+  .androidNote {
+    white-space: nowrap;
+  }
+
+  .androidTitle {
+    font-size: 0.68rem;
+    line-height: 1.05;
+  }
+
+  .androidNote {
+    font-size: 0.5rem;
+    line-height: 1.05;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .cloud,
   .cloudRear,
-  .cloudFront {
+  .cloudFront,
+  .cloudTilt {
     transition: none;
   }
 
@@ -550,7 +667,9 @@
   .cloud:focus-visible .cloudFront,
   .cloud:hover .cloudRear,
   .cloud:active .cloudRear,
-  .cloud:focus-visible .cloudRear {
+  .cloud:focus-visible .cloudRear,
+  .cloud:hover .cloudTilt,
+  .cloud:active .cloudTilt {
     transform: none;
   }
 }
