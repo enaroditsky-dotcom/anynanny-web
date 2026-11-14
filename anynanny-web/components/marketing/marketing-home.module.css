@@ -76,7 +76,11 @@
   flex: 0 1 auto;
 }
 
-.headerBrand :global(span) {
+.headerLockup {
+  display: none;
+}
+
+.headerBrand > :global(span):first-child {
   width: 8.1rem !important;
   max-width: min(8.1rem, 42vw);
 }
@@ -160,27 +164,28 @@
   }
 }
 
-@media (max-width: 430px) {
+@media (max-width: 480px) {
   .headerInner {
     min-height: 3.55rem;
-    padding: 0.3rem 0.7rem;
-    gap: 0.4rem;
+    padding: 0.28rem 0.55rem;
+    gap: 0.35rem;
   }
 
-  .headerBrand :global(span) {
-    width: 6.35rem !important;
-    max-width: min(6.35rem, 38vw);
+  .headerBrand {
+    flex: 0 1 auto;
+  }
+
+  .headerBrand > :global(span):first-child {
+    width: 8.55rem !important;
+    max-width: min(8.55rem, 44vw);
   }
 
   .headerBrand :global(img) {
-    max-height: 2.15rem;
+    max-height: none;
   }
 
-  .menuButton,
-  .accountButton {
-    min-height: 2.2rem;
-    padding: 0.22rem 0.7rem;
-    font-size: 0.82rem;
+  .headerActions {
+    gap: 0.28rem;
   }
 }
 
@@ -216,6 +221,109 @@ a.joinButton {
 .menuButtonIcon {
   width: 1.15rem;
   height: 1.15rem;
+}
+
+.headerControlFace {
+  display: contents;
+}
+
+@media (max-width: 480px) {
+  .menuButton,
+  .accountButton {
+    min-height: 2.75rem;
+    padding: 0.2rem 0;
+    border-color: transparent;
+    background: transparent;
+    font-size: 0.72rem;
+  }
+
+  .headerControlFace {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    min-height: 1.75rem;
+    padding: 0.08rem 0.38rem;
+    border: 1px solid rgba(0, 31, 63, 0.16);
+    border-radius: 999px;
+    background: #fff;
+    line-height: 1.1;
+    text-align: center;
+  }
+
+  .accountButton .headerControlFace {
+    max-width: 4.55rem;
+    white-space: normal;
+  }
+
+  .headerBrand > :global(span):first-child {
+    display: none !important;
+  }
+
+  .headerLockup {
+    display: block;
+    position: relative;
+    width: min(9.2rem, calc(100vw - 12rem));
+    aspect-ratio: 1818 / 554;
+    overflow: hidden;
+  }
+
+  .headerLockup img {
+    position: absolute;
+    width: 119.472%;
+    max-width: none;
+    height: auto;
+    left: -11.551%;
+    top: -15.523%;
+  }
+
+  .headerInner {
+    min-height: 4.05rem;
+  }
+
+  .menuButtonIcon {
+    width: 0.82rem;
+    height: 0.82rem;
+  }
+}
+
+@media (max-width: 63.99rem) {
+  .headerSlogan {
+    display: none;
+  }
+
+  .headerInner {
+    position: relative;
+    justify-content: space-between;
+    min-height: 3.65rem;
+  }
+
+  .headerBrand {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 1;
+    transform: translate(-50%, -50%);
+  }
+
+  .headerBrand > :global(span):first-child {
+    width: min(7.6rem, calc(100vw - 15rem)) !important;
+    max-width: none !important;
+  }
+
+  .headerBrand :global(img) {
+    max-height: none;
+  }
+
+  .headerActions {
+    display: contents;
+  }
+
+  .menuButton,
+  .accountButton {
+    position: relative;
+    z-index: 2;
+  }
 }
 
 .contentColumn {

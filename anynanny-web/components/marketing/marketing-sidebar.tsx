@@ -20,6 +20,7 @@ import {
   X
 } from "lucide-react";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
+import { AnyNannyRobotIcon } from "@/components/brand/anynanny-robot-icon";
 import { type MarketingChapterId } from "@/lib/marketing/chapters";
 import {
   COMING_SOON_LABEL,
@@ -35,7 +36,7 @@ import {
 import { sidebarHeebo } from "@/components/marketing/sidebar-heebo";
 import styles from "./marketing-home.module.css";
 
-const ICONS: Record<Exclude<SiteNavIconName, "android" | "iphone">, LucideIcon> = {
+const ICONS: Record<Exclude<SiteNavIconName, "android" | "iphone" | "robot">, LucideIcon> = {
   home: House,
   globe: Globe,
   app: LayoutGrid,
@@ -54,6 +55,7 @@ const ICONS: Record<Exclude<SiteNavIconName, "android" | "iphone">, LucideIcon> 
 
 function NavGlyph({ name }: { name: SiteNavIconName }) {
   if (name === "iphone" || name === "android") return null;
+  if (name === "robot") return <AnyNannyRobotIcon className={styles.sidebarIcon} />;
   const Icon = ICONS[name];
   return <Icon aria-hidden className={styles.sidebarIcon} />;
 }
@@ -68,14 +70,9 @@ function nodeMatchesQuery(node: SiteNavNode, query: string): boolean {
 }
 
 const OFFICIAL_ANNY_SRC = "/brand/AnyNanny%20logo%20new.png";
-const EXPLORE_PATHS = ["/story", "/marketing/trust", "/marketing/respect", "/marketing/preview"];
 
-function initialOpenIds(activePath: string): Record<string, boolean> {
-  const open: Record<string, boolean> = Object.fromEntries(DEFAULT_OPEN_NAV_IDS.map((id) => [id, true]));
-  if (EXPLORE_PATHS.some((path) => activePath === path || activePath.startsWith(`${path}/`))) {
-    open.explore = true;
-  }
-  return open;
+function initialOpenIds(): Record<string, boolean> {
+  return Object.fromEntries(DEFAULT_OPEN_NAV_IDS.map((id) => [id, true]));
 }
 
 export function MarketingSidebar({
@@ -98,7 +95,7 @@ export function MarketingSidebar({
   const searchButtonRef = useRef<HTMLButtonElement | null>(null);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [openIds, setOpenIds] = useState<Record<string, boolean>>(() => initialOpenIds(activePath));
+  const [openIds, setOpenIds] = useState<Record<string, boolean>>(() => initialOpenIds());
   const [isCompact, setIsCompact] = useState(false);
   const normalizedQuery = query.trim().toLowerCase();
   const showSearchField = searchOpen || Boolean(normalizedQuery);
@@ -146,11 +143,6 @@ export function MarketingSidebar({
       if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
     };
   }, [open, isCompact, onClose]);
-
-  useEffect(() => {
-    if (!EXPLORE_PATHS.some((path) => activePath === path || activePath.startsWith(`${path}/`))) return;
-    setOpenIds((current) => (current.explore ? current : { ...current, explore: true }));
-  }, [activePath]);
 
   const toggleOpen = (id: string) => {
     setOpenIds((current) => ({ ...current, [id]: !current[id] }));

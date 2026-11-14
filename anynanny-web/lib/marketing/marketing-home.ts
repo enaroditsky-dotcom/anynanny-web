@@ -5,6 +5,11 @@ export const MARKETING_HOME_CANONICAL = `${SITE_URL}/`;
 
 export const MARKETING_HOME_TITLE = "צריכים בייביסיטר? מחפשים עבודה? | AnyNanny";
 
+export const MARKETING_HOME_H1 = "AnyNanny — בייביסיטריות ומטפלות לילדים";
+
+export const MARKETING_HOME_SUPPORT =
+  "מחפשים בייביסיטרית או מטפלת לילדים? ב־AnyNanny תוכלו לחפש לפי מיקום, זמינות, ניסיון ותעריף — בחינם.";
+
 export const MARKETING_HOME_DESCRIPTION =
   "הורים ובייביסיטריות נפגשים במקום אחד. חיפוש לפי עיר, זמינות, ניסיון ומחיר שעתי — ללא דמי מנוי וללא עמלת הזמנה.";
 

@@ -73,6 +73,7 @@ export function ParentsLanding({
             target="_blank"
             rel="noopener noreferrer"
             aria-label="AnyNanny ב-App Store"
+            data-cta="app-store"
             data-hero-hit="app-store"
           />
           {PARENTS_LANDING_GOOGLE_PLAY_URL ? (

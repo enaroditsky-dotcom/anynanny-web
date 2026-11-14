@@ -63,7 +63,7 @@ type AppLandingPageProps = {
 export default async function AppLandingPage({ searchParams }: AppLandingPageProps) {
   const params = await searchParams;
   const utm = utmSearchFromRecord(params);
-  const parentHref = appLandingSignupHref("parent", utm);
+  const parentHref = generalWebAppHref(utm);
   const sitterHref = appLandingSignupHref("sitter", utm);
   const webAppHref = DOMAIN_SEPARATION_ENABLED ? generalWebAppHref(utm) : APP_LANDING_SITE_URL;
   const structuredData = buildAppLandingStructuredData();

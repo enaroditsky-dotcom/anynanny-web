@@ -3,17 +3,22 @@ import { GeneralAcquisitionLanding } from "@/components/marketing/general-acquis
 import {
   GENERAL_ACQUISITION_CANONICAL,
   GENERAL_ACQUISITION_DESCRIPTION,
-  GENERAL_ACQUISITION_HERO_ALT,
-  GENERAL_ACQUISITION_HERO_HEIGHT,
-  GENERAL_ACQUISITION_HERO_URL,
-  GENERAL_ACQUISITION_HERO_WIDTH,
   GENERAL_ACQUISITION_TITLE,
   buildGeneralAcquisitionStructuredData,
+  generalIosStoreHref,
   generalParentDemoHref,
+  generalParentSearchHref,
   generalSitterDemoHref,
+  generalSitterSignupHref,
   generalWebAppHref,
   utmSearchFromRecord
 } from "@/lib/marketing/general-acquisition";
+import {
+  MARKETING_HOME_OG_ALT,
+  MARKETING_HOME_OG_HEIGHT,
+  MARKETING_HOME_OG_URL,
+  MARKETING_HOME_OG_WIDTH
+} from "@/lib/marketing/marketing-home";
 
 export const metadata: Metadata = {
   title: GENERAL_ACQUISITION_TITLE,
@@ -38,10 +43,11 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: GENERAL_ACQUISITION_HERO_URL,
-        width: GENERAL_ACQUISITION_HERO_WIDTH,
-        height: GENERAL_ACQUISITION_HERO_HEIGHT,
-        alt: GENERAL_ACQUISITION_HERO_ALT
+        url: MARKETING_HOME_OG_URL,
+        width: MARKETING_HOME_OG_WIDTH,
+        height: MARKETING_HOME_OG_HEIGHT,
+        alt: MARKETING_HOME_OG_ALT,
+        type: "image/png"
       }
     ]
   },
@@ -49,7 +55,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: GENERAL_ACQUISITION_TITLE,
     description: GENERAL_ACQUISITION_DESCRIPTION,
-    images: [GENERAL_ACQUISITION_HERO_URL]
+    images: [MARKETING_HOME_OG_URL]
   }
 };
 
@@ -63,6 +69,9 @@ export default async function BabysitterLandingPage({ searchParams }: Babysitter
   const webAppHref = generalWebAppHref(utm);
   const parentDemoHref = generalParentDemoHref(utm);
   const sitterDemoHref = generalSitterDemoHref(utm);
+  const parentSearchHref = generalParentSearchHref(utm);
+  const sitterSignupHref = generalSitterSignupHref(utm);
+  const iosHref = generalIosStoreHref(utm);
   const structuredData = buildGeneralAcquisitionStructuredData();
 
   return (
@@ -77,6 +86,9 @@ export default async function BabysitterLandingPage({ searchParams }: Babysitter
         webAppHref={webAppHref}
         parentDemoHref={parentDemoHref}
         sitterDemoHref={sitterDemoHref}
+        parentSearchHref={parentSearchHref}
+        sitterSignupHref={sitterSignupHref}
+        iosHref={iosHref}
       />
     </>
   );

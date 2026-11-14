@@ -8,6 +8,8 @@ import {
   CONVERSION_VIDEO_SRC,
   MARKETING_HOME_CANONICAL,
   MARKETING_HOME_DESCRIPTION,
+  MARKETING_HOME_H1,
+  MARKETING_HOME_SUPPORT,
   MARKETING_HOME_TITLE,
   MARKETING_STORY_CANONICAL,
   MARKETING_STORY_DESCRIPTION,
@@ -40,9 +42,24 @@ assert.equal(MARKETING_HOME_CANONICAL, "https://www.anynanny.org/");
 
 assert.match(home, /ANYNANNY_APP_LOGO_SRC/);
 assert.ok(home.indexOf("styles.logo") < home.indexOf("<h1"));
-assert.match(home, /ברוכים הבאים ל־AnyNanny!/);
-assert.match(home, /נעים להכיר\. מה מביא אתכם לכאן\?/);
+assert.equal(MARKETING_HOME_H1, "AnyNanny — בייביסיטריות ומטפלות לילדים");
+assert.equal(
+  MARKETING_HOME_SUPPORT,
+  "מחפשים בייביסיטרית או מטפלת לילדים? ב־AnyNanny תוכלו לחפש לפי מיקום, זמינות, ניסיון ותעריף — בחינם."
+);
+assert.match(home, /MARKETING_HOME_H1/);
+assert.match(home, /MARKETING_HOME_SUPPORT/);
+assert.match(home, /פשוט למצוא זמן לחיים!/);
 assert.equal((home.match(/<h1\b/g) ?? []).length, 1);
+assert.match(home, /data-cta="parent-search"/);
+assert.match(home, /data-cta="sitter-signup"/);
+assert.match(home, /data-cta="app-store"/);
+assert.match(home, /data-cta="web-app"/);
+assert.match(home, /const parentHref = generalWebAppHref\(campaignSearch\)/);
+assert.doesNotMatch(home, /appLandingSignupHref\("parent"/);
+assert.match(home, /appLandingSignupHref\("sitter"/);
+assert.match(home, /withStoreCampaign/);
+assert.match(home, /generalWebAppHref/);
 assert.match(home, /href: welcomeTopicPath\("meet"\)/);
 assert.match(home, /href: welcomeTopicPath\("life"\)/);
 assert.match(home, /href: welcomeTopicPath\("trust"\)/);
@@ -66,7 +83,7 @@ assert.doesNotMatch(home, /CONVERSION_VIDEO_SRC/);
 assert.doesNotMatch(home, /MarketingHome/);
 assert.doesNotMatch(home, /play\.google\.com/);
 assert.match(home, /APP_LANDING_APP_STORE_URL/);
-assert.match(home, /https:\/\/app\.anynanny\.org/);
+assert.match(home, /generalWebAppHref/);
 assert.match(home, /להורדה לאנדרואיד/);
 assert.match(home, /דרך האפליקציה בדפדפן/);
 assert.match(home, /app-store-badge-he\.svg/);

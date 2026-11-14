@@ -94,6 +94,9 @@ export const APP_LANDING_APP_STORE_URL = "https://apps.apple.com/il/app/anynanny
  */
 export const APP_LANDING_GOOGLE_PLAY_URL = "";
 
+/** Shown beside parent search links. Search itself stays behind the existing welcome registration. */
+export const SEARCH_REQUIRES_REGISTRATION_NOTE = "נדרשת הרשמה לפני החיפוש.";
+
 export const APP_LANDING_CLOSING = "AnyNanny — פשוט למצוא זמן לחיים.";
 
 export const APP_LANDING_PARENT_ENTRY_CTA = "אני מחפש/ת בייביסיטר";

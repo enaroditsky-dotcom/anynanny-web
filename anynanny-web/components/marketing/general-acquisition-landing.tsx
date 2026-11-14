@@ -39,11 +39,17 @@ export function GeneralAcquisitionLanding({
   webAppHref,
   parentDemoHref,
   sitterDemoHref,
+  parentSearchHref,
+  sitterSignupHref,
+  iosHref,
   city
 }: {
   webAppHref: string;
   parentDemoHref: string;
   sitterDemoHref: string;
+  parentSearchHref: string;
+  sitterSignupHref: string;
+  iosHref: string;
   city?: BabysitterCity;
 }) {
   const h1Find = city?.h1Find ?? GENERAL_ACQUISITION_H1_FIND;
@@ -145,6 +151,22 @@ export function GeneralAcquisitionLanding({
             <span className={styles.phonePanelTitle}>{GENERAL_ACQUISITION_WEB_APP_CTA}</span>
           </a>
 
+          <a className={styles.roleLink} href={parentSearchHref} data-cta="parent-search" data-press="">
+            לחיפוש בייביסיטר
+          </a>
+          <a className={styles.roleLink} href={sitterSignupHref} data-cta="sitter-signup" data-press="">
+            להרשמה כבייביסיטרית
+          </a>
+          <a
+            className={styles.availabilityLink}
+            href={iosHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-cta="app-store"
+            data-press=""
+          >
+            App Store ל־iOS
+          </a>
           <p className={styles.storeNote}>{GENERAL_ACQUISITION_STORE_NOTE}</p>
         </div>
 

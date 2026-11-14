@@ -34,10 +34,44 @@
   margin: 0 auto;
 }
 
+.homeSlogan {
+  display: none;
+  margin: 0;
+  text-align: center;
+}
+
+.homeSloganMotion {
+  display: block;
+  font-family: var(--font-varela-round), "Varela Round", Rubik, sans-serif;
+  font-size: clamp(1.35rem, 6.5vw, 1.9rem);
+  font-weight: 400;
+  line-height: 1.2;
+  color: #237a32;
+  text-shadow: 0 1px 0 rgba(0, 31, 63, 0.1);
+  white-space: nowrap;
+  animation: homeSloganIn 640ms ease both;
+}
+
+@keyframes homeSloganIn {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .doodleWash,
 .familyHero,
 .familyFooter {
   display: none;
+}
+
+.cloudField {
+  display: contents;
 }
 
 .cloudTilt,
@@ -79,7 +113,7 @@
 .downloads {
   position: relative;
   z-index: 3;
-  order: 2;
+  order: 3;
   align-self: center;
   display: flex;
   align-items: center;
@@ -147,6 +181,57 @@
   font-size: 0.72rem;
   font-weight: 500;
   opacity: 0.82;
+}
+
+.entry {
+  position: relative;
+  z-index: 3;
+  order: 2;
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem 0.7rem;
+  width: min(100%, 52rem);
+  max-width: calc(100% - 1rem);
+  margin: 0 auto;
+}
+
+.parentEntry,
+.sitterEntry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 2.25rem;
+  padding: 0.2rem 0.85rem;
+  border-radius: 999px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+}
+
+.parentEntry {
+  background: #237a32;
+  color: #fff;
+}
+
+.sitterEntry {
+  background: transparent;
+  color: #001f3f;
+  text-decoration: underline;
+  text-underline-offset: 0.16rem;
+}
+
+.entryNote {
+  margin: 0;
+  color: #001f3f;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
 }
 
 .welcomeTitle,
@@ -273,20 +358,15 @@
 }
 
 @media (max-width: 63.99rem) {
-  .overlayHeader > div > a:first-child {
-    display: none;
-  }
-
-  .overlayHeader > div > div {
-    width: 100%;
-    margin-inline-start: 0;
-    justify-content: space-between;
-  }
 
   .screen {
+    display: flex;
     height: auto;
-    min-height: 0;
+    max-height: none;
+    min-height: 100%;
+    flex-direction: column;
     overflow-x: clip;
+    overflow-y: visible;
     background-color: #f6f3ea;
     background-image:
       radial-gradient(circle at 8% 6%, rgba(190, 216, 178, 0.55), transparent 26%),
@@ -316,14 +396,21 @@
   }
 
   .familyHero {
-    margin-top: -0.55rem;
-    margin-bottom: 0.15rem;
+    position: relative;
+    z-index: 0;
+    order: 4;
+    flex: 0 0 auto;
+    height: clamp(5.6rem, 28vw, 7.35rem);
+    margin: 0.05rem -0.7rem 0;
+    justify-content: stretch;
   }
 
   .familyFooter {
-    height: 9.1rem;
-    margin-top: 0.35rem;
-    margin-bottom: 0.15rem;
+    flex: 0 0 auto;
+    height: clamp(5.4rem, 24vw, 7.2rem);
+    margin-top: 0;
+    margin-bottom: 0;
+    margin-inline: -0.75rem;
   }
 
   .familyShotLeft,
@@ -337,77 +424,118 @@
     background-size: 248% auto;
   }
 
+  .familyShotLeft,
+  .familyShotRight {
+    flex: 1 1 50%;
+    max-width: none;
+    background-size: 240% auto;
+  }
+
   .familyShotLeft {
-    background-position: 0% 10%;
-    -webkit-mask-image: radial-gradient(125% 120% at 0% 0%, #000 42%, transparent 76%);
-    mask-image: radial-gradient(125% 120% at 0% 0%, #000 42%, transparent 76%);
+    background-position: 2% 100%;
+    -webkit-mask-image:
+      linear-gradient(to top, transparent 0%, #000 28%),
+      linear-gradient(to right, transparent 0%, #000 14%);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(to top, transparent 0%, #000 28%),
+      linear-gradient(to right, transparent 0%, #000 14%);
+    mask-composite: intersect;
   }
 
   .familyShotRight {
-    background-position: 100% 0%;
-    -webkit-mask-image: radial-gradient(125% 120% at 100% 0%, #000 44%, transparent 78%);
-    mask-image: radial-gradient(125% 120% at 100% 0%, #000 44%, transparent 78%);
+    background-position: 100% 100%;
+    -webkit-mask-image:
+      linear-gradient(to top, transparent 0%, #000 28%),
+      linear-gradient(to left, transparent 0%, #000 14%);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(to top, transparent 0%, #000 28%),
+      linear-gradient(to left, transparent 0%, #000 14%);
+    mask-composite: intersect;
   }
 
   .familyFootLeft {
-    background-position: 2% 100%;
+    background-position: 0% 0%;
     -webkit-mask-image: radial-gradient(130% 125% at 0% 100%, #000 46%, transparent 80%);
     mask-image: radial-gradient(130% 125% at 0% 100%, #000 46%, transparent 80%);
   }
 
   .familyFootRight {
-    background-position: 100% 100%;
+    background-position: 100% 0%;
     -webkit-mask-image: radial-gradient(130% 125% at 100% 100%, #000 46%, transparent 80%);
     mask-image: radial-gradient(130% 125% at 100% 100%, #000 46%, transparent 80%);
   }
 
   .main {
-    flex: none;
-    gap: 0.85rem;
-    min-height: 0;
-    padding: 0.55rem 0.9rem 1.8rem;
+    flex: 1 1 auto;
+    gap: clamp(0.15rem, 0.6dvh, 0.35rem);
+    height: auto;
+    min-height: 100%;
+    padding: 0.28rem 0.7rem 0.2rem;
   }
 
   .logo {
+    position: relative;
+    z-index: 1;
     display: block;
-    order: 2;
-    margin-top: 0.15rem;
+    flex: 0 0 auto;
+    order: 1;
+    margin-top: 0;
+  }
+
+  .homeSloganMotion {
+    font-weight: 700;
+    font-size: clamp(1.45rem, 6.8vw, 1.95rem);
   }
 
   .logoImage {
-    width: min(14.75rem, 68%);
-    margin: 0 auto;
+    display: none;
   }
 
-  .familyHero {
-    order: 4;
+  .homeSlogan {
+    display: flex;
+    justify-content: center;
   }
 
   .stage {
-    order: 3;
+    position: relative;
+    z-index: 1;
+    order: 4;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: visible;
+    background: transparent;
+    container-type: normal;
   }
 
   .familyFooter {
     order: 5;
   }
 
-  .stage {
-    flex: none;
-    overflow: visible;
-    background: transparent;
-    container-type: normal;
-  }
-
   .art {
     position: static;
     display: flex;
     width: 100%;
-    height: auto;
+    height: 100%;
+    min-height: 0;
     aspect-ratio: auto;
     transform: none;
     flex-direction: column;
     align-items: stretch;
-    gap: 0.7rem;
+    gap: clamp(0.08rem, 0.4dvh, 0.22rem);
+  }
+
+  .cloudField {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.12rem;
+    width: 100%;
+    min-height: 0;
   }
 
   .artImage {
@@ -426,15 +554,35 @@
     text-align: center;
   }
 
+  .welcomeTitle,
+  .welcomePrompt {
+    flex: 0 0 auto;
+  }
+
   .welcomeTitle {
-    font-size: clamp(1.4rem, 6.2vw, 1.8rem);
+    font-size: clamp(1.02rem, 4.5vw, 1.35rem);
+    font-weight: 800;
     line-height: 1.25;
   }
 
   .welcomePrompt {
-    font-size: 1rem;
+    font-size: clamp(0.72rem, 3vw, 0.88rem);
     font-weight: 700;
-    line-height: 1.4;
+    line-height: 1.35;
+  }
+
+  .entry {
+    order: 3;
+    flex-direction: column;
+    gap: 0.12rem;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .parentEntry,
+  .sitterEntry {
+    min-height: 2.75rem;
+    font-size: 0.95rem;
   }
 
   .cloudRear,
@@ -452,12 +600,12 @@
   .cloudShape {
     display: block;
     position: absolute;
-    inset: -12% -4% -14%;
-    width: auto;
-    height: auto;
+    inset: -10% 0 -8%;
+    width: 100%;
+    height: 100%;
     overflow: visible;
     pointer-events: none;
-    filter: drop-shadow(0 9px 10px rgba(42, 74, 52, 0.15));
+    filter: drop-shadow(0 4px 3px rgba(42, 74, 52, 0.16));
   }
 
   .cloudShade {
@@ -479,38 +627,52 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
-    min-height: 3.35rem;
-    padding: 1.05rem 1.05rem 1.15rem;
+    gap: 0.28rem;
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.78rem 1.05rem 0.88rem;
   }
 
   .cloudIcon {
     display: block;
-    width: 1.15rem;
-    height: 1.15rem;
+    width: 0.9rem;
+    height: 0.9rem;
     flex-shrink: 0;
     color: var(--cloud-accent, #2f6f4a);
+  }
+
+  .cloudTilt {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
   }
 
   .cloud {
     position: relative;
     left: auto;
     top: auto;
-    width: auto;
+    display: flex;
+    flex: 0 0 auto;
+    width: 96%;
+    max-width: 100%;
     height: auto;
-    min-height: 0;
-    padding: 0.15rem 0;
+    min-height: 2.75rem;
+    margin: 0;
+    padding: 0;
     color: #001f3f;
     background: transparent;
     box-sizing: border-box;
+    align-self: center;
   }
 
   .cloudLabel {
     display: block;
     overflow: visible;
-    font-size: 0.98rem;
+    font-size: clamp(0.9rem, 3.7vw, 1.05rem);
     font-weight: 800;
-    line-height: 1.35;
+    line-height: 1.25;
+    text-align: center;
     white-space: normal;
   }
 
@@ -525,88 +687,79 @@
   }
 
   .meet {
-    --tilt: -1.2deg;
+    --tilt: -1.1deg;
     --cloud-fill: #e7f4ff;
     --cloud-shade: #b7d4ee;
     --cloud-accent: #2d6f9c;
-    align-self: flex-end;
-    width: 93%;
-    margin: 0.15rem 0 0;
+    width: 94%;
+    max-width: 94%;
   }
 
   .life {
-    --tilt: 1.35deg;
+    --tilt: 1.15deg;
     --cloud-fill: #fff6d6;
     --cloud-shade: #ead28a;
     --cloud-accent: #c48912;
-    align-self: flex-start;
-    width: 78%;
-    margin-block: 0.35rem 0;
-    margin-inline-start: 0.15rem;
+    width: 100%;
+    max-width: 100%;
   }
 
   .trust {
-    --tilt: -0.7deg;
+    --tilt: -0.6deg;
     --cloud-fill: #fde9f1;
     --cloud-shade: #e4c0ce;
     --cloud-accent: #b85a78;
-    align-self: center;
-    width: 86%;
-    margin: 0.45rem 0 0;
+    width: 92%;
+    max-width: 92%;
   }
 
   .parents {
-    --tilt: 1.05deg;
+    --tilt: 0.9deg;
     --cloud-fill: #e7f6ea;
     --cloud-shade: #b7d8be;
     --cloud-accent: #2f8a46;
-    align-self: flex-start;
-    width: 90%;
-    margin-block: 0.2rem 0;
-    margin-inline-end: 0.15rem;
+    width: 98%;
+    max-width: 98%;
   }
 
   .sitters {
-    --tilt: -1.05deg;
+    --tilt: -0.85deg;
     --cloud-fill: #f3eafc;
     --cloud-shade: #d4c4ea;
     --cloud-accent: #7454a8;
-    align-self: flex-end;
-    width: 97%;
-    margin: 0.35rem 0 0;
+    width: 100%;
+    max-width: 100%;
   }
 
   .peek {
-    --tilt: 0.85deg;
+    --tilt: 0.7deg;
     --cloud-fill: #e8f8df;
     --cloud-shade: #bdd9ae;
     --cloud-accent: #3d9442;
-    align-self: center;
-    width: 72%;
-    margin: 0.15rem 0 0;
+    width: 90%;
+    max-width: 90%;
   }
 
   .respect {
-    --tilt: -1.3deg;
+    --tilt: -1.15deg;
     --cloud-fill: #e6f2fb;
     --cloud-shade: #b9d4ea;
     --cloud-accent: #356fa6;
-    align-self: flex-start;
-    width: 92%;
-    margin-block: 0.4rem 0.1rem;
-    margin-inline-start: 0.1rem;
+    width: 97%;
+    max-width: 97%;
   }
 
   .downloads {
     position: static;
-    order: 1;
+    order: 2;
+    flex: 0 0 auto;
     align-self: center;
     justify-content: center;
     flex-wrap: nowrap;
     gap: 0.4rem;
     width: auto;
     max-width: 100%;
-    margin: 0.15rem auto 0;
+    margin: -0.42rem 0 0;
   }
 
   .storeLink,
@@ -656,8 +809,15 @@
   .cloud,
   .cloudRear,
   .cloudFront,
-  .cloudTilt {
+  .cloudTilt,
+  .homeSloganMotion {
     transition: none;
+  }
+
+  .homeSloganMotion {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 
   .cloud:hover,

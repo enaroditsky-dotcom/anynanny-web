@@ -6,6 +6,7 @@ import { MARKETING_TOGETHER } from "@/lib/marketing/copy";
 import { storyChapterHref } from "@/lib/marketing/chapters";
 import { MARKETING_SITE_NAV_ID } from "@/lib/marketing/site-nav";
 import { storyAccountHref, type StoryAccountAction } from "@/lib/marketing/story-entry";
+import { ANYNANNY_APP_LOGO_SRC } from "@/components/brand/anynanny-app-logo";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 import styles from "./marketing-home.module.css";
 
@@ -55,11 +56,14 @@ export function MarketingHeader({
           }}
         >
           <AnyNannyLogo variant="header" />
+          <span className={styles.headerLockup}>
+            <img src={ANYNANNY_APP_LOGO_SRC} alt="AnyNanny" width={2172} height={724} draggable={false} />
+          </span>
         </a>
 
         <div className={styles.headerActions}>
           <a href={loginHref} className={styles.accountButton}>
-            {MARKETING_TOGETHER.loginLabel}
+            <span className={styles.headerControlFace}>{MARKETING_TOGETHER.loginLabel}</span>
           </a>
           <button
             ref={menuButtonRef}
@@ -70,8 +74,10 @@ export function MarketingHeader({
             aria-controls={MARKETING_SITE_NAV_ID}
             onClick={onToggleNav}
           >
-            <Menu aria-hidden className={styles.menuButtonIcon} />
-            <span>תפריט</span>
+            <span className={styles.headerControlFace}>
+              <Menu aria-hidden className={styles.menuButtonIcon} />
+              <span>תפריט</span>
+            </span>
           </button>
         </div>
       </div>

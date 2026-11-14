@@ -1,5 +1,5 @@
 import { DOMAIN_SEPARATION_ENABLED } from "@/lib/hosts/site-classifier";
-import { appLandingSignupHref, APP_LANDING_APP_STORE_URL, APP_LANDING_GOOGLE_PLAY_URL } from "@/lib/marketing/app-landing";
+import { APP_LANDING_APP_STORE_URL, APP_LANDING_GOOGLE_PLAY_URL } from "@/lib/marketing/app-landing";
 import { generalWebAppHref } from "@/lib/marketing/general-acquisition";
 import { utmSearchFromRecord as readUtmSearchFromRecord } from "@/lib/marketing/student-jobs";
 
@@ -93,12 +93,12 @@ export function utmSearchFromRecord(
   return readUtmSearchFromRecord(params);
 }
 
-/** Existing parent welcome → register hop. */
+/** Parent search starts at the application entry. The app decides the next screen. */
 export function parentsLandingSignupHref(
   search: string | URLSearchParams = "",
   domainSeparationEnabled: boolean = DOMAIN_SEPARATION_ENABLED
 ): string {
-  return appLandingSignupHref("parent", search, domainSeparationEnabled);
+  return generalWebAppHref(search, domainSeparationEnabled);
 }
 
 /** Application-origin Web App entry when this marketing page cannot install it. */

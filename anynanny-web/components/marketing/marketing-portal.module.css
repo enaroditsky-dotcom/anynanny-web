@@ -38,20 +38,30 @@
 }
 
 @media (max-width: 63.99rem) {
-  .shell[data-single-screen="true"],
-  .shell[data-single-screen="true"] .column,
-  .shell[data-single-screen="true"] .stage {
+  .shell[data-single-screen="true"] {
     height: auto;
     max-height: none;
+    min-height: 100dvh;
     overflow: visible;
   }
 
   .shell[data-single-screen="true"] .column {
+    box-sizing: border-box;
+    height: auto;
     min-height: 100dvh;
+    max-height: none;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .shell[data-single-screen="true"] .stage {
-    display: block;
-    flex: none;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .shell[data-single-screen="true"] .stage > * {
+    min-height: min-content;
   }
 }

@@ -103,6 +103,7 @@ export function ParentsWebAppInstallButton({
         type="button"
         className={className}
         aria-label="להתקנת AnyNanny כ-Web App"
+        data-cta="web-app"
         data-hero-hit="web-app"
         onClick={() => {
           void onClick();

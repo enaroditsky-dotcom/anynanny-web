@@ -104,7 +104,11 @@ for (const filename of [
 }
 
 const soon = collectDestinations(SITE_NAV_ITEMS).filter((destination) => destination.kind === "soon");
-assert.equal(soon.length, 1);
+assert.equal(soon.length, 2);
+const aiNav = SITE_NAV_ITEMS.find((item) => item.id === "anynanny-ai");
+assert.equal(aiNav?.type === "link" ? aiNav.label : "", "AnyNanny AI");
+assert.equal(aiNav?.type === "link" ? aiNav.icon : "", "robot");
+assert.equal(aiNav?.type === "link" ? destinationHref(aiNav.destination) : "linked", null);
 assert.equal(destinationHref(soon[0]), null);
 assert.doesNotMatch(JSON.stringify(SITE_NAV_ITEMS), /פורום AnyNanny|AnyNanny Marketplace|קהילת AnyNanny|מגזין/);
 const findBabysitterNav = SITE_NAV_ITEMS.find((item) => item.id === "find-babysitter");
@@ -112,7 +116,9 @@ const babysitterWorkNav = SITE_NAV_ITEMS.find((item) => item.id === "babysitter-
 const homeNav = SITE_NAV_ITEMS.find((item) => item.id === "home");
 const appNav = SITE_NAV_ITEMS.find((item) => item.id === "app-entry");
 const offersNav = SITE_NAV_ITEMS.find((item) => item.id === "offers");
-const exploreNav = SITE_NAV_ITEMS.find((item) => item.id === "explore");
+assert.equal(SITE_NAV_ITEMS.some((item) => item.id === "explore"), false);
+assert.doesNotMatch(JSON.stringify(SITE_NAV_ITEMS), /להכיר את AnyNanny/);
+assert.equal(SITE_NAV_ITEMS.findIndex((item) => item.id === "anynanny-ai") >= 0, true);
 assert.deepEqual(
   homeNav?.type === "link" ? { label: homeNav.label, destination: homeNav.destination } : null,
   { label: "דף הבית", destination: { kind: "href", href: "/" } }
@@ -134,18 +140,6 @@ assert.deepEqual(appNav?.type === "link" ? appNav.destination : null, { kind: "h
 assert.equal(offersNav?.type === "link" ? offersNav.label : "", "ANYNANNY-מבצעים וקופונים");
 assert.equal(offersNav?.type === "link" ? offersNav.tone : "", "offer");
 assert.equal(offersNav?.type === "link" ? destinationHref(offersNav.destination) : "linked", null);
-assert.equal(exploreNav?.type, "accordion");
-assert.deepEqual(
-  exploreNav?.type === "accordion"
-    ? exploreNav.children.map((child) => (child.type === "link" ? child.destination : null))
-    : [],
-  [
-    { kind: "href", href: "/story" },
-    { kind: "href", href: "/marketing/trust" },
-    { kind: "href", href: "/marketing/respect" },
-    { kind: "href", href: "/marketing/preview" }
-  ]
-);
 assert.doesNotMatch(sidebar, /play\.google\.com|apps\.apple\.com/);
 assert.doesNotMatch(sidebar, /כניסה לאפליקציה/);
 assert.match(read("components/marketing/marketing-press.css"), /scale\(0\.97\)/);

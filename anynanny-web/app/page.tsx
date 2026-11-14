@@ -22,6 +22,7 @@ import {
   buildMarketingHomeStructuredData
 } from "@/lib/marketing/marketing-home";
 import { marketingDocumentMetadata } from "@/lib/marketing/marketing-document";
+import { NOINDEX_METADATA } from "@/lib/seo/private-index";
 
 type HomeSearch = Record<string, string | string[] | undefined>;
 
@@ -62,9 +63,9 @@ export async function generateMetadata({
 }: {
   searchParams: Promise<HomeSearch>;
 }): Promise<Metadata> {
-  if (!marketingRootActive()) return {};
+  if (!marketingRootActive()) return { robots: NOINDEX_METADATA };
   const params = await searchParams;
-  if ((await currentRootEntry(params)) !== "marketing") return {};
+  if ((await currentRootEntry(params)) !== "marketing") return { robots: NOINDEX_METADATA };
   return {
     ...(await marketingDocumentMetadata()),
     title: MARKETING_HOME_TITLE,
@@ -126,7 +127,7 @@ export default async function HomePage({
         />
         <MarketingHomeAuthHandoff>
           <StoryChapterHandoff />
-          <ConversionHome />
+          <ConversionHome campaignSearch={searchFromRecord(params)} />
         </MarketingHomeAuthHandoff>
       </>
     );

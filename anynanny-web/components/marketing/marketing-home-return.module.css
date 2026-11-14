@@ -5,15 +5,21 @@
 .link {
   display: inline-flex;
   align-items: center;
+  min-height: 2.75rem;
+  color: #001f3f;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.face {
+  display: inline-flex;
+  align-items: center;
   gap: 0.4rem;
   min-height: 2.75rem;
   padding: 0.3rem 0.95rem;
   border-radius: 999px;
   background: #fff;
-  color: #001f3f;
-  font-weight: 700;
-  line-height: 1.2;
-  text-decoration: none;
   box-shadow: 0 8px 18px rgba(0, 31, 63, 0.08);
 }
 
@@ -27,8 +33,30 @@
   stroke-linejoin: round;
 }
 
-.link:hover {
+.link:hover .face {
   background: #f4f8f2;
+}
+
+@media (max-width: 480px) {
+  .wrap {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.45rem;
+  }
+
+  .face {
+    min-height: 0;
+    gap: 0.22rem;
+    padding: 0.12rem 0.42rem;
+    font-size: 0.75rem;
+    line-height: 1.15;
+    box-shadow: 0 3px 8px rgba(0, 31, 63, 0.08);
+  }
+
+  .link svg {
+    width: 0.72rem;
+    height: 0.72rem;
+  }
 }
 
 .link:focus-visible {

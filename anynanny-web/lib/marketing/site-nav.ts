@@ -38,6 +38,7 @@ export type SiteNavIconName =
   | "book"
   | "shield"
   | "sparkles"
+  | "robot"
   | "help"
   | "android"
   | "iphone"
@@ -100,40 +101,11 @@ export const SITE_NAV_ITEMS: SiteNavNode[] = [
     destination: { kind: "href", href: "/babysitter" }
   },
   {
-    type: "accordion",
-    id: "explore",
-    label: "להכיר את AnyNanny",
-    icon: "book",
-    children: [
-      {
-        type: "link",
-        id: "our-story",
-        label: "הסיפור שלנו",
-        icon: "book",
-        destination: { kind: "href", href: "/story" }
-      },
-      {
-        type: "link",
-        id: "trust",
-        label: "להכיר ולהיות בטוחים",
-        icon: "shield",
-        destination: { kind: "href", href: "/marketing/trust" }
-      },
-      {
-        type: "link",
-        id: "respect",
-        label: "כבוד והדדיות",
-        icon: "users",
-        destination: { kind: "href", href: "/marketing/respect" }
-      },
-      {
-        type: "link",
-        id: "preview",
-        label: "בואו נציץ פנימה",
-        icon: "sparkles",
-        destination: { kind: "href", href: "/marketing/preview" }
-      }
-    ]
+    type: "link",
+    id: "anynanny-ai",
+    label: "AnyNanny AI",
+    icon: "robot",
+    destination: { kind: "soon" }
   },
   {
     type: "link",

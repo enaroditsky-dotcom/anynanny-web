@@ -67,14 +67,13 @@ assert.equal(PARENTS_LANDING_OG_PATH, "/SEO pages/parents-landing-og.png");
 assert.equal(PARENTS_LANDING_OG_URL, "https://www.anynanny.org/SEO%20pages/parents-landing-og.png");
 
 const parentHref = parentsLandingSignupHref("", false);
-assert.match(parentHref, /^\/welcome\?/);
-assert.match(parentHref, /role=parent/);
-assert.match(parentHref, /register/);
-assert.doesNotMatch(parentHref, /role=sitter/);
-assert.doesNotMatch(parentHref, /track=babysitter/);
+assert.equal(parentHref, "/");
+assert.doesNotMatch(parentHref, /welcome|register|role=/);
+assert.equal(parentsLandingSignupHref("utm_source=audit&utm_medium=cpc", true), "https://app.anynanny.org/?utm_source=audit&utm_medium=cpc");
+assert.doesNotMatch(parentsLandingSignupHref("utm_source=audit", true), /welcome|register|role=|next=/);
 assert.equal(parentsWebAppFallbackHref("", false), "/");
 assert.equal(parentsWebAppFallbackHref("", true), "https://app.anynanny.org/");
-assert.match(parentsLandingSignupHref("", true), /^https:\/\/app\.anynanny\.org\/welcome\?/);
+assert.equal(parentsLandingSignupHref("", true), "https://app.anynanny.org/");
 assert.doesNotMatch(parentsWebAppFallbackHref("", false), /apps\.apple\.com|play\.google/);
 assert.doesNotMatch(parentsWebAppFallbackHref("", true), /www\.anynanny\.org|apps\.apple\.com|play\.google/);
 

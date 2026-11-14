@@ -4,39 +4,45 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Briefcase, Coffee, Handshake, Play, ShieldCheck, Sun, Users } from "lucide-react";
 import { ANYNANNY_APP_LOGO_SRC } from "@/components/brand/anynanny-app-logo";
-import { APP_LANDING_APP_STORE_LABEL, APP_LANDING_APP_STORE_URL } from "@/lib/marketing/app-landing";
+import {
+  APP_LANDING_APP_STORE_LABEL,
+  APP_LANDING_APP_STORE_URL,
+  appLandingSignupHref
+} from "@/lib/marketing/app-landing";
+import { generalWebAppHref } from "@/lib/marketing/general-acquisition";
+import { MARKETING_HOME_H1, MARKETING_HOME_SUPPORT } from "@/lib/marketing/marketing-home";
+import { withStoreCampaign } from "@/lib/marketing/site-nav";
 import { welcomeTopicPath } from "@/lib/marketing/welcome-topics";
 import styles from "./conversion-home.module.css";
 
 const HOME_ART = "/brand/anynanny-home-family-clouds.png";
-const ANDROID_WEB_APP_URL = "https://app.anynanny.org";
 
 const CLOUD_LOBES: Array<Array<[number, number, number, number]>> = [
   [
-    [72, 76, 58, 34],
-    [142, 50, 68, 42],
-    [220, 66, 70, 38],
-    [168, 90, 104, 28]
+    [78, 74, 64, 36],
+    [160, 48, 82, 42],
+    [244, 72, 66, 36],
+    [160, 94, 132, 30]
   ],
   [
-    [58, 80, 48, 30],
-    [122, 48, 62, 44],
-    [198, 60, 74, 38],
-    [258, 82, 44, 26],
-    [156, 92, 92, 26]
+    [62, 78, 52, 32],
+    [128, 50, 66, 40],
+    [208, 46, 72, 40],
+    [270, 76, 46, 30],
+    [160, 96, 126, 28]
   ],
   [
-    [84, 72, 66, 34],
-    [154, 44, 56, 40],
-    [226, 64, 68, 40],
-    [164, 94, 116, 26]
+    [88, 74, 70, 36],
+    [168, 46, 76, 42],
+    [248, 70, 62, 36],
+    [160, 96, 134, 28]
   ],
   [
-    [66, 82, 54, 30],
-    [136, 52, 78, 46],
-    [214, 58, 58, 38],
-    [250, 84, 46, 28],
-    [150, 90, 86, 28]
+    [70, 78, 56, 34],
+    [148, 48, 80, 44],
+    [228, 64, 66, 38],
+    [272, 84, 42, 26],
+    [158, 98, 122, 26]
   ]
 ];
 
@@ -63,7 +69,7 @@ function CloudSilhouette({ shape }: { shape: number }) {
     <svg className={styles.cloudShape} viewBox="0 0 320 128" preserveAspectRatio="none" aria-hidden="true">
       <g className={styles.cloudShade}>
         {lobes.map(([cx, cy, rx, ry], index) => (
-          <ellipse key={`shade-${index}`} cx={cx} cy={cy + 7} rx={rx} ry={ry} />
+          <ellipse key={`shade-${index}`} cx={cx} cy={cy + 5} rx={rx} ry={ry} />
         ))}
       </g>
       <g className={styles.cloudFill}>
@@ -76,7 +82,11 @@ function CloudSilhouette({ shape }: { shape: number }) {
   );
 }
 
-export function ConversionHome() {
+export function ConversionHome({ campaignSearch = "" }: { campaignSearch?: string }) {
+  const parentHref = generalWebAppHref(campaignSearch);
+  const sitterHref = appLandingSignupHref("sitter", campaignSearch);
+  const storeHref = withStoreCampaign(APP_LANDING_APP_STORE_URL, campaignSearch);
+  const webAppHref = generalWebAppHref(campaignSearch);
   return (
     <div className={styles.screen}>
       <div className={styles.doodleWash} aria-hidden="true" />
@@ -84,15 +94,16 @@ export function ConversionHome() {
         <div className={styles.downloads}>
           <a
             className={styles.storeLink}
-            href={APP_LANDING_APP_STORE_URL}
+            href={storeHref}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={APP_LANDING_APP_STORE_LABEL}
+            data-cta="app-store"
             data-press=""
           >
             <img src="/brand/app-store-badge-he.svg" alt="" width={122} height={42} />
           </a>
-          <a className={styles.androidLink} href={ANDROID_WEB_APP_URL} data-press="">
+          <a className={styles.androidLink} href={webAppHref} data-cta="web-app" data-press="">
             <span className={styles.androidFace}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M17.6 9.48 19.44 6.3c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24c-2.86-1.21-6.08-1.21-8.94 0L5.65 5.67c-.19-.29-.54-.37-.85-.22-.3.16-.42.54-.26.85l1.84 3.18C3.86 11.17 2.5 13.58 2.5 16.2v.3c0 .83.67 1.5 1.5 1.5h16c.83 0 1.5-.67 1.5-1.5v-.3c0-2.62-1.36-5.03-3.9-6.72ZM7 14.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Zm10 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Z" />
@@ -102,6 +113,14 @@ export function ConversionHome() {
                 <span className={styles.androidNote}>דרך האפליקציה בדפדפן</span>
               </span>
             </span>
+          </a>
+        </div>
+        <div className={styles.entry}>
+          <a className={styles.parentEntry} href={parentHref} data-cta="parent-search" data-press="">
+            לחיפוש בייביסיטר
+          </a>
+          <a className={styles.sitterEntry} href={sitterHref} data-cta="sitter-signup" data-press="">
+            להרשמה כבייביסיטרית
           </a>
         </div>
         <div className={styles.familyHero} aria-hidden="true">
@@ -118,12 +137,16 @@ export function ConversionHome() {
             decoding="async"
             draggable={false}
           />
+          <p className={styles.homeSlogan}>
+            <span className={styles.homeSloganMotion}>פשוט למצוא זמן לחיים!</span>
+          </p>
         </div>
         <div className={styles.stage}>
           <div className={styles.art}>
             <img className={styles.artImage} src={HOME_ART} alt="" />
-            <h1 className={styles.welcomeTitle}>ברוכים הבאים ל־AnyNanny!</h1>
-            <p className={styles.welcomePrompt}>נעים להכיר. מה מביא אתכם לכאן?</p>
+            <h1 className={styles.welcomeTitle}>{MARKETING_HOME_H1}</h1>
+            <p className={styles.welcomePrompt}>{MARKETING_HOME_SUPPORT}</p>
+            <div className={styles.cloudField}>
             {CLOUDS.map((cloud) => {
               const Icon = cloud.icon;
               return (
@@ -140,6 +163,7 @@ export function ConversionHome() {
                 </Link>
               );
             })}
+            </div>
           </div>
         </div>
         <div className={styles.familyFooter} aria-hidden="true">

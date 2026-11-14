@@ -2,6 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { WelcomeTopicPage } from "@/components/marketing/welcome-topic-page";
 import {
+  MARKETING_HOME_OG_ALT,
+  MARKETING_HOME_OG_HEIGHT,
+  MARKETING_HOME_OG_URL,
+  MARKETING_HOME_OG_WIDTH
+} from "@/lib/marketing/marketing-home";
+import {
   WELCOME_TOPICS,
   welcomeTopicBySlug,
   welcomeTopicCanonical
@@ -31,7 +37,16 @@ export async function generateMetadata({ params }: TopicPageProps): Promise<Meta
       url: canonical,
       siteName: "AnyNanny",
       locale: "he_IL",
-      type: "website"
+      type: "website",
+      images: [
+        {
+          url: MARKETING_HOME_OG_URL,
+          width: MARKETING_HOME_OG_WIDTH,
+          height: MARKETING_HOME_OG_HEIGHT,
+          alt: MARKETING_HOME_OG_ALT,
+          type: "image/png"
+        }
+      ]
     }
   };
 }
