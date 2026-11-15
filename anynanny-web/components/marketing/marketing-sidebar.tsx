@@ -20,9 +20,9 @@ import {
   X
 } from "lucide-react";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
-import { AnyNannyRobotIcon } from "@/components/brand/anynanny-robot-icon";
 import { type MarketingChapterId } from "@/lib/marketing/chapters";
 import {
+  AI_COMING_SOON_LABEL,
   COMING_SOON_LABEL,
   DEFAULT_OPEN_NAV_IDS,
   MARKETING_SITE_NAV_ID,
@@ -36,7 +36,7 @@ import {
 import { sidebarHeebo } from "@/components/marketing/sidebar-heebo";
 import styles from "./marketing-home.module.css";
 
-const ICONS: Record<Exclude<SiteNavIconName, "android" | "iphone" | "robot">, LucideIcon> = {
+const ICONS: Record<Exclude<SiteNavIconName, "android" | "iphone">, LucideIcon> = {
   home: House,
   globe: Globe,
   app: LayoutGrid,
@@ -53,11 +53,12 @@ const ICONS: Record<Exclude<SiteNavIconName, "android" | "iphone" | "robot">, Lu
   giveaway: Gift
 };
 
-function NavGlyph({ name }: { name: SiteNavIconName }) {
+function NavGlyph({ name, className }: { name: SiteNavIconName; className?: string }) {
   if (name === "iphone" || name === "android") return null;
-  if (name === "robot") return <AnyNannyRobotIcon className={styles.sidebarIcon} />;
   const Icon = ICONS[name];
-  return <Icon aria-hidden className={styles.sidebarIcon} />;
+  return (
+    <Icon aria-hidden className={className ? `${styles.sidebarIcon} ${className}` : styles.sidebarIcon} />
+  );
 }
 
 function nodeMatchesQuery(node: SiteNavNode, query: string): boolean {
@@ -381,7 +382,13 @@ function NavLeafRow({
       <div className={styles.sidebarOffer} aria-disabled="true" data-press="">
         <span className={styles.sidebarOfferGlow} aria-hidden="true" />
         <Gift aria-hidden className={styles.sidebarOfferIcon} />
-        <span className={styles.sidebarOfferLabel}>{item.label}</span>
+        <span className={styles.sidebarOfferLabel}>
+          {item.label.replace(/וקופונים$/, "")}
+          <span className={styles.sidebarOfferTail}>
+            וקופונים
+            <span className={styles.soonBadge}>{AI_COMING_SOON_LABEL}</span>
+          </span>
+        </span>
         <Sparkles aria-hidden className={styles.sidebarOfferSparkle} />
       </div>
     );
@@ -398,10 +405,14 @@ function NavLeafRow({
     : `${styles.sidebarSoon} ${styles.sidebarTopItem}`;
   const content = (
     <>
-      {item.icon ? <NavGlyph name={item.icon} /> : null}
+      {item.icon ? (
+        <NavGlyph name={item.icon} className={item.id === "anynanny-ai" ? styles.sidebarAiIcon : undefined} />
+      ) : null}
       <span className={styles.sidebarLabel}>{item.label}</span>
       {destination.kind === "soon" ? (
-        <span className={styles.soonBadge}>{COMING_SOON_LABEL}</span>
+        <span className={styles.soonBadge}>
+          {item.id === "anynanny-ai" ? AI_COMING_SOON_LABEL : COMING_SOON_LABEL}
+        </span>
       ) : null}
     </>
   );

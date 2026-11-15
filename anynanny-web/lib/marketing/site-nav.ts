@@ -7,6 +7,7 @@ import { ANYNANNY_SUPPORT_EMAIL } from "@/lib/legal/contact";
 import { readStudentJobsUtm } from "@/lib/marketing/student-jobs";
 
 export const COMING_SOON_LABEL = "בקרוב";
+export const AI_COMING_SOON_LABEL = "מגיע בקרוב";
 export const IPHONE_APP_STORE_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
 
 /** App Store listing with the five campaign params. Other stores stay unchanged. */
@@ -38,7 +39,6 @@ export type SiteNavIconName =
   | "book"
   | "shield"
   | "sparkles"
-  | "robot"
   | "help"
   | "android"
   | "iphone"
@@ -104,7 +104,7 @@ export const SITE_NAV_ITEMS: SiteNavNode[] = [
     type: "link",
     id: "anynanny-ai",
     label: "AnyNanny AI",
-    icon: "robot",
+    icon: "sparkles",
     destination: { kind: "soon" }
   },
   {

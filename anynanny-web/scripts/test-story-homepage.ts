@@ -14,7 +14,9 @@ import {
   WWW_MARKETING_ROOT_ENABLED
 } from "../lib/hosts/site-classifier";
 import {
+  AI_COMING_SOON_LABEL,
   APP_ENTRY_HREF,
+  COMING_SOON_LABEL,
   DEFAULT_OPEN_NAV_IDS,
   IPHONE_APP_STORE_URL,
   SITE_NAV_DOWNLOADS,
@@ -107,7 +109,16 @@ const soon = collectDestinations(SITE_NAV_ITEMS).filter((destination) => destina
 assert.equal(soon.length, 2);
 const aiNav = SITE_NAV_ITEMS.find((item) => item.id === "anynanny-ai");
 assert.equal(aiNav?.type === "link" ? aiNav.label : "", "AnyNanny AI");
-assert.equal(aiNav?.type === "link" ? aiNav.icon : "", "robot");
+assert.equal(AI_COMING_SOON_LABEL, "מגיע בקרוב");
+assert.equal(COMING_SOON_LABEL, "בקרוב");
+assert.match(sidebar, /AI_COMING_SOON_LABEL/);
+assert.match(sidebar, /sidebarOfferTail[\s\S]*וקופונים[\s\S]*soonBadge/);
+assert.doesNotMatch(read("components/marketing/marketing-home.module.css"), /\.sidebarOffer \.soonBadge\s*\{[^}]*position:\s*absolute/);
+assert.doesNotMatch(sidebar, /sidebarOfferRow/);
+assert.equal((sidebar.match(/AI_COMING_SOON_LABEL/g) || []).length, 3);
+assert.equal(aiNav?.type === "link" ? aiNav.icon : "", "sparkles");
+assert.doesNotMatch(sidebar, /anynanny-robot-icon|AnyNannyRobotIcon/);
+assert.equal(existsSync(resolve(root, "components/brand/anynanny-robot-icon.tsx")), false);
 assert.equal(aiNav?.type === "link" ? destinationHref(aiNav.destination) : "linked", null);
 assert.equal(destinationHref(soon[0]), null);
 assert.doesNotMatch(JSON.stringify(SITE_NAV_ITEMS), /פורום AnyNanny|AnyNanny Marketplace|קהילת AnyNanny|מגזין/);
