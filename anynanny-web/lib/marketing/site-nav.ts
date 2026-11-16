@@ -9,6 +9,8 @@ import { readStudentJobsUtm } from "@/lib/marketing/student-jobs";
 export const COMING_SOON_LABEL = "בקרוב";
 export const AI_COMING_SOON_LABEL = "מגיע בקרוב";
 export const IPHONE_APP_STORE_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
+/** Android entry is the browser app. Google Play is not offered. */
+export const ANDROID_WEB_APP_URL = "https://app.anynanny.org/";
 
 /** App Store listing with the five campaign params. Other stores stay unchanged. */
 export function withStoreCampaign(href: string, search: string | URLSearchParams = ""): string {
@@ -128,14 +130,14 @@ export const SITE_NAV_DOWNLOADS: SiteNavLink[] = [
   {
     type: "link",
     id: "download-android",
-    label: "Android",
-    icon: "android",
-    destination: { kind: "soon" }
+    label: "Web App",
+    icon: "globe",
+    destination: { kind: "href", href: ANDROID_WEB_APP_URL }
   },
   {
     type: "link",
     id: "download-iphone",
-    label: "iPhone",
+    label: "App Store",
     icon: "iphone",
     destination: { kind: "href", href: IPHONE_APP_STORE_URL }
   }

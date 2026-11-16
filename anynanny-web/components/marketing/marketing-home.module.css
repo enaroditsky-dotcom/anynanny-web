@@ -2315,6 +2315,7 @@ a.mobileStoreAction {
 
 @media (max-width: 380px) {
   .mobileActionBar {
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr) minmax(0, 1.05fr) minmax(0, 1.12fr);
     gap: 0.2rem;
     padding-inline: calc(0.32rem + env(safe-area-inset-left, 0px)) calc(0.32rem + env(safe-area-inset-right, 0px));
   }

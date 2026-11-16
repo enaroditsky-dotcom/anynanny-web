@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Briefcase, Coffee, Handshake, Play, ShieldCheck, Sun, Users } from "lucide-react";
+import { Briefcase, Coffee, Globe, Handshake, Play, ShieldCheck, Sun, Users } from "lucide-react";
 import { ANYNANNY_APP_LOGO_SRC } from "@/components/brand/anynanny-app-logo";
 import {
   APP_LANDING_APP_STORE_LABEL,
@@ -105,11 +105,9 @@ export function ConversionHome({ campaignSearch = "" }: { campaignSearch?: strin
           </a>
           <a className={styles.androidLink} href={webAppHref} data-cta="web-app" data-press="">
             <span className={styles.androidFace}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M17.6 9.48 19.44 6.3c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24c-2.86-1.21-6.08-1.21-8.94 0L5.65 5.67c-.19-.29-.54-.37-.85-.22-.3.16-.42.54-.26.85l1.84 3.18C3.86 11.17 2.5 13.58 2.5 16.2v.3c0 .83.67 1.5 1.5 1.5h16c.83 0 1.5-.67 1.5-1.5v-.3c0-2.62-1.36-5.03-3.9-6.72ZM7 14.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Zm10 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1Z" />
-              </svg>
+              <Globe aria-hidden="true" strokeWidth={2} />
               <span>
-                <span className={styles.androidTitle}>להורדה לאנדרואיד</span>
+                <span className={styles.androidTitle}>Web App לאנדרואיד</span>
                 <span className={styles.androidNote}>דרך האפליקציה בדפדפן</span>
               </span>
             </span>

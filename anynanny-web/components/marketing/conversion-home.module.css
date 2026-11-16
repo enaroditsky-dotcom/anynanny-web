@@ -163,7 +163,8 @@
   width: 1.55rem;
   height: 1.55rem;
   flex-shrink: 0;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .androidTitle,

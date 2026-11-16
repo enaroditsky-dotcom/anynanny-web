@@ -166,11 +166,18 @@ assert.equal(
   withStoreCampaign(IPHONE_APP_STORE_URL, "?utm_source=ig&utm_medium=cpc&code=secret"),
   "https://apps.apple.com/il/app/anynanny/id6813214477?utm_source=ig&utm_medium=cpc"
 );
-assert.equal(androidDownload?.destination.kind, "soon");
+assert.equal(androidDownload?.destination.kind, "href");
+if (androidDownload?.destination.kind === "href") {
+  assert.equal(androidDownload.destination.href, "https://app.anynanny.org/");
+}
+assert.equal(androidDownload?.label, "Web App");
 assert.match(read("components/marketing/marketing-sidebar.tsx"), /AnyNanny%20logo%20new\.png/);
 assert.doesNotMatch(read("components/marketing/marketing-sidebar.tsx"), /anynanny-clean-transparent/);
-assert.match(read("lib/marketing/copy.ts"), /גרסת Google Play — בקרוב/);
-assert.doesNotMatch(read("lib/marketing/copy.ts"), /App Store — בקרוב/);
+assert.match(read("lib/marketing/copy.ts"), /AnyNanny כבר זמינה! מצאו בייביסיטרית או הצטרפו כבייביסיטרית\./);
+assert.doesNotMatch(read("lib/marketing/copy.ts"), /App Store — בקרוב|הורדת האפליקציה — בקרוב|גרסת Google Play — בקרוב/);
+assert.doesNotMatch(read("components/marketing/marketing-mobile-actions.tsx"), /Google Play|play\.google|COMING_SOON_LABEL/);
+assert.match(read("components/marketing/marketing-mobile-actions.tsx"), /Web App לאנדרואיד/);
+assert.match(read("components/marketing/marketing-mobile-actions.tsx"), /להורדה ב־App Store/);
 
 assert.equal(storyLoginHref("?utm_source=ig&type=recovery", false), "/login?utm_source=ig");
 assert.equal(storyLoginHref("?utm_source=ig&type=recovery"), "https://app.anynanny.org/login?utm_source=ig");

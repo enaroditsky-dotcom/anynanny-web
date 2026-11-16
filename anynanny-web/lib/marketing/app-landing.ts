@@ -81,17 +81,10 @@ export const APP_LANDING_DOWNLOAD_HEADING = "להורדת AnyNanny";
 
 export const APP_LANDING_APP_STORE_LABEL = "להורדה ב־App Store";
 
-/**
- * Real AnyNanny App Store listing.
- * `public/marketing/demo/store-links.js` also keeps APP_STORE_URL empty.
- * Leave this empty until that listing URL is stored in the repo.
- */
+/** Official iPhone listing. Campaign params are added only by `withStoreCampaign`. */
 export const APP_LANDING_APP_STORE_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
 
-/**
- * Real AnyNanny Google Play listing.
- * The demo store helper keeps GOOGLE_PLAY_URL empty, so Play is not shown as live.
- */
+/** Google Play is not offered. Android visitors use the Web App. */
 export const APP_LANDING_GOOGLE_PLAY_URL = "";
 
 /** Shown beside parent search links. Search itself stays behind the existing welcome registration. */

@@ -163,8 +163,7 @@ export const MARKETING_TOGETHER = {
   artSrc: "/marketing/story/chapter-10-four-scenes.png",
   registerLabel: "הרשמה ל־AnyNanny",
   loginLabel: "כניסה לאפליקציה",
-  comingSoon:
-    "אפשר להצטרף ולהשתמש גם דרך הדפדפן. גרסת Google Play — בקרוב."
+  comingSoon: "AnyNanny כבר זמינה! מצאו בייביסיטרית או הצטרפו כבייביסיטרית."
 } as const;
 
 export const MARKETING_PARENT_CHARTER_SUMMARY = "לקריאת אמנת ההורה של AnyNanny";
