@@ -200,7 +200,13 @@ function LoginInner() {
             <input type="email" className="mt-1 block w-full rounded-lg border p-2" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
           </label>
           <label className="block text-sm">סיסמה
-            <PasswordPeekField value={password} onChange={setPassword} disabled={busy} />
+            <PasswordPeekField
+              name="password"
+              value={password}
+              onChange={setPassword}
+              autoComplete="current-password"
+              disabled={busy}
+            />
           </label>
           <p className="pt-1 text-right">
             <Link

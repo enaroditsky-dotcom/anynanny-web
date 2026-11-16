@@ -21,6 +21,7 @@ import { ensureSitterProfileRowForUser } from '@/lib/sitter/sitter-profile';
 import { RequiredFieldMark } from '@/components/ui/required-field-mark';
 import { AnyNannyLogo } from '@/components/brand/anynanny-logo';
 import { AnynannyMascotPortrait } from '@/components/brand/anynanny-mascot-portrait';
+import { PasswordPeekField } from '@/components/auth/password-peek-field';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -256,12 +257,12 @@ export default function SignUpPage() {
             placeholder="אימייל"
             autoComplete="email"
           />
-          <input
-            type="password"
+          <PasswordPeekField
+            name="password"
             required
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-4 border border-stone-200 rounded-xl outline-none focus:border-[2px]"
+            onChange={setPassword}
+            inputClassName="w-full p-4 border border-stone-200 rounded-xl outline-none focus:border-[2px]"
             style={{ outlineColor: brandColor }}
             placeholder="סיסמה"
             autoComplete="new-password"

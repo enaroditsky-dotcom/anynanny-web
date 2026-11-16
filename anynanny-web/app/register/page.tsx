@@ -34,6 +34,7 @@ import {
 import type { ProfileRole } from "@/lib/supabase/profiles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
+import { PasswordPeekField } from "@/components/auth/password-peek-field";
 
 type RegistrationClient = NonNullable<ReturnType<typeof getSupabaseBrowserClient>>;
 
@@ -389,13 +390,13 @@ function RegisterInner() {
             autoComplete="email"
           />
 
-          <input
-            type="password"
+          <PasswordPeekField
+            name="password"
             required
             placeholder="סיסמה"
-            className="w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-navy-header"
+            inputClassName="w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-navy-header"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={setPassword}
             autoComplete="new-password"
           />
 

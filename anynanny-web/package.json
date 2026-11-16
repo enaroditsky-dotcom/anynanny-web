@@ -72,6 +72,7 @@
     "test:broadcast-question-visibility": "npx --yes tsx scripts/test-broadcast-question-visibility.ts",
     "test:marketing-consent": "npx --yes tsx scripts/test-marketing-consent.ts",
     "test:email-verification": "npx --yes tsx scripts/test-email-verification.ts",
+    "test:password-visibility": "npx --yes tsx scripts/test-password-visibility.ts",
     "test:register-supabase-client": "npx --yes tsx scripts/test-register-supabase-client.ts",
     "test:chat-emoji-picker": "npx --yes tsx scripts/test-chat-emoji-picker.ts",
     "test:parent-favorite-sitters": "npx --yes tsx scripts/test-parent-favorite-sitters.ts",
