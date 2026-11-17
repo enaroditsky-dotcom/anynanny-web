@@ -46,7 +46,8 @@ export function activeRoleForRestoredPath(href: string): ProfileRole | null {
 }
 
 /**
- * Cold start at `/`. A missing active_role still validates the Supabase session.
+ * Cold start at `/`. A saved active_role still validates the Supabase session.
+ * Without a verified user, the entry screen is shown even if active_role remains.
  * Unavailable keeps the session. Manual mode does not read it.
  */
 export async function restoreHomeSession(input: {
@@ -60,8 +61,7 @@ export async function restoreHomeSession(input: {
   const gate = protectedScreenGate(await resolveValidAuthUser(input.supabase));
   if (gate.status === "unavailable") return { status: "unavailable" };
   if (gate.status !== "verified") {
-    const role = savedPortal(input.savedRole);
-    return role ? { status: "login", role } : { status: "welcome" };
+    return { status: "welcome" };
   }
 
   const requestedRole = savedPortal(input.savedRole);

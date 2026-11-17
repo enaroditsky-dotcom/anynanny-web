@@ -200,6 +200,28 @@ async function main() {
   assert.equal(loggedOut.status, "welcome");
   assert.equal(loggedOutCalls.length, 0);
 
+  const staleParentRole = await restoreHomeSession({
+    manual: false,
+    savedRole: "parent",
+    supabase: mockClient({
+      user: null,
+      session: null,
+      signOutCalls: []
+    })
+  });
+  assert.equal(staleParentRole.status, "welcome");
+
+  const staleSitterRole = await restoreHomeSession({
+    manual: false,
+    savedRole: "sitter",
+    supabase: mockClient({
+      user: null,
+      session: null,
+      signOutCalls: []
+    })
+  });
+  assert.equal(staleSitterRole.status, "welcome");
+
   const revokedCalls: Array<string | undefined> = [];
   const revoked = await restoreHomeSession({
     manual: false,
@@ -212,6 +234,19 @@ async function main() {
   });
   assert.equal(revoked.status, "welcome");
   assert.deepEqual(revokedCalls, ["local"]);
+
+  const revokedRoleCalls: Array<string | undefined> = [];
+  const revokedRole = await restoreHomeSession({
+    manual: false,
+    savedRole: "parent",
+    supabase: mockClient({
+      error: { code: "refresh_token_not_found", message: "Invalid Refresh Token: Refresh Token Not Found" },
+      session: { access_token: "revoked" },
+      signOutCalls: revokedRoleCalls
+    })
+  });
+  assert.equal(revokedRole.status, "welcome");
+  assert.deepEqual(revokedRoleCalls, ["local"]);
 
   assert.equal(activeRoleForRestoredPath("/parent/dashboard"), "parent");
   assert.equal(activeRoleForRestoredPath("/sitter/dashboard"), "sitter");
