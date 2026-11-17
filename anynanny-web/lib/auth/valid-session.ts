@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { clearActiveRoleHint } from "@/lib/auth/returning-user";
 import { readSupabaseErrorMessage } from "@/lib/supabase/postgrest-schema";
 
 export type ValidAuthUserResult =
@@ -179,17 +180,35 @@ export function protectedScreenGate(
   return { status: "signed_out" };
 }
 
-export async function clearStaleBrowserSession(auth: Pick<AuthLike, "signOut">): Promise<void> {
+function signOutReturnedError(result: unknown): boolean {
+  return Boolean(result && typeof result === "object" && "error" in result && (result as { error?: unknown }).error);
+}
+
+export async function clearStaleBrowserSession(
+  auth: Pick<AuthLike, "signOut"> & Partial<Pick<AuthLike, "getSession">>
+): Promise<void> {
   if (staleClearInFlight) {
     await staleClearInFlight;
     return;
   }
   staleClearInFlight = (async () => {
+    let confirmed = false;
     try {
-      await auth.signOut({ scope: "local" });
+      const result = await auth.signOut({ scope: "local" });
+      confirmed = !signOutReturnedError(result);
     } catch {
-      /* local storage may already be empty */
+      confirmed = false;
     }
+    if (!confirmed) return;
+    if (auth.getSession) {
+      try {
+        const { data, error } = await auth.getSession();
+        if (error || data.session) return;
+      } catch {
+        return;
+      }
+    }
+    clearActiveRoleHint();
   })();
   try {
     await staleClearInFlight;

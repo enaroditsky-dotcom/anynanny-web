@@ -19,6 +19,7 @@ import {
   LOGOUT_PUSH_CLEANUP_QUERY,
   LOGOUT_PUSH_CLEANUP_QUERY_VALUE
 } from "@/lib/auth/logout";
+import { loginRegistrationHref } from "@/lib/charter/routing";
 import { forgotPasswordHref, forwardExplicitRecoveryCallback, readAuthCallbackParams, resetPasswordCallbackHref } from "@/lib/auth/password-reset";
 import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -38,6 +39,7 @@ function LoginInner() {
   const roleFromQuery = searchParams.get("role");
   const trackFromQuery = (searchParams.get("track") || "").trim().toLowerCase();
   const pushCleanupWarning = searchParams.get(LOGOUT_PUSH_CLEANUP_QUERY) === LOGOUT_PUSH_CLEANUP_QUERY_VALUE;
+  const registrationHref = loginRegistrationHref(roleFromQuery, trackFromQuery);
 
   const [bypassLogin, setBypassLogin] = useState(false);
   const [email, setEmail] = useState("");
@@ -284,6 +286,11 @@ function LoginInner() {
             </Link>
           </p>
           <button type="submit" disabled={busy} className="mt-6 w-full rounded-2xl bg-[#001F3F] py-3 text-white">התחברות</button>
+          <p className="pt-4 text-center">
+            <Link href={registrationHref} className="text-sm font-semibold text-navy-header underline">
+              אין לכם חשבון? הירשמו עכשיו
+            </Link>
+          </p>
         </form>
         {message && <p className="mt-4 p-3 text-center bg-rose-50 text-rose-950 text-sm">{message}</p>}
       </section>

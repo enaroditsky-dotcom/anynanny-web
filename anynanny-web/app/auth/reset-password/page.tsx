@@ -24,6 +24,7 @@ import {
   readAuthCallbackParams,
   userFacingUpdatePasswordError
 } from "@/lib/auth/password-reset";
+import { clearActiveRoleHintWhen } from "@/lib/auth/returning-user";
 import { LOGOUT_PUSH_CLEANUP_FAILED_MESSAGE, notePushCleanupResult } from "@/lib/auth/logout";
 import { unsubscribeCurrentPushSubscription } from "@/lib/push/register-push";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -197,7 +198,8 @@ function ResetPasswordInner() {
           : PASSWORD_UPDATED_MESSAGE
       );
       try {
-        await supabase.auth.signOut();
+        const { error: signOutError } = await supabase.auth.signOut();
+        clearActiveRoleHintWhen(!signOutError);
       } catch (signOutError) {
         if (process.env.NODE_ENV === "development") {
           console.warn("[password-reset] signOut after update:", signOutError);

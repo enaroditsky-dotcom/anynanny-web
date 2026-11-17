@@ -1,3 +1,4 @@
+import { ACCOUNT_TYPE_ENTRY_HREF } from "@/lib/auth/age-eligibility";
 import { PARENT_ONBOARDING_PATH } from "@/lib/auth/product-profiles";
 import type { CharterType } from "@/lib/charter/versions";
 import type { ProfileRole } from "@/lib/supabase/profiles";
@@ -51,6 +52,18 @@ export function welcomeSignupHref(role: ProfileRole, nextPath?: string): string 
   const params = new URLSearchParams({ role });
   params.set("next", nextPath ?? signupPathForRole(role));
   return `${WELCOME_PATH}?${params.toString()}`;
+}
+
+/** Login → registration. Role-specific links stay on the Welcome signup path. */
+export function loginRegistrationHref(role: string | null | undefined, track?: string | null): string {
+  if (role === "parent") return welcomeSignupHref("parent");
+  if (role === "sitter") {
+    if (track?.trim().toLowerCase() === "expert") {
+      return welcomeSignupHref("sitter", "/register?role=sitter&track=expert");
+    }
+    return welcomeSignupHref("sitter");
+  }
+  return ACCOUNT_TYPE_ENTRY_HREF;
 }
 
 export function welcomeReplayHref(role: ProfileRole, from?: string): string {
