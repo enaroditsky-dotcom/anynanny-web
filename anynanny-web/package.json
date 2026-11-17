@@ -89,10 +89,13 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.112.4",
     "lucide-react": "^1.14.0",
-    "next": "^15.2.0",
+    "next": "15.5.29",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "web-push": "^3.6.7"
+  },
+  "overrides": {
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.10",
