@@ -193,8 +193,10 @@ const coordination = read("lib/notifications/coordination.ts");
 const inbox = read("lib/broadcast/question-inbox.ts");
 const store = read("lib/broadcast/use-unanswered-questions.ts");
 
-assert.match(parentNav, /href: "\/parent\/settings"/);
-assert.match(parentNav, /href: "\/sitter\/settings"/);
+assert.match(parentNav, /href: "\/parent\/messages"/);
+assert.match(parentNav, /href: "\/sitter\/messages"/);
+assert.doesNotMatch(parentNav, /href: "\/parent\/settings"/);
+assert.doesNotMatch(parentNav, /href: "\/sitter\/settings"/);
 assert.equal(parentNav.match(/badgeKey: "questions"/g)?.length ?? 0, 0);
 assert.match(parentNav, /data-broadcast-messages-badge/);
 assert.match(parentNav, /useBroadcastMessagesBadge/);

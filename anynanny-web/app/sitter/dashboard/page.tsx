@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Calendar, History, Wallet, X } from "lucide-react";
+import { X } from "lucide-react";
 import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDashboardGreetingName } from "@/lib/user/use-dashboard-greeting-name";
@@ -13,14 +12,8 @@ import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wi
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
 import { SitterVerifiedParentsPreference } from "@/components/sitter/sitter-verified-parents-preference";
 import { useSitterBroadcastPause } from "@/components/sitter/SitterBroadcastAlertHost";
-import { LogoutButton } from "@/components/account/logout-button";
-import {
-  APP_CONTENT_MAX_W,
-  DASHBOARD_SHORTCUT_ICON,
-  DASHBOARD_SHORTCUT_ICON_WRAP,
-  DASHBOARD_SHORTCUT_LABEL,
-  DASHBOARD_SHORTCUT_TILE
-} from "@/lib/ui/app-shell";
+import { APP_CONTENT_MAX_W } from "@/lib/ui/app-shell";
+import { NavBadgePortal, SITTER_SHIFTS_BADGE_SLOT } from "@/components/navigation/nav-badge-slot";
 import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import { hasSitterCompletedOnboarding, SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -1492,48 +1485,21 @@ export default function SitterDashboardPage() {
                 </section>
               ) : null}
               {!shouldHideDashboardActions ? (
-                <section className="shrink-0 rounded-xl bg-white p-1.5 shadow-soft">
-                  <div className="grid min-w-0 grid-cols-3 gap-1">
-                    <Link
-                      href="/sitter/availability"
-                      data-tour="sitter-work-schedule"
-                      aria-label="סידור עבודה"
-                      className={`${DASHBOARD_SHORTCUT_TILE} border border-emerald-600/15 bg-emerald-50/40 text-navy-header hover:border-emerald-600/30 hover:shadow-md`}
-                    >
-                      <span className={`${DASHBOARD_SHORTCUT_ICON_WRAP} text-emerald-600 ring-1 ring-emerald-600/10`}>
-                        <Calendar className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
-                      </span>
-                      <span className={DASHBOARD_SHORTCUT_LABEL}>סידור עבודה</span>
-                    </Link>
-                    <Link
-                      href="/sitter/wallet"
-                      data-tour="sitter-wallet"
-                      className={`${DASHBOARD_SHORTCUT_TILE} border border-navy-header/10 bg-[#FDFBF6]/80 text-navy-header hover:border-navy-header/25 hover:shadow-md`}
-                    >
-                      <span className={`${DASHBOARD_SHORTCUT_ICON_WRAP} ring-1 ring-navy-header/10`}>
-                        <Wallet className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
-                      </span>
-                      <span className={DASHBOARD_SHORTCUT_LABEL}>הארנק שלי</span>
-                    </Link>
-                    <Link
-                      href="/sitter/shifts"
-                      data-tour="sitter-shifts"
-                      aria-label={cancellationAttention.showDot ? "המשמרות שלי — יש עדכון ביטול" : pendingBookingCount > 0 ? `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות` : "המשמרות שלי"}
-                      className={`${DASHBOARD_SHORTCUT_TILE} border border-navy-header/10 bg-[#FDFBF6]/80 text-navy-header hover:border-navy-header/25 hover:shadow-md`}
-                    >
-                      <span className={`relative ${DASHBOARD_SHORTCUT_ICON_WRAP} ring-1 ring-navy-header/10`}>
-                        <History className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
-                        <CancellationAttentionDot visible={cancellationAttention.showDot} />
-                        {pendingBookingCount > 0 ? (
-                          <span className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white" aria-hidden>
-                            {pendingBookingCount > 9 ? "9+" : pendingBookingCount}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className={DASHBOARD_SHORTCUT_LABEL}>המשמרות שלי</span>
-                    </Link>
-                  </div>
-                </section>
+                <NavBadgePortal slot={SITTER_SHIFTS_BADGE_SLOT}>
+                  <CancellationAttentionDot visible={cancellationAttention.showDot} />
+                  {pendingBookingCount > 0 ? (
+                    <span className="absolute right-0 top-0 z-[1] flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white" aria-hidden>
+                      {pendingBookingCount > 9 ? "9+" : pendingBookingCount}
+                    </span>
+                  ) : null}
+                  {cancellationAttention.showDot || pendingBookingCount > 0 ? (
+                    <span className="sr-only">
+                      {cancellationAttention.showDot
+                        ? "המשמרות שלי — יש עדכון ביטול"
+                        : `המשמרות שלי — ${pendingBookingCount} בקשות ממתינות`}
+                    </span>
+                  ) : null}
+                </NavBadgePortal>
               ) : null}
               {showSitterStatusPanel ? (
                 <div className="px-1 pb-2">
@@ -1575,19 +1541,16 @@ export default function SitterDashboardPage() {
               </div>
             ) : null}
           </div>
-          {!shouldHideDashboardActions && sitterBootstrapComplete && sitterId && !onboardingPending ? (
+          {!shouldHideDashboardActions && sitterBootstrapComplete && sitterId && !onboardingPending && showReleaseStuckShiftButton ? (
             <div className="flex w-full shrink-0 flex-col gap-2 border-t border-slate-100 bg-slate-50/50 px-3 py-2 rounded-b-2xl">
-              {showReleaseStuckShiftButton ? (
-                <button
-                  type="button"
-                  disabled={releasingStuckShift}
-                  onClick={handleOpenReleaseStuckShiftModal}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-[0.97] disabled:opacity-60"
-                >
-                  <span>{releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}</span>
-                </button>
-              ) : null}
-              <LogoutButton />
+              <button
+                type="button"
+                disabled={releasingStuckShift}
+                onClick={handleOpenReleaseStuckShiftModal}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-[0.97] disabled:opacity-60"
+              >
+                <span>{releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}</span>
+              </button>
             </div>
           ) : null}
           <CancellationAttentionModals attention={cancellationAttention} role="sitter" />

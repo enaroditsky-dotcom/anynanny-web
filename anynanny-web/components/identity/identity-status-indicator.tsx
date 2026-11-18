@@ -17,12 +17,15 @@ type IdentityStatusIndicatorProps = {
   userId: string | null;
   role: IdentityVerificationRole;
   nextPath: string;
+  /** Visible label for the existing unverified/failed action. Handler stays the same. */
+  actionLabel?: string;
 };
 
 export function IdentityStatusIndicator({
   userId,
   role,
-  nextPath
+  nextPath,
+  actionLabel
 }: IdentityStatusIndicatorProps) {
   const [loading, setLoading] = useState(Boolean(userId));
   const [record, setRecord] = useState<IdentityVerificationRecord>(EMPTY_IDENTITY_VERIFICATION);
@@ -62,6 +65,7 @@ export function IdentityStatusIndicator({
 
   const label = identityDashboardStatusLabel(record.status);
   const actionable = isIdentityDashboardActionable(record.status);
+  const actionText = actionable && actionLabel ? actionLabel : label;
   const verified = record.status === "verified";
   const pending = record.status === "pending";
 
@@ -80,10 +84,10 @@ export function IdentityStatusIndicator({
           <button
             type="button"
             onClick={() => setFormOpen(true)}
-            className={`${className} transition hover:border-slate-300 hover:bg-slate-50`}
-            aria-label={`${label}. לפתיחת אימות זהות`}
+            className={`${className} w-fit shrink-0 transition hover:border-slate-300 hover:bg-slate-50`}
+            aria-label={`${actionText}. לפתיחת אימות זהות`}
           >
-            {label}
+            {actionText}
           </button>
         ) : (
           <span className={className} aria-label={label}>

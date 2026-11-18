@@ -3,9 +3,10 @@
 import type { ReactNode } from "react";
 import { memo, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { APP_SHELL_SCROLL_ID } from "@/lib/ui/app-shell";
 
-import { AppShellHeader } from "@/components/app-shell-header";
+import { AppSideDrawerFrame } from "@/components/navigation/app-side-drawer-frame";
+import { useAppSideDrawer } from "@/components/navigation/use-app-side-drawer";
+import { isAppDrawerRoute } from "@/lib/navigation/app-side-drawer";
 import { GlobalCoordinationNotifications } from "@/components/notifications/global-coordination-notifications";
 import { AppShellSessionHydration } from "@/components/app-shell-session-hydration";
 import { AppShellStableBoundary } from "@/components/app-shell-stable-boundary";
@@ -37,7 +38,9 @@ const CHROMELESS_PREFIXES = [
   "/parents",
   "/welcome",
   "/charter",
-  "/sitter/onboarding"
+  "/sitter/onboarding",
+  "/dev/side-drawer",
+  "/dev/parent-profile-header"
 ];
 
 const MAIN_LAYOUT_PREFIXES = [
@@ -85,6 +88,8 @@ export function AppShellGate({
 }) {
   const pathname = usePathname();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const drawerEnabled = !isChromelessAuthPath(pathname) && isAppDrawerRoute(pathname);
+  const drawer = useAppSideDrawer(drawerEnabled, pathname);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
@@ -137,30 +142,32 @@ export function AppShellGate({
            * One scrollport between the in-flow header and the fixed BottomNav.
            * html/body stay unscrollable here so iOS does not get a second scroller.
            */}
-          <div className="flex h-dvh max-h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-[#FDFBF6]">
-            <AppShellHeader />
-            <GlobalCoordinationNotifications />
-
-            <div
-              id={APP_SHELL_SCROLL_ID}
-              ref={scrollRef}
-              className={[
-                "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain",
-                mainLayout ? "" : "px-2 pt-2",
-                SHELL_BOTTOM_NAV_PADDING
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              <RouteTransitionShell>
-                <PushPermissionBanner />
-                {children}
-              </RouteTransitionShell>
-            </div>
-
-            <ParentActiveNowDock pathname={pathname} />
-            <StableBottomNav />
-          </div>
+          <AppSideDrawerFrame
+            clipRef={drawer.clipRef}
+            scrollRef={scrollRef}
+            phase={drawer.phase}
+            enabled={drawer.enabled}
+            clipRaised={drawer.clipRaised}
+            panelStyle={drawer.panelStyle}
+            backdropStyle={drawer.backdropStyle}
+            onPanelTransitionEnd={drawer.onPanelTransitionEnd}
+            onOpenMenu={drawer.toggleDrawer}
+            onClose={drawer.closeDrawer}
+            menuButtonRef={drawer.menuButtonRef}
+            scrollClassName={[mainLayout ? "" : "px-2 pt-2", SHELL_BOTTOM_NAV_PADDING].filter(Boolean).join(" ")}
+            belowHeader={<GlobalCoordinationNotifications />}
+            footer={
+              <>
+                <ParentActiveNowDock pathname={pathname} />
+                <StableBottomNav />
+              </>
+            }
+          >
+            <RouteTransitionShell>
+              <PushPermissionBanner />
+              {children}
+            </RouteTransitionShell>
+          </AppSideDrawerFrame>
         </IncomingChatInboxProvider>
       </AppShellStableBoundary>
     </SessionProvider>

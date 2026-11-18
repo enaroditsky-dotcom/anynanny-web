@@ -4,28 +4,38 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, MessageCircle, UserRound, Settings, Zap } from "lucide-react";
+import { Calendar, CalendarRange, ClipboardList, History, MessageCircle, Wallet, Zap, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { CHAT_COMPOSER_ACTIVE_EVENT } from "@/lib/chat/composer-chrome";
 import { useWalletNotification } from "@/features/wallet/hooks/useWalletNotification";
 import { useChatNotification } from "@/features/chat/hooks/useChatNotification";
 import { useBroadcastMessagesBadge } from "@/lib/broadcast/use-broadcast-inbox";
+import { PARENT_CALENDAR_BADGE_SLOT, SITTER_SHIFTS_BADGE_SLOT } from "@/components/navigation/nav-badge-slot";
 
 type NavItem = {
   href: string;
   label: string;
   match: (path: string) => boolean;
-  Icon: typeof Home;
+  Icon: LucideIcon;
   badgeKey?: "messages" | "wallet";
   tour?: string;
+  badgeSlot?: typeof PARENT_CALENDAR_BADGE_SLOT | typeof SITTER_SHIFTS_BADGE_SLOT;
 };
 
 const parentSideItems: NavItem[] = [
   {
-    href: "/parent/dashboard",
-    label: "בית",
-    match: (p) => p === "/parent/dashboard",
-    Icon: Home
+    href: "/parent/wallet",
+    label: "ארנק",
+    match: (p) => p.startsWith("/parent/wallet"),
+    Icon: Wallet,
+    badgeKey: "wallet"
+  },
+  {
+    href: "/parent/calendar",
+    label: "יומן",
+    match: (p) => p.startsWith("/parent/calendar"),
+    Icon: Calendar,
+    badgeSlot: PARENT_CALENDAR_BADGE_SLOT
   },
   {
     href: "/parent/messages",
@@ -36,28 +46,28 @@ const parentSideItems: NavItem[] = [
     tour: "messages"
   },
   {
-    href: "/parent/profile",
-    label: "אזור אישי",
-    match: (p) => p.startsWith("/parent/profile") || p.startsWith("/parent/wallet"),
-    Icon: UserRound,
-    badgeKey: "wallet",
-    tour: "personal-area"
-  },
-  {
-    href: "/parent/settings",
-    label: "הגדרות",
-    match: (p) => p.startsWith("/parent/settings") || p.startsWith("/parent/faq"),
-    Icon: Settings,
-    tour: "settings"
+    href: "/parent/history",
+    label: "היסטוריה",
+    match: (p) => p.startsWith("/parent/history"),
+    Icon: History
   }
 ];
 
 const sitterItems: NavItem[] = [
   {
-    href: "/sitter/dashboard",
-    label: "בית",
-    match: (p) => p === "/sitter/dashboard",
-    Icon: Home
+    href: "/sitter/wallet",
+    label: "ארנק",
+    match: (p) => p.startsWith("/sitter/wallet"),
+    Icon: Wallet,
+    badgeKey: "wallet",
+    tour: "sitter-wallet"
+  },
+  {
+    href: "/sitter/availability",
+    label: "יומן עבודה",
+    match: (p) => p.startsWith("/sitter/availability") || p === "/sitter/calendar" || p.startsWith("/sitter/calendar/"),
+    Icon: CalendarRange,
+    tour: "sitter-work-schedule"
   },
   {
     href: "/sitter/messages",
@@ -68,18 +78,12 @@ const sitterItems: NavItem[] = [
     tour: "sitter-messages"
   },
   {
-    href: "/sitter/profile",
-    label: "אזור אישי",
-    match: (p) => p.startsWith("/sitter/profile") || p.startsWith("/sitter/personal"),
-    Icon: UserRound,
-    tour: "sitter-personal-area"
-  },
-  {
-    href: "/sitter/settings",
-    label: "הגדרות",
-    match: (p) => p.startsWith("/sitter/settings") || p.startsWith("/sitter/faq"),
-    Icon: Settings,
-    tour: "sitter-settings"
+    href: "/sitter/shifts",
+    label: "משמרות",
+    match: (p) => p.startsWith("/sitter/shifts"),
+    Icon: ClipboardList,
+    tour: "sitter-shifts",
+    badgeSlot: SITTER_SHIFTS_BADGE_SLOT
   }
 ];
 
@@ -98,7 +102,7 @@ function NavLink({
   broadcastBadge: string | null;
   clearWalletNotification: () => void;
 }) {
-  const { href, label, match, Icon, badgeKey, tour } = item;
+  const { href, label, match, Icon, badgeKey, tour, badgeSlot } = item;
   const active = match(pathname);
   const showMessageBadge = badgeKey === "messages" && hasUnreadMessages;
   const showWalletBadge = badgeKey === "wallet" && hasWalletUpdate;
@@ -122,13 +126,18 @@ function NavLink({
             ? `${label} — הודעות חדשות`
             : showWalletBadge
               ? `${label} — עדכון בארנק`
-              : label
+              : badgeSlot
+                ? undefined
+                : label
       }
     >
       <div className="relative">
         <Icon className={`h-[26px] w-[26px] shrink-0 ${active ? "stroke-[2.25]" : "stroke-[1.85]"}`} aria-hidden />
         {showBadge ? (
           <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
+        ) : null}
+        {badgeSlot ? (
+          <span data-nav-badge-slot={badgeSlot} className="pointer-events-none absolute inset-0" />
         ) : null}
         {showBroadcastBadge ? (
           <span
@@ -245,7 +254,7 @@ export function BottomNav() {
         aria-hidden={chatComposerActive}
         className={navClassName}
       >
-        <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5">
+        <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5" dir="ltr">
           {[leftA, leftB].map((item) => (
             <NavLink
               key={item.href}
@@ -281,7 +290,7 @@ export function BottomNav() {
       aria-hidden={chatComposerActive}
       className={navClassName}
     >
-      <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5">
+      <div className="mx-auto grid w-full max-w-md grid-cols-5 items-end gap-0.5" dir="ltr">
         {[leftA, leftB].map((item) => (
           <NavLink
             key={item.href}

@@ -40,21 +40,45 @@ assert.match(logoutButton, /aria-hidden/);
 assert.match(logoutButton, /logoutAndRedirect\(router\)/);
 assert.match(logoutButton, /<LogoutButtonContent label=\{busy \? "מתנתק…" : label\} \/>/);
 
+const drawerLogout = read("components/navigation/app-side-drawer-logout.tsx");
+assert.match(drawerLogout, /LOGOUT_BUTTON_CLASS/);
+assert.match(drawerLogout, /<LogoutButtonContent \/>/);
+assert.match(drawerLogout, /getSupabaseBrowserClient\(\)/);
+assert.match(drawerLogout, /setBroadcastMinimized\(false\)/);
+assert.match(drawerLogout, /supabase\.auth\.signOut\(\)/);
+assert.match(drawerLogout, /window\.location\.href = "\/login"/);
+assert.match(drawerLogout, /currentRole === "sitter"/);
+assert.match(drawerLogout, /<LogoutButton \/>/);
+assert.match(drawerLogout, /signedIn/);
+assert.match(drawerLogout, /isAppDrawerRoute\(pathname\)/);
+assert.doesNotMatch(drawerLogout, /\bUnplug\b/);
+assert.doesNotMatch(drawerLogout, /\bLogOut\b/);
+assert.doesNotMatch(drawerLogout, /logoutAndRedirect/);
+assert.doesNotMatch(drawerLogout, /releaseStuckShift/);
+assert.doesNotMatch(drawerLogout, /effectiveRole/);
+
 const dashboard = read("components/parent/parent-dashboard-client.tsx");
-assert.match(dashboard, /LOGOUT_BUTTON_CLASS/);
-assert.match(dashboard, /<LogoutButtonContent \/>/);
-assert.match(dashboard, /supabase\.auth\.signOut\(\)/);
-assert.match(dashboard, /window\.location\.href = "\/login"/);
-assert.doesNotMatch(dashboard, /\bUnplug\b/);
-assert.doesNotMatch(dashboard, /\bLogOut\b/);
+assert.doesNotMatch(dashboard, /LOGOUT_BUTTON_CLASS/);
+assert.doesNotMatch(dashboard, /LogoutButtonContent/);
+assert.doesNotMatch(dashboard, /window\.location\.href = "\/login"/);
 assert.doesNotMatch(dashboard, /logoutAndRedirect/);
+assert.match(dashboard, /showStuckShiftReleaseButton/);
+assert.match(dashboard, /ReleaseStuckShiftModal/);
+assert.match(dashboard, /handleOpenReleaseStuckShiftModal/);
+
+const sitterDashboard = read("app/sitter/dashboard/page.tsx");
+assert.doesNotMatch(sitterDashboard, /<LogoutButton/);
+assert.doesNotMatch(sitterDashboard, /logoutAndRedirect/);
+assert.match(sitterDashboard, /showReleaseStuckShiftButton/);
+assert.match(sitterDashboard, /ReleaseStuckShiftModal/);
+assert.match(sitterDashboard, /handleOpenReleaseStuckShiftModal/);
 
 const logoutButtonUsages = [
   "app/parent/settings/page.tsx",
   "app/sitter/settings/page.tsx",
-  "app/sitter/dashboard/page.tsx",
   "app/sitter/profile/page.tsx",
-  "components/safety/account-suspended-gate.tsx"
+  "components/safety/account-suspended-gate.tsx",
+  "components/navigation/app-side-drawer-logout.tsx"
 ];
 for (const file of logoutButtonUsages) {
   const source = read(file);

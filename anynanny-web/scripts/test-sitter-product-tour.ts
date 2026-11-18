@@ -33,6 +33,7 @@ import {
 } from "../lib/product-tour/session-guard";
 import { mergeProductTourRows } from "../lib/product-tour/tour-row";
 import { firstPresentTourSelector } from "../lib/product-tour/resolve-target";
+import { appDrawerLinks } from "../lib/navigation/app-side-drawer-destinations";
 import {
   clampTourTooltipWidth,
   TOUR_TOOLTIP_MAX_WIDTH_PX,
@@ -235,8 +236,9 @@ assert.equal(scheduleEntry?.targetSelector, SITTER_TOUR_SELECTORS.workSchedule);
 assert.equal(scheduleEntry?.advanceMode, "click-target");
 assert.equal(scheduleExplain?.targetSelector, SITTER_TOUR_SELECTORS.workScheduleContainer);
 assert.equal(scheduleExplain?.route, SITTER_TOUR_SCHEDULE_PATH);
-assert.match(dashboard, /data-tour="sitter-work-schedule"/);
-assert.match(dashboard, /href="\/sitter\/availability"/);
+assert.match(bottomNav, /tour: "sitter-work-schedule"/);
+assert.match(bottomNav, /href: "\/sitter\/availability"/);
+assert.doesNotMatch(dashboard, /data-tour="sitter-work-schedule"/);
 assert.match(availability, /data-tour="sitter-work-schedule-container"/);
 
 // 9. work-schedule explanation does not modify availability
@@ -257,7 +259,8 @@ assert.equal(shiftBoard?.targetSelector, SITTER_TOUR_SELECTORS.shiftBoard);
 assert.equal(shiftBoard?.advanceMode, "next-button");
 assert.equal(shiftBoard?.blockTargetAction, true);
 assert.match(shiftsPage, /data-tour="sitter-shift-board"/);
-assert.match(dashboard, /data-tour="sitter-shifts"/);
+assert.match(bottomNav, /tour: "sitter-shifts"/);
+assert.doesNotMatch(dashboard, /data-tour="sitter-shifts"/);
 assert.doesNotMatch(read("lib/product-tour/sitter-steps.ts"), /pendingBooking|requiresPending/);
 
 // 11. sitter Messages sequence works
@@ -296,6 +299,21 @@ assert.doesNotMatch(read("lib/product-tour/sitter-steps.ts"), /window\.open|wa\.
 assert.doesNotMatch(provider, /window\.open|wa\.me/);
 assert.match(engine, /if \(step\.preserveTargetState \|\| step\.blockTargetAction\)/);
 
+const drawerMenu = read("components/navigation/app-side-drawer-menu.tsx");
+const drawerHook = read("components/navigation/use-app-side-drawer.ts");
+const sitterDrawerLinks = appDrawerLinks("sitter");
+assert.equal(sitterDrawerLinks.find((item) => item.id === "personal-area")?.href, "/sitter/profile");
+assert.equal(sitterDrawerLinks.find((item) => item.id === "personal-area")?.tour, "sitter-personal-area");
+assert.equal(sitterDrawerLinks.find((item) => item.id === "settings")?.href, "/sitter/settings");
+assert.equal(sitterDrawerLinks.find((item) => item.id === "settings")?.tour, "sitter-settings");
+assert.match(drawerMenu, /"data-tour": item\.tour/);
+assert.match(engine, /data-product-tour-overlay/);
+assert.match(engine, /APP_DRAWER_TOUR_STEP_ATTRIBUTE/);
+assert.match(drawerHook, /readDrawerTourPresentationHold/);
+assert.doesNotMatch(read("lib/product-tour/sitter-steps.ts"), /app-side-drawer|openDrawer/);
+assert.doesNotMatch(provider, /openDrawer|app-side-drawer/);
+assert.doesNotMatch(bottomNav, /data-tour="sitter-personal-area"|data-tour="sitter-settings"/);
+
 // 14. payment receiving explanation works
 const paymentStep = SITTER_TOUR_STEPS.find((step) => step.id === "sitter-payment-methods");
 assert.equal(paymentStep?.targetSelector, SITTER_TOUR_SELECTORS.paymentMethods);
@@ -319,7 +337,8 @@ assert.match(paymentSection, /selectPreferred/);
 const walletStep = SITTER_TOUR_STEPS.find((step) => step.id === "sitter-wallet");
 assert.equal(walletStep?.targetSelector, SITTER_TOUR_SELECTORS.wallet);
 assert.equal(walletStep?.advanceMode, "click-target");
-assert.match(dashboard, /data-tour="sitter-wallet"/);
+assert.match(bottomNav, /tour: "sitter-wallet"/);
+assert.doesNotMatch(dashboard, /data-tour="sitter-wallet"/);
 assert.match(walletPage, /data-tour="sitter-wallet-container"/);
 assert.doesNotMatch(read("lib/product-tour/sitter-steps.ts"), /payout-methods|fetchSitterWalletView/);
 assert.doesNotMatch(provider, /payout-methods|fetchSitterWalletView/);
@@ -470,8 +489,9 @@ assert.match(persistence, /eq\("tour_key", tourKey\)/);
 assert.equal(SITTER_TOUR_STEPS.map((step) => step.id).join(","), EXPECTED_STEP_IDS.join(","));
 assert.equal(getSitterTourStep(99), null);
 assert.match(dashboard, /data-tour="sitter-home"/);
-assert.match(bottomNav, /tour: "sitter-personal-area"/);
-assert.match(bottomNav, /tour: "sitter-settings"/);
+assert.doesNotMatch(bottomNav, /tour: "sitter-personal-area"/);
+assert.doesNotMatch(bottomNav, /tour: "sitter-settings"/);
+assert.match(bottomNav, /tour: "sitter-messages"/);
 assert.match(bottomNav, /data-tour="sitter-surprises"/);
 const parentNavBlock = bottomNav.slice(
   bottomNav.indexOf("const parentSideItems"),
