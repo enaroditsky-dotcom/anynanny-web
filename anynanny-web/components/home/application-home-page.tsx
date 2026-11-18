@@ -1,0 +1,373 @@
+﻿"use client";
+
+import { Suspense, useEffect, useState } from "react";
+import { AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { restoreHomeSession } from "@/lib/auth/home-session-restore";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
+import { AnyNannyEntryBrand } from "@/components/brand/anynanny-entry-brand";
+import { welcomeSignupHref } from "@/lib/charter/routing";
+import { setUserRoleChoice } from "@/lib/auth/returning-user";
+import { hasPasswordRecoveryEvent } from "@/lib/auth/password-recovery-state";
+import {
+  forwardExplicitRecoveryCallback,
+  readAuthCallbackParams
+} from "@/lib/auth/password-reset";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+type LandingPath = "parent" | "sitter";
+
+const HOMEPAGE_INFO_LINKS: Array<{ href: string; label: string }> = [
+  { href: "/parents", label: "מחפשים בייביסיטר?" },
+  { href: "/babysitter", label: "רוצה לעבוד כבייביסיטר?" },
+  { href: "/jobs/students", label: "עבודה בבייביסיטר לסטודנטיות" }
+];
+
+function PathIcon({ path }: { path: LandingPath }) {
+  if (path === "parent") {
+    return <Users className="h-4 w-4 sm:h-[0.8125rem] sm:w-[0.8125rem]" aria-hidden />;
+  }
+
+  return <Baby className="h-4 w-4 sm:h-[0.8125rem] sm:w-[0.8125rem]" aria-hidden />;
+}
+
+const PATHS: Array<{
+  id: LandingPath;
+  title: string;
+  subtitle: string;
+  accent: string;
+  iconWrap: string;
+}> = [
+  {
+    id: "parent",
+    title: "הורים",
+    subtitle: "חיפוש בייביסיטר",
+    accent:
+      "border-[#FF8A8A]/35 bg-[#FF8A8A]/10 text-[#C45C5C]",
+    iconWrap:
+      "bg-[#FF8A8A]/15 text-[#FF8A8A] ring-[#FF8A8A]/25"
+  },
+  {
+    id: "sitter",
+    title: "בייביסיטר",
+    subtitle: "קבלת משמרות ועבודה",
+    accent:
+      "border-navy-header/20 bg-[#001F3F]/5 text-navy-header",
+    iconWrap:
+      "bg-[#001F3F]/10 text-navy-header ring-navy-header/15"
+  }
+];
+
+function HomeInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isManual = searchParams.get("manual") === "true";
+  const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [restorePending, setRestorePending] = useState(false);
+  const [serviceMissing, setServiceMissing] = useState(false);
+  const authRetry = useOnlineRetryNonce();
+  const hasRecoveryCallback = searchParams.get("type")?.toLowerCase() === "recovery";
+
+  useEffect(() => {
+    let cancelled = false;
+    const hash = window.location.hash;
+    const search = window.location.search;
+    const callback = readAuthCallbackParams(search, hash);
+
+    if (forwardExplicitRecoveryCallback()) return;
+
+    if (hasPasswordRecoveryEvent()) {
+      window.location.replace(`/auth/reset-password${search}${hash}`);
+      return;
+    }
+
+    if (callback.isRecoveryType) {
+      window.location.replace(`/auth/reset-password${search}${hash}`);
+      return;
+    }
+
+    if (hash.includes("error") || search.includes("error")) {
+      const queryString = search
+        ? search
+        : `?${hash.replace("#", "")}`;
+
+      router.replace(`/auth/verified${queryString}`);
+      return;
+    }
+
+    if (isManual) {
+      setRestorePending(false);
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      if (!cancelled) {
+        setRestorePending(false);
+        setServiceMissing(true);
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!cancelled) setServiceMissing(false);
+
+    let savedRole: string | null = null;
+    try {
+      savedRole = localStorage.getItem("active_role");
+    } catch {
+      savedRole = null;
+    }
+
+    setRestorePending(true);
+    void (async () => {
+      const result = await restoreHomeSession({ manual: false, supabase, savedRole });
+      if (cancelled) return;
+      if (result.status === "unavailable") {
+        authRetry.noteUnavailable();
+        return;
+      }
+      authRetry.noteSettled();
+      if (result.status === "welcome" || result.status === "no_client" || result.status === "manual") {
+        setRestorePending(false);
+        return;
+      }
+      if (result.status === "login") {
+        router.replace(result.role === "parent" ? "/login?role=parent" : "/login?role=sitter");
+        return;
+      }
+      if (result.activeRole) {
+        try {
+          localStorage.setItem("active_role", result.activeRole);
+        } catch {
+          /* ignore quota */
+        }
+      }
+      router.replace(result.href);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, isManual, router, searchParams]);
+
+  const navigateWithPath = (
+    action: "login" | "register",
+    path: LandingPath
+  ) => {
+    const profileRole = path === "parent" ? "parent" : "sitter";
+
+    setUserRoleChoice(profileRole);
+
+    try {
+      localStorage.setItem(
+        "anynanny_service_track",
+        path === "sitter" ? "babysitter" : "parent"
+      );
+    } catch {
+      /* ignore */
+    }
+
+    const qs = new URLSearchParams({
+      role: profileRole,
+      track: "babysitter"
+    });
+
+    if (action === "register") {
+      router.push(welcomeSignupHref(profileRole, `/register?${qs.toString()}`));
+      return;
+    }
+
+    router.push(`/login?${qs.toString()}`);
+  };
+
+  if (restorePending && !hasRecoveryCallback) {
+    return (
+      <main className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF6] px-4" dir="rtl">
+        <AuthRetryStatus exhausted={authRetry.exhausted} onRetry={authRetry.retryNow} pending="טוען…" />
+      </main>
+    );
+  }
+
+  if (hasRecoveryCallback) {
+    return (
+      <main
+        className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF6] px-4"
+        dir="rtl"
+      >
+        <p className="text-center text-base text-slate-600">מעבירים לאיפוס סיסמה…</p>
+      </main>
+    );
+  }
+
+  return (
+    <main
+      className="min-h-[100dvh] w-full overflow-y-auto bg-[#FDFBF6] px-4 py-1.5 sm:py-[0.8125rem]"
+      dir="rtl"
+    >
+      <div className="mx-auto flex min-h-[calc(100dvh-0.75rem)] w-full max-w-md flex-col items-center justify-start gap-0 pt-0 sm:min-h-0 sm:gap-[0.65rem] sm:pt-1">
+        {/* Brand — illustration, then official wordmark. */}
+        {serviceMissing ? (
+          <p className="mb-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
+            {AUTH_SERVICE_UNAVAILABLE_MESSAGE}
+          </p>
+        ) : null}
+        <div className="w-full min-w-0 shrink-0 text-center">
+          <AnyNannyEntryBrand />
+
+          <p className="mt-0.5 text-xs font-bold leading-tight text-slate-500 sm:mt-[0.1625rem] sm:text-[0.56875rem]">
+            פשוט למצוא זמן לחיים
+          </p>
+        </div>
+
+        <HomepageWelcomeVideo
+          onJoinClick={() => {
+            setRegistrationOpen(true);
+            window.requestAnimationFrame(() => {
+              document
+                .getElementById("landing-registration-options")
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            });
+          }}
+        />
+
+        {/* Login */}
+        <section className="mt-2 w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:mt-0 sm:rounded-[0.975rem] sm:p-[0.65rem]">
+          <h2 className="text-center text-xl font-extrabold tracking-tight text-navy-header sm:text-[0.975rem]">
+            כניסה
+          </h2>
+
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-[0.325rem] sm:gap-[0.325rem]">
+            {PATHS.map((path) => (
+              <button
+                key={`login-${path.id}`}
+                type="button"
+                onClick={() =>
+                  navigateWithPath("login", path.id)
+                }
+                className={`flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition hover:brightness-[0.99] active:scale-[0.98] sm:min-h-[3.7375rem] sm:gap-1 sm:rounded-xl sm:px-1.5 sm:py-2 ${path.accent}`}
+              >
+                <span
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-[1.625rem] sm:w-[1.625rem] ${path.iconWrap}`}
+                >
+                  <PathIcon path={path.id} />
+                </span>
+
+                <span className="block text-sm font-bold leading-tight sm:text-[11.05px]">
+                  כניסת {path.title}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Register */}
+        <section className="mt-1.5 w-full shrink-0 px-1 pt-0 sm:mt-0 sm:px-1 sm:pt-[0.24375rem]">
+          <button
+            type="button"
+            onClick={() => setRegistrationOpen((open) => !open)}
+            aria-expanded={registrationOpen}
+            aria-controls="landing-registration-options"
+            className="landing-register-cta mx-auto flex w-fit min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-navy-header bg-navy-header px-8 py-3.5 text-center text-[1.51875rem] font-bold leading-[1.75rem] text-white shadow-[0_8px_18px_rgba(0,31,63,0.28),0_0_0_3px_rgba(255,138,138,0.2)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-salmon focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF6] sm:my-[0.325rem] sm:h-11 sm:min-h-11 sm:w-full sm:gap-[0.325rem] sm:rounded-[0.975rem] sm:px-[1.3rem] sm:py-0 sm:text-[0.9871875rem] sm:leading-none"
+          >
+            <span>להרשמה</span>
+            {registrationOpen ? (
+              <ChevronUp className="h-5 w-5 shrink-0 sm:h-[0.65rem] sm:w-[0.65rem]" aria-hidden />
+            ) : (
+              <ChevronDown className="h-5 w-5 shrink-0 sm:h-[0.65rem] sm:w-[0.65rem]" aria-hidden />
+            )}
+          </button>
+
+          <p className="mt-0.5 text-center text-[12px] leading-snug text-slate-500 sm:mt-[0.1625rem] sm:text-[13px]">
+            עדיין אין לכם חשבון? צרו את החשבון המתאים לכם
+          </p>
+
+          <div
+            id="landing-registration-options"
+            className={`grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out ${
+              registrationOpen
+                ? "mt-2 grid-rows-[1fr] opacity-100"
+                : "mt-0 grid-rows-[0fr] opacity-0"
+            }`}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div className="grid grid-cols-2 gap-2">
+                {PATHS.map((path) => (
+                  <button
+                    key={`register-${path.id}`}
+                    type="button"
+                    onClick={() =>
+                      navigateWithPath("register", path.id)
+                    }
+                    className={`flex min-h-[70px] flex-col items-center justify-center gap-1 rounded-xl border bg-white px-2 py-2.5 text-center shadow-sm transition hover:bg-slate-50 active:scale-[0.98] sm:min-h-[3.16875rem] sm:gap-[0.1625rem] sm:rounded-xl sm:py-1.5 ${path.accent}`}
+                  >
+                    <span
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg ring-1 sm:h-[1.4625rem] sm:w-[1.4625rem] ${path.iconWrap}`}
+                    >
+                      <PathIcon path={path.id} />
+                    </span>
+
+                    <span className="min-w-0">
+                      <span className="block text-xs font-bold leading-tight sm:text-sm">
+                        {path.title}
+                      </span>
+
+                      <span className="block text-[12px] font-medium leading-snug opacity-75 sm:text-xs">
+                        הרשמה
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <p className="mt-1.5 max-w-sm shrink-0 text-center text-[12px] leading-snug text-slate-500 sm:mt-0 sm:text-xs">
+          הורים ובייביסיטריות — כל הקהילה במקום אחד.
+        </p>
+
+        <nav
+          aria-label="עוד ב־AnyNanny"
+          className="mt-3 w-full max-w-sm shrink-0 border-t border-navy-header/10 pt-2.5 text-center sm:mt-[0.65rem] sm:pt-[0.40625rem]"
+        >
+          <p className="text-[11px] font-semibold leading-none text-navy-header/55 sm:text-[0.65rem]">
+            עוד ב־AnyNanny
+          </p>
+          <ul className="mt-1 flex flex-col items-center">
+            {HOMEPAGE_INFO_LINKS.map((link) => (
+              <li key={link.href} className="max-w-full">
+                <Link
+                  href={link.href}
+                  className="inline-flex min-h-8 items-center px-1 py-0.5 text-center text-[13px] font-semibold leading-snug text-navy-header underline decoration-emerald-600/50 underline-offset-[3px] transition hover:text-emerald-800"
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </div>
+    </main>
+  );
+}
+
+export function ApplicationHomePage() {
+  return (
+    <Suspense
+      fallback={
+        <main
+          className="flex min-h-[100dvh] items-center justify-center bg-[#FDFBF6]"
+          dir="rtl"
+        >
+          <p className="text-sm text-slate-500">טוען...</p>
+        </main>
+      }
+    >
+      <HomeInner />
+    </Suspense>
+  );
+}

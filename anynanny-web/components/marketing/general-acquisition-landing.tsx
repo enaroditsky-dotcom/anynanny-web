@@ -39,11 +39,17 @@ export function GeneralAcquisitionLanding({
   webAppHref,
   parentDemoHref,
   sitterDemoHref,
+  parentSearchHref,
+  sitterSignupHref,
+  iosHref,
   city
 }: {
   webAppHref: string;
   parentDemoHref: string;
   sitterDemoHref: string;
+  parentSearchHref: string;
+  sitterSignupHref: string;
+  iosHref: string;
   city?: BabysitterCity;
 }) {
   const h1Find = city?.h1Find ?? GENERAL_ACQUISITION_H1_FIND;
@@ -124,27 +130,43 @@ export function GeneralAcquisitionLanding({
         </figure>
 
         <div className={styles.actions}>
-          <a className={styles.primaryCta} href={webAppHref} data-cta="web-app" data-cta-placement="primary">
+          <a className={styles.primaryCta} href={webAppHref} data-cta="web-app" data-cta-placement="primary" data-press="">
             <Download aria-hidden className={styles.ctaIcon} />
             <span>{GENERAL_ACQUISITION_WEB_APP_CTA}</span>
             <ChevronLeft aria-hidden className={styles.ctaIcon} />
           </a>
 
-          <a className={styles.parentDemo} href={parentDemoHref} data-cta="parent-demo">
+          <a className={styles.parentDemo} href={parentDemoHref} data-cta="parent-demo" data-press="">
             <Play aria-hidden className={styles.demoIcon} />
             <span>{GENERAL_ACQUISITION_PARENT_DEMO_CTA}</span>
           </a>
 
-          <a className={styles.sitterDemo} href={sitterDemoHref} data-cta="sitter-demo">
+          <a className={styles.sitterDemo} href={sitterDemoHref} data-cta="sitter-demo" data-press="">
             <Play aria-hidden className={styles.demoIcon} />
             <span>{GENERAL_ACQUISITION_SITTER_DEMO_CTA}</span>
           </a>
 
-          <a className={styles.phonePanel} href={webAppHref} data-cta="web-app" data-cta-placement="phone">
+          <a className={styles.phonePanel} href={webAppHref} data-cta="web-app" data-cta-placement="phone" data-press="">
             <Download aria-hidden className={styles.phonePanelIcon} />
             <span className={styles.phonePanelTitle}>{GENERAL_ACQUISITION_WEB_APP_CTA}</span>
           </a>
 
+          <a className={styles.roleLink} href={parentSearchHref} data-cta="parent-search" data-press="">
+            לחיפוש בייביסיטר
+          </a>
+          <a className={styles.roleLink} href={sitterSignupHref} data-cta="sitter-signup" data-press="">
+            להרשמה כבייביסיטרית
+          </a>
+          <a
+            className={styles.availabilityLink}
+            href={iosHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-cta="app-store"
+            data-press=""
+          >
+            App Store ל־iOS
+          </a>
           <p className={styles.storeNote}>{GENERAL_ACQUISITION_STORE_NOTE}</p>
         </div>
 

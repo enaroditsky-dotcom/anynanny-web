@@ -1,4 +1,3 @@
-import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 import {
   APP_LANDING_APP_STORE_URL,
   APP_LANDING_H1,
@@ -24,22 +23,16 @@ import styles from "./app-landing.module.css";
 
 export function AppLanding({
   parentHref,
-  sitterHref
+  sitterHref,
+  webAppHref
 }: {
   parentHref: string;
   sitterHref: string;
+  webAppHref: string;
 }) {
   return (
     <div className={styles.page} dir="rtl">
-      <header className={styles.header}>
-        <a className={styles.brand} href={APP_LANDING_SITE_URL} aria-label="AnyNanny, לאתר">
-          <AnyNannyLogo variant="header" />
-        </a>
-      </header>
-
       <main className={styles.main}>
-        <h1 className={styles.heroTitle}>{APP_LANDING_H1}</h1>
-
         <figure className={styles.hero}>
           <img
             src={APP_LANDING_HERO_SRC}
@@ -51,9 +44,10 @@ export function AppLanding({
           />
           <a
             className={styles.heroEntry}
-            href={APP_LANDING_SITE_URL}
+            href={webAppHref}
             aria-label="להרשמה ולהורדה"
             data-hero-hit="entry"
+            data-press=""
           >
             להרשמה ולהורדה
           </a>
@@ -73,6 +67,8 @@ export function AppLanding({
           />
         </figure>
 
+        <h1 className={styles.heroTitle}>{APP_LANDING_H1}</h1>
+
         <div className={styles.audiences}>
           <section className={styles.sitterCard} aria-labelledby="sitter-heading">
             <h2 id="sitter-heading">{APP_LANDING_SITTER_HEADING}</h2>
@@ -87,7 +83,7 @@ export function AppLanding({
             <p className={styles.emphasis}>
               <strong>{APP_LANDING_SITTER_EMPHASIS}</strong>
             </p>
-            <a className={styles.sitterCta} href={sitterHref} data-cta="sitter-signup">
+            <a className={styles.sitterCta} href={sitterHref} data-cta="sitter-signup" data-press="">
               {APP_LANDING_SITTER_CTA}
             </a>
           </section>
@@ -103,7 +99,7 @@ export function AppLanding({
               ))}
             </ul>
             <p>{APP_LANDING_PARENT_NOTE}</p>
-            <a className={styles.parentCta} href={parentHref} data-cta="parent-search">
+            <a className={styles.parentCta} href={parentHref} data-cta="parent-search" data-press="">
               {APP_LANDING_PARENT_CTA}
             </a>
           </section>

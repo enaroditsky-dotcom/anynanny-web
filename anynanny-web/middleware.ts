@@ -1,5 +1,11 @@
 import { createSupabaseMiddlewareClient } from "@/lib/supabase/middleware-client";
 import { shouldForwardRootAuthCallback } from "@/lib/auth/root-auth-callback";
+import {
+  DOMAIN_SEPARATION_ENABLED,
+  DOMAIN_SEPARATION_REDIRECT_STATUS,
+  classifySiteRequest,
+  resolvePublicSiteHost
+} from "@/lib/hosts/site-classifier";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -14,6 +20,22 @@ function logMiddleware(step: string, pathname: string) {
 export async function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
   logMiddleware("enter", pathname);
+
+  if (DOMAIN_SEPARATION_ENABLED) {
+    const decision = classifySiteRequest({
+      host: resolvePublicSiteHost({
+        host: req.headers.get("host") || req.nextUrl.host,
+        forwardedHost: req.headers.get("x-forwarded-host")
+      }),
+      pathname,
+      search: req.nextUrl.search,
+      domainSeparationEnabled: DOMAIN_SEPARATION_ENABLED
+    });
+    if (decision.serving.mode === "redirect-to-www") {
+      logMiddleware("redirect-www", pathname);
+      return NextResponse.redirect(decision.serving.location, DOMAIN_SEPARATION_REDIRECT_STATUS);
+    }
+  }
 
   // Explicit recovery that fell back to Site URL arrives as `/?type=recovery`.
   // Generic signup `/?code=` is not recovery and must not be forwarded here.

@@ -59,7 +59,7 @@ const acceptRoute = read("app/api/charter/accept/route.ts");
 const migration = read("supabase/migrations/20260902190000_user_charter_acceptances.sql");
 const parentOnboardingPage = read("app/parent/onboarding/page.tsx");
 const sitterOnboardingPage = read("app/sitter/onboarding/page.tsx");
-const landing = read("app/page.tsx");
+const landing = read("components/home/application-home-page.tsx");
 const parentPersonal = read("components/parent/parent-personal-area.tsx");
 const sitterPersonal = read("components/sitter/sitter-personal-area.tsx");
 
@@ -86,7 +86,7 @@ assert.equal(nextPathAfterCharterAcceptance("sitter"), "/sitter/onboarding");
 assert.equal(onboardingPathForRole("parent"), "/parent/onboarding");
 assert.equal(onboardingPathForRole("sitter"), "/sitter/onboarding");
 assert.match(postAuth, /destinationBeforeRoleOnboarding|pathBeforeRoleOnboarding/);
-assert.match(postAuth, /hasAcceptedCurrentCharter/);
+assert.match(postAuth, /readCurrentCharterAcceptance/);
 assert.match(postAuth, /charterHref\("parent"\)/);
 assert.match(postAuth, /charterHref\("sitter"\)/);
 assert.doesNotMatch(postAuth, /welcomeHref\("parent"\)/);
@@ -186,9 +186,9 @@ assert.equal(
   resolvePreOnboardingPath({ role: "parent", onboardingComplete: false, charterAccepted: false }),
   "/charter?role=parent"
 );
-assert.match(welcomeFlow, /onboardingComplete/);
+assert.match(welcomeFlow, /onboardingState === "complete"/);
 assert.match(welcomeFlow, /\/parent\/dashboard/);
-assert.match(charterFlow, /onboardingComplete/);
+assert.match(charterFlow, /onboardingState === "complete"/);
 
 // 3–4. Initial Welcome is pre-auth and must not send signup users to login
 assert.match(welcomeFlow, /markSignupWelcomePlayed/);

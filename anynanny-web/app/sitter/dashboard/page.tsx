@@ -18,7 +18,8 @@ import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import { hasSitterCompletedOnboarding, SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { SESSIONS_TABLE, SESSION_PENDING_START_STATUSES, computeLiveAccruedNis, computeLiveElapsedSecondsActive, resolveLiveHourlyRateNis, type SupabaseSessionRow, formatElapsed } from "@/lib/session/protocol";
 import { dismissCompletedSession, readDismissedCompletedSessionId, shouldSuppressStaleCompletedSession } from "@/lib/session/dismissed-completed";
 import { readSessionLinkedBookingId, SESSION_SELECT_FALLBACK_CHAIN, SESSIONS_PROTOCOL_SELECT_CORE } from "@/lib/session/sessions-query";
@@ -162,6 +163,7 @@ export default function SitterDashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
   const { nowMs, sitter: sessionSitter } = useSession();
+  const authRetry = useOnlineRetryNonce();
 
   const {
     sitterId, setSitterId, pendingRow, setPendingRow, activeShiftRow, setActiveShiftRow, 
@@ -590,9 +592,26 @@ export default function SitterDashboardPage() {
     void (async () => {
       const auth = await resolveBrowserAuth();
       if (!auth.ok) {
-        if (!cancelled) { setLoading(false); setCheckingAuthEnforcement(false); setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לראות משמרות."); }
+        if (auth.reason === "unavailable") {
+          authRetry.noteUnavailable();
+          if (!cancelled && authRetry.exhausted) {
+            setLoading(false);
+            setCheckingAuthEnforcement(false);
+            setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לראות משמרות."));
+          }
+          return;
+        }
+        authRetry.noteSettled();
+        if (!cancelled) {
+          setSitterId(null);
+          setLoading(false);
+          setCheckingAuthEnforcement(false);
+          setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לראות משמרות."));
+        }
         return;
       }
+      authRetry.noteSettled();
+      if (cancelled) return;
       setSitterId(auth.userId);
 
       const [{ data: sitterProfile }, { data: mainProfile }] = await Promise.all([
@@ -620,7 +639,7 @@ export default function SitterDashboardPage() {
       setLoading(false); setSitterBootstrapComplete(true); setCheckingAuthEnforcement(false);
     })();
     return () => { cancelled = true; };
-  }, [refreshForUser, setSitterBootstrapComplete, setSitterId]);
+  }, [authRetry.exhausted, authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, refreshForUser, setSitterBootstrapComplete, setSitterId]);
 
   useEffect(() => {
     if (!sitterId) { setSitterSerialLoaded(false); setSitterPublicDisplayId(null); return; }
@@ -971,7 +990,7 @@ export default function SitterDashboardPage() {
     try {
       const auth = await resolveBrowserAuth();
       if (!auth.ok) {
-        const message = RELEASE_STUCK_SHIFT_COPY.genericFailure;
+        const message = browserAuthFailureMessage(auth.reason, RELEASE_STUCK_SHIFT_COPY.genericFailure);
         setReleaseStuckModalError(message);
         setBanner(message);
         return;
@@ -1050,7 +1069,7 @@ export default function SitterDashboardPage() {
   const confirmStartShift = async () => {
     if (!pendingRow || !sitterId) return;
     const auth = await resolveBrowserAuth();
-    if (!auth.ok) { setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני אישור משמרת."); return; }
+    if (!auth.ok) { setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר לפני אישור משמרת.")); return; }
     const startIso = new Date().toISOString();
     try {
       const { error } = await auth.supabase.from(SESSIONS_TABLE).update({ status: "active", sitter_id: sitterId, start_time: startIso, start_confirmed: true }).eq("id", pendingRow.id);
@@ -1066,7 +1085,7 @@ export default function SitterDashboardPage() {
     const bookingId = readSessionLinkedBookingId(row, todaysBooking?.id ?? activeCircleBooking?.id ?? null) || todaysBooking?.id || null;
     if (bookingId) persistShiftLocallyDismissed(bookingId);
     const auth = await resolveBrowserAuth();
-    if (!auth.ok) { setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר לפני סיום משמרת."); return; }
+    if (!auth.ok) { setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר לפני סיום משמרת.")); return; }
     setEndShiftBusy(true);
     try {
       const { error } = await sitterCompleteSession(auth.supabase, sitterId, row.id, row.start_time);

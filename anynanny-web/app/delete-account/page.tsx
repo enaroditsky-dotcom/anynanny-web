@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { AccountDeletionDocument } from "@/components/legal/account-deletion-document";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
+import { absoluteSiteUrl } from "@/lib/seo/public-sitemap";
 
 export const metadata: Metadata = {
   title: "מחיקת חשבון | AnyNanny",
-  description: "מידע ובקשה למחיקת חשבון AnyNanny והנתונים המשויכים אליו."
+  description: "מידע ובקשה למחיקת חשבון AnyNanny והנתונים המשויכים אליו.",
+  alternates: {
+    canonical: absoluteSiteUrl("/delete-account")
+  }
 };
 
 export default function DeleteAccountPage() {

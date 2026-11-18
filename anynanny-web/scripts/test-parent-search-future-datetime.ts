@@ -305,6 +305,7 @@ assert.match(ui, /<select/);
 assert.match(ui, /min=\{todayIso\}/);
 assert.match(ui, /min=\{endDateMin\}/);
 assert.match(dateField, /backgroundColor: "#FFFFFF"/);
+assert.match(dateField, /useAnchoredOverlay\(open, triggerRef, 320, align, 440\)/);
 assert.match(dateField, /disabled=\{!day\.selectable\}/);
 assert.match(dateField, /bg-\[#F3F4F6\]/);
 assert.match(dateField, /text-\[#9CA3AF\]/);

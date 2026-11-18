@@ -1,5 +1,11 @@
+import { DOMAIN_SEPARATION_ENABLED } from "@/lib/hosts/site-classifier";
+import { WEB_APP_ORIGIN } from "@/lib/hosts/app-entry";
+import { APP_LANDING_APP_STORE_URL, appLandingSignupHref } from "@/lib/marketing/app-landing";
 import { marketingDemoHref } from "@/lib/marketing/demo-entry";
+import { withStoreCampaign } from "@/lib/marketing/site-nav";
 import { readStudentJobsUtm, utmSearchFromRecord as readUtmSearchFromRecord } from "@/lib/marketing/student-jobs";
+
+export { WEB_APP_ORIGIN };
 
 export const GENERAL_ACQUISITION_PATH = "/babysitter";
 export const GENERAL_ACQUISITION_CANONICAL = "https://www.anynanny.org/babysitter";
@@ -25,15 +31,20 @@ export const GENERAL_ACQUISITION_DIRECT =
 export const GENERAL_ACQUISITION_WEB_APP_CTA = "להורדת Web App";
 
 /**
- * Canonical Web App entry. The installable app starts at `/`
- * (`app/manifest.ts` start_url). This is not a file download or a store URL.
+ * Application origin. Marketing pages stay on www; open, download, and install
+ * links use the app host only after domain separation is enabled.
+ * `public/manifest.webmanifest` start_url remains `/` on that origin.
+ * This is not a file download or a store URL.
  */
+
+/** Installable app entry path. Same-origin with `WEB_APP_ORIGIN` once separation is on. */
 export const GENERAL_WEB_APP_PATH = "/";
 
 export const GENERAL_ACQUISITION_PARENT_DEMO_CTA = "אני מחפש/ת בייביסיטר — דמו";
 export const GENERAL_ACQUISITION_SITTER_DEMO_CTA = "אני רוצה לעבוד כבייביסיטר — דמו";
 
-export const GENERAL_ACQUISITION_STORE_NOTE = "האפליקציות בחנויות — בקרוב";
+export const GENERAL_ACQUISITION_STORE_NOTE =
+  "iOS זמין ב־App Store. לאנדרואיד נכנסים דרך האפליקציה בדפדפן. גרסת Google Play עדיין לא פורסמה.";
 
 export const GENERAL_ACQUISITION_PARENT_HEADING = "חיפוש בייביסיטר בחינם ובקלות";
 export const GENERAL_ACQUISITION_PARENT_COPY =
@@ -85,10 +96,37 @@ export function utmSearchFromRecord(
 }
 
 /** Shared Web App entry. Only the five campaign params are copied. */
-export function generalWebAppHref(search: string | URLSearchParams = ""): string {
+export function generalWebAppHref(
+  search: string | URLSearchParams = "",
+  domainSeparationEnabled: boolean = DOMAIN_SEPARATION_ENABLED
+): string {
   const utm = readGeneralAcquisitionUtm(search);
   const qs = utm.toString();
-  return qs ? `${GENERAL_WEB_APP_PATH}?${qs}` : GENERAL_WEB_APP_PATH;
+  const relative = qs ? `${GENERAL_WEB_APP_PATH}?${qs}` : GENERAL_WEB_APP_PATH;
+  if (!domainSeparationEnabled) return relative;
+  const url = new URL(GENERAL_WEB_APP_PATH, WEB_APP_ORIGIN);
+  utm.forEach((value, key) => {
+    url.searchParams.set(key, value);
+  });
+  return url.toString();
+}
+
+/** Official iOS listing. Campaign params only. Google Play is not offered. */
+export function generalIosStoreHref(search: string | URLSearchParams = ""): string {
+  return withStoreCampaign(APP_LANDING_APP_STORE_URL, search);
+}
+
+/** Parent search starts at the application entry. The app decides the next screen. */
+export function generalParentSearchHref(
+  search: string | URLSearchParams = "",
+  domainSeparationEnabled: boolean = DOMAIN_SEPARATION_ENABLED
+): string {
+  return generalWebAppHref(search, domainSeparationEnabled);
+}
+
+/** Existing sitter welcome → register hop. */
+export function generalSitterSignupHref(search: string | URLSearchParams = ""): string {
+  return appLandingSignupHref("sitter", search);
 }
 
 export function generalParentDemoHref(search: string | URLSearchParams = ""): string {

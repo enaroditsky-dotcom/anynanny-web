@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { AuthRetryStatus } from "@/lib/auth/use-online-retry-nonce";
 import { Calendar, ArrowRight, ChevronDown, Star, User, Wallet } from "lucide-react";
 import { ProfileImage } from "@/components/profile/profile-image";
 import {
@@ -47,7 +48,7 @@ export default function ParentSitterProfileView() {
   const params = useParams();
   const searchParams = useSearchParams();
   const sitterId = typeof params?.sitterId === "string" ? params.sitterId : "";
-  const { isLoading, signedIn, effectiveRole } = useAuth();
+  const { isLoading, signedIn, effectiveRole, authRetryExhausted, retryAuthentication } = useAuth();
 
   const [profile, setProfile] = useState<SitterProfilePublic | null>(null);
   const [reviews, setReviews] = useState<PublicSitterReview[]>([]);
@@ -211,7 +212,9 @@ export default function ParentSitterProfileView() {
         </Link>
       </div>
 
-      {fetching ? (
+      {authRetryExhausted && isLoading && !signedIn ? (
+        <AuthRetryStatus exhausted onRetry={() => void retryAuthentication()} pending="טוען פרופיל…" />
+      ) : fetching ? (
         <p className="text-right text-sm text-slate-600 px-1">טוען פרופיל…</p>
       ) : errorMsg ? (
         <p className="text-right text-sm text-rose-700 px-1">{errorMsg}</p>

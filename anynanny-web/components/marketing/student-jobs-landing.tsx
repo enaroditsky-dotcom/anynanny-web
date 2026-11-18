@@ -101,7 +101,7 @@ export function StudentJobsLanding({
               })}
             </ul>
 
-            <a className={styles.primaryCta} href={signupHref} data-cta="sitter-signup" data-cta-placement="hero">
+            <a className={styles.primaryCta} href={signupHref} data-cta="sitter-signup" data-cta-placement="hero" data-press="">
               {withBrand(STUDENT_JOBS_PRIMARY_CTA)}
             </a>
             <p className={styles.signupNote}>{STUDENT_JOBS_SIGNUP_NOTE}</p>

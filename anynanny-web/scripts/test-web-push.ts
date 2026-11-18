@@ -28,6 +28,7 @@ import {
   PUSH_WEBHOOK_HEADER
 } from "../lib/push/webhook-auth";
 import { isExpiredPushStatus } from "../lib/push/web-push-sender";
+import { shouldRegisterPushServiceWorker } from "../lib/push/service-worker-register";
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "../lib/settings/notification-preferences";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -411,7 +412,84 @@ assert.equal(PUSH_NOTIFICATION_KIND_LIST.length, 10);
 assert.equal(PUSH_NOTIFICATION_KIND_LIST[9], "הודעה מ-AnyNanny");
 assert.match(settings, /לא שולט בצליל התראת המערכת/);
 assert.match(bottomNav, /hasUnreadMessages/);
+assert.match(swRegister, /shouldRegisterPushServiceWorker/);
 assert.match(swRegister, /navigator\.serviceWorker/);
+assert.doesNotMatch(swRegister, /serviceWorker\.unregister|registration\.unregister/);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parents", { domainSeparationEnabled: false }),
+  true
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/", { domainSeparationEnabled: false }),
+  true
+);
+assert.equal(shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parents"), false);
+assert.equal(shouldRegisterPushServiceWorker("https://www.anynanny.org", "/"), false);
+assert.equal(shouldRegisterPushServiceWorker("https://app.anynanny.org", "/"), true);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parents", { domainSeparationEnabled: true }),
+  false
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/babysitter/haifa", { domainSeparationEnabled: true }),
+  false
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/jobs/students", { domainSeparationEnabled: true }),
+  false
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/app", { domainSeparationEnabled: true }),
+  false
+);
+for (const pathname of ["/privacy", "/terms", "/delete-account"]) {
+  assert.equal(
+    shouldRegisterPushServiceWorker("https://www.anynanny.org", pathname, { domainSeparationEnabled: true }),
+    false,
+    pathname
+  );
+}
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/parent/dashboard", { domainSeparationEnabled: true }),
+  true
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/", {
+    domainSeparationEnabled: true,
+    wwwMarketingRootEnabled: false
+  }),
+  true
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://app.anynanny.org", "/parents", { domainSeparationEnabled: true }),
+  true
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://app.anynanny.org", "/parent/dashboard", { domainSeparationEnabled: true }),
+  true
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("http://localhost:3000", "/parents", { domainSeparationEnabled: true }),
+  false
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("http://localhost:3000", "/sitter/dashboard", { domainSeparationEnabled: true }),
+  true
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://www.anynanny.org", "/", {
+    domainSeparationEnabled: true,
+    wwwMarketingRootEnabled: true
+  }),
+  false
+);
+assert.equal(
+  shouldRegisterPushServiceWorker("https://app.anynanny.org", "/", {
+    domainSeparationEnabled: true,
+    wwwMarketingRootEnabled: true
+  }),
+  true
+);
 assert.match(layoutSw, /registerAnyNannyServiceWorker/);
 
 const android = detectPushCapability({

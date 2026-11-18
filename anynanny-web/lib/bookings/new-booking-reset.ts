@@ -26,6 +26,16 @@ export function dispatchNewBookingCreated(detail: NewBookingEventDetail): void {
   );
 }
 
+/** Drop the marker on logout so the next account cannot restore the previous booking card. */
+export function clearNewBookingMarker(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(NEW_BOOKING_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Consume a pending new-booking marker (e.g. after navigating to the dashboard). */
 export function consumeNewBookingMarker(): NewBookingEventDetail | null {
   if (typeof window === "undefined") return null;

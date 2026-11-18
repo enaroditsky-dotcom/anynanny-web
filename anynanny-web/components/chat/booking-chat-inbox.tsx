@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent } from "react";
 import { MessageCircle, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { BookingScheduleText } from "@/components/bookings/booking-schedule-label";
 import { DeleteConversationDialog } from "@/components/chat/delete-conversation-dialog";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
@@ -25,7 +27,6 @@ import {
   type SwipeAxis
 } from "@/lib/chat/swipe-to-delete";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 type BookingChatInboxProps = {
   role: "parent" | "sitter";
@@ -335,7 +336,10 @@ function BookingChatInbox({
   emptyActionLabel,
   tourAnchor
 }: BookingChatInboxProps) {
-  const { isLoading, signedIn, effectiveRole } = useAuth();
+  const { isLoading, signedIn, effectiveRole, user } = useAuth();
+  const authRetry = useOnlineRetryNonce();
+  const accountUserIdRef = useRef<string | null>(null);
+  accountUserIdRef.current = signedIn ? user?.id ?? null : null;
   const searchId = useId();
   const [inbox, setInbox] = useState<BookingChatInboxRow[]>([]);
   const [loadingInbox, setLoadingInbox] = useState(true);
@@ -347,11 +351,32 @@ function BookingChatInbox({
   const nowMs = Date.now();
 
   const loadInbox = useCallback(async () => {
-    const auth = await resolveBrowserAuth();
-    if (!auth.ok) {
+    const expectedId = accountUserIdRef.current;
+    if (!expectedId) {
+      authRetry.noteSettled();
+      setInbox([]);
       setLoadingInbox(false);
       return;
     }
+    const auth = await resolveBrowserAuth();
+    if (accountUserIdRef.current !== expectedId) return;
+    if (!auth.ok) {
+      if (auth.reason === "unavailable") {
+        authRetry.noteUnavailable();
+        if (authRetry.exhausted) setLoadingInbox(false);
+        return;
+      }
+      authRetry.noteSettled();
+      setInbox([]);
+      setLoadingInbox(false);
+      return;
+    }
+    if (auth.userId !== expectedId) {
+      setInbox([]);
+      setLoadingInbox(false);
+      return;
+    }
+    authRetry.noteSettled();
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
@@ -360,6 +385,7 @@ function BookingChatInbox({
     }
 
     const { rows, error } = await fetchBookingChatInboxForRole(supabase, auth.userId, role);
+    if (accountUserIdRef.current !== expectedId) return;
     if (error) {
       setInbox([]);
       setLoadingInbox(false);
@@ -368,12 +394,19 @@ function BookingChatInbox({
 
     setInbox(rows);
     setLoadingInbox(false);
-  }, [role]);
+  }, [authRetry.exhausted, authRetry.noteSettled, authRetry.noteUnavailable, role]);
 
   useEffect(() => {
-    if (isLoading || !signedIn || effectiveRole !== role) return;
+    if (isLoading) return;
+    if (!signedIn) {
+      authRetry.noteSettled();
+      setInbox([]);
+      setLoadingInbox(false);
+      return;
+    }
+    if (effectiveRole !== role) return;
     void loadInbox();
-  }, [isLoading, signedIn, effectiveRole, role, loadInbox]);
+  }, [authRetry.nonce, authRetry.noteSettled, effectiveRole, isLoading, loadInbox, role, signedIn, user?.id]);
 
   const grouped = useMemo(() => {
     const active: BookingChatInboxRow[] = [];
@@ -415,7 +448,7 @@ function BookingChatInbox({
     if (!pendingDelete || deleteBusy) return;
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      setDeleteError("יש להתחבר מחדש");
+      setDeleteError(browserAuthFailureMessage(auth.reason, "יש להתחבר מחדש"));
       return;
     }
     const supabase = getSupabaseBrowserClient();

@@ -3,7 +3,7 @@
 import { Unplug } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { logoutAndRedirect } from "@/lib/auth/logout";
+import { logoutAndRedirect, LOGOUT_SIGN_OUT_FAILED_MESSAGE } from "@/lib/auth/logout";
 
 export const LOGOUT_BUTTON_LABEL = "התנתקות";
 
@@ -34,18 +34,31 @@ export function LogoutButton({
 }: LogoutButtonProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => {
-        setBusy(true);
-        void logoutAndRedirect(router).finally(() => setBusy(false));
-      }}
-      className={className}
-    >
-      <LogoutButtonContent label={busy ? "מתנתק…" : label} />
-    </button>
+    <div className="flex w-full flex-col gap-2">
+      {error ? (
+        <p role="alert" className="text-center text-sm text-rose-800">
+          {error}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setError(null);
+          void logoutAndRedirect(router).then((result) => {
+            if (result.ok) return;
+            setError(LOGOUT_SIGN_OUT_FAILED_MESSAGE);
+            setBusy(false);
+          });
+        }}
+        className={className}
+      >
+        <LogoutButtonContent label={busy ? "מתנתק…" : label} />
+      </button>
+    </div>
   );
 }

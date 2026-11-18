@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { AuthRetryStatus } from "@/lib/auth/use-online-retry-nonce";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { broadcastQuestionHref, MY_QUESTIONS_HREF } from "@/lib/broadcast/question-link";
 import type { MyQuestionStatus } from "@/lib/broadcast/question-inbox";
@@ -39,7 +40,7 @@ function statusLabel(row: QuestionRow): string {
 
 export function MyBroadcastQuestions() {
   const router = useRouter();
-  const { isLoading, signedIn, user, effectiveRole } = useAuth();
+  const { isLoading, signedIn, user, effectiveRole, authRetryExhausted, retryAuthentication } = useAuth();
   const userId = signedIn && user?.id ? user.id : null;
   const [status, setStatus] = useState<MyQuestionStatus>("pending");
   const [page, setPage] = useState(1);
@@ -130,7 +131,13 @@ export function MyBroadcastQuestions() {
           </button>
         ))}
       </div>
-      {loading || isLoading ? <p className="mt-6 text-sm text-[#001F3F]/80">טוען שאלות…</p> : null}
+      {authRetryExhausted && isLoading && !userId ? (
+        <div className="mt-6">
+          <AuthRetryStatus exhausted onRetry={() => void retryAuthentication()} pending="טוען שאלות…" />
+        </div>
+      ) : loading || isLoading ? (
+        <p className="mt-6 text-sm text-[#001F3F]/80">טוען שאלות…</p>
+      ) : null}
       {error ? (
         <p className="mt-4 text-sm text-rose-700" role="alert">
           {error}

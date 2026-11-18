@@ -82,8 +82,8 @@ assert.doesNotMatch(preview, /<Link|href=|signIn|signUp|setSession|service_role|
 const appLogout = read("components/navigation/app-side-drawer-logout.tsx");
 assert.match(appLogout, /if \(!signedIn \|\| !isAppDrawerRoute\(pathname\)\) return null/);
 assert.match(appLogout, /currentRole === "sitter" \? \([\s\S]*<LogoutButton \/>/);
-assert.match(appLogout, /supabase\.auth\.signOut\(\)/);
-assert.match(appLogout, /window\.location\.href = "\/login"/);
+assert.match(appLogout, /logoutAndRedirect\(router, "\/login"\)/);
+assert.doesNotMatch(appLogout, /supabase\.auth\.signOut\(\)|window\.location\.href/);
 assert.doesNotMatch(appLogout, /data-dev-drawer-logout|\/dev\/side-drawer/);
 
 assert.match(frame, /AppShellHeader/);

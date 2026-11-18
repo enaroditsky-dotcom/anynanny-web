@@ -13,7 +13,8 @@ import { BOOKINGS_TABLE, type BookingStatus } from "@/lib/bookings/constants";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { UserSafetyActions } from "@/components/safety/user-safety-actions";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 export type SitterProfileActionsProps = {
   sitterId: string;
@@ -54,6 +55,7 @@ export function SitterProfileActions({
   onBookingSuccess
 }: SitterProfileActionsProps) {
   const router = useRouter();
+  const authRetry = useOnlineRetryNonce();
   const [messageBusy, setMessageBusy] = useState(false);
   const [bookModalOpen, setBookModalOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -77,7 +79,18 @@ export function SitterProfileActions({
 
     void (async () => {
       const auth = await resolveBrowserAuth();
-      if (!auth.ok || cancelled) return;
+      if (cancelled) return;
+      if (!auth.ok) {
+        if (auth.reason === "unavailable") {
+          authRetry.noteUnavailable();
+          return;
+        }
+        authRetry.noteSettled();
+        setPendingBookingId(null);
+        setBookingStatus(null);
+        return;
+      }
+      authRetry.noteSettled();
 
       const supabase = getSupabaseBrowserClient();
       if (!supabase) return;
@@ -92,7 +105,7 @@ export function SitterProfileActions({
     return () => {
       cancelled = true;
     };
-  }, [sitterId]);
+  }, [authRetry.exhausted, authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, sitterId]);
 
   useEffect(() => {
     if (!pendingBookingId) return;
@@ -153,7 +166,7 @@ export function SitterProfileActions({
 
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      setActionError("יש להתחבר מחדש");
+      setActionError(browserAuthFailureMessage(auth.reason, "יש להתחבר מחדש"));
       setMessageBusy(false);
       return;
     }

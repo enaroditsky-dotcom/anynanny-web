@@ -1,29 +1,28 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  loadProductProfileOwnership,
+  isForcedOnboardingNext,
+  isOnboardingUnavailablePath,
+  onboardingUnreadableHref,
+  type OnboardingReadState
+} from "@/lib/auth/onboarding-state";
+import {
+  onboardingStateForRole,
   PARENT_DASHBOARD_PATH,
   PARENT_ONBOARDING_PATH,
+  readProductProfileOwnership,
+  readSitterOnboardingState,
   roleMismatchHref,
-  SECOND_ROLE_PATH
+  SECOND_ROLE_PATH,
+  type ProductProfileOwnership
 } from "@/lib/auth/product-profiles";
-import { hasAcceptedCurrentCharter } from "@/lib/charter/acceptance";
+import { readCurrentCharterAcceptance } from "@/lib/charter/acceptance";
 import { charterHref, resolvePreOnboardingPath } from "@/lib/charter/routing";
-import {
-  hasSitterCompletedOnboarding,
-  SITTER_PROFILES_TABLE,
-  SITTER_PROFILES_USER_COLUMN
-} from "@/lib/sitter/sitter-profile";
-import { isPostgrestMissingColumnError } from "@/lib/supabase/postgrest-schema";
-import { isProfileRole, PROFILES_TABLE, type ProfileRole } from "@/lib/supabase/profiles";
+import { isProfileRole, type ProfileRole } from "@/lib/supabase/profiles";
 
 export const SITTER_ONBOARDING_PATH = "/sitter/onboarding";
 export const SITTER_DASHBOARD_PATH = "/sitter/dashboard";
 
-export type ProfileAuthRow = {
-  role: string | null;
-  role_selected?: boolean | null;
-  parent_onboarding_completed_at?: string | null;
-};
+export type { ProductProfileOwnership };
 
 /** Safe redirect when auth routing cannot proceed (missing profile, thrown errors). */
 export const AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT = "/auth/login?next=/auth/role-selection";
@@ -38,20 +37,6 @@ export function isNannyOnboardingBypassEmail(email: string | null | undefined): 
   return Boolean(email?.includes("+nanny"));
 }
 
-function asProfileAuthRow(value: unknown): ProfileAuthRow | null {
-  if (!value || typeof value !== "object") return null;
-  const o = value as Record<string, unknown>;
-  const role = typeof o.role === "string" || o.role === null ? (o.role as string | null) : null;
-  return {
-    role,
-    role_selected: typeof o.role_selected === "boolean" || o.role_selected === null ? (o.role_selected as boolean | null) : undefined,
-    parent_onboarding_completed_at:
-      typeof o.parent_onboarding_completed_at === "string" || o.parent_onboarding_completed_at === null
-        ? (o.parent_onboarding_completed_at as string | null)
-        : undefined
-  };
-}
-
 /** Safe deep-link target from `?next=` (relative app path only; blocks traversal and protocol-relative URLs). */
 export function sanitizeNextParam(nextParam: string | null): string | null {
   if (!nextParam || nextParam.includes("..") || nextParam.startsWith("//")) return null;
@@ -64,113 +49,108 @@ export function isSitterOnboardingPath(pathname: string): boolean {
   return path === SITTER_ONBOARDING_PATH || path.startsWith(`${SITTER_ONBOARDING_PATH}/`);
 }
 
-async function loadSitterOnboardingCompletedAt(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const fk = SITTER_PROFILES_USER_COLUMN;
-  const full = await supabase
-    .from(SITTER_PROFILES_TABLE)
-    .select("onboarding_completed_at")
-    .eq(fk, userId)
-    .maybeSingle();
-
-  if (full.error) {
-    return null;
-  }
-
-  const at = (full.data as { onboarding_completed_at?: string | null } | null)?.onboarding_completed_at;
-  return typeof at === "string" && at.trim() ? at : null;
-}
-
-/**
- * Route an owned sitter product profile by onboarding_completed_at only.
- * Does not create sitter_profiles rows.
- */
-async function pathBeforeRoleOnboarding(
-  supabase: SupabaseClient,
-  userId: string,
-  role: ProfileRole
-): Promise<string> {
-  const charterAccepted = await hasAcceptedCurrentCharter(supabase, userId, role);
-  return resolvePreOnboardingPath({
-    role,
-    onboardingComplete: false,
-    charterAccepted
-  });
-}
-
-async function resolveOwnedSitterPostAuthPath(supabase: SupabaseClient, userId: string): Promise<string> {
-  const completedAt = await loadSitterOnboardingCompletedAt(supabase, userId);
-  if (!hasSitterCompletedOnboarding({ onboarding_completed_at: completedAt })) {
-    return pathBeforeRoleOnboarding(supabase, userId, "sitter");
-  }
-
-  return SITTER_DASHBOARD_PATH;
-}
-
-/**
- * Read-only sitter route guard. Does not create rows.
- * Incomplete (`onboarding_completed_at` null) → `/sitter/onboarding`.
- * Complete users on the questionnaire → `/sitter/dashboard`.
- * Callers must confirm sitter product ownership before invoking this.
- */
-export async function getSitterOnboardingGateRedirect(
-  supabase: SupabaseClient,
-  userId: string,
-  currentPath: string
-): Promise<string | null> {
-  const path = currentPath.split("?")[0] || currentPath;
-  const completedAt = await loadSitterOnboardingCompletedAt(supabase, userId);
-  const complete = hasSitterCompletedOnboarding({ onboarding_completed_at: completedAt });
-
-  if (!complete) {
-    const charterAccepted = await hasAcceptedCurrentCharter(supabase, userId, "sitter");
-    if (!charterAccepted) {
-      return charterHref("sitter");
-    }
-    if (isSitterOnboardingPath(path)) return null;
-    return SITTER_ONBOARDING_PATH;
-  }
-
-  if (isSitterOnboardingPath(path)) return SITTER_DASHBOARD_PATH;
-  return null;
-}
-
 export function isParentOnboardingRoute(pathname: string): boolean {
   const path = pathname.split("?")[0] || pathname;
   return path === PARENT_ONBOARDING_PATH || path.startsWith(`${PARENT_ONBOARDING_PATH}/`);
 }
 
 /**
+ * Incomplete onboarding continues through Charter, then the questionnaire.
+ * A failed Charter read stays on the recoverable unavailable screen.
+ */
+async function pathBeforeRoleOnboarding(
+  supabase: SupabaseClient,
+  userId: string,
+  role: ProfileRole
+): Promise<string> {
+  const charter = await readCurrentCharterAcceptance(supabase, userId, role);
+  if (charter === "unreadable") return onboardingUnreadableHref(role);
+  if (charter === "missing") return charterHref(role);
+  return resolvePreOnboardingPath({
+    role,
+    onboardingComplete: false,
+    charterAccepted: true
+  });
+}
+
+async function destinationForOnboardingState(
+  supabase: SupabaseClient,
+  userId: string,
+  role: ProfileRole,
+  state: OnboardingReadState,
+  nextParam: string | null
+): Promise<string> {
+  if (state === "unreadable") return onboardingUnreadableHref(role);
+  if (state === "incomplete") return pathBeforeRoleOnboarding(supabase, userId, role);
+  if (role === "parent") return allowedNextPath("parent", nextParam) ?? PARENT_DASHBOARD_PATH;
+  return SITTER_DASHBOARD_PATH;
+}
+
+/**
+ * Read-only sitter route guard. Does not create rows.
+ * Incomplete onboarding follows Charter, then `/sitter/onboarding`.
+ * Unreadable onboarding stays off Charter and the questionnaire.
+ * Complete users on the questionnaire go to `/sitter/dashboard`.
+ */
+export async function getSitterOnboardingGateRedirect(
+  supabase: SupabaseClient,
+  userId: string,
+  currentPath: string
+): Promise<string | null> {
+  try {
+    const path = currentPath.split("?")[0] || currentPath;
+    const read = await readSitterOnboardingState(supabase, userId);
+    if (read.state === "unreadable") return onboardingUnreadableHref("sitter");
+
+    if (read.state === "incomplete") {
+      const dest = await pathBeforeRoleOnboarding(supabase, userId, "sitter");
+      if (isOnboardingUnavailablePath(dest)) return dest;
+      if (dest === charterHref("sitter")) return dest;
+      if (isSitterOnboardingPath(path)) return null;
+      return dest;
+    }
+
+    if (isSitterOnboardingPath(path)) return SITTER_DASHBOARD_PATH;
+    return null;
+  } catch {
+    return onboardingUnreadableHref("sitter");
+  }
+}
+
+/**
  * Read-only parent route guard. Does not create profiles.
- * Callers must confirm parent product ownership before invoking this.
+ * Unreadable parent onboarding is not treated as incomplete.
  */
 export async function getParentOnboardingGateRedirect(
   supabase: SupabaseClient,
   userId: string,
   currentPath: string
 ): Promise<string | null> {
-  const path = currentPath.split("?")[0] || currentPath;
-  const ownership = await loadProductProfileOwnership(supabase, userId);
-  const complete = Boolean(ownership?.parentOnboardingComplete);
+  try {
+    const path = currentPath.split("?")[0] || currentPath;
+    const read = await readProductProfileOwnership(supabase, userId);
+    if (read.status === "unreadable") return onboardingUnreadableHref("parent");
+    if (read.status === "missing") return "/auth/role-selection";
+    if (read.ownership.parentOnboardingState === "unreadable") return onboardingUnreadableHref("parent");
 
-  if (!complete) {
-    const charterAccepted = await hasAcceptedCurrentCharter(supabase, userId, "parent");
-    if (!charterAccepted) {
-      return charterHref("parent");
+    if (read.ownership.parentOnboardingState === "incomplete") {
+      const dest = await pathBeforeRoleOnboarding(supabase, userId, "parent");
+      if (isOnboardingUnavailablePath(dest)) return dest;
+      if (dest === charterHref("parent")) return dest;
+      if (isParentOnboardingRoute(path)) return null;
+      return dest;
     }
-    if (isParentOnboardingRoute(path)) return null;
-    return PARENT_ONBOARDING_PATH;
-  }
 
-  if (isParentOnboardingRoute(path)) return PARENT_DASHBOARD_PATH;
-  return null;
+    if (isParentOnboardingRoute(path)) return PARENT_DASHBOARD_PATH;
+    return null;
+  } catch {
+    return onboardingUnreadableHref("parent");
+  }
 }
 
 function allowedNextPath(role: ProfileRole, nextParam: string | null): string | null {
   const safe = sanitizeNextParam(nextParam);
-  if (!safe) return null;
+  if (!safe || isForcedOnboardingNext(safe)) return null;
   if (role === "parent") {
     if (safe.startsWith("/parent") || safe.startsWith("/checkout")) return safe;
     return null;
@@ -184,58 +164,6 @@ function allowedNextPath(role: ProfileRole, nextParam: string | null): string | 
     return safe;
   }
   return null;
-}
-
-/**
- * Load profile row for routing; tolerates DBs that have not yet run onboarding column migrations.
- * Legacy rows without `role_selected` behave as role_selected = true once the column exists.
- */
-async function loadProfileAuthRow(supabase: SupabaseClient, userId: string): Promise<ProfileAuthRow | null> {
-  const full = await supabase
-    .from(PROFILES_TABLE)
-    .select("role, role_selected, parent_onboarding_completed_at")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (!full.error) {
-    return asProfileAuthRow(full.data);
-  }
-
-  const errMsg = full.error.message ?? "";
-  if (!isPostgrestMissingColumnError(errMsg, "role_selected") && !isPostgrestMissingColumnError(errMsg, "parent_onboarding_completed_at")) {
-    return null;
-  }
-
-  const mid = await supabase
-    .from(PROFILES_TABLE)
-    .select("role, parent_onboarding_completed_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!mid.error) {
-    const parsed = asProfileAuthRow(mid.data);
-    if (!parsed) return null;
-    return { ...parsed, role_selected: true };
-  }
-  if (!isPostgrestMissingColumnError(mid.error.message ?? "", "parent_onboarding_completed_at")) {
-    return null;
-  }
-
-  const rs = await supabase.from(PROFILES_TABLE).select("role, role_selected").eq("id", userId).maybeSingle();
-  if (!rs.error && rs.data) {
-    const parsed = asProfileAuthRow(rs.data);
-    if (!parsed) return null;
-    return { ...parsed, parent_onboarding_completed_at: parsed.parent_onboarding_completed_at ?? null };
-  }
-
-  const roleOnly = await supabase.from(PROFILES_TABLE).select("role").eq("id", userId).maybeSingle();
-  if (roleOnly.error || roleOnly.data == null) return null;
-  const parsedRole = asProfileAuthRow(roleOnly.data);
-  if (!parsedRole) return null;
-  return {
-    role: parsedRole.role,
-    role_selected: true,
-    parent_onboarding_completed_at: null
-  };
 }
 
 export type ResolvePostAuthOptions = {
@@ -291,11 +219,27 @@ function destinationForMissingPortal(
   return roleMismatchHref(requestedPortal);
 }
 
+async function destinationForOwnedPortal(
+  supabase: SupabaseClient,
+  userId: string,
+  ownership: ProductProfileOwnership,
+  portal: ProfileRole,
+  nextParam: string | null
+): Promise<string> {
+  const state = onboardingStateForRole(ownership, portal);
+  if (state === "unreadable") return onboardingUnreadableHref(portal);
+  const owns = portal === "parent" ? ownership.hasParent : ownership.hasSitter;
+  if (!owns) return destinationForMissingPortal(portal, nextParam);
+  return destinationForOnboardingState(supabase, userId, portal, state, nextParam);
+}
+
 /**
  * Where to send the user after login, register, or email confirmation.
  *
  * Explicit portal choice is preserved. Missing ownership for THAT portal
  * goes to role-mismatch — never to the other product portal.
+ * Unreadable onboarding never goes to Charter or a questionnaire.
+ * Completed users ignore stale onboarding, Charter, and Welcome `next` values.
  */
 export async function resolvePostAuthPath(
   supabase: SupabaseClient,
@@ -303,6 +247,7 @@ export async function resolvePostAuthPath(
   nextParam: string | null,
   options?: ResolvePostAuthOptions
 ): Promise<string> {
+  let requestedPortal: ProfileRole | null = null;
   try {
     if (!userId) {
       return AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT;
@@ -313,7 +258,7 @@ export async function resolvePostAuthPath(
       ? options.userEmail
       : (await supabase.auth.getUser()).data.user?.email;
 
-    const requestedPortal = resolveExplicitRequestedPortal(nextParam, options);
+    requestedPortal = resolveExplicitRequestedPortal(nextParam, options);
 
     /**
      * Test-email sitter shortcut must NOT run when the user explicitly chose Parent.
@@ -323,49 +268,38 @@ export async function resolvePostAuthPath(
       !requestedPortal &&
       (isNannyOnboardingBypassEmail(email) || isSitterTestBypassEmail(email))
     ) {
-      return resolveOwnedSitterPostAuthPath(supabase, userId);
+      const sitter = await readSitterOnboardingState(supabase, userId);
+      return destinationForOnboardingState(supabase, userId, "sitter", sitter.state, nextParam);
     }
 
-    const profile = await loadProfileAuthRow(supabase, userId);
-    if (!profile) {
-      return "/auth/role-selection";
+    const read = await readProductProfileOwnership(supabase, userId);
+    if (read.status === "unreadable") return onboardingUnreadableHref(requestedPortal);
+    if (read.status === "missing") return "/auth/role-selection";
+
+    const ownership = read.ownership;
+
+    if (requestedPortal) {
+      return destinationForOwnedPortal(supabase, userId, ownership, requestedPortal, nextParam);
     }
 
-    const ownership = await loadProductProfileOwnership(supabase, userId);
-
-    if (requestedPortal === "parent") {
-      if (!ownership?.hasParent) {
-        return destinationForMissingPortal("parent", nextParam);
-      }
-      if (!ownership.parentOnboardingComplete) {
-        return pathBeforeRoleOnboarding(supabase, userId, "parent");
-      }
-      const nextOk = allowedNextPath("parent", nextParam);
-      return nextOk ?? PARENT_DASHBOARD_PATH;
+    const storedRole = ownership.role;
+    if (storedRole === "sitter" && ownership.hasSitter) {
+      return destinationForOwnedPortal(supabase, userId, ownership, "sitter", nextParam);
+    }
+    if (storedRole === "parent" && ownership.hasParent) {
+      return destinationForOwnedPortal(supabase, userId, ownership, "parent", nextParam);
     }
 
-    if (requestedPortal === "sitter") {
-      if (!ownership?.hasSitter) {
-        return destinationForMissingPortal("sitter", nextParam);
-      }
-      return resolveOwnedSitterPostAuthPath(supabase, userId);
-    }
-
-    // Unscoped post-auth (no login portal): skip role-selection only if a first role already exists.
-    const storedRole = isProfileRole(profile.role) ? profile.role : null;
-    if (storedRole === "sitter" && ownership?.hasSitter) {
-      return resolveOwnedSitterPostAuthPath(supabase, userId);
-    }
-    if (storedRole === "parent" && ownership?.hasParent) {
-      if (!ownership.parentOnboardingComplete) {
-        return pathBeforeRoleOnboarding(supabase, userId, "parent");
-      }
-      return PARENT_DASHBOARD_PATH;
+    if (
+      ownership.parentOnboardingState === "unreadable" ||
+      ownership.sitterOnboardingState === "unreadable"
+    ) {
+      return onboardingUnreadableHref(storedRole);
     }
 
     return "/auth/role-selection";
   } catch {
-    return AUTH_LOGIN_WITH_ROLE_SELECTION_NEXT;
+    return onboardingUnreadableHref(requestedPortal);
   }
 }
 

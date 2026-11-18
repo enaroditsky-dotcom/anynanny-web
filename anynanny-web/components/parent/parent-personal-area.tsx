@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { protectedScreenGate, resolveValidAuthUser } from "@/lib/auth/valid-session";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Trash2, User, Wallet } from "lucide-react";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
@@ -153,6 +155,7 @@ export function ParentPersonalArea() {
   const [draftAutoSuggest, setDraftAutoSuggest] = useState<boolean | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [authPhone, setAuthPhone] = useState("");
+  const authRetry = useOnlineRetryNonce();
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -165,14 +168,18 @@ export function ParentPersonalArea() {
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user }
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
+    if (gate.status === "unavailable") {
+      setLoading(true);
+      authRetry.noteUnavailable();
+      return;
+    }
+    authRetry.noteSettled();
+    if (gate.status === "signed_out") {
       router.replace("/auth/login?next=/parent/profile");
       return;
     }
+    const user = gate.user;
 
     let profileRow: unknown = null;
     let lastError: string | null = null;
@@ -206,7 +213,7 @@ export function ParentPersonalArea() {
     setPublicId(displayId);
     setForm(parsed);
     setLoading(false);
-  }, [router]);
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, router]);
 
   useEffect(() => {
     void load();
@@ -532,8 +539,14 @@ export function ParentPersonalArea() {
   if (loading || !form) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-500">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <p className="text-sm">טוען את האזור האישי…</p>
+        {authRetry.exhausted ? (
+          <AuthRetryStatus exhausted onRetry={authRetry.retryNow} pending="טוען את האזור האישי…" />
+        ) : (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <p className="text-sm">טוען את האזור האישי…</p>
+          </>
+        )}
       </div>
     );
   }

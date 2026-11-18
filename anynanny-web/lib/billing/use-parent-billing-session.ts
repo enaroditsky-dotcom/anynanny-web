@@ -20,7 +20,8 @@ import {
   type SupabaseSessionRow
 } from "@/lib/session/protocol";
 import { friendlySupabaseSessionError } from "@/lib/session/supabase-errors";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
 
@@ -32,6 +33,7 @@ function applyRowToState(row: SupabaseSessionRow): SessionProtocolState | null {
 }
 
 export function useParentBillingSession() {
+  const authRetry = useOnlineRetryNonce();
   const [sessionState, setSessionState] = useState<SessionProtocolState>({ status: "idle" });
   const [parentUserId, setParentUserId] = useState<string | null>(null);
   const [useSupabase, setUseSupabase] = useState(false);
@@ -75,14 +77,20 @@ export function useParentBillingSession() {
     let cancelled = false;
     void (async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const fromSession = sessionData.session?.user ?? null;
-        const { data: authData, error: authErr } = await supabase.auth.getUser();
-        const resolvedUser = authData.user ?? fromSession;
-        if (authErr && !resolvedUser) return;
-        if (!resolvedUser || cancelled) return;
+        const auth = await resolveBrowserAuth();
+        if (cancelled) return;
+        if (!auth.ok) {
+          if (auth.reason === "unavailable") {
+            authRetry.noteUnavailable();
+            return;
+          }
+          authRetry.noteSettled();
+          setParentUserId(null);
+          return;
+        }
+        authRetry.noteSettled();
 
-        const userId = resolvedUser.id;
+        const userId = auth.userId;
         setParentUserId(userId);
         try {
           localStorage.setItem("active_role", "parent");
@@ -90,7 +98,7 @@ export function useParentBillingSession() {
           /* ignore */
         }
 
-        const { data: row, error: rowErr } = await supabase
+        const { data: row, error: rowErr } = await auth.supabase
           .from(SESSIONS_TABLE)
           .select("*")
           .eq("parent_id", userId)
@@ -98,21 +106,21 @@ export function useParentBillingSession() {
           .limit(1)
           .maybeSingle();
 
-        if (!cancelled && !rowErr && row) {
+        if (cancelled) return;
+        if (!rowErr && row) {
           const mapped = applyRowToState(row as SupabaseSessionRow);
           if (mapped) setSessionState(mapped);
         }
+        setUseSupabase(true);
       } catch {
         // Network/schema failure → keep clean idle state; never break the provider.
-      } finally {
-        if (!cancelled) setUseSupabase(true);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authRetry.exhausted, authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable]);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -181,7 +189,7 @@ export function useParentBillingSession() {
 
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לפתוח משמרת.");
+      setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לפתוח משמרת."));
       return;
     }
 
@@ -246,7 +254,7 @@ export function useParentBillingSession() {
 
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לשלוח בקשת סיום.");
+      setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לשלוח בקשת סיום."));
       return;
     }
 
@@ -289,7 +297,7 @@ export function useParentBillingSession() {
 
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      setBanner(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר כדי לאשר סיום.");
+      setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לאשר סיום."));
       return;
     }
 

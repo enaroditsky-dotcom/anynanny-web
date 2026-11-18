@@ -6,7 +6,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ANYNANNY_PUSH_NAVIGATE_MESSAGE } from "@/lib/push/constants";
 import { clearAppBadge } from "@/lib/push/badge";
 import { loadNotificationPreferencesForUser } from "@/lib/push/preferences";
-import { reconcilePushSubscription } from "@/lib/push/register-push";
+import { alignDevicePushOwnership } from "@/lib/push/register-push";
 import { registerAnyNannyServiceWorker } from "@/lib/push/service-worker-register";
 
 export function PushRuntime() {
@@ -19,7 +19,10 @@ export function PushRuntime() {
     await clearAppBadge();
     if (!signedIn || !user?.id) return;
     const prefs = await loadNotificationPreferencesForUser(user.id);
-    await reconcilePushSubscription(prefs.pushEnabled);
+    const aligned = await alignDevicePushOwnership(prefs.pushEnabled);
+    if (!aligned.ok) {
+      console.warn("[push] device ownership cleanup failed:", aligned.reason);
+    }
   }, [signedIn, user?.id]);
 
   useEffect(() => {

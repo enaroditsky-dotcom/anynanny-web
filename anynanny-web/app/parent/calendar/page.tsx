@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { protectedScreenGate, resolveValidAuthUser } from "@/lib/auth/valid-session";
+import { AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { BookingCalendarPanel } from "@/components/bookings/booking-calendar-panel";
@@ -45,6 +48,8 @@ export default function ParentCalendarPage() {
   const searchParams = useSearchParams();
   const focusBookingId = parseFocusBookingId(searchParams.get("bookingId"));
   const [ready, setReady] = useState(false);
+  const [serviceMissing, setServiceMissing] = useState(false);
+  const authRetry = useOnlineRetryNonce();
   const [parentId, setParentId] = useState<string | null>(null);
   const [allShifts, setAllShifts] = useState<CalendarShift[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
@@ -166,19 +171,26 @@ export default function ParentCalendarPage() {
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setReady(true);
+      setServiceMissing(true);
       return;
     }
+    setServiceMissing(false);
 
     let cancelled = false;
     void (async () => {
       try {
-        const { data: authData } = await supabase.auth.getUser();
-        const user = authData.user;
-        if (!user) {
-          if (!cancelled) router.replace("/auth/login?next=/parent/calendar");
+        const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
+        if (cancelled) return;
+        if (gate.status === "unavailable") {
+          authRetry.noteUnavailable();
           return;
         }
+        authRetry.noteSettled();
+        if (gate.status === "signed_out") {
+          router.replace("/auth/login?next=/parent/calendar");
+          return;
+        }
+        const user = gate.user;
 
         const { data: profile, error } = await supabase
           .from(PROFILES_TABLE)
@@ -201,14 +213,14 @@ export default function ParentCalendarPage() {
         }
       } catch (e) {
         console.warn("[parent/calendar] bootstrap failed:", e);
-        if (!cancelled) setReady(true);
+        if (!cancelled) authRetry.noteUnavailable();
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, router]);
 
   useEffect(() => {
     if (!parentId) return;
@@ -259,10 +271,18 @@ export default function ParentCalendarPage() {
     []
   );
 
+  if (serviceMissing) {
+    return (
+      <div className="flex min-h-[12rem] items-center justify-center px-4">
+        <p className="text-center text-sm text-slate-600">{AUTH_SERVICE_UNAVAILABLE_MESSAGE}</p>
+      </div>
+    );
+  }
+
   if (!ready) {
     return (
       <div className="flex min-h-[12rem] items-center justify-center">
-        <p className="text-center text-sm font-normal text-slate-500">טוען...</p>
+        <AuthRetryStatus exhausted={authRetry.exhausted} onRetry={authRetry.retryNow} pending="טוען..." />
       </div>
     );
   }

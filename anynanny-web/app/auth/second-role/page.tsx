@@ -9,14 +9,17 @@ import {
 } from "@/components/auth/terms-acceptance-checkbox";
 import { PageBackButton, PageBackRow } from "@/components/navigation/page-back-link";
 import { ACCOUNT_TYPE_ENTRY_HREF } from "@/lib/auth/age-eligibility";
-import { SITTER_DASHBOARD_PATH, SITTER_ONBOARDING_PATH } from "@/lib/auth/post-auth-destination";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
+import { resolvePostAuthPath, SITTER_ONBOARDING_PATH } from "@/lib/auth/post-auth-destination";
 import {
-  loadProductProfileOwnership,
   markSecondRoleInProgress,
-  PARENT_DASHBOARD_PATH,
   PARENT_ONBOARDING_PATH,
+  readProductProfileOwnership,
   roleMismatchHref
 } from "@/lib/auth/product-profiles";
+import { AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
+import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { protectedScreenGate, resolveValidAuthUser } from "@/lib/auth/valid-session";
 import { createLegalAcceptanceRecord, persistLegalAcceptanceIfUnset } from "@/lib/legal/acceptance";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isProfileRole, type ProfileRole } from "@/lib/supabase/profiles";
@@ -25,6 +28,10 @@ const ROLE_LABELS: Record<ProfileRole, string> = {
   parent: "הורה",
   sitter: "בייביסיטר"
 };
+
+function secondRoleLoginHref(role: ProfileRole): string {
+  return `/login?role=${role}&next=${encodeURIComponent(`/auth/second-role?role=${role}`)}`;
+}
 
 function SecondRoleInner() {
   const router = useRouter();
@@ -38,6 +45,8 @@ function SecondRoleInner() {
   const [legalError, setLegalError] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [serviceMissing, setServiceMissing] = useState(false);
+  const authRetry = useOnlineRetryNonce();
 
   const backHref = useMemo(() => (role ? roleMismatchHref(role) : ACCOUNT_TYPE_ENTRY_HREF), [role]);
 
@@ -57,33 +66,51 @@ function SecondRoleInner() {
     let cancelled = false;
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      router.replace(`/login?next=${encodeURIComponent(`/auth/second-role?role=${role}`)}`);
+      setServiceMissing(true);
+      setSessionState("loading");
       return;
     }
+    setServiceMissing(false);
 
     void (async () => {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
+      const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
       if (cancelled) return;
 
-      if (!user) {
-        router.replace(`/login?role=${role}&next=${encodeURIComponent(`/auth/second-role?role=${role}`)}`);
+      if (gate.status === "unavailable") {
+        setSessionState("loading");
+        authRetry.noteUnavailable();
+        return;
+      }
+      authRetry.noteSettled();
+
+      if (gate.status === "signed_out") {
+        router.replace(secondRoleLoginHref(role));
         return;
       }
 
-      const ownership = await loadProductProfileOwnership(supabase, user.id);
+      const user = gate.user;
+      const read = await readProductProfileOwnership(supabase, user.id);
       if (cancelled) return;
 
-      if (role === "sitter" && ownership?.hasSitter) {
+      if (read.status === "unreadable") {
         setSessionState("redirecting");
-        router.replace(ownership.sitterOnboardingComplete ? SITTER_DASHBOARD_PATH : SITTER_ONBOARDING_PATH);
+        router.replace(onboardingUnreadableHref(role));
         return;
       }
 
-      if (role === "parent" && ownership?.hasParent) {
+      const ownership = read.status === "ready" ? read.ownership : null;
+      const ownsRequested =
+        role === "sitter"
+          ? Boolean(ownership?.hasSitter) || ownership?.sitterOnboardingState === "unreadable"
+          : Boolean(ownership?.hasParent) || ownership?.parentOnboardingState === "unreadable";
+
+      if (ownsRequested) {
         setSessionState("redirecting");
-        router.replace(ownership.parentOnboardingComplete ? PARENT_DASHBOARD_PATH : PARENT_ONBOARDING_PATH);
+        const dest = await resolvePostAuthPath(supabase, user.id, null, {
+          requestedRole: role,
+          userEmail: user.email
+        });
+        if (!cancelled) router.replace(dest);
         return;
       }
 
@@ -98,7 +125,7 @@ function SecondRoleInner() {
     return () => {
       cancelled = true;
     };
-  }, [role, router]);
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, role, router]);
 
   const handleContinue = async () => {
     if (!role) return;
@@ -122,13 +149,16 @@ function SecondRoleInner() {
     setLegalError(null);
 
     try {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace(`/login?role=${role}&next=${encodeURIComponent(`/auth/second-role?role=${role}`)}`);
+      const gate = protectedScreenGate(await resolveValidAuthUser(supabase));
+      if (gate.status === "unavailable") {
+        setErrorMsg("אין חיבור כרגע. נסו שוב בעוד רגע.");
         return;
       }
+      if (gate.status !== "verified") {
+        router.replace(secondRoleLoginHref(role));
+        return;
+      }
+      const user = gate.user;
 
       const persist = await persistLegalAcceptanceIfUnset(supabase, user.id, createLegalAcceptanceRecord());
       if (persist.error) {
@@ -147,7 +177,20 @@ function SecondRoleInner() {
   if (!role || sessionState !== "ready") {
     return (
       <main className="mx-auto flex min-h-[70vh] w-full max-w-lg flex-col items-center justify-center px-4 py-10" dir="rtl">
-        <p className="text-center text-sm text-slate-600">טוענים…</p>
+        {serviceMissing ? (
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-center text-sm text-slate-600">{AUTH_SERVICE_UNAVAILABLE_MESSAGE}</p>
+            <button
+              type="button"
+              onClick={authRetry.retryNow}
+              className="rounded-xl bg-navy-header px-4 py-2 text-sm font-bold text-white"
+            >
+              נסו שוב
+            </button>
+          </div>
+        ) : (
+          <AuthRetryStatus exhausted={authRetry.exhausted} onRetry={authRetry.retryNow} pending="טוענים…" />
+        )}
       </main>
     );
   }

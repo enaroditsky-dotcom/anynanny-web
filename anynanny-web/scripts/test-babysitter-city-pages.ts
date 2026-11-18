@@ -208,11 +208,31 @@ const web = new URL(
       code: "secret",
       type: "recovery",
       unrelated: "drop"
-    })
+    }),
+    false
   ),
   "https://www.anynanny.org"
 );
+assert.equal(web.origin, "https://www.anynanny.org");
 assert.equal(web.pathname, "/");
+const separatedCityWeb = new URL(
+  generalWebAppHref(
+    utmSearchFromRecord({
+      utm_source: "facebook",
+      utm_medium: "cpc",
+      utm_campaign: "haifa",
+      utm_content: "hero",
+      utm_term: "בייביסיטר",
+      code: "secret",
+      type: "recovery",
+      unrelated: "drop"
+    }),
+    true
+  )
+);
+assert.equal(separatedCityWeb.origin, "https://app.anynanny.org");
+assert.equal(separatedCityWeb.pathname, "/");
+assert.equal(separatedCityWeb.search, web.search);
 assert.equal(web.searchParams.get("utm_source"), "facebook");
 assert.equal(web.searchParams.get("utm_medium"), "cpc");
 assert.equal(web.searchParams.get("utm_campaign"), "haifa");
