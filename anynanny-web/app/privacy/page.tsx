@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import { PrivacyPageView } from "@/components/legal/privacy-page-view";
+import { privacyPolicyMetadataDescription } from "@/lib/legal/privacy-release";
 
 export const metadata: Metadata = {
   title: "מדיניות פרטיות | AnyNanny",
-  description: "מדיניות הפרטיות של פלטפורמת AnyNanny. עדכון אחרון: אוגוסט 2026."
+  description: privacyPolicyMetadataDescription(),
+  alternates: {
+    canonical: "https://www.anynanny.org/privacy"
+  }
 };
 
 export default function PrivacyPage() {

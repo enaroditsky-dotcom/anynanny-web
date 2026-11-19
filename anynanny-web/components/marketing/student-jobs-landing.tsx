@@ -13,6 +13,7 @@ import {
   STUDENT_JOBS_SLOGAN,
   STUDENT_JOBS_SUPPORT
 } from "@/lib/marketing/student-jobs";
+import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
 import styles from "./student-jobs-landing.module.css";
 
 const BENEFIT_ICONS = [Clock3, Wallet, MapPin, ShieldCheck] as const;
@@ -108,6 +109,7 @@ export function StudentJobsLanding({
           </div>
         </div>
       </main>
+      <MarketingPrivacyLink />
     </div>
   );
 }

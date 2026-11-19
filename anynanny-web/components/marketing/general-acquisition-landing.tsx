@@ -33,6 +33,7 @@ import {
   GENERAL_ACQUISITION_WORDMARK_SRC,
   GENERAL_ACQUISITION_WORDMARK_WIDTH
 } from "@/lib/marketing/general-acquisition";
+import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
 import styles from "./general-acquisition-landing.module.css";
 
 export function GeneralAcquisitionLanding({
@@ -204,6 +205,7 @@ export function GeneralAcquisitionLanding({
           </nav>
         )}
       </main>
+      <MarketingPrivacyLink />
     </div>
   );
 }

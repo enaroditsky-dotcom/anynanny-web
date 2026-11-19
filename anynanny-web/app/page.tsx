@@ -9,6 +9,7 @@ import {
   getSitterOnboardingGateRedirect
 } from "@/lib/auth/post-auth-destination";
 import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
+import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
 import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
 import { AnyNannyEntryBrand } from "@/components/brand/anynanny-entry-brand";
 import { welcomeSignupHref } from "@/lib/charter/routing";
@@ -321,6 +322,7 @@ function HomeInner() {
             ))}
           </ul>
         </nav>
+        <MarketingPrivacyLink compact />
       </div>
     </main>
   );

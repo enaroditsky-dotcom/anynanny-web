@@ -8,6 +8,7 @@ import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-se
 import { ParentFavoriteSittersSection } from "@/components/parent/parent-favorite-sitters-section";
 import { IdentityPersonalSection } from "@/components/identity/identity-personal-section";
 import { IdentityVerifiedBadgeLive } from "@/components/identity/verified-user-badge";
+import { ParentMedicalCollectionNotice } from "@/components/parent/parent-medical-collection-notice";
 import {
   OnboardingChips,
   OnboardingSelect,
@@ -461,8 +462,8 @@ export function ParentPersonalArea() {
         children_count: draftChildren.length || null
       };
     } else if (editKey === "household") {
-      if (draftHasMedical === true && !draftMedicalDetails.trim()) {
-        setModalError("יש למלא פרטים שחשוב לדעת.");
+      if (draftHasMedical == null) {
+        setModalError("יש לבחור האם יש מידע רפואי או צורך מיוחד שחשוב לדעת.");
         return;
       }
       next = {
@@ -764,7 +765,7 @@ export function ParentPersonalArea() {
       <PersonalAreaSection
         title="מידע חשוב למשמרת"
         accent="emerald"
-        description="מידע פרטי לחשבון שלך בלבד. לא מוצג בפרופיל הציבורי ולא בחיפוש בייביסיטרים."
+        description="מידע פרטי לחשבון שלך בלבד. לא מוצג בפרופיל הציבורי, בחיפוש או בתצוגה המקדימה של הזמנה, ולא נשלח אוטומטית לבייביסיטר. אפשר לשתף אותו בצ'אט של הזמנה, ואז הוא גלוי למשתתפי אותה הזמנה."
         summary={householdSummary}
         action={<PersonalChangeLink onClick={() => openEdit("household")} label="עריכה" />}
       >
@@ -1099,11 +1100,16 @@ export function ParentPersonalArea() {
               </PersonalField>
             ) : null}
             <OnboardingYesNo
-              legend="יש מידע רפואי או צורך מיוחד שחשוב לדעת?"
+              legend="יש מידע רפואי או צורך מיוחד שחשוב לשמור בחשבון?"
               name="parent-has-medical"
+              required
               value={draftHasMedical}
-              onChange={setDraftHasMedical}
+              onChange={(hasMedical) => {
+                setDraftHasMedical(hasMedical);
+                if (!hasMedical) setDraftMedicalDetails("");
+              }}
             />
+            <ParentMedicalCollectionNotice />
             {draftHasMedical === true ? (
               <PersonalField label="פרטים שחשוב לדעת">
                 <textarea
@@ -1111,7 +1117,11 @@ export function ParentPersonalArea() {
                   value={draftMedicalDetails}
                   onChange={(e) => setDraftMedicalDetails(e.target.value)}
                   maxLength={1000}
+                  aria-describedby="parent-medical-details-hint"
                 />
+                <p id="parent-medical-details-hint" className="mt-1 text-xs leading-relaxed text-slate-500">
+                  לא חובה. הפירוט נשמר בחשבון שלך בלבד, לא נשלח אוטומטית לבייביסיטר, ואינו מוצג בחיפוש או בתצוגה המקדימה.
+                </p>
               </PersonalField>
             ) : null}
           </div>

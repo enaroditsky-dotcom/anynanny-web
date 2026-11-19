@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { IsraelCitiesMultiSelect } from "@/components/geo/israel-cities-multi-select";
 import { IdentityOnboardingCard } from "@/components/identity/identity-onboarding-card";
 import { IdentityVerificationForm } from "@/components/identity/identity-verification-form";
+import { ParentMedicalCollectionNotice } from "@/components/parent/parent-medical-collection-notice";
 import {
   OnboardingActions,
   OnboardingCard,
@@ -473,6 +474,7 @@ function QuestionnaireStepFields({
           value={draft.street}
           onChange={(street) => updateDraft({ street })}
           autoComplete="address-line1"
+          hint="לא חובה. בהזמנה רגילה הרחוב מוצג רק לבייביסיטר ששויכה להזמנה, ורק אחרי אישור. ב-AnyNanny NOW הרחוב, מספר הבית והעיר עשויים להופיע לבייביסיטר מועמדת באזור לפני קבלה."
         />
         <OnboardingTextInput
           id={fieldId("parent-house-number")}
@@ -623,7 +625,7 @@ function QuestionnaireStepFields({
         <div id={idSuffix ? undefined : "parent-has-medical"}>
           <OnboardingYesNo
             name={fieldId("hasMedical")}
-            legend="האם יש לילד/ה אלרגיה, מצב רפואי, צורך מיוחד או מידע אחר שחשוב שבייביסיטר תדע?"
+            legend="האם יש לילד/ה אלרגיה, מצב רפואי, צורך מיוחד או מידע טיפולי שחשוב לשמור בחשבון?"
             required
             value={draft.hasChildSpecialOrMedicalInformation}
             onChange={(hasChildSpecialOrMedicalInformation) =>
@@ -635,12 +637,13 @@ function QuestionnaireStepFields({
               })
             }
           />
+          <ParentMedicalCollectionNotice />
         </div>
         {draft.hasChildSpecialOrMedicalInformation ? (
           <OnboardingTextInput
             id={fieldId("medical-details")}
             label="פרטים שחשוב לדעת"
-            required
+            hint="לא חובה. הפירוט נשמר בחשבון ההורה בלבד. הוא לא מוצג בפרופיל הציבורי, בחיפוש או בתצוגה המקדימה של הזמנה, ולא נשלח אוטומטית. אפשר לכתוב אותו בצ'אט של הזמנה, ואז ההודעה גלויה להורה ולבייביסיטר של אותה הזמנה."
             value={draft.childSpecialOrMedicalDetails}
             onChange={(childSpecialOrMedicalDetails) => updateDraft({ childSpecialOrMedicalDetails })}
           />

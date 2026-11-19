@@ -4,13 +4,13 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { BOOKINGS_TABLE } from "@/lib/bookings/constants";
+import { fetchSitterAssignedParentContacts } from "@/lib/bookings/sitter-parent-contact";
 import {
   fetchUserPublicReviews,
   fetchUserRatingSummary,
   type PublicUserReview,
   type UserRatingSummary
 } from "@/lib/ratings/fetch-user-rating-summary";
-import { parseIdentityVerificationStatus } from "@/lib/identity/identity-verification";
 import {
   isProfileRole,
   PROFILES_TABLE
@@ -23,15 +23,6 @@ type BookingAccessRow = {
   parent_id: string | null;
   sitter_id: string | null;
   status: string | null;
-};
-
-type ParentProfileRow = {
-  id?: string;
-  user_id?: string;
-  address?: string | null;
-  children_count?: number | null;
-  children_ages?: string | null;
-  is_verified?: boolean | null;
 };
 
 function userIsSitter(
@@ -316,118 +307,29 @@ export async function GET(
     }
 
     /*
-     * 6.
-     * מידע כללי ובטוח מטבלת profiles.
+     * Name and street come from the assigned-sitter RPC.
+     * The function omits the street until the booking is approved,
+     * and never returns medical details or entry notes.
+     * A missing function fails closed: no street in the response.
      */
-    const {
-      data:
-        publicParentProfile
-    } = await supabase
-      .from(PROFILES_TABLE)
-      .select(
-        "first_name, last_name, avatar_url, identity_verification_status"
-      )
-      .eq("id", parentId)
-      .maybeSingle();
-
-    /*
-     * 7.
-     * מידע משפחתי.
-     */
-    const primaryParentRead =
-      await supabase
-        .from(
-          "parent_profiles"
-        )
-        .select(
-          "id, address, children_count, children_ages, is_verified"
-        )
-        .eq(
-          "id",
-          parentId
-        )
-        .maybeSingle();
-
-    let parentDetails:
-      | ParentProfileRow
-      | null =
-      (primaryParentRead.data as
-        | ParentProfileRow
-        | null) ?? null;
-
-    let parentDetailsError =
-      primaryParentRead.error;
-
-    /*
-     * fallback למקרה שהקישור
-     * מבוסס user_id במקום id.
-     */
-    if (
-      parentDetailsError ||
-      !parentDetails
-    ) {
-      const fallback =
-        await supabase
-          .from(
-            "parent_profiles"
-          )
-          .select(
-            "user_id, address, children_count, children_ages, is_verified"
-          )
-          .eq(
-            "user_id",
-            parentId
-          )
-          .maybeSingle();
-
-      if (!fallback.error) {
-        parentDetails =
-          (fallback.data as
-            | ParentProfileRow
-            | null) ?? null;
-
-        parentDetailsError =
-          null;
-      }
-    }
-
-    if (
-      parentDetailsError
-    ) {
-      console.warn(
-        "[parent-preview] parent_profiles:",
-        parentDetailsError.message
+    const { contacts } =
+      await fetchSitterAssignedParentContacts(
+        supabase,
+        [bookingId]
       );
-    }
-
-    const details:
-      ParentProfileRow =
-      parentDetails ?? {};
-
-    /*
-     * 8.
-     * כתובת מלאה נחשפת רק
-     * לאחר שהנני אישרה.
-     */
-    const bookingApproved =
-      status === "approved";
+    const contact =
+      contacts.find(
+        (row) =>
+          row.bookingId === bookingId
+      ) ?? null;
 
     return NextResponse.json({
       parent: {
         id: booking.parent_id,
         first_name:
-          String(
-            publicParentProfile
-              ?.first_name ??
-              ""
-          ).trim() || null,
+          contact?.firstName || null,
 
-        avatar_url:
-          String(
-            publicParentProfile
-              ?.avatar_url ??
-              ""
-          ).trim() || null,
+        avatar_url: contact?.avatarUrl ?? null,
 
         rating_average:
           Number(
@@ -447,35 +349,20 @@ export async function GET(
           created_at: review.created_at
         })),
 
-        children_count:
-          details.children_count !=
-          null
-            ? Number(
-                details.children_count
-              )
-            : null,
+        children_count: null,
 
-        children_ages:
-          String(
-            details.children_ages ??
-              ""
-          ).trim() || null,
+        children_ages: null,
 
-        identity_verified:
-          parseIdentityVerificationStatus(
-            publicParentProfile?.identity_verification_status
-          ) === "verified",
+        identity_verified: contact?.identityVerified === true,
 
         address:
-          bookingApproved
-            ? String(
-                details.address ??
-                  ""
-              ).trim() || null
+          status === "approved"
+            ? contact?.addressLine ?? null
             : null,
 
         address_visible:
-          bookingApproved
+          status === "approved" &&
+          Boolean(contact?.addressLine)
       }
     });
   } catch (error) {

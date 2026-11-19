@@ -20,6 +20,7 @@ import {
   APP_LANDING_SITTER_PARAGRAPHS,
   APP_LANDING_SITTER_POINTS
 } from "@/lib/marketing/app-landing";
+import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
 import styles from "./app-landing.module.css";
 
 export function AppLanding({
@@ -116,6 +117,7 @@ export function AppLanding({
           ))}
         </section>
       </main>
+      <MarketingPrivacyLink />
     </div>
   );
 }
