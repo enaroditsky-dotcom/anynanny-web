@@ -503,7 +503,8 @@ assert.equal(PARENT_TOUR_STEPS.map((step) => step.id).join(","), [
   "settings"
 ].join(","));
 
-assert.match(dashboard, /data-tour="parent-home"/);
+assert.match(dashboard, /tour="parent-home"/);
+assert.match(read("components/dashboard/dashboard-profile-hero.tsx"), /data-tour=\{tour\}/);
 assert.match(searchFilters, /data-tour="parent-search-filters"/);
 assert.match(parentLayout, /<ParentTourProvider>/);
 assert.match(parentLayout, /<ProductPortalGate portal="parent">\{children\}<\/ProductPortalGate>/);

@@ -10,8 +10,8 @@ import {
   isRpcKnownMissing,
   markRpcMissing
 } from "@/lib/supabase/rpc-availability";
-import { Star, User } from "lucide-react";
-import { ProfileImage } from "@/components/profile/profile-image";
+import { Star } from "lucide-react";
+import { DashboardProfileHero } from "@/components/dashboard/dashboard-profile-hero";
 import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 type SitterDashboardStats = {
@@ -157,52 +157,44 @@ export function SitterDashboardHeader({
   const reviewsCount = stats.rating_count || 0;
 
   return (
-    <header className="px-0" dir="rtl">
-      <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <ProfileImage
-              src={avatarUrl}
-              name={firstName}
-              className="h-12 w-12 border border-slate-200 bg-white text-slate-400 shadow-sm"
-              fallback={<User className="h-6 w-6" />}
-            />
-            <h1 className={`min-w-0 text-lg font-bold leading-snug text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}>
-              {greeting}
-            </h1>
-          </div>
-          {showIdPill && displayIdValue ? (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-[13px] font-bold text-purple-800"
-              dir="ltr"
-            >
-              <span>{displayIdValue}</span>
-              <span className="text-[11px] font-normal text-purple-500">ID</span>
-            </span>
-          ) : showPublicId && !publicIdLoaded ? (
-            <span className="inline-block h-5 w-16 shrink-0 animate-pulse rounded-md bg-purple-100/80" aria-hidden />
-          ) : null}
-        </div>
-        <div className="flex items-start justify-between gap-3">
-          {statsLoading ? (
-            <span className="inline-block h-6 w-28 animate-pulse rounded-md bg-amber-50" aria-hidden />
-          ) : (
-            <div className="inline-flex min-w-0 items-center gap-1 rounded-md border border-amber-200/60 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
-              <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
-              <span>{numericRating}</span>
-              <span className="text-[13px] text-slate-400">({reviewsCount} חוות דעת)</span>
-            </div>
-          )}
-          <div className="flex min-w-0 max-w-[11.5rem] shrink-0 justify-end sm:max-w-[13rem]">
+      <DashboardProfileHero
+        title={greeting}
+        titleClassName={`text-right text-base font-bold leading-snug text-slate-900 ${nameLoading ? "animate-pulse" : ""}`}
+        avatarUrl={avatarUrl}
+        avatarName={firstName}
+        badges={
+          <>
+            {showIdPill && displayIdValue ? (
+              <span
+                className="inline-flex w-fit shrink-0 items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2 py-0.5 text-[12px] font-bold text-purple-800"
+                dir="ltr"
+              >
+                <span>{displayIdValue}</span>
+                <span className="text-[11px] font-normal text-purple-500">ID</span>
+              </span>
+            ) : showPublicId && !publicIdLoaded ? (
+              <span className="inline-block h-5 w-16 shrink-0 animate-pulse rounded-md bg-purple-100/80" aria-hidden />
+            ) : null}
             <IdentityStatusIndicator
               userId={sitterId}
               role="sitter"
               nextPath="/sitter/dashboard"
             />
-          </div>
-        </div>
-      </div>
-      {children}
-    </header>
+            {statsLoading ? (
+              <span className="inline-block h-5 w-28 animate-pulse rounded-md bg-amber-50" aria-hidden />
+            ) : (
+              <div className="inline-flex w-fit shrink-0 items-center gap-1 rounded-md border border-amber-200/60 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
+                <span>{numericRating}</span>
+                <span className="text-[13px] text-slate-400">
+                  ({reviewsCount} {reviewsCount === 1 ? "חוות דעת" : "חוות דעת"})
+                </span>
+              </div>
+            )}
+          </>
+        }
+      >
+        {children}
+      </DashboardProfileHero>
   );
 }

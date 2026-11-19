@@ -1417,8 +1417,8 @@ export default function SitterDashboardPage() {
   );
 
   return (
-    <main className={`mx-auto flex w-full min-w-0 ${APP_CONTENT_MAX_W} flex-col bg-[#FDFBF6]`} dir="rtl">
-      <div className="flex flex-col gap-1.5 py-1">
+    <main className={`relative mx-auto w-full min-w-0 ${APP_CONTENT_MAX_W} space-y-1.5`} dir="rtl">
+      <div className="space-y-1.5">
         <div className="shrink-0">
           <SitterDashboardHeader
             firstName={firstName}
@@ -1521,7 +1521,6 @@ export default function SitterDashboardPage() {
                 </NavBadgePortal>
               ) : null}
               {showSitterStatusPanel ? (
-                <div className="px-1 pb-2">
                   <DashboardStatusCard
                     collapsedSummary={sitterStatusCollapsedSummary}
                     collapsed={statusPanelCollapsed}
@@ -1549,7 +1548,6 @@ export default function SitterDashboardPage() {
                       </div>
                     </DoubleShakeShiftPanel>
                   </DashboardStatusCard>
-                </div>
               ) : null}
             </div>
             {onboardingPending ? (

@@ -75,7 +75,7 @@ export function SitterVerifiedParentsPreference() {
   return (
     <section
       dir="rtl"
-      className="shrink-0 rounded-xl border border-slate-200/80 bg-white px-3 py-2 shadow-soft"
+      className="w-full min-w-0 shrink-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3"
     >
       <div className="flex min-h-11 items-center gap-2">
         <input

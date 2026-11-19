@@ -146,8 +146,8 @@ import {
 } from "@/lib/ui/long-primary-cta";
 import { APP_CONTENT_MAX_W } from "@/lib/ui/app-shell";
 import { NavBadgePortal, PARENT_CALENDAR_BADGE_SLOT } from "@/components/navigation/nav-badge-slot";
-import { Search, CheckCircle2, Clock, Star, User, X, Loader2 } from "lucide-react";
-import { ProfileImage } from "@/components/profile/profile-image";
+import { Search, CheckCircle2, Clock, Star, X, Loader2 } from "lucide-react";
+import { DashboardProfileHero } from "@/components/dashboard/dashboard-profile-hero";
 import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 const BOOKING_LIVE_SELECT =
@@ -2321,13 +2321,13 @@ export function ParentDashboardClient({
       ) : null}
 
       <div className={`space-y-1.5 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
-        <div
-          data-tour="parent-home"
-          className="w-full min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3 space-y-2"
-        >
-            <h1 className="text-right text-base font-bold leading-snug text-slate-900">שלום, {firstName}!</h1>
-            <div className="flex items-center justify-between gap-3" dir="ltr">
-              <div className="flex min-w-0 flex-col items-start gap-2">
+        <DashboardProfileHero
+          tour="parent-home"
+          title={`שלום, ${firstName}!`}
+          avatarUrl={parentAvatarUrl}
+          avatarName={firstName}
+          badges={
+            <>
                 {parentSerialLabel ? (
                   <span
                     className="inline-flex w-fit shrink-0 items-center gap-1 bg-purple-100 text-purple-800 text-[12px] font-bold px-2 py-0.5 rounded-md border border-purple-200"
@@ -2355,16 +2355,9 @@ export function ParentDashboardClient({
                       : "חוות דעת"})
                   </span>
                 </div>
-              </div>
-              <div className="shrink-0 rounded-[1.15rem] border border-[#E4D3B4] bg-[#FBF7EF] p-1.5 shadow-[0_14px_28px_-16px_rgba(0,31,63,0.55),inset_0_1px_0_rgba(255,255,255,0.92)]">
-                <ProfileImage
-                  src={parentAvatarUrl}
-                  name={firstName}
-                  className="h-[6.75rem] w-[6.75rem] bg-white text-slate-400 shadow-[inset_0_0_0_1px_rgba(0,31,63,0.08)]"
-                  fallback={<User className="h-8 w-8" />}
-                />
-              </div>
-            </div>
+            </>
+          }
+        >
 
             {sitterAcceptedToast ? (
               <div
@@ -2397,7 +2390,7 @@ export function ParentDashboardClient({
               </div>
             ) : null}
 
-        </div>
+        </DashboardProfileHero>
 
             {!shouldHideDashboardActions ? (
               <NavBadgePortal slot={PARENT_CALENDAR_BADGE_SLOT}>
