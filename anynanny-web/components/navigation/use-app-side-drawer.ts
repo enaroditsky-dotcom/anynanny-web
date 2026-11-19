@@ -16,6 +16,7 @@ import {
   APP_DRAWER_TOUR_STEP_ATTRIBUTE,
   readDrawerTourPresentationHold
 } from "@/lib/navigation/app-side-drawer-destinations";
+import { guardDrawerBackgroundClick } from "@/lib/navigation/app-side-drawer-guard";
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -92,6 +93,20 @@ export function useAppSideDrawer(enabled: boolean, pathname: string) {
 
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase === "closed") return;
+
+    const onBackgroundClick = (event: MouseEvent) => {
+      guardDrawerBackgroundClick(event, readDrawerTourPresentationHold(), () => {
+        restoreFocusRef.current = true;
+        setPhase((current) => nextDrawerPhase(current, "close", reducedRef.current));
+      });
+    };
+
+    window.addEventListener("click", onBackgroundClick, true);
+    return () => window.removeEventListener("click", onBackgroundClick, true);
   }, [phase]);
 
   useEffect(() => {

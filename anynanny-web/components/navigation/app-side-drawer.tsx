@@ -179,7 +179,6 @@ export function AppSideDrawerCatcher({
         aria-label="סגירת תפריט"
         className="absolute bottom-0 left-0 right-0 z-[60] cursor-pointer border-0 bg-transparent p-0"
         style={{ top: APP_SIDE_DRAWER_TOP, touchAction: "none" }}
-        onMouseDown={(event) => event.preventDefault()}
         onClick={dismiss}
       />
       <div

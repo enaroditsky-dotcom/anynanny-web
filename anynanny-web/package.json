@@ -82,7 +82,8 @@
     "test:chat-emoji-picker": "npx --yes tsx scripts/test-chat-emoji-picker.ts",
     "test:parent-favorite-sitters": "npx --yes tsx scripts/test-parent-favorite-sitters.ts",
     "test:chat-inbox-ux": "npx --yes tsx scripts/test-chat-inbox-ux.ts",
-    "test:app-side-drawer": "npx --yes tsx scripts/test-app-side-drawer.ts"
+    "test:app-side-drawer": "npx --yes tsx scripts/test-app-side-drawer.ts",
+    "test:drawer-background-click": "npx --yes tsx scripts/test-drawer-background-click.ts"
   },
   "dependencies": {
     "@didit-protocol/sdk-web": "^0.3.0",

@@ -84,7 +84,7 @@ assert.doesNotMatch(gate, /will-change|translate-x-|signOut|logoutAndRedirect/);
 assert.match(frame, /APP_SHELL_SCROLL_ID/);
 assert.match(frame, /overflow-y-auto/);
 assert.match(frame, /drawerActive \? "overflow-hidden overscroll-none" : "overflow-y-auto overscroll-y-contain"/);
-assert.match(frame, /\[&_\*\]:pointer-events-none/);
+assert.match(frame, /\[&_\*\]:!pointer-events-none/);
 assert.equal((frame.match(/inert=\{phase !== "closed"\}/g) ?? []).length, 2);
 assert.match(frame, /h-dvh/);
 assert.match(frame, /data-app-side-drawer=\{phase\}/);

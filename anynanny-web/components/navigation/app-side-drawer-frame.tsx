@@ -116,7 +116,7 @@ export function AppSideDrawerFrame({
             {children}
           </div>
         </div>
-        <div className={drawerActive ? "[&_*]:pointer-events-none" : undefined} inert={phase !== "closed"}>
+        <div className={drawerActive ? "[&_*]:!pointer-events-none" : undefined} inert={phase !== "closed"}>
           {footer}
         </div>
       </div>
