@@ -58,7 +58,7 @@ export function AppShellHeader({
         {showUi ? (
           showMenuButton ? (
             onHomePress ? (
-              <button type="button" aria-label="בית" aria-current="page" className={`${LOGO_HOME_CLASS} ${LOGO_SLOT_CLASS}`} onClick={onHomePress}>
+              <button type="button" aria-label="בית" aria-current="page" className={`${LOGO_HOME_CLASS} ${LOGO_SLOT_CLASS}`} inert={menuExpanded} onClick={onHomePress}>
                 {logo}
               </button>
             ) : (
@@ -67,6 +67,7 @@ export function AppShellHeader({
                 aria-label="בית"
                 aria-current={homeActive ? "page" : undefined}
                 className={`${LOGO_HOME_CLASS} ${LOGO_SLOT_CLASS}`}
+                inert={menuExpanded}
               >
                 {logo}
               </Link>

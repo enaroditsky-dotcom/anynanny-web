@@ -1,13 +1,18 @@
 "use client";
 
-import type { CSSProperties, ReactNode, Ref, TransitionEvent } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode, Ref, TransitionEvent } from "react";
 import { AppShellHeader } from "@/components/app-shell-header";
 import { AppSideDrawer, AppSideDrawerCatcher } from "@/components/navigation/app-side-drawer";
-import type { DrawerPanelStyle, DrawerPhase } from "@/lib/navigation/app-side-drawer";
+import { APP_SIDE_DRAWER_ID, type DrawerPanelStyle, type DrawerPhase } from "@/lib/navigation/app-side-drawer";
 import { APP_SHELL_SCROLL_ID } from "@/lib/ui/app-shell";
 
 const CLIP_CLASS = "relative h-dvh max-h-dvh min-h-0 min-w-0 overflow-hidden";
 const CLIP_RAISED_CLASS = "relative z-[80] h-dvh max-h-dvh min-h-0 min-w-0 overflow-hidden";
+const MENU_BUTTON_SELECTOR = `[aria-controls="${APP_SIDE_DRAWER_ID}"]`;
+
+function isMenuButtonTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest(MENU_BUTTON_SELECTOR));
+}
 
 export type AppSideDrawerFrameProps = {
   clipRef: Ref<HTMLDivElement>;
@@ -55,16 +60,37 @@ export function AppSideDrawerFrame({
   footer,
   children
 }: AppSideDrawerFrameProps) {
+  const drawerActive = phase !== "closed";
+
+  const blockUnderlyingChrome = (event: MouseEvent<HTMLElement>) => {
+    if (!drawerActive || isMenuButtonTarget(event.target)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onClose();
+  };
+
+  const blockUnderlyingKeys = (event: KeyboardEvent<HTMLElement>) => {
+    if (!drawerActive || isMenuButtonTarget(event.target)) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    event.stopPropagation();
+    onClose();
+  };
+
   return (
     <div
       ref={clipRef}
       data-app-side-drawer={phase}
       className={[clipRaised ? CLIP_RAISED_CLASS : CLIP_CLASS, "flex flex-col"].join(" ")}
     >
-      <div className="relative z-[90] shrink-0">
+      <div
+        className="relative z-[90] shrink-0"
+        onClickCapture={blockUnderlyingChrome}
+        onKeyDownCapture={blockUnderlyingKeys}
+      >
         <AppShellHeader
           showMenu={enabled}
-          menuExpanded={phase !== "closed"}
+          menuExpanded={drawerActive}
           onOpenMenu={onOpenMenu}
           menuButtonRef={menuButtonRef}
           onHomePress={onHomePress}
@@ -80,7 +106,8 @@ export function AppSideDrawerFrame({
             id={APP_SHELL_SCROLL_ID}
             ref={scrollRef}
             className={[
-              "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain",
+              "min-h-0 min-w-0 flex-1 overflow-x-hidden",
+              drawerActive ? "overflow-hidden overscroll-none" : "overflow-y-auto overscroll-y-contain",
               scrollClassName ?? ""
             ]
               .filter(Boolean)
@@ -89,7 +116,9 @@ export function AppSideDrawerFrame({
             {children}
           </div>
         </div>
-        {footer}
+        <div className={drawerActive ? "[&_*]:pointer-events-none" : undefined} inert={phase !== "closed"}>
+          {footer}
+        </div>
       </div>
       {enabled ? (
         <AppSideDrawer

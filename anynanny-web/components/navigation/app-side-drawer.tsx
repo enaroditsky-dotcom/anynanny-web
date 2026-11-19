@@ -153,7 +153,10 @@ export function AppSideDrawer({
   );
 }
 
-/** Dims the page below the header. Not a navigation control and not a modal. */
+/**
+ * Closes the drawer on any press outside the panel, including the bottom nav.
+ * The dim stays above the nav so the panel's visual edge does not change.
+ */
 export function AppSideDrawerCatcher({
   onClose,
   motionStyle
@@ -161,24 +164,34 @@ export function AppSideDrawerCatcher({
   onClose: () => void;
   motionStyle?: CSSProperties;
 }) {
-  const backdropStyle: CSSProperties = {
-    top: APP_SIDE_DRAWER_TOP,
-    bottom: APP_SIDE_DRAWER_BOTTOM,
-    background: APP_SIDE_DRAWER_BACKDROP,
-    touchAction: "none",
-    ...motionStyle
+  const dismiss = (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onClose();
   };
 
   return (
-    <button
-      type="button"
-      tabIndex={-1}
-      data-app-side-drawer-backdrop=""
-      aria-label="סגירת תפריט"
-      className="absolute bottom-0 left-0 right-0 z-[60] cursor-pointer border-0 p-0"
-      style={backdropStyle}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={onClose}
-    />
+    <>
+      <button
+        type="button"
+        tabIndex={-1}
+        data-app-side-drawer-backdrop=""
+        aria-label="סגירת תפריט"
+        className="absolute bottom-0 left-0 right-0 z-[60] cursor-pointer border-0 bg-transparent p-0"
+        style={{ top: APP_SIDE_DRAWER_TOP, touchAction: "none" }}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={dismiss}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-0 right-0 z-[60]"
+        style={{
+          top: APP_SIDE_DRAWER_TOP,
+          bottom: APP_SIDE_DRAWER_BOTTOM,
+          background: APP_SIDE_DRAWER_BACKDROP,
+          ...motionStyle
+        }}
+      />
+    </>
   );
 }
