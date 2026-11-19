@@ -99,6 +99,15 @@ async function main() {
   const clientAt = dashboardPage.indexOf("<ParentDashboardClient");
   assert.ok(unavailableAt >= 0 && redirectAt > unavailableAt && clientAt > redirectAt);
 
+  const sitterDashboardGate = read("app/sitter/dashboard/layout.tsx");
+  const sitterUnavailableAt = sitterDashboardGate.indexOf('gate.status === "unavailable"');
+  const sitterRedirectAt = sitterDashboardGate.indexOf('redirect("/auth/login?next=/sitter/dashboard")');
+  const sitterChildrenAt = sitterDashboardGate.indexOf("return children");
+  assert.ok(sitterUnavailableAt >= 0 && sitterRedirectAt > sitterUnavailableAt && sitterChildrenAt > sitterRedirectAt);
+  assert.match(sitterDashboardGate, /protectedScreenGate\(await resolveValidAuthUser\(supabase\)\)/);
+  assert.doesNotMatch(sitterDashboardGate, /signOut|logoutAndRedirect/);
+  assert.doesNotMatch(read("app/sitter/dashboard/page.tsx"), /logoutAndRedirect|supabase\.auth\.signOut\(/);
+
   const dashboardClient = read("components/parent/parent-dashboard-client.tsx");
   const drawerLogout = read("components/navigation/app-side-drawer-logout.tsx");
   const authEffect = dashboardClient.slice(dashboardClient.indexOf("const expectedId = authUser.id"));

@@ -18,6 +18,7 @@ import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import { hasSitterCompletedOnboarding, SITTER_PROFILES_TABLE, SITTER_PROFILES_USER_COLUMN } from "@/lib/sitter/sitter-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { removeRealtimeChannel, subscribePostgresChanges } from "@/lib/supabase/subscribe-postgres-changes";
+import { AUTH_RETRY_MESSAGE, AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
 import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
 import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { SESSIONS_TABLE, SESSION_PENDING_START_STATUSES, computeLiveAccruedNis, computeLiveElapsedSecondsActive, resolveLiveHourlyRateNis, type SupabaseSessionRow, formatElapsed } from "@/lib/session/protocol";
@@ -198,10 +199,12 @@ export default function SitterDashboardPage() {
   const [stuckShiftReviewNotice, setStuckShiftReviewNotice] = useState(false);
   const [missedShiftBooking, setMissedShiftBooking] = useState<MissedShiftBookingView | null>(null);
   const dismissedMissedShiftIdsRef = useRef<Set<string>>(new Set());
+  const signedOutRedirectedRef = useRef(false);
   const [releaseStuckModalOpen, setReleaseStuckModalOpen] = useState(false);
   const [releasingStuckShift, setReleasingStuckShift] = useState(false);
   const [releaseStuckModalError, setReleaseStuckModalError] = useState<string | null>(null);
   const [checkingAuthEnforcement, setCheckingAuthEnforcement] = useState(true);
+  const [authHoldMessage, setAuthHoldMessage] = useState<string | null>(null);
   const lastBookingToastKeyRef = useRef<string | null>(null);
   const lastRealtimeToastAtRef = useRef<number>(0);
 
@@ -587,7 +590,12 @@ export default function SitterDashboardPage() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) { setLoading(false); setCheckingAuthEnforcement(false); setBanner("Supabase לא מוגדר."); return; }
+    if (!supabase) {
+      setAuthHoldMessage(AUTH_SERVICE_UNAVAILABLE_MESSAGE);
+      setLoading(false);
+      setCheckingAuthEnforcement(false);
+      return;
+    }
     let cancelled = false;
     void (async () => {
       const auth = await resolveBrowserAuth();
@@ -595,21 +603,21 @@ export default function SitterDashboardPage() {
         if (auth.reason === "unavailable") {
           authRetry.noteUnavailable();
           if (!cancelled && authRetry.exhausted) {
+            setAuthHoldMessage(`${AUTH_RETRY_MESSAGE} רעננו את הדף כדי לנסות שוב.`);
             setLoading(false);
             setCheckingAuthEnforcement(false);
-            setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לראות משמרות."));
           }
           return;
         }
         authRetry.noteSettled();
-        if (!cancelled) {
+        if (!cancelled && !signedOutRedirectedRef.current) {
+          signedOutRedirectedRef.current = true;
           setSitterId(null);
-          setLoading(false);
-          setCheckingAuthEnforcement(false);
-          setBanner(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לראות משמרות."));
+          router.replace("/auth/login?next=/sitter/dashboard");
         }
         return;
       }
+      if (!cancelled) setAuthHoldMessage(null);
       authRetry.noteSettled();
       if (cancelled) return;
       setSitterId(auth.userId);
@@ -639,7 +647,7 @@ export default function SitterDashboardPage() {
       setLoading(false); setSitterBootstrapComplete(true); setCheckingAuthEnforcement(false);
     })();
     return () => { cancelled = true; };
-  }, [authRetry.exhausted, authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, refreshForUser, setSitterBootstrapComplete, setSitterId]);
+  }, [authRetry.exhausted, authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable, refreshForUser, router, setSitterBootstrapComplete, setSitterId]);
 
   useEffect(() => {
     if (!sitterId) { setSitterSerialLoaded(false); setSitterPublicDisplayId(null); return; }
@@ -1278,10 +1286,18 @@ export default function SitterDashboardPage() {
 
   const showLoading = checkingAuthEnforcement || (loading && !sitterBootstrapComplete && !(pendingRow || activeShiftRow || endConfirmRow));
 
+  if (authHoldMessage) {
+    return (
+      <main className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center px-4" dir="rtl">
+        <p className="text-center text-sm text-slate-600">{authHoldMessage}</p>
+      </main>
+    );
+  }
+
   if (showLoading) {
     return (
-      <main className={`mx-auto flex min-h-[12rem] w-full ${APP_CONTENT_MAX_W} items-center justify-center bg-[#FDFBF6] py-10`} dir="rtl">
-        <p className="text-right text-sm text-slate-600 animate-pulse">בודק הרשאות גישה ומאמת פרופיל…</p>
+      <main className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center px-4" dir="rtl">
+        <p className="text-center text-sm text-slate-600">טוענים…</p>
       </main>
     );
   }
