@@ -9,7 +9,7 @@ import {
   getBillingState,
   type BillingSessionRow
 } from "@/lib/billing/session-billing";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { SESSIONS_TABLE } from "@/lib/session/protocol";
 
 type TestRole = "parent" | "sitter";
@@ -30,7 +30,7 @@ function BillingTestPageInner() {
     void (async () => {
       const auth = await resolveBrowserAuth();
       if (!auth.ok) {
-        setAuthError(auth.reason === "no_client" ? "Supabase לא מוגדר." : "יש להתחבר.");
+        setAuthError(browserAuthFailureMessage(auth.reason, "יש להתחבר."));
         return;
       }
       setUserId(auth.userId);

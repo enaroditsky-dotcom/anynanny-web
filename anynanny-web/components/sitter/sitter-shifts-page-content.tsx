@@ -25,10 +25,12 @@ import {
   type TodaysLinkedBookingView
 } from "@/lib/bookings/todays-linked-booking";
 import { normalizeBookingStatus } from "@/lib/bookings/use-shift-activation-status";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 export function SitterShiftsPageContent() {
+  const authRetry = useOnlineRetryNonce();
   const [sitterId, setSitterId] = useState<string | null>(null);
   const [authState, setAuthState] = useState<"loading" | "ready" | "error">("loading");
   const [confirmedRefreshNonce, setConfirmedRefreshNonce] = useState(0);
@@ -122,16 +124,29 @@ export function SitterShiftsPageContent() {
   );
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
       const auth = await resolveBrowserAuth();
+      if (cancelled) return;
       if (!auth.ok) {
+        if (auth.reason === "unavailable") {
+          authRetry.noteUnavailable();
+          if (authRetry.exhausted) setAuthState("error");
+          return;
+        }
+        authRetry.noteSettled();
+        setSitterId(null);
         setAuthState("error");
         return;
       }
+      authRetry.noteSettled();
       setSitterId(auth.userId);
       setAuthState("ready");
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [authRetry.exhausted, authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable]);
 
   const handleBookingResponded = useCallback(
     async (result: { status: "approved" | "rejected"; booking: PendingBookingView | null }) => {

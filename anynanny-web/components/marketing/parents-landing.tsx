@@ -2,6 +2,7 @@
 
 import { AnyNannyLogo } from "@/components/brand/anynanny-logo";
 import { AnynannyMascotPortrait } from "@/components/brand/anynanny-mascot-portrait";
+import { MarketingHomeReturn } from "@/components/marketing/marketing-home-return";
 import { ParentsWebAppInstallButton } from "@/components/marketing/parents-web-app-install-button";
 import {
   PARENTS_LANDING_ANNY_ALT,
@@ -45,6 +46,7 @@ export function ParentsLanding({
       </header>
 
       <main className={styles.main}>
+        <MarketingHomeReturn />
         <h1 className={styles.heroTitle}>{PARENTS_LANDING_H1}</h1>
         <h2 className={styles.revolution}>{PARENTS_LANDING_REVOLUTION_HEADING}</h2>
         <p className={styles.supporting}>
@@ -72,6 +74,7 @@ export function ParentsLanding({
             target="_blank"
             rel="noopener noreferrer"
             aria-label="AnyNanny ב-App Store"
+            data-cta="app-store"
             data-hero-hit="app-store"
           />
           {PARENTS_LANDING_GOOGLE_PLAY_URL ? (
@@ -103,7 +106,7 @@ export function ParentsLanding({
           <p>{PARENTS_LANDING_AVAILABILITY}</p>
         </section>
 
-        <a className={styles.parentCta} href={parentHref} data-cta="parent-search">
+        <a className={styles.parentCta} href={parentHref} data-cta="parent-search" data-press="">
           {PARENTS_LANDING_CTA}
         </a>
       </main>

@@ -1,4 +1,6 @@
 import { signupPathForRole, welcomeSignupHref } from "@/lib/charter/routing";
+import { toAppEntryHref } from "@/lib/hosts/app-entry";
+import { DOMAIN_SEPARATION_ENABLED } from "@/lib/hosts/site-classifier";
 
 export const STUDENT_JOBS_PATH = "/jobs/students";
 export const STUDENT_JOBS_CANONICAL = "https://www.anynanny.org/jobs/students";
@@ -100,7 +102,10 @@ export function utmSearchFromRecord(
  * URL and into the register `next` path so the existing signup hop keeps them.
  * Other query params are not forwarded.
  */
-export function studentSitterSignupHref(search: string | URLSearchParams = ""): string {
+export function studentSitterSignupHref(
+  search: string | URLSearchParams = "",
+  domainSeparationEnabled: boolean = DOMAIN_SEPARATION_ENABLED
+): string {
   const utm = readStudentJobsUtm(search);
   const nextUrl = new URL(signupPathForRole("sitter"), "https://www.anynanny.org");
   utm.forEach((value, key) => {
@@ -112,5 +117,5 @@ export function studentSitterSignupHref(search: string | URLSearchParams = ""): 
     welcome.searchParams.set(key, value);
   });
   const qs = welcome.searchParams.toString();
-  return qs ? `${welcome.pathname}?${qs}` : welcome.pathname;
+  return toAppEntryHref(qs ? `${welcome.pathname}?${qs}` : welcome.pathname, domainSeparationEnabled);
 }

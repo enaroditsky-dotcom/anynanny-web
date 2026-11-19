@@ -64,6 +64,7 @@ body.demo-open{overflow:hidden}
 .demo-store-web .demo-store-kicker{text-align:end}
 .demo-store-actions button:disabled{opacity:1;cursor:default}
 .demo-store-actions button:not(:disabled){cursor:pointer}
+a.demo-store-badge{color:#fff;text-decoration:none;cursor:pointer}
 .demo-store.is-live .demo-store-help{display:none}
 @media(max-width:740px){.demo-store{margin-top:8px;padding:10px 10px 12px}.demo-store h3{font-size:16px}.demo-store-actions{flex-direction:column}.demo-store-actions .demo-store-badge{flex-basis:auto;width:100%}}
 .sitter-web-cta{display:none}
@@ -75,5 +76,4 @@ body.demo-open{overflow:hidden}
 .experience.is-sitter .sitter-web-cta{display:flex;align-items:center;justify-content:center;width:fit-content;max-width:100%;min-height:2.6rem;margin:0 auto 12px;padding:0.45rem 1.15rem;border-radius:999px;background:#3a9a44;color:#fff;font-size:0.98rem;font-weight:800;line-height:1.2;text-align:center;text-decoration:none;box-sizing:border-box}
 .experience.is-sitter .phone{width:min(100%,390px);height:min(768px,calc(100dvh - 78px));max-width:100%}
 .app-download{margin:26px auto 0;padding:24px 16px 4px;border-top:1px solid var(--line);text-align:center}
-.download-soon:disabled{opacity:1;background:var(--navy);color:white;border-radius:28px;padding:13px 28px;font-size:16px;font-weight:700;cursor:default;max-width:100%}
-.app-download p{font-size:13px;line-height:1.7;color:#6d8190;max-width:480px;margin:10px auto 0}
+.app-download .app-available{max-width:32rem;margin:0 auto;font-size:16px;line-height:1.6;font-weight:700;color:var(--navy)}

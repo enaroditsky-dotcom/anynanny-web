@@ -3,8 +3,9 @@
 import { usePathname, useRouter } from "next/navigation";
 import { startTransition, useCallback } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
 import { getSitterOnboardingGateRedirect } from "@/lib/auth/post-auth-destination";
-import { loadProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
+import { classifyPortalAccess, readProductProfileOwnership, roleMismatchHref } from "@/lib/auth/product-profiles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "active_role";
@@ -25,8 +26,15 @@ export function RoleToggle() {
     void (async () => {
       const supabase = getSupabaseBrowserClient();
       if (supabase && user?.id) {
-        const ownership = await loadProductProfileOwnership(supabase, user.id);
-        if (!ownership?.hasParent) {
+        const read = await readProductProfileOwnership(supabase, user.id);
+        const access = classifyPortalAccess(read, "parent");
+        if (access === "unreadable") {
+          startTransition(() => {
+            router.replace(onboardingUnreadableHref("parent"));
+          });
+          return;
+        }
+        if (access === "unowned") {
           startTransition(() => {
             router.replace(roleMismatchHref("parent"));
           });
@@ -49,8 +57,15 @@ export function RoleToggle() {
     void (async () => {
       const supabase = getSupabaseBrowserClient();
       if (supabase && user?.id) {
-        const ownership = await loadProductProfileOwnership(supabase, user.id);
-        if (!ownership?.hasSitter) {
+        const read = await readProductProfileOwnership(supabase, user.id);
+        const access = classifyPortalAccess(read, "sitter");
+        if (access === "unreadable") {
+          startTransition(() => {
+            router.replace(onboardingUnreadableHref("sitter"));
+          });
+          return;
+        }
+        if (access === "unowned") {
           startTransition(() => {
             router.replace(roleMismatchHref("sitter"));
           });

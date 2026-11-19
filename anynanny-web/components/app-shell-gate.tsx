@@ -3,9 +3,11 @@
 import type { ReactNode } from "react";
 import { memo, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { APP_SHELL_SCROLL_ID } from "@/lib/ui/app-shell";
+import { classifySiteHost, classifySitePath, resolvePublicSiteHost, type SiteHostRole } from "@/lib/hosts/site-classifier";
 
-import { AppShellHeader } from "@/components/app-shell-header";
+import { AppSideDrawerFrame } from "@/components/navigation/app-side-drawer-frame";
+import { useAppSideDrawer } from "@/components/navigation/use-app-side-drawer";
+import { isAppDrawerRoute } from "@/lib/navigation/app-side-drawer";
 import { GlobalCoordinationNotifications } from "@/components/notifications/global-coordination-notifications";
 import { AppShellSessionHydration } from "@/components/app-shell-session-hydration";
 import { AppShellStableBoundary } from "@/components/app-shell-stable-boundary";
@@ -17,6 +19,7 @@ import { PrivacyPolicyUpdateNotice } from "@/components/legal/privacy-policy-upd
 import { PushPermissionBanner } from "@/components/push/push-permission-banner";
 import { PushRuntime } from "@/components/push/push-runtime";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
+import { MarketingPortal } from "@/components/marketing/marketing-portal";
 import SessionProvider from "@/context/SessionContext";
 
 const CHROMELESS_PREFIXES = [
@@ -36,9 +39,12 @@ const CHROMELESS_PREFIXES = [
   "/babysitter",
   "/app",
   "/parents",
+  "/story",
   "/welcome",
   "/charter",
-  "/sitter/onboarding"
+  "/sitter/onboarding",
+  "/dev/side-drawer",
+  "/dev/parent-profile-header"
 ];
 
 const MAIN_LAYOUT_PREFIXES = [
@@ -79,20 +85,33 @@ const StableBottomNav = memo(BottomNav);
 // so /parent/broadcast → dashboard minimize can show the compact bar.
 
 
+export function isMarketingPortalPath(pathname: string, hostRole: SiteHostRole): boolean {
+  if (hostRole === "app" || hostRole === "apex") return false;
+  const kind = classifySitePath(pathname);
+  if (kind === "marketing") return true;
+  return kind === "entry" && hostRole === "www";
+}
+
 export function AppShellGate({
-  children
+  children,
+  siteHost = ""
 }: {
   children: ReactNode;
+  siteHost?: string;
 }) {
   const pathname = usePathname();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hostRole: SiteHostRole = classifySiteHost(resolvePublicSiteHost({ host: siteHost }));
+  const portal = isMarketingPortalPath(pathname, hostRole);
+  const drawerEnabled = !portal && !isChromelessAuthPath(pathname) && isAppDrawerRoute(pathname);
+  const drawer = useAppSideDrawer(drawerEnabled, pathname);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
   }, [pathname]);
 
   useEffect(() => {
-    if (isChromelessAuthPath(pathname)) return;
+    if (portal || isChromelessAuthPath(pathname)) return;
     const html = document.documentElement;
     const body = document.body;
     const previousHtml = html.style.overflow;
@@ -103,14 +122,14 @@ export function AppShellGate({
       html.style.overflow = previousHtml;
       body.style.overflow = previousBody;
     };
-  }, [pathname]);
+  }, [pathname, portal]);
 
   const chromeless = isChromelessAuthPath(pathname);
 
   /**
    * Auth / landing pages manage their own layout.
    */
-  if (chromeless) {
+  if (portal || chromeless) {
     return (
       <SessionProvider>
         <AppShellSessionHydration />
@@ -118,7 +137,7 @@ export function AppShellGate({
         <MarketingConsentPrompt />
 
         <RouteTransitionShell>
-          {children}
+          {portal ? <MarketingPortal>{children}</MarketingPortal> : children}
         </RouteTransitionShell>
       </SessionProvider>
     );
@@ -138,31 +157,33 @@ export function AppShellGate({
            * One scrollport between the in-flow header and the fixed BottomNav.
            * html/body stay unscrollable here so iOS does not get a second scroller.
            */}
-          <div className="flex h-dvh max-h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-[#FDFBF6]">
-            <AppShellHeader />
-            <GlobalCoordinationNotifications />
-
-            <div
-              id={APP_SHELL_SCROLL_ID}
-              ref={scrollRef}
-              className={[
-                "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain",
-                mainLayout ? "" : "px-2 pt-2",
-                SHELL_BOTTOM_NAV_PADDING
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              <RouteTransitionShell>
-                <PrivacyPolicyUpdateNotice />
-                <PushPermissionBanner />
-                {children}
-              </RouteTransitionShell>
-            </div>
-
-            <ParentActiveNowDock pathname={pathname} />
-            <StableBottomNav />
-          </div>
+          <AppSideDrawerFrame
+            clipRef={drawer.clipRef}
+            scrollRef={scrollRef}
+            phase={drawer.phase}
+            enabled={drawer.enabled}
+            clipRaised={drawer.clipRaised}
+            panelStyle={drawer.panelStyle}
+            backdropStyle={drawer.backdropStyle}
+            onPanelTransitionEnd={drawer.onPanelTransitionEnd}
+            onOpenMenu={drawer.toggleDrawer}
+            onClose={drawer.closeDrawer}
+            menuButtonRef={drawer.menuButtonRef}
+            scrollClassName={[mainLayout ? "" : "px-2 pt-2", SHELL_BOTTOM_NAV_PADDING].filter(Boolean).join(" ")}
+            belowHeader={<GlobalCoordinationNotifications />}
+            footer={
+              <>
+                <ParentActiveNowDock pathname={pathname} />
+                <StableBottomNav />
+              </>
+            }
+          >
+            <RouteTransitionShell>
+              <PrivacyPolicyUpdateNotice />
+              <PushPermissionBanner />
+              {children}
+            </RouteTransitionShell>
+          </AppSideDrawerFrame>
         </IncomingChatInboxProvider>
       </AppShellStableBoundary>
     </SessionProvider>

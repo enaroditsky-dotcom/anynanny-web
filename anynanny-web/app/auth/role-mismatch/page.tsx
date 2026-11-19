@@ -3,11 +3,10 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageBackButton, PageBackRow } from "@/components/navigation/page-back-link";
-import { SITTER_DASHBOARD_PATH, SITTER_ONBOARDING_PATH } from "@/lib/auth/post-auth-destination";
+import { onboardingUnreadableHref } from "@/lib/auth/onboarding-state";
+import { resolvePostAuthPath } from "@/lib/auth/post-auth-destination";
 import {
-  loadProductProfileOwnership,
-  PARENT_DASHBOARD_PATH,
-  PARENT_ONBOARDING_PATH,
+  readProductProfileOwnership,
   secondRoleHref
 } from "@/lib/auth/product-profiles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -74,18 +73,28 @@ function RoleMismatchInner() {
         return;
       }
 
-      const ownership = await loadProductProfileOwnership(supabase, user.id);
+      const read = await readProductProfileOwnership(supabase, user.id);
       if (cancelled) return;
 
-      if (requested === "sitter" && ownership?.hasSitter) {
+      if (read.status === "unreadable") {
         setStatus("redirecting");
-        router.replace(ownership.sitterOnboardingComplete ? SITTER_DASHBOARD_PATH : SITTER_ONBOARDING_PATH);
+        router.replace(onboardingUnreadableHref(requested));
         return;
       }
 
-      if (requested === "parent" && ownership?.hasParent) {
+      const ownership = read.status === "ready" ? read.ownership : null;
+      const ownsRequested =
+        requested === "sitter"
+          ? Boolean(ownership?.hasSitter) || ownership?.sitterOnboardingState === "unreadable"
+          : Boolean(ownership?.hasParent) || ownership?.parentOnboardingState === "unreadable";
+
+      if (ownsRequested) {
         setStatus("redirecting");
-        router.replace(ownership.parentOnboardingComplete ? PARENT_DASHBOARD_PATH : PARENT_ONBOARDING_PATH);
+        const dest = await resolvePostAuthPath(supabase, user.id, null, {
+          requestedRole: requested,
+          userEmail: user.email
+        });
+        if (!cancelled) router.replace(dest);
         return;
       }
 

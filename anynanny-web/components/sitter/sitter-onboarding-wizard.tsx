@@ -89,7 +89,8 @@ import {
   SITTER_WORKING_CITIES_COLUMN
 } from "@/lib/sitter/sitter-profile";
 import { updateSitterWorkingCities } from "@/lib/sitter/sitter-working-cities";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 type Props = {
@@ -116,6 +117,7 @@ const QUESTIONNAIRE_TITLE_ID = "sitter-questionnaire-step-title";
 
 export function SitterOnboardingWizard({ onSaved }: Props) {
   const router = useRouter();
+  const authRetry = useOnlineRetryNonce();
   const [isExpert, setIsExpert] = useState(false);
   const [questionnaireStep, setQuestionnaireStep] = useState(1);
   const [showIdentity, setShowIdentity] = useState(false);
@@ -140,10 +142,17 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
   };
 
   useEffect(() => {
+    let cancelled = false;
     setIsExpert(readIsExpertTrack());
     void (async () => {
       const auth = await resolveBrowserAuth();
-      if (!auth.ok) return;
+      if (cancelled) return;
+      if (!auth.ok) {
+        if (auth.reason === "unavailable") authRetry.noteUnavailable();
+        else authRetry.noteSettled();
+        return;
+      }
+      authRetry.noteSettled();
 
       const {
         data: { user }
@@ -188,6 +197,7 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
         }
       }
 
+      if (cancelled) return;
       updateDraft({
         firstName: resolved.first_name,
         lastName: resolved.last_name,
@@ -204,6 +214,7 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
       const types = normalizeExpertServiceTypes(sitterRow?.service_types);
       const primary = types.find((type) => isExpertOnlyServiceKind(type));
       if (primary || expertFromMeta) {
+        if (cancelled) return;
         setIsExpert(true);
         const source = sitterRow ?? user?.user_metadata ?? {};
         setExpertDraft({
@@ -228,7 +239,10 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
         });
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable]);
 
   useEffect(() => {
     setQuestionnaireStep((prev) => Math.min(prev, sitterQuestionnaireStepCount(isExpert)));
@@ -334,7 +348,7 @@ export function SitterOnboardingWizard({ onSaved }: Props) {
     try {
       const auth = await resolveBrowserAuth();
       if (!auth.ok) {
-        setError("יש להתחבר מחדש כדי לסיים את השאלון.");
+        setError(browserAuthFailureMessage(auth.reason, "יש להתחבר מחדש כדי לסיים את השאלון."));
         setBusy(false);
         return;
       }

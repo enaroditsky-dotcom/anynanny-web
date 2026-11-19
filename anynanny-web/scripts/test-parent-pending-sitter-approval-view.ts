@@ -230,26 +230,21 @@ assert.match(sitterPending, /\.eq\("status", "pending"\)/);
 assert.match(sitterPending, /status: Extract<BookingStatus, "approved" \| "rejected">/);
 
 const parentDashboard = read("components/parent/parent-dashboard-client.tsx");
+const bottomNav = read("components/bottom-nav.tsx");
 assert.match(parentDashboard, /useParentPendingBookingCount/);
 assert.match(parentDashboard, /href="\/parent\/calendar"/);
-assert.doesNotMatch(
-  parentDashboard.slice(parentDashboard.indexOf('href="/parent/wallet"')),
-  /pendingSitterApprovalCount/
-);
-assert.doesNotMatch(
-  parentDashboard.slice(parentDashboard.indexOf('href="/parent/history"')),
-  /pendingSitterApprovalCount/
-);
+assert.match(parentDashboard, /PARENT_CALENDAR_BADGE_SLOT/);
+assert.match(parentDashboard, /pendingSitterApprovalCount/);
+assert.doesNotMatch(parentDashboard, /href="\/parent\/wallet"|href="\/parent\/history"|DASHBOARD_SHORTCUT_TILE/);
+assert.doesNotMatch(bottomNav, /useParentPendingBookingCount|useCancellationAttention|pendingSitterApprovalCount/);
+assert.match(bottomNav, /badgeSlot: PARENT_CALENDAR_BADGE_SLOT/);
 
 const sitterDashboard = read("app/sitter/dashboard/page.tsx");
-assert.match(sitterDashboard, /href="\/sitter\/shifts"/);
+assert.match(sitterDashboard, /useSitterPendingBookingCount/);
 assert.match(sitterDashboard, /pendingBookingCount/);
-assert.doesNotMatch(
-  sitterDashboard.slice(
-    sitterDashboard.indexOf('href="/sitter/wallet"'),
-    sitterDashboard.indexOf('href="/sitter/shifts"')
-  ),
-  /pendingBookingCount/
-);
+assert.match(sitterDashboard, /SITTER_SHIFTS_BADGE_SLOT/);
+assert.doesNotMatch(sitterDashboard, /href="\/sitter\/shifts"|href="\/sitter\/wallet"|href="\/sitter\/availability"/);
+assert.doesNotMatch(bottomNav, /useSitterPendingBookingCount|pendingBookingCount/);
+assert.match(bottomNav, /badgeSlot: SITTER_SHIFTS_BADGE_SLOT/);
 
 console.log("Parent pending sitter-approval calendar view checks passed.");

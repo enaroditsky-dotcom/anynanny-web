@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { APP_DRAWER_TOUR_STEP_ATTRIBUTE } from "@/lib/navigation/app-side-drawer-destinations";
 import { PARENT_TOUR_COPY } from "@/lib/product-tour/constants";
 import { matchesTourRoute } from "@/lib/product-tour/eligibility";
 import { firstPresentTourSelector, tourStepSelectorList } from "@/lib/product-tour/resolve-target";
@@ -79,6 +80,22 @@ export function ProductTourEngine({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!active || !step) {
+      if (root.getAttribute(APP_DRAWER_TOUR_STEP_ATTRIBUTE) !== null) {
+        root.removeAttribute(APP_DRAWER_TOUR_STEP_ATTRIBUTE);
+      }
+      return;
+    }
+    root.setAttribute(APP_DRAWER_TOUR_STEP_ATTRIBUTE, step.id);
+    return () => {
+      if (root.getAttribute(APP_DRAWER_TOUR_STEP_ATTRIBUTE) === step.id) {
+        root.removeAttribute(APP_DRAWER_TOUR_STEP_ATTRIBUTE);
+      }
+    };
+  }, [active, step]);
 
   const routeReady = useMemo(() => {
     if (!step) return false;
@@ -213,7 +230,7 @@ export function ProductTourEngine({
   const hole = rect && !missing ? rect : null;
 
   return createPortal(
-    <div className="pointer-events-none fixed inset-0 z-[160]" dir="rtl">
+    <div data-product-tour-overlay="" className="pointer-events-none fixed inset-0 z-[160]" dir="rtl">
       {hole ? (
         <>
           <div className="pointer-events-auto absolute inset-x-0 top-0 bg-[#001F3F]/55" style={{ height: hole.top }} />

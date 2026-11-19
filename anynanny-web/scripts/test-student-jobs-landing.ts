@@ -144,8 +144,12 @@ assert.equal(demoWithUtm.searchParams.get("code"), null);
 assert.equal(demoWithUtm.searchParams.get("type"), null);
 assert.doesNotMatch(demoWithUtm.toString(), /role=parent/);
 
-const plain = studentSitterSignupHref();
+const plain = studentSitterSignupHref("", false);
 assert.equal(plain, welcomeSignupHref("sitter"));
+const separatedPlain = new URL(studentSitterSignupHref("", true));
+assert.equal(separatedPlain.origin, "https://app.anynanny.org");
+assert.equal(separatedPlain.pathname, "/welcome");
+assert.equal(separatedPlain.search, new URL(welcomeSignupHref("sitter"), "https://app.anynanny.org").search);
 const plainUrl = new URL(plain, "https://www.anynanny.org");
 assert.equal(plainUrl.pathname, "/welcome");
 assert.equal(plainUrl.searchParams.get("role"), "sitter");
@@ -163,8 +167,13 @@ for (const sample of [
   "?utm_source=instagram&utm_medium=reel&utm_campaign=students",
   "utm_source=campus&utm_medium=whatsapp&utm_campaign=students&utm_content=story&utm_term=babysitter"
 ]) {
-  const href = studentSitterSignupHref(sample);
+  const href = studentSitterSignupHref(sample, false);
   const url = new URL(href, "https://www.anynanny.org");
+  assert.equal(url.origin, "https://www.anynanny.org");
+  const separated = new URL(studentSitterSignupHref(sample, true));
+  assert.equal(separated.origin, "https://app.anynanny.org");
+  assert.equal(separated.pathname, "/welcome");
+  assert.equal(separated.search, url.search);
   assert.equal(url.pathname, "/welcome");
   assert.equal(url.searchParams.get("role"), "sitter");
   assert.equal(url.searchParams.get("utm_campaign"), "students");
@@ -179,7 +188,7 @@ for (const sample of [
   assert.doesNotMatch(href, /role=parent/);
 }
 
-const filtered = studentSitterSignupHref("utm_source=facebook&code=secret&type=recovery");
+const filtered = studentSitterSignupHref("utm_source=facebook&code=secret&type=recovery", false);
 const filteredUrl = new URL(filtered, "https://www.anynanny.org");
 assert.equal(filteredUrl.searchParams.get("utm_source"), "facebook");
 assert.equal(filteredUrl.searchParams.get("code"), null);
@@ -190,7 +199,8 @@ const fromRecord = studentSitterSignupHref(
     utm_source: "instagram",
     utm_medium: ["reel"],
     unrelated: "drop-me"
-  })
+  }),
+  false
 );
 const recordUrl = new URL(fromRecord, "https://www.anynanny.org");
 assert.equal(recordUrl.searchParams.get("utm_source"), "instagram");

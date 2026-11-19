@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { AuthRetryStatus } from "@/lib/auth/use-online-retry-nonce";
 import { PublicSitterSearchCardLink } from "@/components/sitter/public-sitter-search-card";
 import type { PublicSitterSearchCard } from "@/lib/sitter/sitter-profile";
 import {
@@ -27,7 +28,7 @@ function normalizeParentSearchError(error: string | null): string | null {
 function ParentSearchResultsInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isLoading, signedIn, effectiveRole } = useAuth();
+  const { isLoading, signedIn, effectiveRole, authRetryExhausted, retryAuthentication } = useAuth();
 
   const searchQuery = searchParams.toString();
 
@@ -176,7 +177,11 @@ function ParentSearchResultsInner() {
       </div>
 
       {showWait ? (
-        <p className="px-1 text-right text-sm text-slate-600">טוען…</p>
+        authRetryExhausted && !signedIn ? (
+          <AuthRetryStatus exhausted onRetry={() => void retryAuthentication()} pending="טוען…" />
+        ) : (
+          <p className="px-1 text-right text-sm text-slate-600">טוען…</p>
+        )
       ) : redirectingToLogin ? (
         <p className="px-1 text-right text-sm text-slate-600">מעבירים להתחברות…</p>
       ) : !showContent ? (

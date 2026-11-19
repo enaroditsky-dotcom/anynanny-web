@@ -26,7 +26,7 @@ const parentSettings = read("app/parent/settings/page.tsx");
 const sitterSettings = read("app/sitter/settings/page.tsx");
 const deleteAccount = read("lib/account/delete-current-user.ts");
 const login = read("app/auth/login/page.tsx");
-const landing = read("app/page.tsx");
+const landing = read("components/home/application-home-page.tsx");
 const privacyLink = read("components/marketing/marketing-privacy-link.tsx");
 const parentsLanding = read("components/marketing/parents-landing.tsx");
 const appLanding = read("components/marketing/app-landing.tsx");
@@ -36,7 +36,7 @@ const studentJobsLanding = read("components/marketing/student-jobs-landing.tsx")
 assert.match(page, /export default function PrivacyPage/);
 assert.match(page, /PrivacyPageView/);
 assert.match(page, /privacyPolicyMetadataDescription/);
-assert.match(page, /https:\/\/www\.anynanny\.org\/privacy/);
+assert.match(page, /absoluteSiteUrl\("\/privacy"\)/);
 assert.match(checkbox, /href="\/privacy"/);
 assert.match(parentSettings, /href="\/privacy"/);
 assert.match(sitterSettings, /href="\/privacy"/);

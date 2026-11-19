@@ -1,12 +1,13 @@
 "use strict";
 /**
- * Store listing URLs for the demo download CTA.
- * Leave empty until the real Google Play and App Store listings exist.
- * Empty values keep the buttons disabled — they must not open a search page.
+ * Public download destinations for the demo.
+ * iPhone opens the official App Store listing, without campaign query params.
+ * Android opens the Web App. Google Play is not offered.
  */
-const GOOGLE_PLAY_URL = "";
-const APP_STORE_URL = "";
-const WEB_APP_URL = "";
+const APP_STORE_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
+const WEB_APP_URL = "https://app.anynanny.org/";
+/** Keep aligned with DOMAIN_SEPARATION_ENABLED in lib/hosts/site-classifier.ts. */
+const DOMAIN_SEPARATION_ENABLED = true;
 
 const STORE_UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
 
@@ -23,6 +24,7 @@ function liveStoreUrl(value) {
 
 function withCampaignParams(value) {
   const url = new URL(value);
+  if (url.origin === "https://apps.apple.com") return url.toString();
   const incoming = new URLSearchParams(window.location.search);
   STORE_UTM_KEYS.forEach((key) => {
     const raw = incoming.get(key);
@@ -32,18 +34,6 @@ function withCampaignParams(value) {
     url.searchParams.set(key, trimmed);
   });
   return url.toString();
-}
-
-function armStoreButton(button, value) {
-  const live = liveStoreUrl(value);
-  if (!live) {
-    button.disabled = true;
-    delete button.dataset.href;
-    return false;
-  }
-  button.disabled = false;
-  button.dataset.href = withCampaignParams(live);
-  return true;
 }
 
 function sitterSignupHref() {
@@ -63,25 +53,26 @@ function sitterSignupHref() {
     next: `/register?${next.toString()}`
   });
   utm.forEach((value, key) => welcome.set(key, value));
-  return `/welcome?${welcome.toString()}`;
+  const path = `/welcome?${welcome.toString()}`;
+  return DOMAIN_SEPARATION_ENABLED ? `https://app.anynanny.org${path}` : path;
 }
 
 document.querySelectorAll("[data-sitter-web-app]").forEach((link) => {
   link.setAttribute("href", sitterSignupHref());
 });
 
+function armStoreLink(link, value) {
+  if (!link || link.tagName !== "A") return false;
+  const live = liveStoreUrl(value);
+  if (!live) return false;
+  link.href = withCampaignParams(live);
+  return true;
+}
+
 document.querySelectorAll(".demo-store").forEach((block) => {
-  const google = block.querySelector('[data-store="google"]');
   const apple = block.querySelector('[data-store="apple"]');
   const web = block.querySelector('[data-store="web"]');
-  const googleLive = google ? armStoreButton(google, GOOGLE_PLAY_URL) : false;
-  const appleLive = apple ? armStoreButton(apple, APP_STORE_URL) : false;
-  if (web) armStoreButton(web, WEB_APP_URL);
-  if (googleLive && appleLive) block.classList.add("is-live");
-  block.querySelectorAll("[data-store]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (button.disabled || !button.dataset.href) return;
-      window.location.assign(button.dataset.href);
-    });
-  });
+  const appleLive = armStoreLink(apple, APP_STORE_URL);
+  const webLive = armStoreLink(web, WEB_APP_URL);
+  if (appleLive || webLive) block.classList.add("is-live");
 });

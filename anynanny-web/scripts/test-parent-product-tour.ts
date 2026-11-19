@@ -27,6 +27,7 @@ import {
 } from "../lib/product-tour/session-guard";
 import { mergeParentTourRows } from "../lib/product-tour/tour-row";
 import { firstPresentTourSelector } from "../lib/product-tour/resolve-target";
+import { appDrawerLinks } from "../lib/navigation/app-side-drawer-destinations";
 import { PARENT_SITTER_SEARCH_CTA_LABEL } from "../lib/ui/long-primary-cta";
 import {
   clampTourTooltipWidth,
@@ -332,7 +333,8 @@ assert.equal(afterShift?.targetSelector, PARENT_TOUR_SELECTORS.messagesChat);
 const personalStep = PARENT_TOUR_STEPS.find((step) => step.id === "personal-area");
 assert.equal(personalStep?.targetSelector, PARENT_TOUR_SELECTORS.personalArea);
 assert.equal(personalStep?.advanceMode, "click-target");
-assert.match(bottomNav, /tour: "personal-area"/);
+assert.doesNotMatch(bottomNav, /tour: "personal-area"/);
+assert.doesNotMatch(bottomNav, /data-tour="personal-area"/);
 assert.match(personal, /data-tour="identity-verification"/);
 assert.match(personal, /IdentityPersonalSection role="parent"/);
 
@@ -340,7 +342,23 @@ assert.match(personal, /IdentityPersonalSection role="parent"/);
 const settingsStep = PARENT_TOUR_STEPS.find((step) => step.id === "settings");
 assert.equal(settingsStep?.targetSelector, PARENT_TOUR_SELECTORS.settings);
 assert.equal(settingsStep?.advanceMode, "click-target");
-assert.match(bottomNav, /tour: "settings"/);
+assert.doesNotMatch(bottomNav, /tour: "settings"/);
+assert.doesNotMatch(bottomNav, /data-tour="settings"/);
+
+const drawerMenu = read("components/navigation/app-side-drawer-menu.tsx");
+const drawerHook = read("components/navigation/use-app-side-drawer.ts");
+const parentDrawerLinks = appDrawerLinks("parent");
+assert.equal(parentDrawerLinks.find((item) => item.id === "personal-area")?.href, "/parent/profile");
+assert.equal(parentDrawerLinks.find((item) => item.id === "personal-area")?.tour, "personal-area");
+assert.equal(parentDrawerLinks.find((item) => item.id === "settings")?.href, "/parent/settings");
+assert.equal(parentDrawerLinks.find((item) => item.id === "settings")?.tour, "settings");
+assert.match(drawerMenu, /"data-tour": item\.tour/);
+assert.match(engine, /APP_DRAWER_TOUR_STEP_ATTRIBUTE/);
+assert.match(engine, /data-product-tour-overlay/);
+assert.match(drawerHook, /readDrawerTourPresentationHold/);
+assert.doesNotMatch(read("lib/product-tour/parent-steps.ts"), /app-side-drawer|openDrawer/);
+assert.doesNotMatch(read("lib/product-tour/persistence.ts"), /app-side-drawer|data-product-tour-step/);
+assert.doesNotMatch(provider, /openDrawer|app-side-drawer/);
 
 // 13. skip works
 assert.equal(PARENT_TOUR_COPY.skip, "דלג על הסיור");
@@ -485,7 +503,8 @@ assert.equal(PARENT_TOUR_STEPS.map((step) => step.id).join(","), [
   "settings"
 ].join(","));
 
-assert.match(dashboard, /data-tour="parent-home"/);
+assert.match(dashboard, /tour="parent-home"/);
+assert.match(read("components/dashboard/dashboard-profile-hero.tsx"), /data-tour=\{tour\}/);
 assert.match(searchFilters, /data-tour="parent-search-filters"/);
 assert.match(parentLayout, /<ParentTourProvider>/);
 assert.match(parentLayout, /<ProductPortalGate portal="parent">\{children\}<\/ProductPortalGate>/);

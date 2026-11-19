@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { Search } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { AuthRetryStatus } from "@/lib/auth/use-online-retry-nonce";
 import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { MainLayout } from "@components/layout/MainLayout";
@@ -29,7 +30,7 @@ import {
 function ParentSearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isLoading, signedIn, effectiveRole, user } = useAuth();
+  const { isLoading, signedIn, effectiveRole, user, authRetryExhausted, retryAuthentication } = useAuth();
   const searchQuery = searchParams.toString();
   const [draftFilters, setDraftFilters] = useState<ParentSearchFilters>(() =>
     parseFiltersFromSearchParams(searchParams)
@@ -97,7 +98,11 @@ function ParentSearchContent() {
     <MainLayout showBrandHeader={false}>
       <div className="mx-auto w-full max-w-md overflow-x-hidden bg-[#FDFBF6] pb-8" dir="rtl">
         {showWait ? (
-          <p className="text-right text-sm text-slate-600">טוען…</p>
+          authRetryExhausted && !signedIn ? (
+            <AuthRetryStatus exhausted onRetry={() => void retryAuthentication()} pending="טוען…" />
+          ) : (
+            <p className="text-right text-sm text-slate-600">טוען…</p>
+          )
         ) : redirectingToLogin ? (
           <p className="text-right text-sm text-slate-600">מעבירים להתחברות…</p>
         ) : !showContent ? (

@@ -2,7 +2,9 @@
 
 import { MapPin, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ISRAEL_CITIES, type IsraelCity } from "@/lib/geo/israel-cities";
+import { useAnchoredOverlay } from "@/lib/ui/anchored-overlay";
 
 function filterIsraelCities(query: string): readonly IsraelCity[] {
   const q = query.trim().toLowerCase();
@@ -37,8 +39,15 @@ export function CityAutocomplete({
 }: CityAutocompleteProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState<string>(value);
+  const [mounted, setMounted] = useState(false);
+  const listBox = useAnchoredOverlay(open, inputRef, "trigger", "stretch", 208);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) setQuery(value);
@@ -49,13 +58,24 @@ export function CityAutocomplete({
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (target && rootRef.current?.contains(target)) return;
+      if (!target) return;
+      if (rootRef.current?.contains(target) || listRef.current?.contains(target)) return;
       setOpen(false);
       setQuery(value);
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        setQuery(value);
+      }
+    };
 
     document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open, value]);
 
   const suggestions = useMemo(() => filterIsraelCities(query), [query]);
@@ -117,11 +137,21 @@ export function CityAutocomplete({
         </button>
       ) : null}
 
-      {open ? (
+      {open && mounted && listBox
+        ? createPortal(
         <ul
+          ref={listRef}
           id="parent-search-city-list"
           role="listbox"
-          className="absolute inset-x-0 top-full z-30 mt-1 max-h-52 overflow-y-auto overscroll-contain rounded-xl border border-slate-300/80 bg-white py-1 shadow-[0_8px_20px_rgba(0,31,63,0.12)]"
+          dir="rtl"
+          style={{
+            top: listBox.placement === "below" ? listBox.top : undefined,
+            bottom: listBox.placement === "above" ? listBox.bottom : undefined,
+            left: listBox.left,
+            width: listBox.width,
+            maxHeight: listBox.maxHeight
+          }}
+          className="fixed z-[60] overflow-y-auto overscroll-contain rounded-xl border border-slate-300/80 bg-white py-1 shadow-[0_8px_20px_rgba(0,31,63,0.12)]"
         >
           {suggestions.length === 0 ? (
             <li className="px-3 py-3 text-right text-[14px] font-medium text-slate-400">
@@ -150,8 +180,10 @@ export function CityAutocomplete({
               );
             })
           )}
-        </ul>
-      ) : null}
+        </ul>,
+        document.body
+        )
+        : null}
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { AddFavoriteSitterPrompt } from "@/components/parent/add-favorite-sitter
 import { resolvePostSettlementFavoritePrompt } from "@/lib/favorites/parent-favorites";
 import { DoubleShakeCircleButton } from "@/components/session/double-shake-circle-button";
 import { ManualPaymentPanel } from "@/components/billing/ManualPaymentPanel";
+import { useAuth } from "@/components/auth-provider";
 import { useSession } from "@/context/SessionContext";
 import { BOOKINGS_TABLE, type BookingRow } from "@/lib/bookings/constants";
 import { parentApproveSitterStart } from "@/lib/bookings/parent-approve-sitter-start";
@@ -130,30 +131,23 @@ import {
   fetchLatestParentSessionRow,
   fetchSessionForBooking
 } from "@/lib/session/sessions-query";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   removeRealtimeChannel,
   subscribePostgresChanges
 } from "@/lib/supabase/subscribe-postgres-changes";
-import { LOGOUT_BUTTON_CLASS, LogoutButtonContent } from "@/components/account/logout-button";
 import { DashboardStatusCard } from "@/components/dashboard/dashboard-status-card";
 import { LongPrimaryCtaContent } from "@/components/ui/long-primary-cta";
-import { setBroadcastMinimized } from "@/lib/broadcast/broadcast-minimize-preference";
 import {
   LONG_PRIMARY_CTA_CLASS,
   LONG_PRIMARY_CTA_ICON_CLASS,
   PARENT_SITTER_SEARCH_CTA_LABEL
 } from "@/lib/ui/long-primary-cta";
-import {
-  APP_CONTENT_MAX_W,
-  DASHBOARD_SHORTCUT_ICON,
-  DASHBOARD_SHORTCUT_ICON_WRAP,
-  DASHBOARD_SHORTCUT_LABEL,
-  DASHBOARD_SHORTCUT_TILE
-} from "@/lib/ui/app-shell";
-import { Calendar, Wallet, History, Search, CheckCircle2, Clock, Star, User, X, Loader2 } from "lucide-react";
-import { ProfileImage } from "@/components/profile/profile-image";
+import { APP_CONTENT_MAX_W } from "@/lib/ui/app-shell";
+import { NavBadgePortal, PARENT_CALENDAR_BADGE_SLOT } from "@/components/navigation/nav-badge-slot";
+import { Search, CheckCircle2, Clock, Star, X, Loader2 } from "lucide-react";
+import { DashboardProfileHero } from "@/components/dashboard/dashboard-profile-hero";
 import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
 
 const BOOKING_LIVE_SELECT =
@@ -528,6 +522,11 @@ export function ParentDashboardClient({
   initialAvatarUrl?: string | null;
 }) {
   const { nowMs } = useSession();
+  const { user: authUser, signedIn, isLoading: authLoading } = useAuth();
+  const accountUserIdRef = useRef<string | null>(null);
+  if (!authLoading) {
+    accountUserIdRef.current = signedIn ? authUser?.id ?? null : null;
+  }
   const [prefs, setPrefs] = useState(initialPreferences);
   const [parentSerial, setParentSerial] = useState<string>(initialPreferences.parentSerial || "");
   const [parentAvatarUrl, setParentAvatarUrl] = useState<string | null>(
@@ -1226,7 +1225,10 @@ export function ParentDashboardClient({
     try {
       const auth = await resolveBrowserAuth();
       if (!auth.ok) {
-        const message = RELEASE_STUCK_SHIFT_COPY.genericFailure;
+        const message =
+          auth.reason === "unavailable"
+            ? browserAuthFailureMessage(auth.reason, RELEASE_STUCK_SHIFT_COPY.genericFailure)
+            : RELEASE_STUCK_SHIFT_COPY.genericFailure;
         setReleaseStuckModalError(message);
         setShiftError(message);
         return;
@@ -1304,28 +1306,66 @@ export function ParentDashboardClient({
     };
 
     const onNewBooking = (event: Event) => {
-      applyNewBooking((event as CustomEvent<NewBookingEventDetail>).detail);
+      const accountId = accountUserIdRef.current;
+      const detail = (event as CustomEvent<NewBookingEventDetail>).detail;
+      if (!accountId) return;
+      if (detail?.parentId && detail.parentId !== accountId) return;
+      applyNewBooking(detail);
     };
     window.addEventListener(ANYNANNY_NEW_BOOKING_EVENT, onNewBooking);
 
-    const pendingMarker = consumeNewBookingMarker();
-    if (pendingMarker) applyNewBooking(pendingMarker);
+    if (accountUserIdRef.current) {
+      const pendingMarker = consumeNewBookingMarker();
+      if (
+        pendingMarker &&
+        (!pendingMarker.parentId || pendingMarker.parentId === accountUserIdRef.current)
+      ) {
+        applyNewBooking(pendingMarker);
+      }
+    }
 
     return () => window.removeEventListener(ANYNANNY_NEW_BOOKING_EVENT, onNewBooking);
-  }, [clearToIdleDashboard, parentId, refreshLiveShiftState]);
+  }, [authLoading, authUser?.id, clearToIdleDashboard, parentId, refreshLiveShiftState, signedIn]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!signedIn || !authUser?.id) {
+      setParentId(null);
+      clearToIdleDashboard();
+      return;
+    }
+    const expectedId = authUser.id;
+    let cancelled = false;
     void (async () => {
       const auth = await resolveBrowserAuth();
-      if (!auth.ok) return;
-      setParentId(auth.userId);
-      if (auth.supabase) {
-        await refreshParentOnboardingStatus(auth.supabase, auth.userId);
-        await refreshLiveShiftState(auth.userId);
-        await refreshParentRatingSummary(auth.userId);
+      if (cancelled || accountUserIdRef.current !== expectedId) return;
+      if (!auth.ok) {
+        if (auth.reason === "unavailable") return;
+        setParentId(null);
+        clearToIdleDashboard();
+        return;
       }
+      if (auth.userId !== expectedId) return;
+      setParentId(auth.userId);
+      if (!auth.supabase) return;
+      await refreshParentOnboardingStatus(auth.supabase, auth.userId);
+      if (cancelled || accountUserIdRef.current !== expectedId) return;
+      await refreshLiveShiftState(auth.userId);
+      if (cancelled || accountUserIdRef.current !== expectedId) return;
+      await refreshParentRatingSummary(auth.userId);
     })();
-  }, [refreshParentOnboardingStatus, refreshLiveShiftState, refreshParentRatingSummary]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authLoading,
+    authUser?.id,
+    clearToIdleDashboard,
+    refreshLiveShiftState,
+    refreshParentOnboardingStatus,
+    refreshParentRatingSummary,
+    signedIn
+  ]);
 
   useEffect(() => {
     if (!parentId) return;
@@ -2281,52 +2321,43 @@ export function ParentDashboardClient({
       ) : null}
 
       <div className={`space-y-1.5 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
-        <div
-          data-tour="parent-home"
-          className="w-full min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-2 space-y-1.5"
-        >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <ProfileImage
-                  src={parentAvatarUrl}
-                  name={firstName}
-                  className="h-9 w-9 border border-slate-200 bg-white text-slate-400 shadow-sm"
-                  fallback={<User className="h-5 w-5" />}
-                />
-                <h1 className="min-w-0 text-base font-bold leading-snug text-slate-900">שלום, {firstName}!</h1>
-              </div>
-              {parentSerialLabel ? (
-                <span
-                  className="inline-flex shrink-0 items-center gap-1 bg-purple-100 text-purple-800 text-[12px] font-bold px-2 py-0.5 rounded-md border border-purple-200"
-                  dir="ltr"
-                >
-                  <span>{parentSerialLabel}</span>
-                  <span className="text-[11px] text-purple-500 font-normal">ID</span>
-                </span>
-              ) : null}
-            </div>
-
-            <div className="flex items-start justify-between gap-2">
-              <div className="inline-flex min-w-0 items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-[11px] font-medium px-1.5 py-0.5 rounded-md">
-                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
-                <span>
-                  {parentRatingSummary.average.toFixed(1)}
-                </span>
-                <span className="text-slate-400 text-[13px]">
-                  ({parentRatingSummary.count}{" "}
-                  {parentRatingSummary.count === 1
-                    ? "חוות דעת"
-                    : "חוות דעת"})
-                </span>
-              </div>
-              <div className="flex min-w-0 max-w-[10.5rem] shrink-0 justify-end sm:max-w-[12rem]">
+        <DashboardProfileHero
+          tour="parent-home"
+          title={`שלום, ${firstName}!`}
+          avatarUrl={parentAvatarUrl}
+          avatarName={firstName}
+          badges={
+            <>
+                {parentSerialLabel ? (
+                  <span
+                    className="inline-flex w-fit shrink-0 items-center gap-1 bg-purple-100 text-purple-800 text-[12px] font-bold px-2 py-0.5 rounded-md border border-purple-200"
+                    dir="ltr"
+                  >
+                    <span>{parentSerialLabel}</span>
+                    <span className="text-[11px] text-purple-500 font-normal">ID</span>
+                  </span>
+                ) : null}
                 <IdentityStatusIndicator
                   userId={parentId}
                   role="parent"
                   nextPath="/parent/dashboard"
+                  actionLabel="לאימות הזהות"
                 />
-              </div>
-            </div>
+                <div className="inline-flex w-fit shrink-0 items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-[11px] font-medium px-1.5 py-0.5 rounded-md">
+                  <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
+                  <span>
+                    {parentRatingSummary.average.toFixed(1)}
+                  </span>
+                  <span className="text-slate-400 text-[13px]">
+                    ({parentRatingSummary.count}{" "}
+                    {parentRatingSummary.count === 1
+                      ? "חוות דעת"
+                      : "חוות דעת"})
+                  </span>
+                </div>
+            </>
+          }
+        >
 
             {sitterAcceptedToast ? (
               <div
@@ -2359,61 +2390,27 @@ export function ParentDashboardClient({
               </div>
             ) : null}
 
-        </div>
+        </DashboardProfileHero>
 
             {!shouldHideDashboardActions ? (
-              <div className="grid min-w-0 grid-cols-3 gap-1">
-                <Link
-                  href="/parent/calendar"
-                  onClick={dismissStatusBanner}
-                  aria-label={
-                    cancellationAttention.showDot
+              <NavBadgePortal slot={PARENT_CALENDAR_BADGE_SLOT}>
+                <CancellationAttentionDot visible={cancellationAttention.showDot} />
+                {pendingSitterApprovalCount > 0 ? (
+                  <span
+                    className="absolute right-0 top-0 z-[1] flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white"
+                    aria-hidden
+                  >
+                    {pendingSitterApprovalCount > 9 ? "9+" : pendingSitterApprovalCount}
+                  </span>
+                ) : null}
+                {cancellationAttention.showDot || pendingSitterApprovalCount > 0 ? (
+                  <span className="sr-only">
+                    {cancellationAttention.showDot
                       ? "יומן תיאום המשמרות — יש עדכון ביטול"
-                      : pendingSitterApprovalCount > 0
-                      ? `יומן תיאום המשמרות — ${pendingSitterApprovalCount} ממתינות לאישור בייביסיטר`
-                      : "יומן תיאום המשמרות"
-                  }
-                  className={`${DASHBOARD_SHORTCUT_TILE} border border-slate-200/80 bg-white hover:bg-slate-50 hover:shadow-md`}
-                >
-                  <span className={`relative ${DASHBOARD_SHORTCUT_ICON_WRAP} text-emerald-600 ring-1 ring-emerald-600/10`}>
-                    <Calendar className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
-                    <CancellationAttentionDot visible={cancellationAttention.showDot} />
-                    {pendingSitterApprovalCount > 0 ? (
-                      <span
-                        className="absolute right-0 top-0 flex h-4 min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white"
-                        aria-hidden
-                      >
-                        {pendingSitterApprovalCount > 9 ? "9+" : pendingSitterApprovalCount}
-                      </span>
-                    ) : null}
+                      : `יומן תיאום המשמרות — ${pendingSitterApprovalCount} ממתינות לאישור בייביסיטר`}
                   </span>
-                  <span className={`${DASHBOARD_SHORTCUT_LABEL} text-slate-800`}>
-                    יומן תיאום המשמרות
-                  </span>
-                </Link>
-                <Link
-                  href="/parent/wallet"
-                  className={`${DASHBOARD_SHORTCUT_TILE} border border-slate-200/80 bg-white hover:bg-slate-50 hover:shadow-md`}
-                >
-                  <span className={`${DASHBOARD_SHORTCUT_ICON_WRAP} text-emerald-600 ring-1 ring-emerald-600/10`}>
-                    <Wallet className={DASHBOARD_SHORTCUT_ICON} aria-hidden />
-                  </span>
-                  <span className={`${DASHBOARD_SHORTCUT_LABEL} text-slate-800`}>
-                    הארנק שלי
-                  </span>
-                </Link>
-                <Link
-                  href="/parent/history"
-                  className={`${DASHBOARD_SHORTCUT_TILE} border border-slate-200/80 bg-white hover:bg-slate-50 hover:shadow-md`}
-                >
-                  <span className={`${DASHBOARD_SHORTCUT_ICON_WRAP} ring-1 ring-navy-header/10`}>
-                    <History className={`${DASHBOARD_SHORTCUT_ICON} text-[#001F3F]`} aria-hidden />
-                  </span>
-                  <span className={`${DASHBOARD_SHORTCUT_LABEL} text-slate-800`}>
-                    היסטוריית משמרות
-                  </span>
-                </Link>
-              </div>
+                ) : null}
+              </NavBadgePortal>
             ) : null}
 
           {statusCardVisible ? (
@@ -2650,20 +2647,35 @@ export function ParentDashboardClient({
 
           {!shouldHideDashboardActions ? (
             <>
-              <div className="space-y-2 pt-0.5">
+              <div className="flex justify-center">
                 <Link
                   href="/parent/search"
                   data-tour="parent-search"
                   className={LONG_PRIMARY_CTA_CLASS}
+                  style={{
+                    height: 52,
+                    width: "fit-content",
+                    maxWidth: "100%",
+                    padding: "0 21px",
+                    fontSize: 18,
+                    lineHeight: 1.4
+                  }}
                 >
-                  <LongPrimaryCtaContent icon={<Search className={LONG_PRIMARY_CTA_ICON_CLASS} />}>
+                  <LongPrimaryCtaContent
+                    icon={
+                      <Search
+                        className={LONG_PRIMARY_CTA_ICON_CLASS}
+                        style={{ height: 25, width: 25 }}
+                      />
+                    }
+                  >
                     {PARENT_SITTER_SEARCH_CTA_LABEL}
                   </LongPrimaryCtaContent>
                 </Link>
               </div>
 
-              <div className="pt-1 flex flex-col gap-1.5">
-                {showStuckShiftReleaseButton ? (
+              {showStuckShiftReleaseButton ? (
+                <div className="pt-1 flex flex-col gap-1.5">
                   <button
                     type="button"
                     disabled={releasingStuckShift}
@@ -2672,19 +2684,8 @@ export function ParentDashboardClient({
                   >
                     {releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const supabase = getSupabaseBrowserClient();
-                    setBroadcastMinimized(false);
-                    if (supabase) void supabase.auth.signOut().then(() => (window.location.href = "/login"));
-                  }}
-                  className={LOGOUT_BUTTON_CLASS}
-                >
-                  <LogoutButtonContent />
-                </button>
-              </div>
+                </div>
+              ) : null}
             </>
           ) : null}
       </div>

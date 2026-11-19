@@ -7,6 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:domain-separation": "npx --yes tsx scripts/test-domain-separation.ts",
+    "test:www-marketing-home": "npx --yes tsx scripts/test-www-marketing-home.ts",
+    "test:story-homepage": "npx --yes tsx scripts/test-story-homepage.ts",
+    "test:marketing-likes": "npx --yes tsx scripts/test-marketing-likes.ts",
     "test:sitter-ownership": "node scripts/test-sitter-discovery-ownership.mjs",
     "test:sitter-profiles-private": "npx --yes tsx scripts/test-sitter-profiles-private-select.ts",
     "test:public-sitter-rpc-avatar": "npx --yes tsx scripts/test-public-sitter-rpc-avatar-source.ts",
@@ -43,6 +47,7 @@
     "test:payment-cash-default": "npx --yes tsx scripts/test-payment-cash-default.ts",
     "test:sitter-personal-area-model": "npx --yes tsx scripts/test-sitter-personal-area-model.ts",
     "test:welcome-charter-flow": "npx --yes tsx scripts/test-welcome-charter-flow.ts",
+    "test:existing-user-onboarding-redirect": "npx --yes tsx scripts/test-existing-user-onboarding-redirect.ts",
     "test:homepage-welcome-video": "npx --yes tsx scripts/test-homepage-welcome-video.ts",
     "test:settings-legal-documents": "npx --yes tsx scripts/test-settings-legal-documents.ts",
     "test:onboarding-questionnaires": "npx --yes tsx scripts/test-onboarding-questionnaires.ts",
@@ -76,7 +81,9 @@
     "test:register-supabase-client": "npx --yes tsx scripts/test-register-supabase-client.ts",
     "test:chat-emoji-picker": "npx --yes tsx scripts/test-chat-emoji-picker.ts",
     "test:parent-favorite-sitters": "npx --yes tsx scripts/test-parent-favorite-sitters.ts",
-    "test:chat-inbox-ux": "npx --yes tsx scripts/test-chat-inbox-ux.ts"
+    "test:chat-inbox-ux": "npx --yes tsx scripts/test-chat-inbox-ux.ts",
+    "test:app-side-drawer": "npx --yes tsx scripts/test-app-side-drawer.ts",
+    "test:drawer-background-click": "npx --yes tsx scripts/test-drawer-background-click.ts"
   },
   "dependencies": {
     "@didit-protocol/sdk-web": "^0.3.0",
@@ -84,10 +91,13 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.112.4",
     "lucide-react": "^1.14.0",
-    "next": "^15.2.0",
+    "next": "15.5.29",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "web-push": "^3.6.7"
+  },
+  "overrides": {
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.10",

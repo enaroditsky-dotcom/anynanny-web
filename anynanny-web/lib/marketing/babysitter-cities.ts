@@ -2,12 +2,16 @@ import type { Metadata } from "next";
 import {
   GENERAL_ACQUISITION_ANNY_URL,
   GENERAL_ACQUISITION_CANONICAL,
-  GENERAL_ACQUISITION_HERO_HEIGHT,
   GENERAL_ACQUISITION_HERO_URL,
-  GENERAL_ACQUISITION_HERO_WIDTH,
   GENERAL_ACQUISITION_LOGO_URL,
   SITE_URL
 } from "@/lib/marketing/general-acquisition";
+import {
+  MARKETING_HOME_OG_ALT,
+  MARKETING_HOME_OG_HEIGHT,
+  MARKETING_HOME_OG_URL,
+  MARKETING_HOME_OG_WIDTH
+} from "@/lib/marketing/marketing-home";
 
 export const BABYSITTER_CITY_SLUGS = [
   "haifa",
@@ -356,10 +360,11 @@ export function babysitterCityMetadata(city: BabysitterCity): Metadata {
       type: "website",
       images: [
         {
-          url: GENERAL_ACQUISITION_HERO_URL,
-          width: GENERAL_ACQUISITION_HERO_WIDTH,
-          height: GENERAL_ACQUISITION_HERO_HEIGHT,
-          alt: city.heroAlt
+          url: MARKETING_HOME_OG_URL,
+          width: MARKETING_HOME_OG_WIDTH,
+          height: MARKETING_HOME_OG_HEIGHT,
+          alt: `${MARKETING_HOME_OG_ALT} — ${city.nameHe}`,
+          type: "image/png"
         }
       ]
     },
@@ -367,7 +372,7 @@ export function babysitterCityMetadata(city: BabysitterCity): Metadata {
       card: "summary_large_image",
       title: city.title,
       description: city.description,
-      images: [GENERAL_ACQUISITION_HERO_URL]
+      images: [MARKETING_HOME_OG_URL]
     }
   };
 }

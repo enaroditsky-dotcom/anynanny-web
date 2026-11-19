@@ -1,4 +1,6 @@
 import { signupPathForRole, welcomeSignupHref } from "@/lib/charter/routing";
+import { toAppEntryHref } from "@/lib/hosts/app-entry";
+import { DOMAIN_SEPARATION_ENABLED } from "@/lib/hosts/site-classifier";
 import { readStudentJobsUtm, utmSearchFromRecord as readUtmSearchFromRecord } from "@/lib/marketing/student-jobs";
 
 export const APP_LANDING_PATH = "/app";
@@ -79,18 +81,14 @@ export const APP_LANDING_DOWNLOAD_HEADING = "להורדת AnyNanny";
 
 export const APP_LANDING_APP_STORE_LABEL = "להורדה ב־App Store";
 
-/**
- * Real AnyNanny App Store listing.
- * `public/marketing/demo/store-links.js` also keeps APP_STORE_URL empty.
- * Leave this empty until that listing URL is stored in the repo.
- */
+/** Official iPhone listing. Campaign params are added only by `withStoreCampaign`. */
 export const APP_LANDING_APP_STORE_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
 
-/**
- * Real AnyNanny Google Play listing.
- * The demo store helper keeps GOOGLE_PLAY_URL empty, so Play is not shown as live.
- */
+/** Google Play is not offered. Android visitors use the Web App. */
 export const APP_LANDING_GOOGLE_PLAY_URL = "";
+
+/** Shown beside parent search links. Search itself stays behind the existing welcome registration. */
+export const SEARCH_REQUIRES_REGISTRATION_NOTE = "נדרשת הרשמה לפני החיפוש.";
 
 export const APP_LANDING_CLOSING = "AnyNanny — פשוט למצוא זמן לחיים.";
 
@@ -122,7 +120,8 @@ export function utmSearchFromRecord(
  */
 export function appLandingSignupHref(
   role: "parent" | "sitter",
-  search: string | URLSearchParams = ""
+  search: string | URLSearchParams = "",
+  domainSeparationEnabled: boolean = DOMAIN_SEPARATION_ENABLED
 ): string {
   const utm = readStudentJobsUtm(search);
   const nextUrl = new URL(signupPathForRole(role), APP_LANDING_SITE_URL);
@@ -135,7 +134,7 @@ export function appLandingSignupHref(
     welcome.searchParams.set(key, value);
   });
   const qs = welcome.searchParams.toString();
-  return qs ? `${welcome.pathname}?${qs}` : welcome.pathname;
+  return toAppEntryHref(qs ? `${welcome.pathname}?${qs}` : welcome.pathname, domainSeparationEnabled);
 }
 
 export function buildAppLandingStructuredData() {

@@ -98,7 +98,7 @@ assert.match(payoutLib, /payboxLink: parseAuthorizedPayboxPaymentLink/);
 assert.doesNotMatch(payoutLib, /create table|alter table/i);
 
 // 11. Receiving editor scrolls with the app shell — not a nested wallet modal
-const shell = read("components/app-shell-gate.tsx");
+const shell = `${read("components/app-shell-gate.tsx")}\n${read("components/navigation/app-side-drawer-frame.tsx")}`;
 assert.match(shell, /APP_SHELL_SCROLL_ID/);
 assert.match(shell, /overflow-y-auto/);
 assert.match(shell, /h-dvh/);

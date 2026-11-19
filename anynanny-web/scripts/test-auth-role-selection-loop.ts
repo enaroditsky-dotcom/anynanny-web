@@ -64,12 +64,12 @@ async function main() {
   assert.match(roleSelection, /setSessionGate\("authed"\)/);
   assert.match(postAuth, /return "\/auth\/role-selection"/);
 
-  // 3. invalid/stale session → login once, no loop
+  // 3. confirmed invalid refresh token → clear once, no loop
   const staleCalls: unknown[] = [];
   const stale = await resolveValidAuthUser(
     mockClient({
       user: null,
-      error: { status: 403, message: "Forbidden" },
+      error: { code: "refresh_token_not_found", message: "Invalid Refresh Token: Refresh Token Not Found" },
       session: { access_token: "stale" },
       signOutCalls: staleCalls
     })
@@ -77,7 +77,18 @@ async function main() {
   assert.equal(stale.ok, false);
   assert.equal(stale.clearedStaleSession, true);
   assert.equal(staleCalls.length, 1);
-  assert.equal(shouldClearStaleSession({ user: null, error: { status: 403 }, hasLocalSession: true }), true);
+  assert.equal(
+    shouldClearStaleSession({
+      user: null,
+      error: { code: "refresh_token_not_found", message: "Invalid Refresh Token: Refresh Token Not Found" },
+      hasLocalSession: true
+    }),
+    true
+  );
+  assert.equal(
+    shouldClearStaleSession({ user: null, error: { status: 403, message: "Forbidden" }, hasLocalSession: true }),
+    false
+  );
 
   const afterClear = await resolveValidAuthUser(
     mockClient({ user: null, session: null, signOutCalls: staleCalls })
@@ -99,9 +110,10 @@ async function main() {
   assert.match(roleSelection, /RoleSelectionScreen/);
   assert.match(postAuth, /PARENT_ONBOARDING_PATH|pathBeforeRoleOnboarding/);
 
-  // 6. 403 from getUser does not cause repeated redirects
-  assert.equal(isAuthUserRejectedError({ status: 403, message: "Forbidden" }), true);
-  assert.equal(isAuthUserRejectedError({ status: 401 }), true);
+  // 6. generic 401/403 is not revocation; a dead refresh token is
+  assert.equal(isAuthUserRejectedError({ status: 403, message: "Forbidden" }), false);
+  assert.equal(isAuthUserRejectedError({ status: 401 }), false);
+  assert.equal(isAuthUserRejectedError({ code: "refresh_token_not_found" }), true);
   assert.equal(isAuthUserRejectedError(null), false);
   assert.match(validSession, /signOut\(\{ scope: "local" \}\)/);
   assert.match(validSession, /staleClearInFlight/);

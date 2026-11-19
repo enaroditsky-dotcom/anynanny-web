@@ -33,6 +33,7 @@ import {
   GENERAL_WEB_APP_PATH,
   buildGeneralAcquisitionStructuredData,
   generalParentDemoHref,
+  generalParentSearchHref,
   generalSitterDemoHref,
   generalWebAppHref,
   utmSearchFromRecord
@@ -114,13 +115,27 @@ assert.match(page, /follow:\s*true/);
 assert.doesNotMatch(page, /noindex/);
 assert.doesNotMatch(landing, /noindex/);
 
-assert.equal(GENERAL_ACQUISITION_STORE_NOTE, "האפליקציות בחנויות — בקרוב");
+assert.equal(
+  GENERAL_ACQUISITION_STORE_NOTE,
+  "iOS זמין ב־App Store. לאנדרואיד נכנסים דרך האפליקציה בדפדפן. גרסת Google Play עדיין לא פורסמה."
+);
+assert.match(landing, /parentSearchHref/);
+assert.match(landing, /sitterSignupHref/);
+assert.match(landing, /iosHref/);
+assert.equal(generalParentSearchHref("", true), "https://app.anynanny.org/");
+assert.equal(
+  generalParentSearchHref("utm_source=audit&ignored=1", true),
+  "https://app.anynanny.org/?utm_source=audit"
+);
+assert.doesNotMatch(generalParentSearchHref("utm_source=audit", true), /welcome|register|role=|next=/);
+assert.doesNotMatch(landing, /האפליקציות בחנויות — בקרוב/);
 assert.match(landing, /GENERAL_ACQUISITION_STORE_NOTE/);
 assert.doesNotMatch(landing, /play\.google\.com/);
 assert.doesNotMatch(landing, /apps\.apple\.com/);
 assert.doesNotMatch(page, /play\.google\.com/);
 assert.doesNotMatch(page, /apps\.apple\.com/);
-assert.doesNotMatch(landing, /<a[^>]*store/i);
+assert.match(landing, /data-cta="app-store"/);
+assert.match(landing, /href=\{iosHref\}/);
 
 const structured = buildGeneralAcquisitionStructuredData();
 const graph = structured["@graph"] as Array<Record<string, unknown>>;
@@ -185,17 +200,32 @@ assert.ok(sitemap.some((entry) => entry.url === "https://www.anynanny.org/jobs/s
 
 assert.equal(GENERAL_WEB_APP_PATH, "/");
 
-const plainWeb = new URL(generalWebAppHref(), "https://www.anynanny.org");
+const plainWeb = new URL(generalWebAppHref("", false), "https://www.anynanny.org");
+assert.equal(plainWeb.origin, "https://www.anynanny.org");
 assert.equal(plainWeb.pathname, "/");
 assert.equal(plainWeb.search, "");
+const separatedPlainWeb = new URL(generalWebAppHref("", true));
+assert.equal(separatedPlainWeb.origin, "https://app.anynanny.org");
+assert.equal(separatedPlainWeb.pathname, "/");
+assert.equal(separatedPlainWeb.search, "");
 
 const webWithUtm = new URL(
   generalWebAppHref(
-    "utm_source=facebook&utm_medium=cpc&utm_campaign=babysitter&utm_content=hero&utm_term=nanny&code=secret&type=recovery&access_token=abc&refresh_token=xyz&unrelated=drop"
+    "utm_source=facebook&utm_medium=cpc&utm_campaign=babysitter&utm_content=hero&utm_term=nanny&code=secret&type=recovery&access_token=abc&refresh_token=xyz&unrelated=drop",
+    false
   ),
   "https://www.anynanny.org"
 );
+assert.equal(webWithUtm.origin, "https://www.anynanny.org");
 assert.equal(webWithUtm.pathname, "/");
+const separatedWebWithUtm = new URL(
+  generalWebAppHref(
+    "utm_source=facebook&utm_medium=cpc&utm_campaign=babysitter&utm_content=hero&utm_term=nanny&code=secret&type=recovery&access_token=abc&refresh_token=xyz&unrelated=drop",
+    true
+  )
+);
+assert.equal(separatedWebWithUtm.origin, "https://app.anynanny.org");
+assert.equal(separatedWebWithUtm.search, webWithUtm.search);
 assert.equal(webWithUtm.searchParams.get("utm_source"), "facebook");
 assert.equal(webWithUtm.searchParams.get("utm_medium"), "cpc");
 assert.equal(webWithUtm.searchParams.get("utm_campaign"), "babysitter");
@@ -248,9 +278,25 @@ const fromRecord = generalWebAppHref(
     utm_campaign: "babysitter",
     code: "secret",
     access_token: "nope"
-  })
+  }),
+  false
 );
 const recordUrl = new URL(fromRecord, "https://www.anynanny.org");
+assert.equal(recordUrl.origin, "https://www.anynanny.org");
+const separatedRecord = new URL(
+  generalWebAppHref(
+    utmSearchFromRecord({
+      utm_source: "instagram",
+      utm_medium: ["reel"],
+      utm_campaign: "babysitter",
+      code: "secret",
+      access_token: "nope"
+    }),
+    true
+  )
+);
+assert.equal(separatedRecord.origin, "https://app.anynanny.org");
+assert.equal(separatedRecord.search, recordUrl.search);
 assert.equal(recordUrl.searchParams.get("utm_source"), "instagram");
 assert.equal(recordUrl.searchParams.get("utm_medium"), "reel");
 assert.equal(recordUrl.searchParams.get("utm_campaign"), "babysitter");

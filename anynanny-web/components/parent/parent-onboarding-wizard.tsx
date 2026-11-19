@@ -62,7 +62,8 @@ import {
   parseParentChildren,
   parseParentSpecialEvents
 } from "@/lib/parent/parent-profile";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import { PROFILES_TABLE } from "@/lib/supabase/profiles";
 
 type Props = {
@@ -111,6 +112,7 @@ function focusStepTarget(fieldId: string | null) {
 
 export function ParentOnboardingWizard({ onSaved }: Props) {
   const router = useRouter();
+  const authRetry = useOnlineRetryNonce();
   const [questionnaireStep, setQuestionnaireStep] = useState<ParentQuestionnaireStep>(1);
   const [showIdentity, setShowIdentity] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -130,15 +132,23 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
   };
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
       const auth = await resolveBrowserAuth();
+      if (cancelled) return;
       const cached = readSignupNamesFromDevice();
-      if (!auth.ok || !auth.supabase || !auth.userId) {
+      if (!auth.ok) {
+        if (auth.reason === "unavailable") {
+          authRetry.noteUnavailable();
+          return;
+        }
+        authRetry.noteSettled();
         if (cached) {
           updateDraft({ firstName: cached.first_name, lastName: cached.last_name });
         }
         return;
       }
+      authRetry.noteSettled();
 
       const {
         data: { user }
@@ -160,6 +170,7 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
 
       const address = parseParentAddress(profileRow?.address);
       const children = parseParentChildren(profileRow?.children);
+      if (cancelled) return;
       updateDraft({
         firstName: resolved.first_name,
         lastName: resolved.last_name,
@@ -179,7 +190,10 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
             : ""
       });
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [authRetry.nonce, authRetry.noteSettled, authRetry.noteUnavailable]);
 
   useEffect(() => {
     if (showIdentity) return;
@@ -256,8 +270,8 @@ export function ParentOnboardingWizard({ onSaved }: Props) {
     setError(null);
     try {
       const auth = await resolveBrowserAuth();
-      if (!auth.ok || !auth.supabase || !auth.userId) {
-        setError("יש להתחבר מחדש כדי לסיים את השאלון.");
+      if (!auth.ok) {
+        setError(browserAuthFailureMessage(auth.reason, "יש להתחבר מחדש כדי לסיים את השאלון."));
         setBusy(false);
         return;
       }

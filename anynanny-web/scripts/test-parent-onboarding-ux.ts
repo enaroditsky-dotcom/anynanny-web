@@ -87,6 +87,7 @@ assert.equal(Object.hasOwn(emptyNamePayload, "last_name"), false);
 
 assert.match(multiSelect, /from "@\/lib\/geo\/israel-cities"/);
 assert.match(autocomplete, /from "@\/lib\/geo\/israel-cities"/);
+assert.match(autocomplete, /useAnchoredOverlay\(open, inputRef, "trigger", "stretch", 208\)/);
 assert.match(searchFilters, /CityAutocomplete/);
 assert.match(read("lib/sitter/parent-search-filters.ts"), /selectedCity: IsraelCity/);
 

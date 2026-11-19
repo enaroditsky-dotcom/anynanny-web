@@ -67,12 +67,18 @@ export function isMissingCharterTableError(message: string | null | undefined): 
   );
 }
 
-export async function hasAcceptedCurrentCharter(
+export type CharterAcceptanceRead = "accepted" | "missing" | "unreadable";
+
+/**
+ * Distinguish a missing acceptance from a failed read.
+ * Routing must not send a user to Charter when the acceptance row cannot be read.
+ */
+export async function readCurrentCharterAcceptance(
   supabase: SupabaseClient,
   userId: string,
   charterType: CharterType
-): Promise<boolean> {
-  if (!userId || !isCharterType(charterType)) return false;
+): Promise<CharterAcceptanceRead> {
+  if (!userId || !isCharterType(charterType)) return "missing";
 
   const version = currentCharterVersion(charterType);
   const { data, error } = await supabase
@@ -83,12 +89,18 @@ export async function hasAcceptedCurrentCharter(
     .eq("charter_version", version)
     .maybeSingle();
 
-  if (error) {
-    return false;
-  }
+  if (error) return "unreadable";
 
   const versionValue = (data as { charter_version?: string } | null)?.charter_version;
-  return Boolean(versionValue && isCurrentCharterVersion(charterType, versionValue));
+  return versionValue && isCurrentCharterVersion(charterType, versionValue) ? "accepted" : "missing";
+}
+
+export async function hasAcceptedCurrentCharter(
+  supabase: SupabaseClient,
+  userId: string,
+  charterType: CharterType
+): Promise<boolean> {
+  return (await readCurrentCharterAcceptance(supabase, userId, charterType)) === "accepted";
 }
 
 export async function persistCharterAcceptance(

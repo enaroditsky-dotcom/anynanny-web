@@ -8,8 +8,11 @@ import {
   getBabysitterCity
 } from "@/lib/marketing/babysitter-cities";
 import {
+  generalIosStoreHref,
   generalParentDemoHref,
+  generalParentSearchHref,
   generalSitterDemoHref,
+  generalSitterSignupHref,
   generalWebAppHref,
   utmSearchFromRecord
 } from "@/lib/marketing/general-acquisition";
@@ -53,6 +56,9 @@ export default async function BabysitterCityPage({ params, searchParams }: Babys
         webAppHref={generalWebAppHref(utm)}
         parentDemoHref={generalParentDemoHref(utm)}
         sitterDemoHref={generalSitterDemoHref(utm)}
+        parentSearchHref={generalParentSearchHref(utm)}
+        sitterSignupHref={generalSitterSignupHref(utm)}
+        iosHref={generalIosStoreHref(utm)}
       />
     </>
   );

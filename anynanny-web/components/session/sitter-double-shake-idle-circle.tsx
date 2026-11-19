@@ -22,7 +22,7 @@ import {
   shouldHardLockShiftBooking
 } from "@/lib/session/dismissed-shift-lock";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
+import { browserAuthFailureMessage, resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 
 const SITTER_ARRIVAL_LABEL = "הגעתי! התחלת משמרת";
 const SITTER_WAITING_PARENT_START_LABEL = "ממתין לאישור הורה...";
@@ -125,7 +125,7 @@ function SitterDoubleShakeIdleCircleInner({
 
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      onError?.("יש להתחבר כדי לסיים משמרת.");
+      onError?.(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לסיים משמרת."));
       return;
     }
 
@@ -148,7 +148,7 @@ function SitterDoubleShakeIdleCircleInner({
 
     const auth = await resolveBrowserAuth();
     if (!auth.ok) {
-      onError?.("יש להתחבר כדי לסיים את המשמרת.");
+      onError?.(browserAuthFailureMessage(auth.reason, "יש להתחבר כדי לסיים את המשמרת."));
       return;
     }
 

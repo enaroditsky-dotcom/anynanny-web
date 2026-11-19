@@ -72,13 +72,27 @@ export function clearUserRoleChoice(): void {
   }
 }
 
+/** Removes only the stale portal hint. Email and returning-user preferences stay. */
+export function clearActiveRoleHint(): void {
+  try {
+    localStorage.removeItem("active_role");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Clears the portal hint only after sign-out has succeeded. */
+export function clearActiveRoleHintWhen(confirmed: boolean): void {
+  if (confirmed) clearActiveRoleHint();
+}
+
 /** Clears app hints on device (not Supabase session — call signOut separately when needed). */
 export function clearDeviceAuthHints(): void {
   try {
     localStorage.removeItem(RETURNING_USER_STORAGE_KEY);
     localStorage.removeItem(LAST_EMAIL_STORAGE_KEY);
     localStorage.removeItem(USER_ROLE_CHOICE_KEY);
-    localStorage.removeItem("active_role");
+    clearActiveRoleHint();
     localStorage.removeItem("anynanny_payer_session_v1");
   } catch {
     /* ignore */

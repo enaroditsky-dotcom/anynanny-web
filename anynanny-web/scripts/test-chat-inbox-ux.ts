@@ -115,7 +115,7 @@ assert.match(sitterPage, /\/sitter\/chat\//);
 assert.doesNotMatch(parentPage, /h-dvh|h-screen|overflow-hidden/);
 assert.doesNotMatch(sitterPage, /h-dvh|h-screen|overflow-hidden/);
 
-const shell = read("components/app-shell-gate.tsx");
+const shell = `${read("components/app-shell-gate.tsx")}\n${read("components/navigation/app-side-drawer-frame.tsx")}`;
 assert.match(shell, /overflow-y-auto/);
 assert.match(shell, /APP_SHELL_SCROLL_ID/);
 
