@@ -154,32 +154,24 @@ export function AppSideDrawer({
 }
 
 /**
- * Closes the drawer on any press outside the panel, including the bottom nav.
+ * Swallows presses outside the panel, including the bottom nav.
  * The dim stays above the nav so the panel's visual edge does not change.
  */
-export function AppSideDrawerCatcher({
-  onClose,
-  motionStyle
-}: {
-  onClose: () => void;
-  motionStyle?: CSSProperties;
-}) {
-  const dismiss = (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+export function AppSideDrawerCatcher({ motionStyle }: { motionStyle?: CSSProperties }) {
+  const swallow = (event: { preventDefault: () => void; stopPropagation: () => void }) => {
     event.preventDefault();
     event.stopPropagation();
-    onClose();
   };
 
   return (
     <>
-      <button
-        type="button"
-        tabIndex={-1}
+      <div
         data-app-side-drawer-backdrop=""
-        aria-label="סגירת תפריט"
+        aria-hidden="true"
         className="absolute bottom-0 left-0 right-0 z-[60] cursor-pointer border-0 bg-transparent p-0"
         style={{ top: APP_SIDE_DRAWER_TOP, touchAction: "none" }}
-        onClick={dismiss}
+        onPointerDown={swallow}
+        onClick={swallow}
       />
       <div
         aria-hidden

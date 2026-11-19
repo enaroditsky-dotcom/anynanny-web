@@ -66,7 +66,6 @@ export function AppSideDrawerFrame({
     if (!drawerActive || isMenuButtonTarget(event.target)) return;
     event.preventDefault();
     event.stopPropagation();
-    onClose();
   };
 
   const blockUnderlyingKeys = (event: KeyboardEvent<HTMLElement>) => {
@@ -74,7 +73,6 @@ export function AppSideDrawerFrame({
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    onClose();
   };
 
   return (
@@ -130,7 +128,7 @@ export function AppSideDrawerFrame({
           navigationPath={navigationPath}
         />
       ) : null}
-      {clipRaised ? <AppSideDrawerCatcher onClose={onClose} motionStyle={backdropStyle} /> : null}
+      {clipRaised ? <AppSideDrawerCatcher motionStyle={backdropStyle} /> : null}
     </div>
   );
 }

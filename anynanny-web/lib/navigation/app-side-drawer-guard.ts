@@ -37,12 +37,11 @@ type CancelableClick = {
 
 /**
  * Cancel a background click before a link's own handler can navigate.
- * Returns true when the event belonged to the page behind the drawer.
+ * The drawer stays open. Returns true when the event belonged to the page behind it.
  */
-export function guardDrawerBackgroundClick(event: CancelableClick, holdOpen: boolean, close: () => void): boolean {
+export function guardDrawerBackgroundClick(event: CancelableClick): boolean {
   if (isDrawerChromeTarget(event.target)) return false;
   event.preventDefault();
   event.stopImmediatePropagation();
-  if (!holdOpen) close();
   return true;
 }

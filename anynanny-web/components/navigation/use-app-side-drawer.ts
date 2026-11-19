@@ -99,10 +99,7 @@ export function useAppSideDrawer(enabled: boolean, pathname: string) {
     if (phase === "closed") return;
 
     const onBackgroundClick = (event: MouseEvent) => {
-      guardDrawerBackgroundClick(event, readDrawerTourPresentationHold(), () => {
-        restoreFocusRef.current = true;
-        setPhase((current) => nextDrawerPhase(current, "close", reducedRef.current));
-      });
+      guardDrawerBackgroundClick(event);
     };
 
     window.addEventListener("click", onBackgroundClick, true);

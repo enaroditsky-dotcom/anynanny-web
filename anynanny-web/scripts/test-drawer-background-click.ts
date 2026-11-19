@@ -126,15 +126,14 @@ function mount(role: "sitter" | "parent") {
   const href = role === "sitter" ? "/sitter/wallet" : "/parent/wallet";
   const home = role === "sitter" ? "/sitter/dashboard" : "/parent/dashboard";
   const state = { url: home, badgeClears: 0, open: true, menuToggles: 0, drawerNavigations: 0 };
+  const drawerHref = role === "sitter" ? "/sitter/profile" : "/parent/profile";
 
   const installGuard = () => {
     windowNode.addEventListener(
       "click",
       (event) => {
         if (!state.open) return;
-        guardDrawerBackgroundClick(event, false, () => {
-          state.open = false;
-        });
+        guardDrawerBackgroundClick(event);
       },
       true
     );
@@ -142,7 +141,10 @@ function mount(role: "sitter" | "parent") {
   installGuard();
   installLink(wallet, href, state, true);
   drawerLink.addEventListener("click", (event) => {
-    if (!event.defaultPrevented) state.drawerNavigations += 1;
+    if (event.defaultPrevented) return;
+    state.drawerNavigations += 1;
+    state.open = false;
+    state.url = drawerHref;
   });
   menuButton.addEventListener("click", (event) => {
     if (event.defaultPrevented) return;
@@ -167,30 +169,42 @@ for (const role of ["sitter", "parent"] as const) {
 
   const session = mount(role);
   tap(session.wallet);
-  assert.equal(session.state.open, false, `${role} drawer closes when the exposed wallet icon is tapped`);
+  assert.equal(session.state.open, true, `${role} drawer stays open when the exposed wallet icon is tapped`);
   assert.equal(session.state.url, session.home, `${role} stays on the dashboard`);
   assert.equal(session.state.badgeClears, 0, `${role} wallet click does not reach the link`);
+  tap(session.page);
+  assert.equal(session.state.open, true, `${role} drawer stays open when the exposed page is tapped`);
+  assert.equal(session.state.url, session.home, `${role} page tap does not navigate`);
 
-  session.windowNode.listeners.length = 0;
+  tap(session.menuButton);
+  assert.equal(session.state.menuToggles, 1, `${role} hamburger closes the drawer`);
+  assert.equal(session.state.open, false, `${role} drawer is closed after the hamburger`);
   tap(session.wallet);
   assert.equal(session.state.url, session.href, `${role} wallet navigates on a new tap after the drawer is closed`);
 
   const links = mount(role);
   tap(links.drawerLink);
-  assert.equal(links.state.open, true, `${role} drawer stays open when its own link is used`);
   assert.equal(links.state.drawerNavigations, 1, `${role} drawer link still activates`);
-  tap(links.menuButton);
-  assert.equal(links.state.menuToggles, 1, `${role} hamburger still closes the drawer`);
-  tap(links.page);
-  assert.equal(links.state.url, links.home, `${role} page tap does not navigate`);
+  assert.equal(links.state.open, false, `${role} drawer closes after its own link navigates`);
+  assert.equal(
+    links.state.url,
+    role === "sitter" ? "/sitter/profile" : "/parent/profile",
+    `${role} drawer link navigates`
+  );
 }
 
 const hook = readFileSync(resolve(root, "components/navigation/use-app-side-drawer.ts"), "utf8");
 const frame = readFileSync(resolve(root, "components/navigation/app-side-drawer-frame.tsx"), "utf8");
 assert.match(hook, /addEventListener\("click", onBackgroundClick, true\)/);
+assert.match(hook, /guardDrawerBackgroundClick\(event\)/);
+const backgroundClick = hook.slice(
+  hook.indexOf("const onBackgroundClick"),
+  hook.indexOf('window.addEventListener("click", onBackgroundClick, true)')
+);
+assert.doesNotMatch(backgroundClick, /setPhase|closeDrawer|onClose/);
 assert.match(hook, /event\.key !== "Escape"/);
 assert.match(hook, /menuButtonRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
 assert.match(frame, /drawerActive \? "overflow-hidden overscroll-none" : "overflow-y-auto overscroll-y-contain"/);
 assert.match(frame, /\[&_\*\]:!pointer-events-none/);
 
-console.log("drawer background click: wallet tap closes without navigating");
+console.log("drawer background click: outside taps are ignored");
