@@ -7,6 +7,7 @@ import { restoreHomeSession } from "@/lib/auth/home-session-restore";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
 import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
 import { AnyNannyEntryBrand } from "@/components/brand/anynanny-entry-brand";
 import { welcomeSignupHref } from "@/lib/charter/routing";
@@ -350,6 +351,7 @@ function HomeInner() {
             ))}
           </ul>
         </nav>
+        <MarketingPrivacyLink compact />
       </div>
     </main>
   );

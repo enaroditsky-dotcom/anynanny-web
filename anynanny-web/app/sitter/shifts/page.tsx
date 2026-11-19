@@ -72,8 +72,9 @@ import {
 } from "@/lib/bookings/sitter-pending-bookings";
 
 import {
-  formatParentProfileAddress
-} from "@/lib/bookings/todays-linked-booking";
+  assignedSitterMaySeeStreetAddress,
+  fetchSitterAssignedParentContacts
+} from "@/lib/bookings/sitter-parent-contact";
 
 import {
   normalizeBookingStatus
@@ -98,10 +99,6 @@ import {
 import {
   isPostgrestMissingColumnError
 } from "@/lib/supabase/postgrest-schema";
-
-import {
-  PROFILES_TABLE
-} from "@/lib/supabase/profiles";
 
 import {
   removeRealtimeChannel,
@@ -389,167 +386,20 @@ function statusBadge(
   };
 }
 
-async function loadParentDetailsByIds(
-  supabase: NonNullable<
-    ReturnType<
-      typeof getSupabaseBrowserClient
-    >
-  >,
-  parentIds: string[]
-): Promise<{
-  names: Map<string, string>;
-  addresses: Map<string, string>;
-}> {
-  const names =
-    new Map<
-      string,
-      string
-    >();
-
-  const addresses =
-    new Map<
-      string,
-      string
-    >();
-
-  if (
-    parentIds.length === 0
-  ) {
-    return {
-      names,
-      addresses
-    };
-  }
-
-  let profileRows:
-    | Array<
-        Record<
-          string,
-          unknown
-        >
-      >
-    | null = null;
-
-  const withAddress =
-    await supabase
-      .from(
-        PROFILES_TABLE
-      )
-      .select(
-        "id, first_name, last_name, address"
-      )
-      .in(
-        "id",
-        parentIds
-      );
-
-  if (withAddress.error) {
-    if (
-      isPostgrestMissingColumnError(
-        withAddress.error.message,
-        "address"
-      ) ||
-      /column|schema cache|could not find/i.test(
-        withAddress.error.message
-      )
-    ) {
-      const fallback =
-        await supabase
-          .from(
-            PROFILES_TABLE
-          )
-          .select(
-            "id, first_name, last_name"
-          )
-          .in(
-            "id",
-            parentIds
-          );
-
-      if (fallback.error) {
-        console.warn(
-          "Could not load parent profiles for shifts:",
-          fallback.error.message
-        );
-
-        return {
-          names,
-          addresses
-        };
-      }
-
-      profileRows =
-        (fallback.data as
-          | Array<
-              Record<
-                string,
-                unknown
-              >
-            >
-          | null) ?? [];
-    } else {
-      console.warn(
-        "Could not load parent profiles for shifts:",
-        withAddress.error.message
-      );
-
-      return {
-        names,
-        addresses
-      };
-    }
-  } else {
-    profileRows =
-      (withAddress.data as
-        | Array<
-            Record<
-              string,
-              unknown
-            >
-          >
-        | null) ?? [];
-  }
-
-  for (
-    const profile
-    of profileRows
-  ) {
-    const id =
-      String(
-        profile.id ?? ""
-      );
-
-    if (!id) {
-      continue;
-    }
-
-    const name =
-      `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
-
-    if (name) {
-      names.set(
-        id,
-        name
-      );
-    }
-
-    const address =
-      formatParentProfileAddress(
-        profile.address
-      );
-
-    if (address) {
-      addresses.set(
-        id,
-        address
-      );
+async function loadAssignedParentContacts(
+  supabase: NonNullable<ReturnType<typeof getSupabaseBrowserClient>>,
+  bookingIds: string[]
+): Promise<{ names: Map<string, string>; addresses: Map<string, string> }> {
+  const names = new Map<string, string>();
+  const addresses = new Map<string, string>();
+  const { contacts } = await fetchSitterAssignedParentContacts(supabase, bookingIds);
+  for (const contact of contacts) {
+    if (contact.displayName) names.set(contact.parentId, contact.displayName);
+    if (contact.addressVisible && contact.addressLine) {
+      addresses.set(contact.bookingId, contact.addressLine);
     }
   }
-
-  return {
-    names,
-    addresses
-  };
+  return { names, addresses };
 }
 
 const SHIFT_BOARD_SCROLL_MIN_PAGE_PX = 240;
@@ -927,16 +777,9 @@ export default function SitterShiftsPage() {
             }
           }
 
-          const parentIds = [
-            ...new Set(
-              bookingRows
-                .map(
-                  (row) =>
-                    row.parent_id
-                )
-                .filter(Boolean)
-            )
-          ];
+          const bookingIds = bookingRows
+            .map((row) => row.id)
+            .filter(Boolean);
 
           const {
             names:
@@ -944,9 +787,9 @@ export default function SitterShiftsPage() {
             addresses:
               parentAddressById
           } =
-            await loadParentDetailsByIds(
+            await loadAssignedParentContacts(
               supabase,
-              parentIds
+              bookingIds
             );
 
           let sessionRows:
@@ -1068,16 +911,14 @@ export default function SitterShiftsPage() {
                     end_time:
                       booking.end_time,
 
-                    // Pending: never surface full address on the card.
-                    // Parent preview (and approved bookings) own that disclosure.
                     address:
-                      normalizeBookingStatus(
-                        booking.status as BookingStatus
-                      ) === "pending"
-                        ? ""
-                        : parentAddressById.get(
-                            booking.parent_id
-                          ) ?? "",
+                      assignedSitterMaySeeStreetAddress(
+                        booking.status
+                      )
+                        ? parentAddressById.get(
+                            booking.id
+                          ) ?? ""
+                        : "",
 
                     total_amount_nis:
                       null
@@ -1206,9 +1047,13 @@ export default function SitterShiftsPage() {
                     booking.end_time,
 
                   address:
-                    parentAddressById.get(
-                      booking.parent_id
-                    ) ?? "",
+                    assignedSitterMaySeeStreetAddress(
+                      booking.status
+                    )
+                      ? parentAddressById.get(
+                          booking.id
+                        ) ?? ""
+                      : "",
 
                   total_amount_nis:
                     totalAmount,
@@ -1358,16 +1203,9 @@ export default function SitterShiftsPage() {
             (data ??
               []) as unknown as BookingRow[];
 
-          const parentIds = [
-            ...new Set(
-              bookingRows
-                .map(
-                  (row) =>
-                    row.parent_id
-                )
-                .filter(Boolean)
-            )
-          ];
+          const bookingIds = bookingRows
+            .map((row) => row.id)
+            .filter(Boolean);
 
           const {
             names:
@@ -1375,9 +1213,9 @@ export default function SitterShiftsPage() {
             addresses:
               parentAddressById
           } =
-            await loadParentDetailsByIds(
+            await loadAssignedParentContacts(
               supabase,
-              parentIds
+              bookingIds
             );
 
           setCalendarShifts(
@@ -1404,9 +1242,13 @@ export default function SitterShiftsPage() {
                   "הורה AnyNanny",
 
                 partnerAddress:
-                  parentAddressById.get(
-                    row.parent_id
-                  ) ?? "",
+                  assignedSitterMaySeeStreetAddress(
+                    row.status
+                  )
+                    ? parentAddressById.get(
+                        row.id
+                      ) ?? ""
+                    : "",
 
                 bookingDate:
                   row.booking_date,

@@ -219,6 +219,7 @@ assert.match(wizard, /buildParentOnboardingSavePayload/);
 assert.match(wizard, /updateRowStrippingUnknownColumns/);
 assert.match(wizard, /parent_onboarding_completed_at|buildParentOnboardingSavePayload/);
 assert.match(wizard, /router\.replace\("\/parent\/dashboard"\)/);
+assert.match(wizard, /ParentMedicalCollectionNotice/);
 assert.match(wizard, /IdentityOnboardingCard/);
 assert.match(wizard, /continueLabel="סיום"/);
 assert.match(wizard, /setShowIdentity\(true\)/);

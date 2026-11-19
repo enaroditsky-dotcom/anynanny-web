@@ -9,6 +9,7 @@ import {
   personalInputClassName
 } from "@/components/personal-area/personal-area-ui";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { IDENTITY_VERIFICATION_CONSENT_STATEMENT } from "@/lib/identity/identity-verification-consent";
 import {
   saveIdentityVerificationDraft,
   validateIdentityIdNumber,
@@ -99,7 +100,8 @@ export function IdentityVerificationForm({
         credentials: "same-origin",
         body: JSON.stringify({
           role,
-          next: nextPath
+          next: nextPath,
+          consent: true
         })
       });
       const verifyJson = (await verifyRes.json().catch(() => ({}))) as {
@@ -154,9 +156,11 @@ export function IdentityVerificationForm({
         </PersonalField>
 
         <ul className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-[13px] leading-relaxed text-slate-600">
-          <li>האימות כולל צילום תעודת זהות או דרכון ובדיקת פנים מול המסמך.</li>
-          <li>המצלמה והמיקרופון עשויים להיות בשימוש במהלך התהליך.</li>
-          <li>Didit מעבדת את המסמכים והביומטריה. AnyNanny שומרת את סטטוס האימות ומזהה המשתמש בלבד.</li>
+          <li>האימות רשות. אפשר לסגור את החלון בלי להתחיל, והחשבון נשאר בשימוש.</li>
+          <li>Didit מעבדת את מסמך הזיהוי ואת תמונת הפנים. AnyNanny אינה שומרת את קובצי התמונה.</li>
+          <li>
+            AnyNanny שומרת את מספר תעודת הזהות שתזינו, את סטטוס האימות, ופרטי החלטה כגון מספר מסמך, שם ותאריך לידה.
+          </li>
         </ul>
 
         <label className="flex cursor-pointer items-start gap-2 text-right text-[13px] leading-relaxed text-[#001F3F]">
@@ -166,10 +170,7 @@ export function IdentityVerificationForm({
             onChange={(e) => setConsent(e.target.checked)}
             className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
           />
-          <span>
-            אני מאשר/ת למסור מסמך זיהוי ותמונת פנים לספק האימות Didit לצורך אימות זהות ב-AnyNanny,
-            ומבין/ה שהסטטוס יתעדכן רק אחרי החלטת האימות.
-          </span>
+          <span>{IDENTITY_VERIFICATION_CONSENT_STATEMENT}</span>
         </label>
 
         <p className="flex items-start gap-1.5 text-[13px] text-slate-500">
