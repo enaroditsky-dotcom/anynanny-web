@@ -16,15 +16,15 @@ function read(relativePath: string): string {
   return readFileSync(resolve(root, relativePath), "utf8");
 }
 
-assert.equal(PRIVACY_POLICY_RELEASE.published, false);
-assert.equal(PRIVACY_POLICY_RELEASE.publicationDateLabel, null);
-assert.equal(isPrivacyPolicyV12InForce(), false);
-assert.equal(acceptedPrivacyDocVersion(), "1.1");
-assert.match(privacyPolicyMetadataDescription(), /טרם פורסם/);
-assert.doesNotMatch(privacyPolicyMetadataDescription(), /מועד פרסום/);
+assert.equal(PRIVACY_POLICY_RELEASE.published, true);
+assert.equal(PRIVACY_POLICY_RELEASE.publicationDateLabel, "20 בנובמבר 2026");
+assert.equal(isPrivacyPolicyV12InForce(), true);
+assert.equal(acceptedPrivacyDocVersion(), "1.2");
+assert.match(privacyPolicyMetadataDescription(), /מועד פרסום: 20 בנובמבר 2026/);
+assert.doesNotMatch(privacyPolicyMetadataDescription(), /טרם פורסם/);
 
-const record = createLegalAcceptanceRecord("2026-11-19T00:00:00.000Z");
-assert.equal(record.privacy_version, "1.1");
+const record = createLegalAcceptanceRecord("2026-11-20T00:00:00.000Z");
+assert.equal(record.privacy_version, "1.2");
 assert.equal(record.terms_version, "1.1");
 
 const existing = {

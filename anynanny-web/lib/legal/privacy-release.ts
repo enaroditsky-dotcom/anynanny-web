@@ -1,6 +1,6 @@
 /**
- * Privacy Policy v1.2 stays inactive until publication is authorized.
- * Flip `published` and `publicationDateLabel` in the same change.
+ * Privacy Policy v1.2 is in force.
+ * `published` and `publicationDateLabel` change together.
  * A date without publication, or publication without a date, leaves v1.2 inactive.
  */
 export const PRIVACY_POLICY_V12_VERSION = "1.2" as const;
@@ -11,8 +11,8 @@ export const PRIVACY_POLICY_RELEASE: {
   published: boolean;
   publicationDateLabel: string | null;
 } = {
-  published: false,
-  publicationDateLabel: null
+  published: true,
+  publicationDateLabel: "20 בנובמבר 2026"
 };
 
 export function isPrivacyPolicyV12InForce(): boolean {
