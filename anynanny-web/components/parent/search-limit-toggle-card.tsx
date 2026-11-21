@@ -18,7 +18,8 @@ export function SearchLimitToggleCard({
   onEnabledChange,
   inactiveHint,
   children,
-  footer
+  footer,
+  embedded = false
 }: {
   title: string;
   icon?: ReactNode;
@@ -28,16 +29,30 @@ export function SearchLimitToggleCard({
   inactiveHint: string;
   children?: ReactNode;
   footer?: ReactNode;
+  /** Drop the outer card so the limiter can sit beside another field. */
+  embedded?: boolean;
 }) {
-  return (
-    <div className={`${CARD} space-y-3`}>
-      <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+  const content = (
+    <>
+      <div
+        className={
+          embedded
+            ? "flex items-start gap-2"
+            : "flex items-center gap-2 border-b border-slate-100 pb-2.5"
+        }
+      >
         {icon ? (
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
             {icon}
           </span>
         ) : null}
-        <span className={TITLE}>{title}</span>
+        <span
+          className={
+            embedded ? "min-w-0 text-sm font-medium leading-snug text-[#001F3F]" : TITLE
+          }
+        >
+          {title}
+        </span>
       </div>
 
       <div className="space-y-3">
@@ -54,8 +69,14 @@ export function SearchLimitToggleCard({
         {enabled ? children : null}
         {footer}
       </div>
-    </div>
+    </>
   );
+
+  if (embedded) {
+    return <div className="min-w-0 space-y-3">{content}</div>;
+  }
+
+  return <div className={`${CARD} space-y-3`}>{content}</div>;
 }
 
 export function searchLimitSliderProgress(value: number, min: number, max: number): CSSProperties {

@@ -8,15 +8,22 @@ type MainLayoutProps = {
   mainClassName?: string;
   /** Inner brand header. App chrome already renders AppShellHeader — hide this to avoid a duplicate. */
   showBrandHeader?: boolean;
+  /** Replaces the default cream surface for a page that owns its background. */
+  surfaceClassName?: string;
 };
 
 export function MainLayout({
   children,
   mainClassName,
-  showBrandHeader = true
+  showBrandHeader = true,
+  surfaceClassName
 }: MainLayoutProps) {
   return (
-    <div className="mx-auto flex w-full min-w-0 max-w-md flex-col bg-[#FDFBF6] md:rounded-[2rem] md:shadow-soft">
+    <div
+      className={`mx-auto flex w-full min-w-0 max-w-md flex-col md:rounded-[2rem] md:shadow-soft ${
+        surfaceClassName ?? "bg-[#FDFBF6]"
+      }`}
+    >
       {showBrandHeader ? (
         <header className="relative sticky top-0 z-20 flex h-[9rem] shrink-0 items-center justify-center bg-white px-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)] sm:h-[9.7rem]">
           <h1 className="flex min-w-0 items-center justify-center">

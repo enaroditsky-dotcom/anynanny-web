@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useState, type ChangeEvent } from "react";
 import {
   PARENT_SEARCH_HOUR_OPTIONS,
   PARENT_SEARCH_MAX_HOURLY_SLIDER,
@@ -37,7 +37,7 @@ import {
   searchLimitSliderProgress
 } from "@/components/parent/search-limit-toggle-card";
 import { PARENT_SEARCH_FAVORITES_ONLY_LABEL as FAVORITES_ONLY_LABEL } from "@/lib/favorites/parent-favorite-rules";
-import { Search, Calendar, Award, Star, Coins } from "lucide-react";
+import { Award, Calendar, ChevronDown, Coins, Search, SlidersHorizontal, Star } from "lucide-react";
 import { RequiredFieldMark } from "@/components/ui/required-field-mark";
 
 const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] = [
@@ -51,7 +51,9 @@ const FIELD_LABEL =
   "mb-1.5 block min-h-[1.5rem] text-right text-sm font-medium leading-snug text-[#001F3F]";
 const SECTION_HEADING = "text-[1.25rem] font-semibold leading-snug text-[#001F3F]";
 const SECTION_SURFACE =
-  "rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft";
+  "overflow-visible rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft";
+const SPLIT_FIELDS = "grid grid-cols-2 items-start gap-3 max-[340px]:grid-cols-1";
+const ADVANCED_GROUP = "overflow-visible rounded-2xl border border-slate-200/70 bg-[#FBFDF9] p-3";
 const FIELD_CONTROL =
   "box-border block h-11 min-h-[44px] w-full max-w-full rounded-xl border border-slate-200/80 bg-white px-3 text-base font-medium leading-none text-[#001F3F] transition placeholder:text-slate-400 focus:border-[#001F3F] focus:outline-none focus:ring-2 focus:ring-[#001F3F]/15 disabled:opacity-50 appearance-none";
 const FIELD_CONTROL_INVALID =
@@ -292,6 +294,24 @@ export function ParentSearchFiltersBar({
   };
 
   const [now, setNow] = useState(() => new Date());
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const advancedPanelId = useId();
+  const advancedHeadingId = useId();
+  const cityHeadingId = useId();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const openForTour = () => {
+      if (root.getAttribute("data-product-tour-step") === "verified-only") {
+        setAdvancedOpen(true);
+      }
+    };
+    openForTour();
+    const observer = new MutationObserver(openForTour);
+    observer.observe(root, { attributes: true, attributeFilter: ["data-product-tour-step"] });
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     const refresh = () => {
       const active = document.activeElement;
@@ -337,55 +357,20 @@ export function ParentSearchFiltersBar({
 
   return (
     <section data-tour="parent-search-filters" className="flex flex-col gap-4" dir="rtl">
-      <div className="overflow-visible rounded-2xl border border-slate-200/60 bg-white shadow-soft">
-        <div data-tour="verified-only">
-          <SearchQuickFilterRow
-            headingId="verified-only-heading"
-            hintId="verified-only-hint"
-            checked={Boolean(filters.verifiedOnly)}
-            label={VERIFIED_QUICK_FILTER_LABEL}
-            lastWord="מאומתת"
-            help={PARENT_SEARCH_VERIFIED_ONLY_HINT}
-            onChange={(e) => patch({ verifiedOnly: e.target.checked })}
-          />
-        </div>
-        <div className="border-t border-slate-100">
-          <SearchQuickFilterRow
-            checked={Boolean(filters.favoritesOnly)}
-            label={FAVORITES_ONLY_LABEL}
-            lastWord="מועדפות"
-            help={FAVORITES_QUICK_FILTER_HELP}
-            onChange={(e) => patch({ favoritesOnly: e.target.checked })}
-          />
-        </div>
-      </div>
-
-      <div className={`${SECTION_SURFACE} grid grid-cols-2 items-start gap-3`}>
-        <div className={PAIR_COL}>
-          <FieldLabel>מספר ID</FieldLabel>
-          <div className="relative">
-            <Search className={FIELD_ICON} />
-            <input
-              type="search"
-              inputMode="search"
-              autoComplete="off"
-              placeholder="AN-...."
-              className={`${FIELD_CONTROL} pr-9`}
-              value={filters.searchSitterSerial}
-              onChange={(e) => patch({ searchSitterSerial: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div className={PAIR_COL}>
-          <FieldLabel required>עיר פעילות</FieldLabel>
-          <CityAutocomplete
-            value={filters.selectedCity}
-            onChange={(selectedCity) => patch({ selectedCity })}
-            invalid={cityInvalid}
-            inputClassName={`${cityInvalid ? FIELD_CONTROL_INVALID : FIELD_CONTROL} pr-9 pl-10`}
-          />
-        </div>
+      <div className={`${SECTION_SURFACE} space-y-3`}>
+        <h2 id={cityHeadingId} className={SECTION_HEADING}>
+          <span className="inline-flex items-center gap-1.5">
+            <RequiredFieldMark />
+            <span>עיר פעילות</span>
+          </span>
+        </h2>
+        <CityAutocomplete
+          value={filters.selectedCity}
+          onChange={(selectedCity) => patch({ selectedCity })}
+          invalid={cityInvalid}
+          labelledBy={cityHeadingId}
+          inputClassName={`${cityInvalid ? FIELD_CONTROL_INVALID : FIELD_CONTROL} pr-9 pl-10`}
+        />
       </div>
 
       <div className={`${SECTION_SURFACE} space-y-3`}>
@@ -393,11 +378,11 @@ export function ParentSearchFiltersBar({
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
             <Calendar className="h-4 w-4" />
           </span>
-          <span className={SECTION_HEADING}>מתי העבודה נדרשת?</span>
+          <h2 className={SECTION_HEADING}>מתי העבודה נדרשת?</h2>
         </div>
 
-        <div className="grid grid-cols-2 items-start gap-3">
-          <div className={`${PAIR_COL} gap-2`}>
+        <div className={SPLIT_FIELDS}>
+          <div className={PAIR_COL}>
             <FieldLabel required>תאריך התחלה</FieldLabel>
             <ParentSearchDateField
               className={startDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
@@ -440,37 +425,9 @@ export function ParentSearchFiltersBar({
                 });
               }}
             />
-            <TimeBlock
-              title="שעת התחלה"
-              required
-              calendarDate={filters.searchDate}
-              now={now}
-              hour={filters.searchStartHour ?? ""}
-              minute={filters.searchStartMinute ?? ""}
-              disabled={!filters.searchDate}
-              invalid={startTimeInvalid}
-              onHourChange={(searchStartHour) => {
-                const clock = acceptHour(
-                  filters.searchDate,
-                  searchStartHour,
-                  filters.searchStartMinute ?? ""
-                );
-                if (!clock) return;
-                patch({ searchStartHour: clock.hour, searchStartMinute: clock.minute });
-              }}
-              onMinuteChange={(searchStartMinute) => {
-                const next = acceptMinute(
-                  filters.searchDate,
-                  filters.searchStartHour ?? "",
-                  searchStartMinute
-                );
-                if (next === null) return;
-                patch({ searchStartMinute: next });
-              }}
-            />
           </div>
 
-          <div className={`${PAIR_COL} gap-2`}>
+          <div className={PAIR_COL}>
             <FieldLabel required>תאריך סיום</FieldLabel>
             <ParentSearchDateField
               className={endDateInvalid ? DATE_CONTROL_INVALID : DATE_CONTROL}
@@ -501,117 +458,228 @@ export function ParentSearchFiltersBar({
                 });
               }}
             />
-            <TimeBlock
-              title="שעת סיום"
-              required
-              calendarDate={filters.searchEndDate}
-              now={now}
-              hour={filters.searchEndHour ?? ""}
-              minute={filters.searchEndMinute ?? ""}
-              disabled={!filters.searchDate}
-              invalid={endTimeInvalid}
-              onHourChange={(searchEndHour) => {
-                const clock = acceptHour(
-                  filters.searchEndDate,
-                  searchEndHour,
-                  filters.searchEndMinute ?? ""
-                );
-                if (!clock) return;
-                patch({ searchEndHour: clock.hour, searchEndMinute: clock.minute });
-              }}
-              onMinuteChange={(searchEndMinute) => {
-                const next = acceptMinute(
-                  filters.searchEndDate,
-                  filters.searchEndHour ?? "",
-                  searchEndMinute
-                );
-                if (next === null) return;
-                patch({ searchEndMinute: next });
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className={`${SECTION_SURFACE} grid grid-cols-2 items-start gap-3`}>
-        <div className={PAIR_COL}>
-          <FieldLabel>שנות ניסיון</FieldLabel>
-          <div className="relative">
-            <Award className={FIELD_ICON} />
-            <select
-              className={`${FIELD_CONTROL} pr-9`}
-              value={String(filters.minYearsExperience)}
-              onChange={(e) => patch({ minYearsExperience: Number(e.target.value) as ParentSearchMinExperience })}
-            >
-              {EXPERIENCE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
           </div>
         </div>
 
-        <div className={PAIR_COL}>
-          <FieldLabel>דירוג מינימלי</FieldLabel>
-          <div className="relative">
-            <Star className={FIELD_ICON} />
-            <select
-              className={`${FIELD_CONTROL} pr-9`}
-              value={filters.minRating ?? "all"}
-              onChange={(e) => patch({ minRating: e.target.value as ParentSearchMinRating })}
-            >
-              {PARENT_SEARCH_RATING_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <SearchLimitToggleCard
-        title="מחיר שעתי מקסימלי"
-        icon={<Coins className="h-4 w-4" />}
-        toggleLabel="הגבל מחיר"
-        enabled={filters.maxHourlyRate != null}
-        onEnabledChange={(enabled) =>
-          patch({
-            maxHourlyRate: enabled ? PARENT_SEARCH_MAX_HOURLY_SLIDER : null
-          })
-        }
-        inactiveHint="ללא הגבלת מחיר"
-      >
-        <div className={SEARCH_LIMIT_VALUE_ROW}>
-          <button
-            type="button"
-            onClick={() => patch({ maxHourlyRate: null })}
-            className={SEARCH_LIMIT_CLEAR_BUTTON}
-          >
-            נקה הגבלה
-          </button>
-          <span className={SEARCH_LIMIT_VALUE_BADGE}>
-            ₪{filters.maxHourlyRate}
-          </span>
-        </div>
-        <div dir="ltr">
-          <input
-            type="range"
-            min={0}
-            max={PARENT_SEARCH_MAX_HOURLY_SLIDER}
-            step={5}
-            className={SEARCH_LIMIT_SLIDER_CLASS}
-            style={searchLimitSliderProgress(
-              filters.maxHourlyRate ?? PARENT_SEARCH_MAX_HOURLY_SLIDER,
-              0,
-              PARENT_SEARCH_MAX_HOURLY_SLIDER
-            )}
-            value={filters.maxHourlyRate ?? PARENT_SEARCH_MAX_HOURLY_SLIDER}
-            onChange={(e) => patch({ maxHourlyRate: Number(e.target.value) })}
+        <div className={SPLIT_FIELDS}>
+          <TimeBlock
+            title="שעת התחלה"
+            required
+            calendarDate={filters.searchDate}
+            now={now}
+            hour={filters.searchStartHour ?? ""}
+            minute={filters.searchStartMinute ?? ""}
+            disabled={!filters.searchDate}
+            invalid={startTimeInvalid}
+            onHourChange={(searchStartHour) => {
+              const clock = acceptHour(
+                filters.searchDate,
+                searchStartHour,
+                filters.searchStartMinute ?? ""
+              );
+              if (!clock) return;
+              patch({ searchStartHour: clock.hour, searchStartMinute: clock.minute });
+            }}
+            onMinuteChange={(searchStartMinute) => {
+              const next = acceptMinute(
+                filters.searchDate,
+                filters.searchStartHour ?? "",
+                searchStartMinute
+              );
+              if (next === null) return;
+              patch({ searchStartMinute: next });
+            }}
           />
-          <div className={SEARCH_LIMIT_SLIDER_ENDS}>
-            <span>₪0</span>
-            <span>₪{PARENT_SEARCH_MAX_HOURLY_SLIDER}</span>
+          <TimeBlock
+            title="שעת סיום"
+            required
+            calendarDate={filters.searchEndDate}
+            now={now}
+            hour={filters.searchEndHour ?? ""}
+            minute={filters.searchEndMinute ?? ""}
+            disabled={!filters.searchDate}
+            invalid={endTimeInvalid}
+            onHourChange={(searchEndHour) => {
+              const clock = acceptHour(
+                filters.searchEndDate,
+                searchEndHour,
+                filters.searchEndMinute ?? ""
+              );
+              if (!clock) return;
+              patch({ searchEndHour: clock.hour, searchEndMinute: clock.minute });
+            }}
+            onMinuteChange={(searchEndMinute) => {
+              const next = acceptMinute(
+                filters.searchEndDate,
+                filters.searchEndHour ?? "",
+                searchEndMinute
+              );
+              if (next === null) return;
+              patch({ searchEndMinute: next });
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="overflow-visible rounded-3xl shadow-soft">
+        <button
+          type="button"
+          className={`flex w-full items-center gap-3 border border-[#D5E8D0] bg-[#E6F4E2] px-4 py-3.5 text-right transition hover:bg-[#DDF0D8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001F3F]/25 ${
+            advancedOpen ? "rounded-t-3xl" : "rounded-3xl"
+          }`}
+          aria-expanded={advancedOpen}
+          aria-controls={advancedPanelId}
+          onClick={() => setAdvancedOpen((open) => !open)}
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-emerald-700">
+            <SlidersHorizontal className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span id={advancedHeadingId} className="block text-base font-semibold leading-snug text-[#001F3F]">
+              תנאי חיפוש נוספים
+            </span>
+            <span className="mt-0.5 block text-sm font-medium leading-snug text-[#3F6B4A]">
+              סינון נוסף כדי למצוא את הבייביסיטרית המתאימה ביותר
+            </span>
+          </span>
+          <ChevronDown
+            className={`h-5 w-5 shrink-0 text-emerald-800 transition-transform duration-200 ${
+              advancedOpen ? "rotate-180" : ""
+            }`}
+            aria-hidden
+          />
+        </button>
+
+        <div
+          id={advancedPanelId}
+          role="region"
+          aria-labelledby={advancedHeadingId}
+          hidden={!advancedOpen}
+          className="space-y-4 overflow-visible rounded-b-3xl border border-t-0 border-[#D5E8D0] bg-white p-4"
+        >
+          <div className="overflow-visible rounded-2xl border border-slate-200/70 bg-[#FBFDF9]">
+            <div data-tour="verified-only" data-product-label={PARENT_SEARCH_VERIFIED_ONLY_LABEL}>
+              <SearchQuickFilterRow
+                headingId="verified-only-heading"
+                hintId="verified-only-hint"
+                checked={Boolean(filters.verifiedOnly)}
+                label={VERIFIED_QUICK_FILTER_LABEL}
+                lastWord="מאומתת"
+                help={PARENT_SEARCH_VERIFIED_ONLY_HINT}
+                onChange={(e) => patch({ verifiedOnly: e.target.checked })}
+              />
+            </div>
+            <div className="border-t border-slate-100">
+              <SearchQuickFilterRow
+                checked={Boolean(filters.favoritesOnly)}
+                label={FAVORITES_ONLY_LABEL}
+                lastWord="מועדפות"
+                help={FAVORITES_QUICK_FILTER_HELP}
+                onChange={(e) => patch({ favoritesOnly: e.target.checked })}
+              />
+            </div>
+          </div>
+
+          <div className={`${ADVANCED_GROUP} ${SPLIT_FIELDS}`}>
+            <div className={PAIR_COL}>
+              <FieldLabel>שנות ניסיון</FieldLabel>
+              <div className="relative">
+                <Award className={FIELD_ICON} />
+                <select
+                  className={`${FIELD_CONTROL} pr-9`}
+                  value={String(filters.minYearsExperience)}
+                  onChange={(e) => patch({ minYearsExperience: Number(e.target.value) as ParentSearchMinExperience })}
+                >
+                  {EXPERIENCE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className={PAIR_COL}>
+              <FieldLabel>דירוג מינימלי</FieldLabel>
+              <div className="relative">
+                <Star className={FIELD_ICON} />
+                <select
+                  className={`${FIELD_CONTROL} pr-9`}
+                  value={filters.minRating ?? "all"}
+                  onChange={(e) => patch({ minRating: e.target.value as ParentSearchMinRating })}
+                >
+                  {PARENT_SEARCH_RATING_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className={`${ADVANCED_GROUP} ${SPLIT_FIELDS}`}>
+            <SearchLimitToggleCard
+              embedded
+              title="מחיר שעתי מקסימלי"
+              icon={<Coins className="h-4 w-4" />}
+              toggleLabel="הגבל מחיר"
+              enabled={filters.maxHourlyRate != null}
+              onEnabledChange={(enabled) =>
+                patch({
+                  maxHourlyRate: enabled ? PARENT_SEARCH_MAX_HOURLY_SLIDER : null
+                })
+              }
+              inactiveHint="ללא הגבלת מחיר"
+            >
+              <div className={SEARCH_LIMIT_VALUE_ROW}>
+                <button
+                  type="button"
+                  onClick={() => patch({ maxHourlyRate: null })}
+                  className={SEARCH_LIMIT_CLEAR_BUTTON}
+                >
+                  נקה הגבלה
+                </button>
+                <span className={SEARCH_LIMIT_VALUE_BADGE}>
+                  ₪{filters.maxHourlyRate}
+                </span>
+              </div>
+              <div dir="ltr">
+                <input
+                  type="range"
+                  min={0}
+                  max={PARENT_SEARCH_MAX_HOURLY_SLIDER}
+                  step={5}
+                  className={SEARCH_LIMIT_SLIDER_CLASS}
+                  style={searchLimitSliderProgress(
+                    filters.maxHourlyRate ?? PARENT_SEARCH_MAX_HOURLY_SLIDER,
+                    0,
+                    PARENT_SEARCH_MAX_HOURLY_SLIDER
+                  )}
+                  value={filters.maxHourlyRate ?? PARENT_SEARCH_MAX_HOURLY_SLIDER}
+                  onChange={(e) => patch({ maxHourlyRate: Number(e.target.value) })}
+                />
+                <div className={SEARCH_LIMIT_SLIDER_ENDS}>
+                  <span>₪0</span>
+                  <span>₪{PARENT_SEARCH_MAX_HOURLY_SLIDER}</span>
+                </div>
+              </div>
+            </SearchLimitToggleCard>
+
+            <div className={PAIR_COL}>
+              <FieldLabel>חיפוש לפי ה-ID</FieldLabel>
+              <div className="relative">
+                <Search className={FIELD_ICON} />
+                <input
+                  type="search"
+                  inputMode="search"
+                  autoComplete="off"
+                  placeholder="AN-...."
+                  className={`${FIELD_CONTROL} pr-9`}
+                  value={filters.searchSitterSerial}
+                  onChange={(e) => patch({ searchSitterSerial: e.target.value })}
+                />
+              </div>
+            </div>
           </div>
         </div>
-      </SearchLimitToggleCard>
+      </div>
 
     </section>
   );
