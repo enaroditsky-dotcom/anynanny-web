@@ -109,30 +109,25 @@ function ParentSearchContent() {
         ) : null}
 
         {showContent ? (
-          <div className="space-y-5 pt-2">
-            <div className="space-y-2">
-              <header className="space-y-1 text-center">
-                <h1 className="text-2xl font-bold leading-snug text-[#001F3F]">
-                  חיפוש מהיר באפליקציה
-                </h1>
-                <p className="text-base font-medium leading-relaxed text-[#5C6B73]">
-                  מצאו בייביסיטר בקלות ובמהירות
-                </p>
-              </header>
-              <p
-                className="flex w-full flex-row items-center justify-end text-sm font-medium leading-snug text-[#C44747]"
-                dir="ltr"
-              >
-                <span>שדות חובה</span>
-                <span aria-hidden="true">{"\u00a0-\u00a0"}</span>
-                <span aria-hidden="true">*</span>
+          <div className="space-y-3 pt-1">
+            <header className="text-center">
+              <h1 className="text-xl font-bold leading-snug text-[#001F3F]">
+                חיפוש מהיר באפליקציה
+              </h1>
+            </header>
+            {parentPublicId ? (
+              <p className="w-full text-right text-sm font-medium text-slate-500">
+                מזהה: {parentPublicId}
               </p>
-              {parentPublicId ? (
-                <p className="w-full text-right text-sm font-medium text-slate-500">
-                  מזהה: {parentPublicId}
-                </p>
-              ) : null}
-            </div>
+            ) : null}
+            <p
+              className="flex w-full flex-row items-center justify-end text-sm font-medium leading-none text-[#C44747]"
+              dir="ltr"
+            >
+              <span>שדות חובה</span>
+              <span aria-hidden="true">{"\u00a0-\u00a0"}</span>
+              <span aria-hidden="true">*</span>
+            </p>
 
             <ParentSearchFiltersBar
               filters={draftFilters}
