@@ -43,7 +43,8 @@ export function OnboardingTextInput({
   autoComplete,
   inputMode,
   maxLength,
-  placeholder
+  placeholder,
+  hint
 }: {
   id: string;
   label: string;
@@ -54,9 +55,10 @@ export function OnboardingTextInput({
   inputMode?: "text" | "tel" | "numeric" | "decimal";
   maxLength?: number;
   placeholder?: string;
+  hint?: string;
 }) {
   return (
-    <OnboardingField id={id} label={label} required={required}>
+    <OnboardingField id={id} label={label} required={required} hint={hint}>
       <input
         id={id}
         type={inputMode === "tel" ? "tel" : "text"}

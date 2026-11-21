@@ -26,6 +26,7 @@ import {
   PARENTS_LANDING_VALUE_HEADING,
   PARENTS_LANDING_VALUE_PARAGRAPH
 } from "@/lib/marketing/parents-landing";
+import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
 import styles from "./parents-landing.module.css";
 
 export function ParentsLanding({
@@ -109,6 +110,7 @@ export function ParentsLanding({
           {PARENTS_LANDING_CTA}
         </a>
       </main>
+      <MarketingPrivacyLink />
     </div>
   );
 }

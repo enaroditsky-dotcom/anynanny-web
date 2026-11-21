@@ -125,10 +125,10 @@ export const PARENT_QUESTIONNAIRE_STEP_TITLES: Record<ParentQuestionnaireStep, s
 
 export const PARENT_QUESTIONNAIRE_STEP_DESCRIPTIONS: Record<ParentQuestionnaireStep, string> = {
   1: "נשלים כמה פרטים חיוניים כדי שנוכל להתאים לכם את השירות.",
-  2: "כתובת המגורים עוזרת לנו להתאים בייביסיטר באזור שלכם.",
+  2: "עיר נדרשת להתאמה. רחוב ומספר בית אינם חובה, ואינם מוצגים לבייביסיטר בהזמנה רגילה לפני אישור.",
   3: "מצב משפחתי עוזר ל-AnyNanny לזכור תאריכים חשובים בלי לשמור פרטים מיותרים.",
   4: "פרטי הילדים עוזרים להתאים בייביסיטר ולזכור ימי הולדת.",
-  5: "מידע על הבית ועל הילדים שחשוב שבייביסיטר תדע.",
+  5: "מידע על הבית ועל הילדים שנשמר בחשבון ההורה. הוא לא נשלח אוטומטית לבייביסיטר.",
   6: "כמה פרטים על איך אתם משתמשים ב-AnyNanny. אפשר לדלג על שאלות שאינן חובה.",
   7: "תזכורות ותאריכים משפחתיים — אפשר גם להמשיך בלי."
 };
@@ -164,9 +164,6 @@ function validateParentHousehold(draft: ParentOnboardingDraft): string | null {
   if (draft.hasPets == null) return "יש לבחור האם יש בעלי חיים בבית.";
   if (draft.hasChildSpecialOrMedicalInformation == null) {
     return "יש לבחור האם יש מידע רפואי או צורך מיוחד שחשוב לדעת.";
-  }
-  if (draft.hasChildSpecialOrMedicalInformation && !draft.childSpecialOrMedicalDetails.trim()) {
-    return "יש למלא פרטים שחשוב לדעת.";
   }
   return null;
 }
@@ -282,9 +279,6 @@ export function firstInvalidParentOnboardingFieldId(
   if (step === 5) {
     if (draft.hasPets == null) return "parent-has-pets";
     if (draft.hasChildSpecialOrMedicalInformation == null) return "parent-has-medical";
-    if (draft.hasChildSpecialOrMedicalInformation && !draft.childSpecialOrMedicalDetails.trim()) {
-      return "medical-details";
-    }
     return null;
   }
 

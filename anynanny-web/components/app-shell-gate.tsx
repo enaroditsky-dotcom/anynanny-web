@@ -15,6 +15,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { IncomingChatInboxProvider } from "@/features/chat/incoming-chat-inbox-provider";
 import { ParentActiveNowDock } from "@/components/parent/parent-active-now-dock";
 import { MarketingConsentPrompt } from "@/components/marketing/marketing-consent-prompt";
+import { PrivacyPolicyUpdateNotice } from "@/components/legal/privacy-policy-update-notice";
 import { PushPermissionBanner } from "@/components/push/push-permission-banner";
 import { PushRuntime } from "@/components/push/push-runtime";
 import { RouteTransitionShell } from "@/components/route-transition-shell";
@@ -178,6 +179,7 @@ export function AppShellGate({
             }
           >
             <RouteTransitionShell>
+              <PrivacyPolicyUpdateNotice />
               <PushPermissionBanner />
               {children}
             </RouteTransitionShell>

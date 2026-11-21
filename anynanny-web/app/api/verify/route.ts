@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { resolveCheckoutRedirectUrl } from "@/lib/billing/checkout-redirect-url";
 import {
   insertDiditSession,
-  markDiditProfilePending
+  markDiditProfilePending,
+  mergeDiditSessionConsent
 } from "@/lib/identity/didit-db";
 import { readDiditApiKey } from "@/lib/identity/didit";
+import {
+  hasExplicitIdentityVerificationConsent,
+  identityVerificationConsentMetadata
+} from "@/lib/identity/identity-verification-consent";
 import type { IdentityVerificationRole } from "@/lib/identity/identity-verification";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -23,6 +29,7 @@ const ALLOWED_NEXT = new Set([
 type Body = {
   role?: IdentityVerificationRole;
   next?: string;
+  consent?: unknown;
 };
 
 function defaultNext(role: IdentityVerificationRole): string {
@@ -62,6 +69,13 @@ export async function POST(request: Request) {
   }
 
   const role: IdentityVerificationRole = body.role === "sitter" ? "sitter" : "parent";
+  if (!hasExplicitIdentityVerificationConsent(body.consent)) {
+    return NextResponse.json(
+      { error: "יש לאשר את תנאי האימות לפני פתיחת התהליך." },
+      { status: 400 }
+    );
+  }
+  const consentMetadata = identityVerificationConsentMetadata(new Date().toISOString());
   const next = sanitizeNext(role, body.next);
   const returnPath = `/verify/done?role=${encodeURIComponent(role)}&next=${encodeURIComponent(next)}`;
 
@@ -109,10 +123,24 @@ export async function POST(request: Request) {
     role,
     workflowId,
     status: session.status,
-    metadata: { role, next }
+    metadata: { role, next, ...consentMetadata }
   });
   if (stored.error && !stored.missingSchema) {
     return NextResponse.json({ error: stored.error }, { status: 500 });
+  }
+  if (stored.existingOwner) {
+    try {
+      const merged = await mergeDiditSessionConsent(getSupabaseServiceRoleClient(), {
+        sessionId: session.session_id,
+        userId: user.id,
+        consent: consentMetadata
+      });
+      if (merged.error) {
+        return NextResponse.json({ error: merged.error }, { status: 500 });
+      }
+    } catch {
+      return NextResponse.json({ error: "server_misconfigured" }, { status: 503 });
+    }
   }
 
   await markDiditProfilePending(supabase, user.id);

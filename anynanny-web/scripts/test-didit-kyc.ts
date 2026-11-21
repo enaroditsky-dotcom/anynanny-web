@@ -9,7 +9,7 @@ import {
   shouldKeepDiditPending
 } from "../lib/identity/didit";
 import { hmacSha256Hex, verifyDiditWebhook } from "../lib/identity/didit-signature";
-import { isDiditSessionPrimaryKeyConflict } from "../lib/identity/didit-db";
+import { isDiditSessionPrimaryKeyConflict, omitDiditMediaReferences } from "../lib/identity/didit-db";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function read(relativePath: string): string {
@@ -41,7 +41,9 @@ assert.match(insertFn, /\.eq\("session_id", input\.sessionId\)/);
 assert.match(insertFn, /ownerId === currentUserId/);
 assert.doesNotMatch(insertFn, /\.upsert\(/);
 assert.doesNotMatch(insertFn, /onConflict/);
-assert.doesNotMatch(insertFn, /getSupabaseServiceRoleClient/);
+const upsertSlice = diditDb.slice(diditDb.indexOf("from(DIDIT_SESSIONS_TABLE).upsert"));
+assert.doesNotMatch(upsertSlice, /\n\s*metadata,/);
+assert.match(diditDb, /omitDiditMediaReferences\(payload\.decision\)/);
 
 assert.equal(
   isDiditSessionPrimaryKeyConflict({
@@ -66,7 +68,8 @@ const identityClientLib = read("lib/identity/identity-verification.ts");
 assert.doesNotMatch(identityClientLib, /from ["']node:crypto["']|didit-signature/);
 
 const middleware = read("middleware.ts");
-assert.match(middleware, /api\/webhooks\//);
+assert.match(middleware, /if \(!hasSupabaseAuthCookie\(req\)\)/);
+assert.match(middleware, /return NextResponse\.next/);
 
 const webhookRoute = read("app/api/webhooks/didit/route.ts");
 assert.match(webhookRoute, /x-signature-v2/);
@@ -87,7 +90,42 @@ assert.match(form, /startDiditVerification/);
 assert.match(form, /\/api\/verify/);
 assert.match(form, /consent/);
 assert.match(form, /Didit/);
+assert.match(form, /IDENTITY_VERIFICATION_CONSENT_STATEMENT/);
+assert.match(form, /consent: true/);
+assert.doesNotMatch(form, /מזהה המשתמש בלבד/);
 assert.doesNotMatch(form, /hyp-register|DIDIT_API_KEY/);
+
+const consentLib = read("lib/identity/identity-verification-consent.ts");
+assert.match(consentLib, /IDENTITY_VERIFICATION_CONSENT_VERSION = "1\.0"/);
+assert.match(consentLib, /value === true/);
+assert.doesNotMatch(consentLib, /checked=\{true\}|defaultChecked/);
+
+const verifyRouteConsent = read("app/api/verify/route.ts");
+assert.match(verifyRouteConsent, /hasExplicitIdentityVerificationConsent/);
+assert.match(verifyRouteConsent, /identityVerificationConsentMetadata/);
+assert.match(verifyRouteConsent, /mergeDiditSessionConsent/);
+assert.match(verifyRouteConsent, /metadata: \{ role, next, \.\.\.consentMetadata \}/);
+
+const card = read("components/identity/identity-onboarding-card.tsx");
+assert.match(card, /אינו נדרש לתשלום/);
+assert.doesNotMatch(card, /תשלומים דרך AnyNanny|השלימו אמצעי תשלום/);
+
+const stripped = omitDiditMediaReferences({
+  status: "Approved",
+  id_verifications: [
+    {
+      document_number: "kept",
+      full_name: "kept",
+      date_of_birth: "kept",
+      front_image: "https://example.invalid/front",
+      portrait_image: "https://example.invalid/portrait"
+    }
+  ]
+}) as { id_verifications: Array<Record<string, unknown>> };
+assert.equal(stripped.id_verifications[0].document_number, "kept");
+assert.equal(stripped.id_verifications[0].full_name, "kept");
+assert.equal("front_image" in stripped.id_verifications[0], false);
+assert.equal("portrait_image" in stripped.id_verifications[0], false);
 
 const donePage = read("app/verify/done/page.tsx");
 assert.match(donePage, /זה אינו אישור שהזהות אומתה/);

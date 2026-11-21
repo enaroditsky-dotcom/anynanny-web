@@ -99,6 +99,18 @@ assert.equal(parentPayload.preferred_language, "עברית");
 assert.ok("preferred_language" in parentPayload && "preferred_language" in updated);
 assert.ok("has_child_special_or_medical_information" in parentPayload);
 assert.equal(updated.child_special_or_medical_details, "אלרגיה לבוטנים");
+const optionalMedicalUpdate = buildParentProfileUpdatePayload({
+  ...parentRow,
+  has_child_special_or_medical_information: true,
+  child_special_or_medical_details: "   "
+});
+assert.equal(optionalMedicalUpdate.has_child_special_or_medical_information, true);
+assert.equal(optionalMedicalUpdate.child_special_or_medical_details, null);
+assert.match(parentPersonal, /יש לבחור האם יש מידע רפואי או צורך מיוחד שחשוב לדעת/);
+assert.match(parentPersonal, /id="parent-medical-details-hint"/);
+assert.match(parentPersonal, /ParentMedicalCollectionNotice/);
+assert.match(parentPersonal, /לא חובה\. הפירוט נשמר בחשבון שלך בלבד/);
+assert.doesNotMatch(parentPersonal, /יש למלא פרטים שחשוב לדעת/);
 
 const marriedProfile = {
   ...parentRow,

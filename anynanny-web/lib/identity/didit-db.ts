@@ -45,7 +45,7 @@ export async function insertDiditSession(
     status?: string;
     metadata?: Record<string, unknown> | null;
   }
-): Promise<{ error: string | null; missingSchema: boolean }> {
+): Promise<{ error: string | null; missingSchema: boolean; existingOwner?: boolean }> {
   const { error } = await supabase.from(DIDIT_SESSIONS_TABLE).insert({
     session_id: input.sessionId,
     user_id: input.userId,
@@ -84,7 +84,7 @@ export async function insertDiditSession(
   const ownerId = parseUuid((existing.data as { user_id?: unknown } | null)?.user_id);
   const currentUserId = parseUuid(input.userId);
   if (ownerId && currentUserId && ownerId === currentUserId) {
-    return { error: null, missingSchema: false };
+    return { error: null, missingSchema: false, existingOwner: true };
   }
 
   return {
@@ -107,6 +107,58 @@ export async function markDiditProfilePending(
     .eq("id", userId)
     .neq("identity_verification_status", "verified");
 
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+const DIDIT_MEDIA_KEY = /image|video|portrait|selfie/i;
+
+/** Drops document, portrait, and video links before a Didit decision is stored. */
+export function omitDiditMediaReferences(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => omitDiditMediaReferences(item));
+  if (!value || typeof value !== "object") return value;
+  const output: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (DIDIT_MEDIA_KEY.test(key)) continue;
+    output[key] = omitDiditMediaReferences(child);
+  }
+  return output;
+}
+
+export async function mergeDiditSessionConsent(
+  admin: SupabaseClient,
+  input: {
+    sessionId: string;
+    userId: string;
+    consent: Record<string, unknown>;
+  }
+): Promise<{ error: string | null }> {
+  const existing = await admin
+    .from(DIDIT_SESSIONS_TABLE)
+    .select("user_id, metadata")
+    .eq("session_id", input.sessionId)
+    .maybeSingle();
+  if (existing.error) return { error: existing.error.message };
+
+  const row = existing.data as { user_id?: unknown; metadata?: unknown } | null;
+  const ownerId = parseUuid(row?.user_id);
+  const currentUserId = parseUuid(input.userId);
+  if (!ownerId || !currentUserId || ownerId !== currentUserId) {
+    return { error: "Didit session already exists." };
+  }
+
+  const prior =
+    row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : {};
+  const { error } = await admin
+    .from(DIDIT_SESSIONS_TABLE)
+    .update({
+      metadata: { ...prior, ...input.consent },
+      updated_at: new Date().toISOString()
+    })
+    .eq("session_id", input.sessionId)
+    .eq("user_id", currentUserId);
   if (error) return { error: error.message };
   return { error: null };
 }
@@ -178,9 +230,13 @@ export async function applyDiditWebhookDecision(
       ? (payload.metadata as Record<string, unknown>)
       : null;
   const role = metadata?.role === "sitter" ? "sitter" : "parent";
-  const decision = payload.decision && typeof payload.decision === "object" ? payload.decision : null;
+  const decision = payload.decision && typeof payload.decision === "object"
+    ? omitDiditMediaReferences(payload.decision)
+    : null;
   const resubmitInfo =
-    payload.resubmit_info && typeof payload.resubmit_info === "object" ? payload.resubmit_info : null;
+    payload.resubmit_info && typeof payload.resubmit_info === "object"
+      ? omitDiditMediaReferences(payload.resubmit_info)
+      : null;
 
   if (sessionId) {
     const sessionPatch: Record<string, unknown> = {
@@ -211,7 +267,6 @@ export async function applyDiditWebhookDecision(
           status: isDiditSessionStatus(status) ? status : "Not Started",
           decision,
           resubmit_info: resubmitInfo,
-          metadata,
           updated_at: new Date().toISOString()
         },
         { onConflict: "session_id" }

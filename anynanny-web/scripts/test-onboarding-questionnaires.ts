@@ -187,11 +187,24 @@ const medicalParent = {
   hasChildSpecialOrMedicalInformation: true,
   childSpecialOrMedicalDetails: ""
 };
-assert.match(validateParentOnboardingStep(5, medicalParent) ?? "", /פרטים שחשוב לדעת/);
+assert.equal(validateParentOnboardingStep(5, medicalParent), null);
+assert.equal(
+  validateParentOnboardingStep(5, { ...validParent, hasChildSpecialOrMedicalInformation: null }),
+  "יש לבחור האם יש מידע רפואי או צורך מיוחד שחשוב לדעת."
+);
+const optionalMedicalPayload = buildParentOnboardingSavePayload(
+  medicalParent,
+  "2026-09-02T00:00:00.000Z"
+);
+assert.equal(optionalMedicalPayload.has_child_special_or_medical_information, true);
+assert.equal(optionalMedicalPayload.child_special_or_medical_details, null);
 assert.equal(
   validateParentOnboardingStep(5, { ...medicalParent, childSpecialOrMedicalDetails: "אלרגיה לבוטנים" }),
   null
 );
+assert.match(parentWizard, /legend="האם יש לילד\/ה אלרגיה[\s\S]{0,240}required/);
+assert.match(parentWizard, /label="פרטים שחשוב לדעת"[\s\S]{0,120}לא חובה/);
+assert.doesNotMatch(parentWizard, /label="פרטים שחשוב לדעת"\s*\n\s*required/);
 assert.match(validateParentOnboardingStep(4, { ...validParent, childrenCount: null }) ?? "", /כמה ילדים/);
 assert.equal(validateParentOnboardingStep(6, { ...validParent, preferredLanguage: "" }), "יש לבחור שפה מועדפת.");
 
