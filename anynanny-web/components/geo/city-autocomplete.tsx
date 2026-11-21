@@ -28,6 +28,7 @@ type CityAutocompleteProps = {
   disabled?: boolean;
   invalid?: boolean;
   inputClassName?: string;
+  labelledBy?: string;
 };
 
 export function CityAutocomplete({
@@ -35,7 +36,8 @@ export function CityAutocomplete({
   onChange,
   disabled = false,
   invalid = false,
-  inputClassName = ""
+  inputClassName = "",
+  labelledBy
 }: CityAutocompleteProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +113,7 @@ export function CityAutocomplete({
         placeholder="בחר עיר…"
         disabled={disabled}
         aria-invalid={invalid}
+        aria-labelledby={labelledBy}
         className={inputClassName}
         value={open ? query : value}
         onChange={(event) => {

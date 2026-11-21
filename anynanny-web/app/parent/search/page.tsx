@@ -20,7 +20,6 @@ import {
   type ParentSearchMandatoryField
 } from "@/lib/sitter/parent-search-validation";
 import { LongPrimaryCtaContent } from "@/components/ui/long-primary-cta";
-import { RequiredFieldMark } from "@/components/ui/required-field-mark";
 import {
   LONG_PRIMARY_CTA_CLASS,
   LONG_PRIMARY_CTA_ICON_CLASS,
@@ -95,8 +94,8 @@ function ParentSearchContent() {
   }, [showContent, user?.id]);
 
   return (
-    <MainLayout showBrandHeader={false}>
-      <div className="mx-auto w-full max-w-md overflow-x-hidden bg-[#FDFBF6] pb-8" dir="rtl">
+    <MainLayout showBrandHeader={false} surfaceClassName="parent-search-surface">
+      <div className="w-full pb-8" dir="rtl">
         {showWait ? (
           authRetryExhausted && !signedIn ? (
             <AuthRetryStatus exhausted onRetry={() => void retryAuthentication()} pending="טוען…" />
@@ -110,21 +109,25 @@ function ParentSearchContent() {
         ) : null}
 
         {showContent ? (
-          <div className="space-y-5">
-            <header className="text-right">
-              <h1 className="text-2xl font-bold leading-snug text-[#001F3F]">
+          <div className="space-y-3 pt-1">
+            <header className="text-center">
+              <h1 className="text-xl font-bold leading-snug text-[#001F3F]">
                 חיפוש מהיר באפליקציה
               </h1>
-              <p className="mt-1 inline-flex items-center gap-1.5 text-[15px] font-medium text-slate-500">
-                <RequiredFieldMark />
-                <span>שדה חובה</span>
-              </p>
-              {parentPublicId ? (
-                <p className="mt-2 text-[15px] font-medium text-slate-500">
-                  מזהה: {parentPublicId}
-                </p>
-              ) : null}
             </header>
+            {parentPublicId ? (
+              <p className="w-full text-right text-sm font-medium text-slate-500">
+                מזהה: {parentPublicId}
+              </p>
+            ) : null}
+            <p
+              className="flex w-full flex-row items-center justify-end text-sm font-medium leading-none text-[#C44747]"
+              dir="ltr"
+            >
+              <span>שדות חובה</span>
+              <span aria-hidden="true">{"\u00a0-\u00a0"}</span>
+              <span aria-hidden="true">*</span>
+            </p>
 
             <ParentSearchFiltersBar
               filters={draftFilters}
@@ -168,7 +171,7 @@ export default function ParentSearchPage() {
   return (
     <Suspense
       fallback={
-        <MainLayout showBrandHeader={false}>
+        <MainLayout showBrandHeader={false} surfaceClassName="parent-search-surface">
           <div className="p-4 text-right text-sm text-slate-600">טוען…</div>
         </MainLayout>
       }

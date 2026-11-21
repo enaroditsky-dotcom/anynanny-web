@@ -3,9 +3,10 @@ import type { CSSProperties, ReactNode } from "react";
 const CARD = "rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft";
 const TITLE = "text-[1.25rem] font-semibold leading-snug text-[#001F3F]";
 const TOGGLE =
-  "inline-flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-medium text-[#001F3F]";
-const CHECKBOX = "h-[18px] w-[18px] rounded border-slate-300 accent-[#001F3F]";
+  "inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-[#001F3F]";
+const CHECKBOX = "h-[18px] w-[18px] shrink-0 rounded border-slate-300 accent-[#001F3F]";
 const INACTIVE = "text-right text-[15px] font-medium leading-relaxed text-slate-500";
+const INACTIVE_EMBEDDED = "text-right text-[13px] font-medium leading-snug text-slate-500";
 
 /**
  * Shared chrome for optional Parent Search limiters (price, distance).
@@ -18,7 +19,8 @@ export function SearchLimitToggleCard({
   onEnabledChange,
   inactiveHint,
   children,
-  footer
+  footer,
+  embedded = false
 }: {
   title: string;
   icon?: ReactNode;
@@ -28,21 +30,41 @@ export function SearchLimitToggleCard({
   inactiveHint: string;
   children?: ReactNode;
   footer?: ReactNode;
+  /** Drop the outer card so the limiter can sit beside another field. */
+  embedded?: boolean;
 }) {
-  return (
-    <div className={`${CARD} space-y-3`}>
-      <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+  const content = (
+    <>
+      <div
+        className={
+          embedded
+            ? "flex items-start gap-2"
+            : "flex items-center gap-2 border-b border-slate-100 pb-2.5"
+        }
+      >
         {icon ? (
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-            {icon}
-          </span>
+          embedded ? (
+            <span className="inline-flex shrink-0 text-slate-400">{icon}</span>
+          ) : (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+              {icon}
+            </span>
+          )
         ) : null}
-        <span className={TITLE}>{title}</span>
+        <span
+          className={
+            embedded
+              ? "parent-search-pair-label parent-search-price-label min-w-0 text-[13px] font-medium leading-snug text-[#001F3F]"
+              : TITLE
+          }
+        >
+          {title}
+        </span>
       </div>
 
-      <div className="space-y-3">
-        {!enabled ? <p className={INACTIVE}>{inactiveHint}</p> : null}
-        <label className={TOGGLE}>
+      <div className={embedded ? "space-y-1.5" : "space-y-3"}>
+        {!enabled ? <p className={embedded ? INACTIVE_EMBEDDED : INACTIVE}>{inactiveHint}</p> : null}
+        <label dir="rtl" className={TOGGLE}>
           <input
             type="checkbox"
             className={CHECKBOX}
@@ -54,8 +76,14 @@ export function SearchLimitToggleCard({
         {enabled ? children : null}
         {footer}
       </div>
-    </div>
+    </>
   );
+
+  if (embedded) {
+    return <div className="min-w-0 space-y-1.5">{content}</div>;
+  }
+
+  return <div className={`${CARD} space-y-3`}>{content}</div>;
 }
 
 export function searchLimitSliderProgress(value: number, min: number, max: number): CSSProperties {
