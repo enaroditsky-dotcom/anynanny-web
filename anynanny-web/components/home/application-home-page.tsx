@@ -20,6 +20,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 type LandingPath = "parent" | "sitter";
 
 const APP_STORE_LISTING_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
+const GOOGLE_PLAY_LISTING_URL = "https://play.google.com/store/apps/details?id=org.anynanny.app";
 
 function PathIcon({ path }: { path: LandingPath }) {
   if (path === "parent") {
@@ -233,13 +234,20 @@ function HomeInner() {
               className="h-auto w-[122px] max-w-full"
             />
           </a>
-          <img
-            src="/brand/google-play-badge-he.png"
-            alt="כעת ב-Google Play"
-            width={646}
-            height={250}
-            className="h-auto w-[162px] max-w-full shrink-0"
-          />
+          <a
+            href={GOOGLE_PLAY_LISTING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex max-w-full shrink-0"
+          >
+            <img
+              src="/brand/google-play-badge-en.png"
+              alt="Get it on Google Play"
+              width={646}
+              height={250}
+              className="h-auto w-[162px] max-w-full"
+            />
+          </a>
         </div>
 
         {/* Login */}
@@ -264,7 +272,7 @@ function HomeInner() {
                   <PathIcon path={path.id} />
                 </span>
 
-                <span className="block text-sm font-bold leading-tight sm:text-[11.05px]">
+                <span className="block w-full whitespace-nowrap text-center text-[clamp(0.92rem,6.4vw-0.33rem,1.0625rem)] font-bold leading-tight tracking-normal sm:text-[11.05px]">
                   כניסת {path.title}
                 </span>
               </button>
@@ -279,13 +287,13 @@ function HomeInner() {
             onClick={() => setRegistrationOpen((open) => !open)}
             aria-expanded={registrationOpen}
             aria-controls="landing-registration-options"
-            className="landing-register-cta mx-auto flex w-fit min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-navy-header bg-navy-header px-8 py-3.5 text-center text-[1.51875rem] font-bold leading-[1.75rem] text-white shadow-[0_8px_18px_rgba(0,31,63,0.28),0_0_0_3px_rgba(255,138,138,0.2)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-salmon focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF6] sm:my-[0.325rem] sm:h-11 sm:min-h-11 sm:w-full sm:gap-[0.325rem] sm:rounded-[0.975rem] sm:px-[1.3rem] sm:py-0 sm:text-[0.9871875rem] sm:leading-none"
+            className="landing-register-cta mx-auto flex w-fit min-h-11 items-center justify-center gap-[0.4rem] whitespace-nowrap rounded-[0.8rem] border border-navy-header bg-navy-header px-[1.6rem] py-[0.7rem] text-center text-[1.215rem] font-bold leading-[1.4rem] text-white shadow-[0_8px_18px_rgba(0,31,63,0.28),0_0_0_3px_rgba(255,138,138,0.2)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-salmon focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF6] sm:my-[0.325rem] sm:h-11 sm:min-h-11 sm:w-[80%] sm:gap-[0.325rem] sm:rounded-[0.975rem] sm:px-[1.3rem] sm:py-0 sm:text-[0.9871875rem] sm:leading-none"
           >
             <span>להרשמה</span>
             {registrationOpen ? (
-              <ChevronUp className="h-5 w-5 shrink-0 sm:h-[0.65rem] sm:w-[0.65rem]" aria-hidden />
+              <ChevronUp className="h-4 w-4 shrink-0 sm:h-[0.65rem] sm:w-[0.65rem]" aria-hidden />
             ) : (
-              <ChevronDown className="h-5 w-5 shrink-0 sm:h-[0.65rem] sm:w-[0.65rem]" aria-hidden />
+              <ChevronDown className="h-4 w-4 shrink-0 sm:h-[0.65rem] sm:w-[0.65rem]" aria-hidden />
             )}
           </button>
 

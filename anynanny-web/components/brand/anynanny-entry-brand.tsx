@@ -19,10 +19,10 @@ export function AnyNannyEntryBrand() {
         draggable={false}
         decoding="async"
         fetchPriority="high"
-        className="pointer-events-none block h-auto w-[clamp(10.5rem,52vw,13.75rem)] max-w-full shrink-0 bg-transparent object-contain object-center select-none sm:w-[8.25rem]"
+        className="pointer-events-none block h-auto w-[clamp(7.35rem,36.4vw,9.625rem)] max-w-full shrink-0 bg-transparent object-contain object-center select-none sm:w-[5.775rem]"
         style={{ aspectRatio: "1 / 1" }}
       />
-      <h1 className="mt-1 flex w-full min-w-0 justify-center sm:mt-[0.325rem]">
+      <h1 className="-mt-[0.544rem] flex w-full min-w-0 justify-center sm:-mt-[0.333rem]">
         <span
           className="inline-block w-[min(100%,18.75rem)] max-w-full bg-transparent sm:w-[13.65rem]"
           style={{ aspectRatio: "2172 / 724" }}
