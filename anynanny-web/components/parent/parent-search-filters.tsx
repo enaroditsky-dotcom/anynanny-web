@@ -49,7 +49,6 @@ const EXPERIENCE_OPTIONS: { value: ParentSearchMinExperience; label: string }[] 
 
 const FIELD_LABEL =
   "mb-1.5 block min-h-[1.5rem] text-right text-sm font-medium leading-snug text-[#001F3F]";
-const SECTION_HEADING = "text-[1.25rem] font-semibold leading-snug text-[#001F3F]";
 const SECTION_SURFACE =
   "overflow-visible rounded-3xl border border-slate-200/60 bg-white p-3 shadow-soft";
 const PAIR_GRID = "grid min-w-0 grid-cols-2 items-start gap-2";
@@ -216,7 +215,7 @@ function TimeBlock({
       {/* Fixed LTR order so hours stay left and minutes right inside RTL pages. */}
       <div className="grid grid-cols-2 gap-1" dir="ltr">
         <label className="parent-search-time-caption block min-w-0 text-right text-[13px] font-medium leading-none text-slate-500">
-          <span className="mb-0 block min-h-[1rem]">שעה</span>
+          <span className="mb-0 block leading-none">שעה</span>
           <select
             className={selectClass}
             value={hour}
@@ -238,7 +237,7 @@ function TimeBlock({
         </label>
 
         <label className="parent-search-time-caption block min-w-0 text-right text-[13px] font-medium leading-none text-slate-500">
-          <span className="mb-0 block min-h-[1rem]">דק׳</span>
+          <span className="mb-0 block leading-none">דק׳</span>
           <select
             className={selectClass}
             value={minute}
@@ -455,9 +454,9 @@ export function ParentSearchFiltersBar({
   };
 
   return (
-    <section data-tour="parent-search-filters" className="flex flex-col gap-3" dir="rtl">
-      <div className={`${SECTION_SURFACE} space-y-3`}>
-        <h2 id={cityHeadingId} className={SECTION_HEADING}>
+    <section data-tour="parent-search-filters" className="flex flex-col gap-1.5" dir="rtl">
+      <div className={`${SECTION_SURFACE} space-y-1 !p-2`}>
+        <h2 id={cityHeadingId} className="text-base font-semibold leading-tight text-[#001F3F]">
           <span className="inline-flex items-center gap-1.5">
             <RequiredFieldMark />
             <span>עיר פעילות</span>
@@ -472,16 +471,16 @@ export function ParentSearchFiltersBar({
         />
       </div>
 
-      <div className={`${SECTION_SURFACE} parent-search-when space-y-2 !p-3`}>
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+      <div className={`${SECTION_SURFACE} parent-search-when space-y-1 !p-2`}>
+        <div className="flex items-center gap-1.5 border-b border-slate-100 pb-1">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
             <Calendar className="h-4 w-4" />
           </span>
           <h2 className="text-base font-semibold leading-snug text-[#001F3F]">מתי העבודה נדרשת?</h2>
         </div>
 
-        <div className="parent-search-when-grid grid grid-cols-2 items-start gap-1.5">
-          <div className={`${PAIR_COL} gap-1.5`}>
+        <div className="parent-search-when-grid grid grid-cols-2 items-start gap-1">
+          <div className={`${PAIR_COL} gap-1`}>
             <FieldLabel required className="parent-search-when-label">
               תאריך התחלה
             </FieldLabel>
@@ -556,7 +555,7 @@ export function ParentSearchFiltersBar({
             />
           </div>
 
-          <div className={`${PAIR_COL} gap-1.5`}>
+          <div className={`${PAIR_COL} gap-1`}>
             <FieldLabel required className="parent-search-when-label">
               תאריך סיום
             </FieldLabel>
@@ -624,14 +623,14 @@ export function ParentSearchFiltersBar({
       <div className="overflow-visible rounded-3xl shadow-soft">
         <button
           type="button"
-          className={`flex w-full items-center gap-2.5 border border-[#D5E8D0] bg-[#E6F4E2] px-3 py-2.5 text-right transition hover:bg-[#DDF0D8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001F3F]/25 ${
+          className={`flex w-full items-center gap-2 border border-[#D5E8D0] bg-[#E6F4E2] px-3 py-1.5 text-right transition hover:bg-[#DDF0D8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001F3F]/25 ${
             advancedOpen ? "rounded-t-3xl" : "rounded-3xl"
           }`}
           aria-expanded={advancedOpen}
           aria-controls={advancedPanelId}
           onClick={() => setAdvancedOpen((open) => !open)}
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/80 text-emerald-700">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-white/80 text-emerald-700">
             <SlidersHorizontal className="h-4 w-4" aria-hidden />
           </span>
           <span id={advancedHeadingId} className="min-w-0 flex-1 whitespace-nowrap text-sm font-semibold leading-none text-[#001F3F]">
