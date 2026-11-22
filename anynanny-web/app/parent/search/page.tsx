@@ -5,8 +5,6 @@ import { useCallback, useEffect, useState, Suspense } from "react";
 import { Search } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { AuthRetryStatus } from "@/lib/auth/use-online-retry-nonce";
-import { fetchProfilePublicId } from "@/lib/public/sequential-display-id";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { MainLayout } from "@components/layout/MainLayout";
 import { ParentSearchFiltersBar } from "@/components/parent/parent-search-filters";
 import {
@@ -29,7 +27,7 @@ import {
 function ParentSearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isLoading, signedIn, effectiveRole, user, authRetryExhausted, retryAuthentication } = useAuth();
+  const { isLoading, signedIn, effectiveRole, authRetryExhausted, retryAuthentication } = useAuth();
   const searchQuery = searchParams.toString();
   const [draftFilters, setDraftFilters] = useState<ParentSearchFilters>(() =>
     parseFiltersFromSearchParams(searchParams)
@@ -37,7 +35,6 @@ function ParentSearchContent() {
   const [navigating, setNavigating] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [invalidFields, setInvalidFields] = useState<ParentSearchMandatoryField[]>([]);
-  const [parentPublicId, setParentPublicId] = useState<string | null>(null);
 
   useEffect(() => {
     setDraftFilters(parseFiltersFromSearchParams(new URLSearchParams(searchQuery)));
@@ -76,26 +73,9 @@ function ParentSearchContent() {
   const showWait = !authSettled || (signedIn && effectiveRole === null);
   const redirectingToLogin = authSettled && !signedIn;
 
-  useEffect(() => {
-    const uid = user?.id;
-    if (!showContent || !uid) {
-      setParentPublicId(null);
-      return;
-    }
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    let cancelled = false;
-    void fetchProfilePublicId(supabase, uid, "parent").then(({ publicId }) => {
-      if (!cancelled) setParentPublicId(publicId);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [showContent, user?.id]);
-
   return (
     <MainLayout showBrandHeader={false} surfaceClassName="parent-search-surface">
-      <div className="w-full pb-8" dir="rtl">
+      <div className="w-full" dir="rtl">
         {showWait ? (
           authRetryExhausted && !signedIn ? (
             <AuthRetryStatus exhausted onRetry={() => void retryAuthentication()} pending="טוען…" />
@@ -109,19 +89,14 @@ function ParentSearchContent() {
         ) : null}
 
         {showContent ? (
-          <div className="space-y-3 pt-1">
+          <div className="space-y-1">
             <header className="text-center">
-              <h1 className="text-xl font-bold leading-snug text-[#001F3F]">
+              <h1 className="text-xl font-bold leading-tight text-[#001F3F]">
                 חיפוש מהיר באפליקציה
               </h1>
             </header>
-            {parentPublicId ? (
-              <p className="w-full text-right text-sm font-medium text-slate-500">
-                מזהה: {parentPublicId}
-              </p>
-            ) : null}
             <p
-              className="flex w-full flex-row items-center justify-end text-sm font-medium leading-none text-[#C44747]"
+              className="flex w-full flex-row items-center justify-end text-[13px] font-medium leading-none text-[#C44747]"
               dir="ltr"
             >
               <span>שדות חובה</span>
@@ -148,7 +123,7 @@ function ParentSearchContent() {
               </p>
             ) : null}
 
-            <div className="pt-1">
+            <div>
               <button
                 type="button"
                 disabled={navigating}
