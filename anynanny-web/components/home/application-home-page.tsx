@@ -218,19 +218,32 @@ function HomeInner() {
           </p>
         </div>
 
-        <HomepageWelcomeVideo
-          onJoinClick={() => {
-            setRegistrationOpen(true);
-            window.requestAnimationFrame(() => {
-              document
-                .getElementById("landing-registration-options")
-                ?.scrollIntoView({ behavior: "smooth", block: "center" });
-            });
-          }}
-        />
+        <div className="mt-3 flex w-full max-w-full shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-3">
+          <a
+            href={APP_STORE_LISTING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex max-w-full shrink-0"
+          >
+            <img
+              src="/brand/app-store-badge-he.svg"
+              alt="הורדת AnyNanny ב-App Store"
+              width={122}
+              height={42}
+              className="h-auto w-[122px] max-w-full"
+            />
+          </a>
+          <img
+            src="/brand/google-play-badge-he.png"
+            alt="כעת ב-Google Play"
+            width={646}
+            height={250}
+            className="h-auto w-[162px] max-w-full shrink-0"
+          />
+        </div>
 
         {/* Login */}
-        <section className="mt-2 w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:mt-0 sm:rounded-[0.975rem] sm:p-[0.65rem]">
+        <section className="mt-4 w-full shrink-0 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-soft sm:mt-0 sm:rounded-[0.975rem] sm:p-[0.65rem]">
           <h2 className="text-center text-xl font-extrabold tracking-tight text-navy-header sm:text-[0.975rem]">
             כניסה
           </h2>
@@ -321,27 +334,16 @@ function HomeInner() {
           </div>
         </section>
 
-        <div className="mt-4 flex w-full max-w-full shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-3">
-          <a
-            href={APP_STORE_LISTING_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex max-w-full shrink-0"
-          >
-            <img
-              src="/brand/app-store-badge-he.svg"
-              alt="הורדת AnyNanny ב-App Store"
-              width={122}
-              height={42}
-              className="h-auto w-[122px] max-w-full"
-            />
-          </a>
-          <img
-            src="/brand/google-play-badge-he.png"
-            alt="כעת ב-Google Play"
-            width={646}
-            height={250}
-            className="h-auto w-[162px] max-w-full shrink-0"
+        <div className="mt-3 w-full shrink-0">
+          <HomepageWelcomeVideo
+            onJoinClick={() => {
+              setRegistrationOpen(true);
+              window.requestAnimationFrame(() => {
+                document
+                  .getElementById("landing-registration-options")
+                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
+              });
+            }}
           />
         </div>
 
