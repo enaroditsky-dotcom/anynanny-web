@@ -104,6 +104,18 @@ assert.doesNotMatch(nowHero, /text-\[#00A86B\]">Nanny/);
 assert.match(landing, /welcomeSignupHref\(profileRole/);
 assert.match(landing, /action === "register"/);
 assert.match(landing, /router\.push\(`\/login\?\$\{qs\.toString\(\)\}`\)/);
+assert.match(landing, /app-store-badge-he\.svg/);
+assert.match(landing, /google-play-badge-he\.png/);
+assert.match(landing, /https:\/\/apps\.apple\.com\/il\/app\/anynanny\/id6813214477/);
+assert.match(landing, /rel="noopener noreferrer"/);
+assert.match(landing, /© 2026 AnyNanny/);
+assert.doesNotMatch(landing, /play\.google\.com/);
+assert.doesNotMatch(landing, /הורים ובייביסיטריות — כל הקהילה במקום אחד/);
+assert.doesNotMatch(landing, /עוד ב־AnyNanny/);
+assert.doesNotMatch(landing, /מחפשים בייביסיטר\?/);
+assert.doesNotMatch(landing, /רוצה לעבוד כבייביסיטר\?/);
+assert.doesNotMatch(landing, /עבודה בבייביסיטר לסטודנטיות/);
+assert.doesNotMatch(landing, /MarketingPrivacyLink/);
 
 assert.match(homepageVideo, /הכירו את AnyNanny ב־10 שניות/);
 assert.doesNotMatch(homepageVideo, /צפו בסרטון קצר שמסביר איך AnyNanny/);
