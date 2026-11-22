@@ -4,10 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import { AUTH_SERVICE_UNAVAILABLE_MESSAGE } from "@/lib/auth/auth-retry";
 import { AuthRetryStatus, useOnlineRetryNonce } from "@/lib/auth/use-online-retry-nonce";
 import { restoreHomeSession } from "@/lib/auth/home-session-restore";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Baby, ChevronDown, ChevronUp, Users } from "lucide-react";
-import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
 import { HomepageWelcomeVideo } from "@/components/welcome/homepage-welcome-video";
 import { AnyNannyEntryBrand } from "@/components/brand/anynanny-entry-brand";
 import { welcomeSignupHref } from "@/lib/charter/routing";
@@ -21,11 +19,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type LandingPath = "parent" | "sitter";
 
-const HOMEPAGE_INFO_LINKS: Array<{ href: string; label: string }> = [
-  { href: "/parents", label: "מחפשים בייביסיטר?" },
-  { href: "/babysitter", label: "רוצה לעבוד כבייביסיטר?" },
-  { href: "/jobs/students", label: "עבודה בבייביסיטר לסטודנטיות" }
-];
+const APP_STORE_LISTING_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
 
 function PathIcon({ path }: { path: LandingPath }) {
   if (path === "parent") {
@@ -327,31 +321,36 @@ function HomeInner() {
           </div>
         </section>
 
-        <p className="mt-1.5 max-w-sm shrink-0 text-center text-[12px] leading-snug text-slate-500 sm:mt-0 sm:text-xs">
-          הורים ובייביסיטריות — כל הקהילה במקום אחד.
-        </p>
+        <div className="mt-4 flex w-full max-w-full shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-3">
+          <a
+            href={APP_STORE_LISTING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex max-w-full shrink-0"
+          >
+            <img
+              src="/brand/app-store-badge-he.svg"
+              alt="הורדת AnyNanny ב-App Store"
+              width={122}
+              height={42}
+              className="h-auto w-[122px] max-w-full"
+            />
+          </a>
+          <img
+            src="/brand/google-play-badge-he.png"
+            alt="כעת ב-Google Play"
+            width={646}
+            height={250}
+            className="h-auto w-[162px] max-w-full shrink-0"
+          />
+        </div>
 
-        <nav
-          aria-label="עוד ב־AnyNanny"
-          className="mt-3 w-full max-w-sm shrink-0 border-t border-navy-header/10 pt-2.5 text-center sm:mt-[0.65rem] sm:pt-[0.40625rem]"
+        <p
+          dir="ltr"
+          className="mb-3 mt-8 shrink-0 text-center text-[13px] font-normal leading-none text-slate-500"
         >
-          <p className="text-[11px] font-semibold leading-none text-navy-header/55 sm:text-[0.65rem]">
-            עוד ב־AnyNanny
-          </p>
-          <ul className="mt-1 flex flex-col items-center">
-            {HOMEPAGE_INFO_LINKS.map((link) => (
-              <li key={link.href} className="max-w-full">
-                <Link
-                  href={link.href}
-                  className="inline-flex min-h-8 items-center px-1 py-0.5 text-center text-[13px] font-semibold leading-snug text-navy-header underline decoration-emerald-600/50 underline-offset-[3px] transition hover:text-emerald-800"
-                >
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <MarketingPrivacyLink compact />
+          © 2026 AnyNanny
+        </p>
       </div>
     </main>
   );
