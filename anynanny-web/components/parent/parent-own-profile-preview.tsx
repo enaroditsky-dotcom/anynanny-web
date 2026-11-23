@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { MapPin, ShieldAlert, Star, User, Users, X } from "lucide-react";
+import { ShieldAlert, Star, User, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import {
   VERIFIED_PARENT_IDENTITY_LABEL,
@@ -20,6 +20,7 @@ import {
   parentProfileCityOnly,
   projectOwnParentProfileCard
 } from "@/lib/parent/own-profile-card-preview";
+import { parentDashboardSerialLabel } from "@/lib/public/sequential-display-id";
 import { appShellScrollElement } from "@/lib/ui/app-shell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isPostgrestSchemaDriftError } from "@/lib/supabase/postgrest-schema";
@@ -32,6 +33,7 @@ type ParentOwnProfilePreviewProps = {
   avatarUrl: string | null;
   ratingAverage: number;
   ratingCount: number;
+  publicId?: string | null;
 };
 
 /**
@@ -44,7 +46,8 @@ export function ParentOwnProfilePreview({
   firstName,
   avatarUrl,
   ratingAverage,
-  ratingCount
+  ratingCount,
+  publicId = null
 }: ParentOwnProfilePreviewProps) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -138,120 +141,116 @@ export function ParentOwnProfilePreview({
     ratingCount,
     identityVerified,
     reviews: [],
-    city
+    city,
+    publicId
   });
   const displayName = parent.first_name || firstName || "הורה";
   const shownRating = normalizeParentRatingAverage(parent.rating_average);
   const shownRatingCount = normalizeParentRatingCount(parent.rating_count);
   const hasRating = shownRating != null && shownRatingCount > 0;
+  const shownPublicId = parentDashboardSerialLabel(parent.public_id);
 
   return (
     <section
       aria-labelledby={titleId}
-      className="min-h-[calc(100dvh-3.25rem-env(safe-area-inset-top,0px))] bg-[linear-gradient(180deg,#F5F8FF_0%,#E5EEFF_52%,#F5F8FF_100%)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+      className="bg-[linear-gradient(180deg,#F5F8FF_0%,#E5EEFF_52%,#F5F8FF_100%)] px-3 pt-[max(0.25rem,env(safe-area-inset-top,0px))] pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]"
       dir="rtl"
     >
-      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-3">
-        <h2 id={titleId} className="min-w-0 flex-1 text-base font-extrabold text-[#001F3F]">
-          כרטיס הביקור שלי
-        </h2>
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={requestClose}
-          aria-label="סגירת הכרטיס"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#D6E5FF] bg-white text-[#001F3F] transition hover:bg-[#E5EEFF]"
-        >
-          <X className="h-5 w-5" aria-hidden />
-        </button>
-      </div>
-
-      {loading ? (
-        <p className="px-4 py-10 text-center text-sm text-slate-500" aria-busy="true">
-          טוען את כרטיס הפרופיל…
-        </p>
-      ) : (
-        <div className="space-y-4 px-4 pb-2 pt-2">
-          <div className="flex flex-col items-center text-center">
-            <div className="h-[120px] w-[120px] overflow-hidden rounded-full border border-[#D6E5FF] bg-[#E5EEFF]">
-              <ProfileImage
-                src={parent.avatar_url}
-                name={displayName}
-                className="h-full w-full bg-[#E5EEFF] text-[#001F3F]/45"
-                fallback={<User className="h-12 w-12" aria-hidden />}
-              />
-            </div>
-
-            <h3 className="mt-3 text-xl font-extrabold text-[#001F3F]">{displayName}</h3>
-
-            <div className="mt-2 flex justify-center">
-              {parent.identity_verified ? (
-                <VerifiedUserBadge size="xl" label={VERIFIED_PARENT_IDENTITY_LABEL} />
-              ) : (
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">
-                  <ShieldAlert className="h-4 w-4" aria-hidden />
-                  זהות ההורה טרם אומתה
-                </div>
-              )}
-            </div>
-
-            <div className="mt-2">
-              {hasRating ? (
-                <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800">
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden />
-                  <span>{shownRating.toFixed(1)}</span>
-                  <span className="font-medium text-amber-700">
-                    · {shownRatingCount === 1 ? "חוות דעת אחת" : `${shownRatingCount} חוות דעת`}
-                  </span>
-                </div>
-              ) : (
-                <div className="inline-flex flex-row-reverse items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500">
-                  <Star className="h-4 w-4 text-slate-300" aria-hidden />
-                  טרם דורג
-                </div>
-              )}
-            </div>
-          </div>
-
-          <section className="rounded-2xl border border-[#D6E5FF] bg-white p-4 shadow-[0_10px_24px_-20px_rgba(0,31,63,0.45)]">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#E5EEFF] text-[#001F3F]">
-                <Users className="h-5 w-5" aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1 text-right">
-                <h3 className="text-sm font-extrabold text-[#001F3F]">פרטי הילדים</h3>
-                <p className="mt-1 text-sm font-bold text-[#001F3F]">
-                  {parent.children_count != null
-                    ? `${parent.children_count} ילדים`
-                    : PARENT_CHILDREN_COUNT_EMPTY}
-                </p>
-                <p className="mt-1 text-xs text-slate-600">
-                  {parent.children_ages
-                    ? `גילאים: ${parent.children_ages}`
-                    : PARENT_CHILDREN_AGES_EMPTY}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-[#D6E5FF] bg-white p-4 shadow-[0_10px_24px_-20px_rgba(0,31,63,0.45)]">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#E5EEFF] text-[#001F3F]">
-                <MapPin className="h-5 w-5" aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1 text-right">
-                <h3 className="text-sm font-extrabold text-[#001F3F]">עיר מגורים</h3>
-                <p className="mt-1 text-sm font-bold text-[#001F3F]">
-                  {parent.city ?? "העיר לא צוינה"}
-                </p>
-                <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                  {PARENT_FULL_ADDRESS_DISCLOSURE}
-                </p>
-              </div>
-            </div>
-          </section>
+      <article className="mx-auto w-full rounded-[1.75rem] border border-[#D6E5FF] bg-[#FFFEFA] shadow-[0_18px_40px_-28px_rgba(15,40,70,0.35)]">
+        <div className="flex items-center justify-between gap-3 px-3.5 pb-0.5 pt-2">
+          <h2 id={titleId} className="min-w-0 flex-1 text-base font-extrabold text-[#001F3F]">
+            כרטיס הביקור שלי
+          </h2>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={requestClose}
+            aria-label="סגירת הכרטיס"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#D6E5FF] bg-white text-[#001F3F] transition hover:bg-[#E5EEFF]"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
         </div>
-      )}
+
+        {loading ? (
+          <p className="px-3.5 py-8 text-center text-sm text-slate-500" aria-busy="true">
+            טוען את כרטיס הפרופיל…
+          </p>
+        ) : (
+          <div className="space-y-1.5 px-3 pb-2.5 pt-0.5">
+            <div className="flex items-center gap-3">
+              <div className="h-[84px] w-[84px] shrink-0 overflow-hidden rounded-full border border-[#D6E5FF] bg-[#E5EEFF]">
+                <ProfileImage
+                  src={parent.avatar_url}
+                  name={displayName}
+                  className="h-full w-full bg-[#E5EEFF] text-[#001F3F]/45"
+                  fallback={<User className="h-8 w-8" aria-hidden />}
+                />
+              </div>
+
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-1 text-right">
+                <h3 className="w-full text-base font-extrabold leading-tight text-[#001F3F]">
+                  {displayName}
+                </h3>
+                {shownPublicId ? (
+                  <p
+                    dir="ltr"
+                    className="inline-flex max-w-full items-center rounded-md border border-purple-200 bg-purple-50 px-1.5 py-px text-[12px] font-bold tracking-wide text-purple-800"
+                  >
+                    {shownPublicId}
+                  </p>
+                ) : null}
+                {parent.identity_verified ? (
+                  <VerifiedUserBadge size="sm" label={VERIFIED_PARENT_IDENTITY_LABEL} />
+                ) : (
+                  <div className="inline-flex max-w-full items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold leading-tight text-amber-700">
+                    <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span>זהות ההורה טרם אומתה</span>
+                  </div>
+                )}
+                {hasRating ? (
+                  <div className="inline-flex max-w-full flex-row-reverse items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold leading-tight text-amber-800">
+                    <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" aria-hidden />
+                    <span>{shownRating.toFixed(1)}</span>
+                    <span className="font-medium text-amber-700">
+                      · {shownRatingCount === 1 ? "חוות דעת אחת" : `${shownRatingCount} חוות דעת`}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="inline-flex max-w-full flex-row-reverse items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium leading-tight text-slate-500">
+                    <Star className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-hidden />
+                    טרם דורג
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <section className="rounded-xl border border-[#D6E5FF] bg-white px-3 py-1.5">
+              <h3 className="text-sm font-extrabold leading-tight text-[#001F3F]">פרטי הילדים</h3>
+              <p className="mt-0.5 text-sm font-bold leading-tight text-[#001F3F]">
+                {parent.children_count != null
+                  ? `${parent.children_count} ילדים`
+                  : PARENT_CHILDREN_COUNT_EMPTY}
+              </p>
+              <p className="mt-0.5 text-xs leading-tight text-slate-600">
+                {parent.children_ages
+                  ? `גילאים: ${parent.children_ages}`
+                  : PARENT_CHILDREN_AGES_EMPTY}
+              </p>
+            </section>
+
+            <section className="rounded-xl border border-[#D6E5FF] bg-white px-3 py-1.5">
+              <h3 className="text-sm font-extrabold leading-tight text-[#001F3F]">עיר מגורים</h3>
+              <p className="mt-0.5 text-sm font-bold leading-tight text-[#001F3F]">
+                {parent.city ?? "העיר לא צוינה"}
+              </p>
+              <p className="mt-0.5 text-xs leading-snug text-slate-500">
+                {PARENT_FULL_ADDRESS_DISCLOSURE}
+              </p>
+            </section>
+          </div>
+        )}
+      </article>
     </section>
   );
 }

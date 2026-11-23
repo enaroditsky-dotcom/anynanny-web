@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { ChevronDown, ShieldAlert, Star, User, Users, X } from "lucide-react";
 import { ProfileImage } from "@/components/profile/profile-image";
+import { parentDashboardSerialLabel } from "@/lib/public/sequential-display-id";
 
 import {
   VERIFIED_PARENT_IDENTITY_LABEL,
@@ -31,6 +32,8 @@ export type ParentDetailsPreview = {
   children_count?: number | null;
   children_ages?: string | null;
   identity_verified?: boolean;
+  /** Public parent serial, for example P-1002. Not an account id. */
+  public_id?: string | null;
   address?: string | null;
   address_visible?: boolean;
 };
@@ -133,6 +136,7 @@ export function ParentDetailsBody({
   const ratingCount = normalizeParentRatingCount(parent.rating_count);
   const hasRating = ratingAverage != null && ratingCount > 0;
   const displayName = parent.first_name || fallbackName || "הורה";
+  const publicId = parentDashboardSerialLabel(parent.public_id);
   const reviews = Array.isArray(parent.reviews) ? parent.reviews : [];
 
   return (
@@ -146,6 +150,14 @@ export function ParentDetailsBody({
         />
 
         <h3 className="mt-3 text-lg font-extrabold text-[#001F3F]">{displayName}</h3>
+        {publicId ? (
+          <p
+            dir="ltr"
+            className="mt-1 inline-flex items-center rounded-md border border-purple-200 bg-purple-50 px-2 py-0.5 text-[12px] font-bold tracking-wide text-purple-800"
+          >
+            {publicId}
+          </p>
+        ) : null}
 
         <div className="mt-2 flex justify-center">
           {parent.identity_verified ? (

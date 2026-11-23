@@ -77,7 +77,24 @@ assert.doesNotMatch(preview, /מיקום העבודה/);
 assert.match(preview, /PARENT_FULL_ADDRESS_DISCLOSURE/);
 assert.match(preview, /PARENT_CHILDREN_COUNT_EMPTY/);
 assert.match(preview, /rounded-full/);
-assert.match(preview, /h-\[120px\] w-\[120px\]/);
+assert.match(preview, /h-\[84px\] w-\[84px\]/);
+assert.match(preview, /flex items-center gap-3/);
+assert.doesNotMatch(preview, /flex flex-col items-center text-center/);
+assert.match(preview, /rounded-\[1\.75rem\]/);
+assert.match(preview, /bg-\[#FFFEFA\]/);
+assert.match(preview, /parentDashboardSerialLabel/);
+assert.match(preview, /dir="ltr"/);
+assert.match(dashboard, /publicId=\{parentSerialLabel\}/);
+assert.match(detailsModal, /parentDashboardSerialLabel\(parent\.public_id\)/);
+assert.match(detailsModal, /dir="ltr"/);
+assert.match(
+  read("app/api/sitter/bookings/[bookingId]/parent-preview/route.ts"),
+  /public_id: publicId/
+);
+assert.match(
+  read("app/api/sitter/bookings/[bookingId]/parent-preview/route.ts"),
+  /pickProfilePublicId/
+);
 assert.match(preview, /history\.state/);
 assert.doesNotMatch(preview, /ערוך את הכרטיס/);
 assert.doesNotMatch(preview, /href="\/parent\/profile"/);
@@ -127,6 +144,31 @@ assert.equal(card.identity_verified, false);
 assert.equal(card.address, null);
 assert.equal(card.address_visible, false);
 assert.equal(card.city, null);
+assert.equal(card.public_id, null);
+assert.equal(
+  projectOwnParentProfileCard({
+    firstName: "נועה",
+    avatarUrl: null,
+    ratingAverage: 0,
+    ratingCount: 0,
+    identityVerified: false,
+    reviews: [],
+    publicId: " p-1002 "
+  }).public_id,
+  "P-1002"
+);
+assert.equal(
+  projectOwnParentProfileCard({
+    firstName: "נועה",
+    avatarUrl: null,
+    ratingAverage: 0,
+    ratingCount: 0,
+    identityVerified: false,
+    reviews: [],
+    publicId: "11111111-1111-4111-8111-111111111111"
+  }).public_id,
+  null
+);
 assert.equal(card.children_count, null);
 assert.equal(card.children_ages, null);
 assert.equal(
