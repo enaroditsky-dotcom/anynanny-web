@@ -146,9 +146,11 @@ import {
 } from "@/lib/ui/long-primary-cta";
 import { APP_CONTENT_MAX_W } from "@/lib/ui/app-shell";
 import { NavBadgePortal, PARENT_CALENDAR_BADGE_SLOT } from "@/components/navigation/nav-badge-slot";
-import { Search, CheckCircle2, Clock, Star, X, Loader2 } from "lucide-react";
-import { DashboardProfileHero } from "@/components/dashboard/dashboard-profile-hero";
-import { IdentityStatusIndicator } from "@/components/identity/identity-status-indicator";
+import { IdCard, Search, CheckCircle2, Clock, Star, X, Loader2 } from "lucide-react";
+import { ParentDashboardAvatar } from "@/components/parent/parent-dashboard-avatar";
+import { PARENT_DASHBOARD_CARD_CLASS } from "@/components/parent/parent-dashboard-card-art";
+import { ParentOwnProfilePreview } from "@/components/parent/parent-own-profile-preview";
+import { ParentProfileCardHelp } from "@/components/parent/parent-profile-card-help";
 
 const BOOKING_LIVE_SELECT =
   "id, parent_id, sitter_id, status, booking_date, start_time, end_time, rejection_note, hourly_rate_nis, parent_notified_at, requires_admin_review, created_at, updated_at";
@@ -556,6 +558,7 @@ export function ParentDashboardClient({
     average: 0,
     count: 0
   });
+  const [ownProfileOpen, setOwnProfileOpen] = useState(false);
   const [hasHydrated, setHasHydrated] = useState(false);
   const [parentId, setParentId] = useState<string | null>(
     initialActiveBooking?.parent_id ? String(initialActiveBooking.parent_id) : null
@@ -2305,7 +2308,12 @@ export function ParentDashboardClient({
   }, [statusCardKey]);
 
   return (
-    <main className={`relative mx-auto w-full min-w-0 ${APP_CONTENT_MAX_W} space-y-1.5`} dir="rtl">
+    <main
+      className={`relative mx-auto min-h-full w-full min-w-0 ${APP_CONTENT_MAX_W} ${
+        ownProfileOpen ? "bg-[#F5F8FF]" : "space-y-1.5 bg-[#EAF7EE] px-3 py-3"
+      }`}
+      dir="rtl"
+    >
       {rejectedDeclineNotice ? (
         <DeclineNoticeUnit
           notice={rejectedDeclineNotice}
@@ -2320,44 +2328,48 @@ export function ParentDashboardClient({
         </div>
       ) : null}
 
-      <div className={`space-y-1.5 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
-        <DashboardProfileHero
-          tour="parent-home"
-          title={`שלום, ${firstName}!`}
+      {ownProfileOpen ? (
+        <ParentOwnProfilePreview
+          open
+          onClose={() => setOwnProfileOpen(false)}
+          firstName={firstName}
           avatarUrl={parentAvatarUrl}
-          avatarName={firstName}
-          badges={
-            <>
+          ratingAverage={parentRatingSummary.average}
+          ratingCount={parentRatingSummary.count}
+        />
+      ) : (
+      <div className={`space-y-1.5 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>
+        <section data-tour="parent-home" className={PARENT_DASHBOARD_CARD_CLASS}>
+          <div className="relative z-10 flex min-w-0 flex-col gap-4">
+            <div className="flex min-w-0 items-center justify-between gap-3 pb-3" dir="ltr">
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-2 text-right" dir="rtl">
+                <h1 className="w-full break-words text-right text-xl font-bold leading-snug text-[#001F3F]">
+                  שלום, {firstName}!
+                </h1>
                 {parentSerialLabel ? (
                   <span
-                    className="inline-flex w-fit shrink-0 items-center gap-1 bg-purple-100 text-purple-800 text-[12px] font-bold px-2 py-0.5 rounded-md border border-purple-200"
+                    className="inline-flex w-fit max-w-full shrink-0 items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-2 py-0.5 text-[12px] font-bold text-purple-800"
                     dir="ltr"
                   >
                     <span>{parentSerialLabel}</span>
-                    <span className="text-[11px] text-purple-500 font-normal">ID</span>
+                    <span className="text-[11px] font-normal text-purple-500">ID</span>
                   </span>
                 ) : null}
-                <IdentityStatusIndicator
-                  userId={parentId}
-                  role="parent"
-                  nextPath="/parent/dashboard"
-                  actionLabel="לאימות הזהות"
-                />
-                <div className="inline-flex w-fit shrink-0 items-center gap-1 bg-amber-50 border border-amber-200/60 text-amber-800 text-[11px] font-medium px-1.5 py-0.5 rounded-md">
-                  <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
-                  <span>
-                    {parentRatingSummary.average.toFixed(1)}
-                  </span>
-                  <span className="text-slate-400 text-[13px]">
+                <div className="inline-flex w-fit max-w-full shrink-0 flex-wrap items-center gap-1 rounded-md border border-amber-200/60 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+                  <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" aria-hidden />
+                  <span>{parentRatingSummary.average.toFixed(1)}</span>
+                  <span className="text-[13px] text-slate-400">
                     ({parentRatingSummary.count}{" "}
-                    {parentRatingSummary.count === 1
-                      ? "חוות דעת"
-                      : "חוות דעת"})
+                    {parentRatingSummary.count === 1 ? "חוות דעת" : "חוות דעת"})
                   </span>
                 </div>
-            </>
-          }
-        >
+              </div>
+              <ParentDashboardAvatar
+                src={parentAvatarUrl}
+                name={firstName}
+                userId={parentId}
+              />
+            </div>
 
             {sitterAcceptedToast ? (
               <div
@@ -2390,7 +2402,47 @@ export function ParentDashboardClient({
               </div>
             ) : null}
 
-        </DashboardProfileHero>
+            {!shouldHideDashboardActions ? (
+              <>
+                <Link
+                  href="/parent/search"
+                  data-tour="parent-search"
+                  className={`${LONG_PRIMARY_CTA_CLASS} shadow-[0_12px_24px_-14px_rgba(0,31,63,0.4)]`}
+                  style={{ minHeight: 52, fontSize: 18, lineHeight: 1.4 }}
+                >
+                  <LongPrimaryCtaContent
+                    icon={<Search className={`${LONG_PRIMARY_CTA_ICON_CLASS} text-white`} />}
+                  >
+                    {PARENT_SITTER_SEARCH_CTA_LABEL}
+                  </LongPrimaryCtaContent>
+                </Link>
+
+                <div className="flex min-w-0 items-center justify-center gap-2" dir="rtl">
+                  <button
+                    type="button"
+                    onClick={() => setOwnProfileOpen(true)}
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border border-[#001F3F] bg-[#FFFDF8] px-3.5 text-sm font-bold text-[#001F3F] shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001F3F] focus-visible:ring-offset-2"
+                  >
+                    <IdCard className="h-4 w-4 shrink-0" aria-hidden />
+                    <span className="whitespace-nowrap">כרטיס הביקור שלי</span>
+                  </button>
+                  <ParentProfileCardHelp />
+                </div>
+
+                {showStuckShiftReleaseButton ? (
+                  <button
+                    type="button"
+                    disabled={releasingStuckShift}
+                    onClick={handleOpenReleaseStuckShiftModal}
+                    className="w-full rounded-xl border border-amber-300 bg-amber-50/80 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
+                  >
+                    {releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </section>
 
             {!shouldHideDashboardActions ? (
               <NavBadgePortal slot={PARENT_CALENDAR_BADGE_SLOT}>
@@ -2644,51 +2696,8 @@ export function ParentDashboardClient({
               ) : null}
             </DashboardStatusCard>
           ) : null}
-
-          {!shouldHideDashboardActions ? (
-            <>
-              <div className="flex justify-center">
-                <Link
-                  href="/parent/search"
-                  data-tour="parent-search"
-                  className={LONG_PRIMARY_CTA_CLASS}
-                  style={{
-                    height: 52,
-                    width: "fit-content",
-                    maxWidth: "100%",
-                    padding: "0 21px",
-                    fontSize: 18,
-                    lineHeight: 1.4
-                  }}
-                >
-                  <LongPrimaryCtaContent
-                    icon={
-                      <Search
-                        className={LONG_PRIMARY_CTA_ICON_CLASS}
-                        style={{ height: 25, width: 25 }}
-                      />
-                    }
-                  >
-                    {PARENT_SITTER_SEARCH_CTA_LABEL}
-                  </LongPrimaryCtaContent>
-                </Link>
-              </div>
-
-              {showStuckShiftReleaseButton ? (
-                <div className="pt-1 flex flex-col gap-1.5">
-                  <button
-                    type="button"
-                    disabled={releasingStuckShift}
-                    onClick={handleOpenReleaseStuckShiftModal}
-                    className="w-full rounded-xl border border-amber-300 bg-amber-50/50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 shadow-2xs disabled:opacity-60"
-                  >
-                    {releasingStuckShift ? "משחרר…" : "שחרור משמרת תקועה"}
-                  </button>
-                </div>
-              ) : null}
-            </>
-          ) : null}
       </div>
+      )}
       <ReleaseStuckShiftModal
         open={releaseStuckModalOpen}
         busy={releasingStuckShift}
