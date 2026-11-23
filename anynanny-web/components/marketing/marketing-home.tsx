@@ -15,6 +15,7 @@ import {
 import { storyChapterHref, type MarketingChapterId } from "@/lib/marketing/chapters";
 import { storyLoginHref } from "@/lib/marketing/story-entry";
 import { ANYNANNY_SUPPORT_EMAIL } from "@/lib/legal/contact";
+import { MarketingCopyright } from "@/components/marketing/marketing-copyright";
 import { MarketingHeartButton } from "@/components/marketing/marketing-heart";
 import { MarketingAccountChoices } from "@/components/marketing/marketing-header";
 import { MarketingMobileActions } from "@/components/marketing/marketing-mobile-actions";
@@ -433,6 +434,7 @@ export function MarketingHome({
           <a href="#charters">אמנות הקהילה</a>
           <a href={`mailto:${ANYNANNY_SUPPORT_EMAIL}`}>{ANYNANNY_SUPPORT_EMAIL}</a>
         </div>
+        <MarketingCopyright />
       </footer>
       <MarketingMobileActions
         registerHref={openAppHref}

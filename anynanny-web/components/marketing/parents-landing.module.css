@@ -148,6 +148,27 @@
   height: 7.65%;
 }
 
+.heroApple,
+.heroGoogle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #fef6ea;
+  border-radius: 0.45rem;
+}
+
+.heroApple img,
+.heroGoogle img {
+  display: block;
+  width: auto;
+  height: 92%;
+  max-width: 96%;
+  border-radius: 0;
+  box-shadow: none;
+  object-fit: contain;
+}
+
 .installNote {
   width: min(40rem, 100%);
   margin: 0.75rem auto 0;
@@ -259,7 +280,8 @@
     min-height: 44px;
   }
 
-  .heroApple {
+  .heroApple,
+  .heroGoogle {
     height: 7.65%;
     min-height: 44px;
   }

@@ -66,7 +66,9 @@ body.demo-open{overflow:hidden}
 .demo-store-actions button:not(:disabled){cursor:pointer}
 a.demo-store-badge{color:#fff;text-decoration:none;cursor:pointer}
 .demo-store.is-live .demo-store-help{display:none}
-@media(max-width:740px){.demo-store{margin-top:8px;padding:10px 10px 12px}.demo-store h3{font-size:16px}.demo-store-actions{flex-direction:column}.demo-store-actions .demo-store-badge{flex-basis:auto;width:100%}}
+.demo-store-official{flex:0 1 auto;display:inline-flex;align-items:center;justify-content:center;min-height:42px;max-width:100%;margin:0;padding:0;border:0;background:transparent;line-height:0;text-decoration:none}
+.demo-store-official img{display:block;height:42px;width:auto;max-width:100%;object-fit:contain}
+@media(max-width:740px){.demo-store{margin-top:8px;padding:10px 10px 12px}.demo-store h3{font-size:16px}.demo-store-actions{flex-direction:row;flex-wrap:wrap}.demo-store-actions .demo-store-badge{flex-basis:auto;width:100%}.demo-store-official img{height:36px}}
 .sitter-web-cta{display:none}
 .experience.is-sitter .experience-toolbar,
 .experience.is-sitter .intro,

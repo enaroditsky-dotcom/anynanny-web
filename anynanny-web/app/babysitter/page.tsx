@@ -6,6 +6,7 @@ import {
   GENERAL_ACQUISITION_TITLE,
   buildGeneralAcquisitionStructuredData,
   generalIosStoreHref,
+  generalPlayStoreHref,
   generalParentDemoHref,
   generalParentSearchHref,
   generalSitterDemoHref,
@@ -89,6 +90,7 @@ export default async function BabysitterLandingPage({ searchParams }: Babysitter
         parentSearchHref={parentSearchHref}
         sitterSignupHref={sitterSignupHref}
         iosHref={iosHref}
+        playHref={generalPlayStoreHref(utm)}
       />
     </>
   );

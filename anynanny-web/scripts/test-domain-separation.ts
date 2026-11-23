@@ -470,8 +470,7 @@ assert.match(source, /WWW_MARKETING_ROOT_ENABLED = true/);
 const storeLinks = read("public/marketing/demo/store-links.js");
 assert.match(storeLinks, /const DOMAIN_SEPARATION_ENABLED = true/);
 assert.match(storeLinks, /const APP_STORE_URL = "https:\/\/apps\.apple\.com\/il\/app\/anynanny\/id6813214477"/);
-assert.match(storeLinks, /const WEB_APP_URL = "https:\/\/app\.anynanny\.org\/"/);
-assert.doesNotMatch(storeLinks, /GOOGLE_PLAY_URL|play\.google/);
+assert.match(storeLinks, /const GOOGLE_PLAY_URL = "https:\/\/play\.google\.com\/store\/apps\/details\?id=org\.anynanny\.app"/);
 assert.match(storeLinks, /const path = `\/welcome\?\$\{welcome\.toString\(\)\}`;/);
 assert.match(storeLinks, /DOMAIN_SEPARATION_ENABLED \? `https:\/\/app\.anynanny\.org\$\{path\}` : path/);
 

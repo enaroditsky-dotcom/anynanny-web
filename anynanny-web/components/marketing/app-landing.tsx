@@ -1,5 +1,6 @@
 import {
   APP_LANDING_APP_STORE_URL,
+  APP_LANDING_GOOGLE_PLAY_URL,
   APP_LANDING_H1,
   APP_LANDING_HERO_ALT,
   APP_LANDING_HERO_HEIGHT,
@@ -20,17 +21,22 @@ import {
   APP_LANDING_SITTER_POINTS
 } from "@/lib/marketing/app-landing";
 import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
+import { withStoreCampaign } from "@/lib/marketing/site-nav";
 import styles from "./app-landing.module.css";
 
 export function AppLanding({
   parentHref,
   sitterHref,
-  webAppHref
+  webAppHref,
+  campaignSearch = ""
 }: {
   parentHref: string;
   sitterHref: string;
   webAppHref: string;
+  campaignSearch?: string;
 }) {
+  const appStoreHref = withStoreCampaign(APP_LANDING_APP_STORE_URL, campaignSearch);
+  const playHref = withStoreCampaign(APP_LANDING_GOOGLE_PLAY_URL, campaignSearch);
   return (
     <div className={styles.page} dir="rtl">
       <main className={styles.main}>
@@ -54,12 +60,24 @@ export function AppLanding({
           </a>
           <a
             className={`${styles.heroHit} ${styles.heroApple}`}
-            href={APP_LANDING_APP_STORE_URL}
+            href={appStoreHref}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="AnyNanny ב-App Store"
+            data-cta="app-store"
             data-hero-hit="app-store"
-          />
+          >
+            <img src="/brand/app-store-badge-he.svg" alt="הורדת AnyNanny ב-App Store" width={122} height={42} />
+          </a>
+          <a
+            className={`${styles.heroHit} ${styles.heroGoogle}`}
+            href={playHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-cta="google-play"
+            data-hero-hit="google-play"
+          >
+            <img src="/brand/google-play-badge-en.png" alt="הורדת AnyNanny ב-Google Play" width={646} height={250} />
+          </a>
           <a
             className={`${styles.heroHit} ${styles.heroSite}`}
             href={APP_LANDING_SITE_URL}

@@ -9,6 +9,7 @@ import {
 } from "@/lib/marketing/babysitter-cities";
 import {
   generalIosStoreHref,
+  generalPlayStoreHref,
   generalParentDemoHref,
   generalParentSearchHref,
   generalSitterDemoHref,
@@ -59,6 +60,7 @@ export default async function BabysitterCityPage({ params, searchParams }: Babys
         parentSearchHref={generalParentSearchHref(utm)}
         sitterSignupHref={generalSitterSignupHref(utm)}
         iosHref={generalIosStoreHref(utm)}
+        playHref={generalPlayStoreHref(utm)}
       />
     </>
   );

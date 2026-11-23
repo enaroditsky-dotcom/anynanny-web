@@ -1,6 +1,10 @@
 import { DOMAIN_SEPARATION_ENABLED } from "@/lib/hosts/site-classifier";
 import { WEB_APP_ORIGIN } from "@/lib/hosts/app-entry";
-import { APP_LANDING_APP_STORE_URL, appLandingSignupHref } from "@/lib/marketing/app-landing";
+import {
+  APP_LANDING_APP_STORE_URL,
+  APP_LANDING_GOOGLE_PLAY_URL,
+  appLandingSignupHref
+} from "@/lib/marketing/app-landing";
 import { marketingDemoHref } from "@/lib/marketing/demo-entry";
 import { withStoreCampaign } from "@/lib/marketing/site-nav";
 import { readStudentJobsUtm, utmSearchFromRecord as readUtmSearchFromRecord } from "@/lib/marketing/student-jobs";
@@ -43,8 +47,7 @@ export const GENERAL_WEB_APP_PATH = "/";
 export const GENERAL_ACQUISITION_PARENT_DEMO_CTA = "אני מחפש/ת בייביסיטר — דמו";
 export const GENERAL_ACQUISITION_SITTER_DEMO_CTA = "אני רוצה לעבוד כבייביסיטר — דמו";
 
-export const GENERAL_ACQUISITION_STORE_NOTE =
-  "iOS זמין ב־App Store. לאנדרואיד נכנסים דרך האפליקציה בדפדפן. גרסת Google Play עדיין לא פורסמה.";
+export const GENERAL_ACQUISITION_STORE_NOTE = "זמינה בחנויות App Store ו־Google Play.";
 
 export const GENERAL_ACQUISITION_PARENT_HEADING = "חיפוש בייביסיטר בחינם ובקלות";
 export const GENERAL_ACQUISITION_PARENT_COPY =
@@ -111,9 +114,14 @@ export function generalWebAppHref(
   return url.toString();
 }
 
-/** Official iOS listing. Campaign params only. Google Play is not offered. */
+/** Official iOS listing. Campaign params only. */
 export function generalIosStoreHref(search: string | URLSearchParams = ""): string {
   return withStoreCampaign(APP_LANDING_APP_STORE_URL, search);
+}
+
+/** Official Play listing. The five campaign params are passed as `referrer`. */
+export function generalPlayStoreHref(search: string | URLSearchParams = ""): string {
+  return withStoreCampaign(APP_LANDING_GOOGLE_PLAY_URL, search);
 }
 
 /** Parent search starts at the application entry. The app decides the next screen. */

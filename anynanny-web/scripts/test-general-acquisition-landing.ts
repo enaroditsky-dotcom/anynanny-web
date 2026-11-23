@@ -115,13 +115,11 @@ assert.match(page, /follow:\s*true/);
 assert.doesNotMatch(page, /noindex/);
 assert.doesNotMatch(landing, /noindex/);
 
-assert.equal(
-  GENERAL_ACQUISITION_STORE_NOTE,
-  "iOS זמין ב־App Store. לאנדרואיד נכנסים דרך האפליקציה בדפדפן. גרסת Google Play עדיין לא פורסמה."
-);
+assert.equal(GENERAL_ACQUISITION_STORE_NOTE, "זמינה בחנויות App Store ו־Google Play.");
 assert.match(landing, /parentSearchHref/);
 assert.match(landing, /sitterSignupHref/);
 assert.match(landing, /iosHref/);
+assert.match(landing, /playHref/);
 assert.equal(generalParentSearchHref("", true), "https://app.anynanny.org/");
 assert.equal(
   generalParentSearchHref("utm_source=audit&ignored=1", true),
@@ -134,8 +132,13 @@ assert.doesNotMatch(landing, /play\.google\.com/);
 assert.doesNotMatch(landing, /apps\.apple\.com/);
 assert.doesNotMatch(page, /play\.google\.com/);
 assert.doesNotMatch(page, /apps\.apple\.com/);
-assert.match(landing, /data-cta="app-store"/);
-assert.match(landing, /href=\{iosHref\}/);
+assert.match(landing, /MarketingStoreBadges/);
+assert.match(landing, /appStoreHref=\{iosHref\}/);
+assert.match(landing, /playHref=\{playHref\}/);
+assert.match(read("components/marketing/marketing-store-badges.tsx"), /data-cta="app-store"/);
+assert.match(read("components/marketing/marketing-store-badges.tsx"), /data-cta="google-play"/);
+assert.match(read("components/marketing/marketing-store-badges.tsx"), /app-store-badge-he\.svg/);
+assert.match(read("components/marketing/marketing-store-badges.tsx"), /google-play-badge-en\.png/);
 
 const structured = buildGeneralAcquisitionStructuredData();
 const graph = structured["@graph"] as Array<Record<string, unknown>>;

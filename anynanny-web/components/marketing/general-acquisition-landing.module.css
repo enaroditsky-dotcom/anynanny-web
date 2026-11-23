@@ -306,6 +306,29 @@
   line-height: 1.35;
 }
 
+.storeBadges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1rem;
+  max-width: 100%;
+}
+
+.storeBadge {
+  display: inline-flex;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.storeBadge img {
+  display: block;
+  height: 2.625rem;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
 .storeNote {
   margin: 0.1rem 0 0;
   color: var(--acq-navy);
@@ -649,6 +672,7 @@
     font-size: 0.72rem;
   }
 
+  .storeBadges,
   .storeNote {
     grid-column: 1 / -1;
     order: 3;

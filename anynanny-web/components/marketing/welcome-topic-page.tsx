@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MarketingCopyright } from "@/components/marketing/marketing-copyright";
 import { MarketingHomeReturn } from "@/components/marketing/marketing-home-return";
 import { PreviewRoleDemos } from "@/components/marketing/preview-role-demos";
 import type { WelcomeTopic } from "@/lib/marketing/welcome-topics";
@@ -59,6 +60,7 @@ export function WelcomeTopicPage({ topic }: { topic: WelcomeTopic }) {
       <p className={styles.more}>
         <Link href="/story">לסיפור המלא של AnyNanny</Link>
       </p>
+      <MarketingCopyright />
     </article>
   );
 }

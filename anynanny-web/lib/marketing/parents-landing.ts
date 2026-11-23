@@ -66,9 +66,7 @@ export const PARENTS_LANDING_ALREADY_INSTALLED_NOTE = "AnyNanny כבר מותק�
 /** Official App Store listing already stored for the app landing. */
 export const PARENTS_LANDING_APP_STORE_URL = APP_LANDING_APP_STORE_URL;
 
-/**
- * Official Google Play listing. Empty in the repo, so the badge stays inactive.
- */
+/** Official Google Play listing already stored for the app landing. */
 export const PARENTS_LANDING_GOOGLE_PLAY_URL = APP_LANDING_GOOGLE_PLAY_URL;
 
 export const PARENTS_LANDING_WORDMARK_SRC = "/brand/anynanny-official-wordmark.png";

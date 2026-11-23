@@ -76,7 +76,12 @@ export default async function AppLandingPage({ searchParams }: AppLandingPagePro
           __html: JSON.stringify(structuredData).replace(/</g, "\\u003c")
         }}
       />
-      <AppLanding parentHref={parentHref} sitterHref={sitterHref} webAppHref={webAppHref} />
+      <AppLanding
+        parentHref={parentHref}
+        sitterHref={sitterHref}
+        webAppHref={webAppHref}
+        campaignSearch={utm.toString()}
+      />
     </>
   );
 }
