@@ -84,8 +84,8 @@ export const APP_LANDING_APP_STORE_LABEL = "להורדה ב־App Store";
 /** Official iPhone listing. Campaign params are added only by `withStoreCampaign`. */
 export const APP_LANDING_APP_STORE_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
 
-/** Google Play is not offered. Android visitors use the Web App. */
-export const APP_LANDING_GOOGLE_PLAY_URL = "";
+/** Official Play listing for `org.anynanny.app`. Campaign params use `referrer`. */
+export const APP_LANDING_GOOGLE_PLAY_URL = "https://play.google.com/store/apps/details?id=org.anynanny.app";
 
 /** Shown beside parent search links. Search itself stays behind the existing welcome registration. */
 export const SEARCH_REQUIRES_REGISTRATION_NOTE = "נדרשת הרשמה לפני החיפוש.";

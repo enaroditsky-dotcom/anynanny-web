@@ -34,6 +34,7 @@ import {
   GENERAL_ACQUISITION_WORDMARK_WIDTH
 } from "@/lib/marketing/general-acquisition";
 import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
+import { MarketingStoreBadges } from "@/components/marketing/marketing-store-badges";
 import styles from "./general-acquisition-landing.module.css";
 
 export function GeneralAcquisitionLanding({
@@ -43,6 +44,7 @@ export function GeneralAcquisitionLanding({
   parentSearchHref,
   sitterSignupHref,
   iosHref,
+  playHref,
   city
 }: {
   webAppHref: string;
@@ -51,6 +53,7 @@ export function GeneralAcquisitionLanding({
   parentSearchHref: string;
   sitterSignupHref: string;
   iosHref: string;
+  playHref: string;
   city?: BabysitterCity;
 }) {
   const h1Find = city?.h1Find ?? GENERAL_ACQUISITION_H1_FIND;
@@ -158,16 +161,12 @@ export function GeneralAcquisitionLanding({
           <a className={styles.roleLink} href={sitterSignupHref} data-cta="sitter-signup" data-press="">
             להרשמה כבייביסיטרית
           </a>
-          <a
-            className={styles.availabilityLink}
-            href={iosHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-cta="app-store"
-            data-press=""
-          >
-            App Store ל־iOS
-          </a>
+          <MarketingStoreBadges
+            className={styles.storeBadges}
+            linkClassName={styles.storeBadge}
+            appStoreHref={iosHref}
+            playHref={playHref}
+          />
           <p className={styles.storeNote}>{GENERAL_ACQUISITION_STORE_NOTE}</p>
         </div>
 

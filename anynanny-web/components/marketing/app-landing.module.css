@@ -107,6 +107,34 @@
   height: 8.1%;
 }
 
+.heroGoogle {
+  left: 50.96%;
+  top: 74.81%;
+  width: 15.07%;
+  height: 8.29%;
+}
+
+.heroApple,
+.heroGoogle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 0.45rem;
+}
+
+.heroApple img,
+.heroGoogle img {
+  display: block;
+  width: auto;
+  height: 92%;
+  max-width: 96%;
+  border-radius: 0;
+  box-shadow: none;
+  object-fit: contain;
+}
+
 .heroSite {
   left: 35%;
   top: 85%;

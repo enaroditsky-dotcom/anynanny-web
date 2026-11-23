@@ -27,15 +27,20 @@ import {
   PARENTS_LANDING_VALUE_PARAGRAPH
 } from "@/lib/marketing/parents-landing";
 import { MarketingPrivacyLink } from "@/components/marketing/marketing-privacy-link";
+import { withStoreCampaign } from "@/lib/marketing/site-nav";
 import styles from "./parents-landing.module.css";
 
 export function ParentsLanding({
   parentHref,
-  webAppHref
+  webAppHref,
+  campaignSearch = ""
 }: {
   parentHref: string;
   webAppHref: string;
+  campaignSearch?: string;
 }) {
+  const appStoreHref = withStoreCampaign(PARENTS_LANDING_APP_STORE_URL, campaignSearch);
+  const playHref = withStoreCampaign(PARENTS_LANDING_GOOGLE_PLAY_URL, campaignSearch);
   return (
     <div className={styles.page} dir="rtl">
       <header className={styles.header}>
@@ -70,23 +75,24 @@ export function ParentsLanding({
           />
           <a
             className={`${styles.heroHit} ${styles.heroApple}`}
-            href={PARENTS_LANDING_APP_STORE_URL}
+            href={appStoreHref}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="AnyNanny ב-App Store"
             data-cta="app-store"
             data-hero-hit="app-store"
-          />
-          {PARENTS_LANDING_GOOGLE_PLAY_URL ? (
-            <a
-              className={`${styles.heroHit} ${styles.heroGoogle}`}
-              href={PARENTS_LANDING_GOOGLE_PLAY_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="AnyNanny ב-Google Play"
-              data-hero-hit="google-play"
-            />
-          ) : null}
+          >
+            <img src="/brand/app-store-badge-he.svg" alt="הורדת AnyNanny ב-App Store" width={122} height={42} />
+          </a>
+          <a
+            className={`${styles.heroHit} ${styles.heroGoogle}`}
+            href={playHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-cta="google-play"
+            data-hero-hit="google-play"
+          >
+            <img src="/brand/google-play-badge-en.png" alt="הורדת AnyNanny ב-Google Play" width={646} height={250} />
+          </a>
         </figure>
 
         <section className={styles.simple} aria-labelledby="parents-simple-heading">

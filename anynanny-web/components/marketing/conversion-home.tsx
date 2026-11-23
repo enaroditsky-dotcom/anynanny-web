@@ -2,16 +2,12 @@
 
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Briefcase, Coffee, Globe, Handshake, Play, ShieldCheck, Sun, Users } from "lucide-react";
+import { Briefcase, Coffee, Handshake, Play, ShieldCheck, Sun, Users } from "lucide-react";
 import { ANYNANNY_APP_LOGO_SRC } from "@/components/brand/anynanny-app-logo";
-import {
-  APP_LANDING_APP_STORE_LABEL,
-  APP_LANDING_APP_STORE_URL,
-  appLandingSignupHref
-} from "@/lib/marketing/app-landing";
+import { MarketingCopyright } from "@/components/marketing/marketing-copyright";
+import { appLandingSignupHref } from "@/lib/marketing/app-landing";
 import { generalWebAppHref } from "@/lib/marketing/general-acquisition";
 import { MARKETING_HOME_H1, MARKETING_HOME_SUPPORT } from "@/lib/marketing/marketing-home";
-import { withStoreCampaign } from "@/lib/marketing/site-nav";
 import { welcomeTopicPath } from "@/lib/marketing/welcome-topics";
 import styles from "./conversion-home.module.css";
 
@@ -85,34 +81,10 @@ function CloudSilhouette({ shape }: { shape: number }) {
 export function ConversionHome({ campaignSearch = "" }: { campaignSearch?: string }) {
   const parentHref = generalWebAppHref(campaignSearch);
   const sitterHref = appLandingSignupHref("sitter", campaignSearch);
-  const storeHref = withStoreCampaign(APP_LANDING_APP_STORE_URL, campaignSearch);
-  const webAppHref = generalWebAppHref(campaignSearch);
   return (
     <div className={styles.screen}>
       <div className={styles.doodleWash} aria-hidden="true" />
       <main className={styles.main}>
-        <div className={styles.downloads}>
-          <a
-            className={styles.storeLink}
-            href={storeHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={APP_LANDING_APP_STORE_LABEL}
-            data-cta="app-store"
-            data-press=""
-          >
-            <img src="/brand/app-store-badge-he.svg" alt="" width={122} height={42} />
-          </a>
-          <a className={styles.androidLink} href={webAppHref} data-cta="web-app" data-press="">
-            <span className={styles.androidFace}>
-              <Globe aria-hidden="true" strokeWidth={2} />
-              <span>
-                <span className={styles.androidTitle}>Web App לאנדרואיד</span>
-                <span className={styles.androidNote}>דרך האפליקציה בדפדפן</span>
-              </span>
-            </span>
-          </a>
-        </div>
         <div className={styles.entry}>
           <a className={styles.parentEntry} href={parentHref} data-cta="parent-search" data-press="">
             לחיפוש בייביסיטר
@@ -168,6 +140,7 @@ export function ConversionHome({ campaignSearch = "" }: { campaignSearch?: strin
           <span className={styles.familyFootLeft} />
           <span className={styles.familyFootRight} />
         </div>
+        <MarketingCopyright className={styles.copyright} />
       </main>
     </div>
   );

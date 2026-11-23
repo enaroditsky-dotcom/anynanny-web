@@ -73,7 +73,7 @@ export default async function ParentsLandingPage({ searchParams }: ParentsLandin
           __html: JSON.stringify(structuredData).replace(/</g, "\\u003c")
         }}
       />
-      <ParentsLanding parentHref={parentHref} webAppHref={webAppHref} />
+      <ParentsLanding parentHref={parentHref} webAppHref={webAppHref} campaignSearch={utm.toString()} />
     </>
   );
 }

@@ -9,10 +9,14 @@ import { readStudentJobsUtm } from "@/lib/marketing/student-jobs";
 export const COMING_SOON_LABEL = "בקרוב";
 export const AI_COMING_SOON_LABEL = "מגיע בקרוב";
 export const IPHONE_APP_STORE_URL = "https://apps.apple.com/il/app/anynanny/id6813214477";
-/** Android entry is the browser app. Google Play is not offered. */
-export const ANDROID_WEB_APP_URL = "https://app.anynanny.org/";
+/** Direct Play listing for applicationId `org.anynanny.app`. Not a search URL. */
+export const GOOGLE_PLAY_LISTING_URL = "https://play.google.com/store/apps/details?id=org.anynanny.app";
 
-/** App Store listing with the five campaign params. Other stores stay unchanged. */
+/**
+ * App Store keeps the five campaign params as query fields.
+ * Google Play receives the same params in the documented `referrer` value.
+ * Any other destination is left unchanged.
+ */
 export function withStoreCampaign(href: string, search: string | URLSearchParams = ""): string {
   let url: URL;
   try {
@@ -20,11 +24,19 @@ export function withStoreCampaign(href: string, search: string | URLSearchParams
   } catch {
     return href;
   }
-  if (url.origin !== "https://apps.apple.com") return href;
-  readStudentJobsUtm(search).forEach((value, key) => {
-    url.searchParams.set(key, value);
-  });
-  return url.toString();
+  if (url.origin === "https://apps.apple.com") {
+    readStudentJobsUtm(search).forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
+    return url.toString();
+  }
+  if (url.origin === "https://play.google.com" && url.pathname === "/store/apps/details") {
+    const utm = readStudentJobsUtm(search);
+    if ([...utm.keys()].length === 0) return href;
+    url.searchParams.set("referrer", utm.toString());
+    return url.toString();
+  }
+  return href;
 }
 export const MARKETING_SITE_NAV_ID = "marketing-site-nav";
 /** www App Store / Web App landing. Login and signup leave through the application host. */
@@ -130,9 +142,9 @@ export const SITE_NAV_DOWNLOADS: SiteNavLink[] = [
   {
     type: "link",
     id: "download-android",
-    label: "Web App",
-    icon: "globe",
-    destination: { kind: "href", href: ANDROID_WEB_APP_URL }
+    label: "Google Play",
+    icon: "android",
+    destination: { kind: "href", href: GOOGLE_PLAY_LISTING_URL }
   },
   {
     type: "link",
