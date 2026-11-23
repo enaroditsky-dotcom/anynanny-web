@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { ChevronDown, ShieldAlert, Star, User, Users, X } from "lucide-react";
 import { ProfileImage } from "@/components/profile/profile-image";
+import { parentDashboardSerialLabel } from "@/lib/public/sequential-display-id";
 
 import {
   VERIFIED_PARENT_IDENTITY_LABEL,
@@ -31,9 +32,15 @@ export type ParentDetailsPreview = {
   children_count?: number | null;
   children_ages?: string | null;
   identity_verified?: boolean;
+  /** Public parent serial, for example P-1002. Not an account id. */
+  public_id?: string | null;
   address?: string | null;
   address_visible?: boolean;
 };
+
+export const PARENT_CHILDREN_COUNT_EMPTY = "מספר הילדים לא צוין";
+export const PARENT_CHILDREN_AGES_EMPTY = "גילאי הילדים לא צוינו";
+export const PARENT_FULL_ADDRESS_DISCLOSURE = "הכתובת המלאה תוצג לאחר אישור המשמרת.";
 
 export function normalizeParentRatingAverage(value: unknown): number | null {
   const numeric = Number(value);
@@ -112,7 +119,7 @@ function ParentReviewsAccordion({
   );
 }
 
-function ParentDetailsBody({
+export function ParentDetailsBody({
   parent,
   fallbackName,
   safetyUserId,
@@ -122,13 +129,14 @@ function ParentDetailsBody({
   parent: ParentDetailsPreview;
   fallbackName?: string | null;
   safetyUserId?: string | null;
-  closeLabel: string;
-  onClose: () => void;
+  closeLabel?: string;
+  onClose?: () => void;
 }) {
   const ratingAverage = normalizeParentRatingAverage(parent.rating_average);
   const ratingCount = normalizeParentRatingCount(parent.rating_count);
   const hasRating = ratingAverage != null && ratingCount > 0;
   const displayName = parent.first_name || fallbackName || "הורה";
+  const publicId = parentDashboardSerialLabel(parent.public_id);
   const reviews = Array.isArray(parent.reviews) ? parent.reviews : [];
 
   return (
@@ -142,6 +150,14 @@ function ParentDetailsBody({
         />
 
         <h3 className="mt-3 text-lg font-extrabold text-[#001F3F]">{displayName}</h3>
+        {publicId ? (
+          <p
+            dir="ltr"
+            className="mt-1 inline-flex items-center rounded-md border border-purple-200 bg-purple-50 px-2 py-0.5 text-[12px] font-bold tracking-wide text-purple-800"
+          >
+            {publicId}
+          </p>
+        ) : null}
 
         <div className="mt-2 flex justify-center">
           {parent.identity_verified ? (
@@ -186,10 +202,10 @@ function ParentDetailsBody({
             <p className="mt-0.5 text-sm font-bold text-[#001F3F]">
               {parent.children_count != null
                 ? `${parent.children_count} ילדים`
-                : "מספר הילדים לא צוין"}
+                : PARENT_CHILDREN_COUNT_EMPTY}
             </p>
             <p className="mt-1 text-xs text-slate-600">
-              {parent.children_ages ? `גילאים: ${parent.children_ages}` : "גילאי הילדים לא צוינו"}
+              {parent.children_ages ? `גילאים: ${parent.children_ages}` : PARENT_CHILDREN_AGES_EMPTY}
             </p>
           </div>
         </div>
@@ -203,7 +219,7 @@ function ParentDetailsBody({
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-right">
           <p className="text-xs leading-relaxed text-slate-500">
-            הכתובת המלאה תוצג לאחר אישור המשמרת.
+            {PARENT_FULL_ADDRESS_DISCLOSURE}
           </p>
         </div>
       )}
@@ -212,13 +228,15 @@ function ParentDetailsBody({
         <UserSafetyActions targetUserId={safetyUserId} targetName={displayName} />
       ) : null}
 
-      <button
-        type="button"
-        onClick={onClose}
-        className="w-full rounded-xl bg-[#001F3F] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110"
-      >
-        {closeLabel}
-      </button>
+      {closeLabel && onClose ? (
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full rounded-xl bg-[#001F3F] px-4 py-3 text-sm font-bold text-white transition hover:brightness-110"
+        >
+          {closeLabel}
+        </button>
+      ) : null}
     </div>
   );
 }
