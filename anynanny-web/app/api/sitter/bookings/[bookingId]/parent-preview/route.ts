@@ -11,6 +11,7 @@ import {
   type PublicUserReview,
   type UserRatingSummary
 } from "@/lib/ratings/fetch-user-rating-summary";
+import { pickProfilePublicId } from "@/lib/public/sequential-display-id";
 import {
   isProfileRole,
   PROFILES_TABLE
@@ -24,6 +25,20 @@ type BookingAccessRow = {
   sitter_id: string | null;
   status: string | null;
 };
+
+async function readAssignedParentPublicId(
+  supabase: Awaited<ReturnType<typeof supabaseFromCookies>>,
+  parentId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from(PROFILES_TABLE)
+    .select("parent_serial, public_id, serial_id")
+    .eq("id", parentId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return pickProfilePublicId(data, "parent");
+}
 
 function userIsSitter(
   profile: { role?: string | null } | null | undefined,
@@ -322,6 +337,7 @@ export async function GET(
         (row) =>
           row.bookingId === bookingId
       ) ?? null;
+    const publicId = await readAssignedParentPublicId(supabase, parentId);
 
     return NextResponse.json({
       parent: {
@@ -354,6 +370,8 @@ export async function GET(
         children_ages: null,
 
         identity_verified: contact?.identityVerified === true,
+
+        public_id: publicId,
 
         address:
           status === "approved"

@@ -2336,6 +2336,7 @@ export function ParentDashboardClient({
           avatarUrl={parentAvatarUrl}
           ratingAverage={parentRatingSummary.average}
           ratingCount={parentRatingSummary.count}
+          publicId={parentSerialLabel}
         />
       ) : (
       <div className={`space-y-1.5 ${onboardingPending ? "filter blur-[3px] pointer-events-none select-none opacity-50" : ""}`}>

@@ -1,4 +1,5 @@
 import { parseParentAddress } from "@/lib/parent/parent-profile";
+import { parentDashboardSerialLabel } from "@/lib/public/sequential-display-id";
 import type { PublicUserReview } from "@/lib/ratings/fetch-user-rating-summary";
 
 /**
@@ -19,6 +20,8 @@ export type OwnParentProfileCardProjection = {
   children_count: null;
   children_ages: null;
   identity_verified: boolean;
+  /** Public parent serial such as P-1002. Internal user ids are never copied here. */
+  public_id: string | null;
   /** City only. Street, house number, and entry notes are never copied here. */
   city: string | null;
   address: null;
@@ -49,6 +52,7 @@ export function projectOwnParentProfileCard(input: {
   identityVerified: boolean;
   reviews: readonly PublicUserReview[];
   city?: string | null;
+  publicId?: string | null;
 }): OwnParentProfileCardProjection {
   const firstName = input.firstName.trim();
   const avatarUrl = input.avatarUrl?.trim() || "";
@@ -66,6 +70,7 @@ export function projectOwnParentProfileCard(input: {
     children_count: null,
     children_ages: null,
     identity_verified: input.identityVerified === true,
+    public_id: parentDashboardSerialLabel(input.publicId),
     city: input.city?.trim() || null,
     address: null,
     address_visible: false
