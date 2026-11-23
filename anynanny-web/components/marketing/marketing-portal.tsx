@@ -4,6 +4,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { MarketingSidebar } from "@/components/marketing/marketing-sidebar";
+import { MarketingStoreBadges } from "@/components/marketing/marketing-store-badges";
+import { APP_LANDING_APP_STORE_URL, APP_LANDING_GOOGLE_PLAY_URL } from "@/lib/marketing/app-landing";
+import { withStoreCampaign } from "@/lib/marketing/site-nav";
 import { chapterIdFromHash, storyChapterHref, type MarketingChapterId } from "@/lib/marketing/chapters";
 import { generalWebAppHref } from "@/lib/marketing/general-acquisition";
 import homeStyles from "./conversion-home.module.css";
@@ -90,6 +93,16 @@ export function MarketingPortal({ children }: { children: ReactNode }) {
           homeHref="/"
           loginHref={generalWebAppHref(campaignSearch)}
           headerClassName={home ? homeStyles.overlayHeader : undefined}
+          storeBadges={
+            home ? (
+              <MarketingStoreBadges
+                className={storyStyles.headerStoreRow}
+                linkClassName={storyStyles.headerStoreLink}
+                appStoreHref={withStoreCampaign(APP_LANDING_APP_STORE_URL, campaignSearch)}
+                playHref={withStoreCampaign(APP_LANDING_GOOGLE_PLAY_URL, campaignSearch)}
+              />
+            ) : null
+          }
         />
         <div className={shellStyles.stage}>{children}</div>
       </div>

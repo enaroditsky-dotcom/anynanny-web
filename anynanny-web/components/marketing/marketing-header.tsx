@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { Menu } from "lucide-react";
 import { MARKETING_TOGETHER } from "@/lib/marketing/copy";
 import { storyChapterHref } from "@/lib/marketing/chapters";
@@ -34,7 +34,8 @@ export function MarketingHeader({
   onHome,
   homeHref = storyChapterHref("home"),
   loginHref,
-  headerClassName
+  headerClassName,
+  storeBadges
 }: {
   navOpen: boolean;
   onToggleNav: () => void;
@@ -43,9 +44,15 @@ export function MarketingHeader({
   homeHref?: string;
   loginHref: string;
   headerClassName?: string;
+  storeBadges?: ReactNode;
 }) {
   return (
-    <header className={headerClassName ? `${styles.header} ${headerClassName}` : styles.header} data-marketing-header>
+    <header
+      className={[styles.header, headerClassName, storeBadges ? styles.headerWithStores : ""]
+        .filter(Boolean)
+        .join(" ")}
+      data-marketing-header
+    >
       <div className={styles.headerInner}>
         <a
           href={homeHref}
@@ -85,6 +92,7 @@ export function MarketingHeader({
         <span className={styles.headerSloganMotion}>
           <span className={styles.headerSloganText}>פשוט למצוא זמן לחיים!</span>
         </span>
+        {storeBadges ? <span className={styles.headerStoreBadges}>{storeBadges}</span> : null}
       </p>
     </header>
   );

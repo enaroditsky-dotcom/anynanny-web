@@ -117,6 +117,28 @@
   animation: headerSloganIn 640ms ease both;
 }
 
+.headerStoreRow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.headerStoreLink {
+  display: flex;
+  flex: 0 0 6.55rem;
+  align-items: center;
+  justify-content: center;
+  width: 6.55rem;
+  height: 2.4rem;
+}
+
+.headerStoreLink img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .headerSloganText {
   /* Temporary readable face. The project has no licensed Hebrew handwritten font. */
   font-family: var(--font-varela-round), "Varela Round", Rubik, sans-serif;
@@ -153,6 +175,15 @@
 
   .headerSloganText {
     font-size: clamp(1.7rem, 2.25vw, 2.125rem);
+  }
+
+  .headerStoreBadges {
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    left: 0;
+    transform: translate(calc(-100% - 0.7rem), -50%);
+    pointer-events: auto;
   }
 }
 
@@ -290,6 +321,33 @@ a.joinButton {
 @media (max-width: 63.99rem) {
   .headerSlogan {
     display: none;
+  }
+
+  .headerWithStores .headerSlogan {
+    display: flex;
+    position: static;
+    justify-content: center;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0.15rem 0.55rem 0.45rem;
+    translate: none;
+    pointer-events: auto;
+  }
+
+  .headerWithStores .headerSloganMotion {
+    display: none;
+  }
+
+  .headerWithStores .headerStoreBadges {
+    position: static;
+    transform: none;
+  }
+
+  .headerStoreLink {
+    flex-basis: 7.15rem;
+    width: 7.15rem;
+    height: 2.75rem;
   }
 
   .headerInner {

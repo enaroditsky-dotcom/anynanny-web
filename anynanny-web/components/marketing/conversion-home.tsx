@@ -5,15 +5,9 @@ import type { LucideIcon } from "lucide-react";
 import { Briefcase, Coffee, Handshake, Play, ShieldCheck, Sun, Users } from "lucide-react";
 import { ANYNANNY_APP_LOGO_SRC } from "@/components/brand/anynanny-app-logo";
 import { MarketingCopyright } from "@/components/marketing/marketing-copyright";
-import { MarketingStoreBadges } from "@/components/marketing/marketing-store-badges";
-import {
-  APP_LANDING_APP_STORE_URL,
-  APP_LANDING_GOOGLE_PLAY_URL,
-  appLandingSignupHref
-} from "@/lib/marketing/app-landing";
+import { appLandingSignupHref } from "@/lib/marketing/app-landing";
 import { generalWebAppHref } from "@/lib/marketing/general-acquisition";
 import { MARKETING_HOME_H1, MARKETING_HOME_SUPPORT } from "@/lib/marketing/marketing-home";
-import { withStoreCampaign } from "@/lib/marketing/site-nav";
 import { welcomeTopicPath } from "@/lib/marketing/welcome-topics";
 import styles from "./conversion-home.module.css";
 
@@ -87,18 +81,10 @@ function CloudSilhouette({ shape }: { shape: number }) {
 export function ConversionHome({ campaignSearch = "" }: { campaignSearch?: string }) {
   const parentHref = generalWebAppHref(campaignSearch);
   const sitterHref = appLandingSignupHref("sitter", campaignSearch);
-  const storeHref = withStoreCampaign(APP_LANDING_APP_STORE_URL, campaignSearch);
-  const playHref = withStoreCampaign(APP_LANDING_GOOGLE_PLAY_URL, campaignSearch);
   return (
     <div className={styles.screen}>
       <div className={styles.doodleWash} aria-hidden="true" />
       <main className={styles.main}>
-        <MarketingStoreBadges
-          className={styles.downloads}
-          linkClassName={styles.storeLink}
-          appStoreHref={storeHref}
-          playHref={playHref}
-        />
         <div className={styles.entry}>
           <a className={styles.parentEntry} href={parentHref} data-cta="parent-search" data-press="">
             לחיפוש בייביסיטר
