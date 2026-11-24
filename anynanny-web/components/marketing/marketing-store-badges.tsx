@@ -13,7 +13,7 @@ export function MarketingStoreBadges({
   linkClassName?: string;
 }) {
   return (
-    <div className={className}>
+    <span className={className}>
       <a
         className={linkClassName}
         href={appStoreHref}
@@ -44,6 +44,6 @@ export function MarketingStoreBadges({
           height={250}
         />
       </a>
-    </div>
+    </span>
   );
 }
