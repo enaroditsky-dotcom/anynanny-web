@@ -118,6 +118,7 @@
 }
 
 .headerStoreRow {
+  --store-ink: 1.875rem;
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -125,18 +126,29 @@
 
 .headerStoreLink {
   display: flex;
-  flex: 0 0 6.55rem;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 6.55rem;
-  height: 2.4rem;
+  width: auto;
+  height: auto;
 }
 
 .headerStoreLink img {
   display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  width: auto;
+  max-width: none;
+  object-fit: fill;
+}
+
+/* Heights cancel each asset's transparent padding so the black badges match. */
+.headerStoreLink img[src$="app-store-badge-he.svg"] {
+  height: var(--store-ink);
+}
+
+.headerStoreLink img[src$="google-play-badge-en.png"] {
+  /* 250/168 is the opaque badge inside the padded PNG. The 0.968
+     cancels the extra rasterized edge so the painted heights match. */
+  height: calc(var(--store-ink) * 250 / 168 * 0.968);
 }
 
 .headerSloganText {
@@ -344,10 +356,12 @@ a.joinButton {
     transform: none;
   }
 
-  .headerStoreLink {
-    flex-basis: 7.15rem;
-    width: 7.15rem;
-    height: 2.75rem;
+  .headerStoreRow {
+    --store-ink: 2.625rem;
+  }
+
+  .headerStoreLink img[src$="app-store-badge-he.svg"] {
+    height: calc(var(--store-ink) * 1.05);
   }
 
   .headerInner {
