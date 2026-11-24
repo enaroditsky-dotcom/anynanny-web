@@ -11,7 +11,7 @@ import { MARKETING_HOME_H1, MARKETING_HOME_SUPPORT } from "@/lib/marketing/marke
 import { welcomeTopicPath } from "@/lib/marketing/welcome-topics";
 import styles from "./conversion-home.module.css";
 
-const HOME_ART = "/brand/anynanny-home-family-clouds.png";
+const HOME_ART = "/brand/anynanny-home-family-clouds.png?v=3";
 
 const CLOUD_LOBES: Array<Array<[number, number, number, number]>> = [
   [
