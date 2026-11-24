@@ -197,6 +197,65 @@
     transform: translate(calc(-100% - 0.7rem), -50%);
     pointer-events: auto;
   }
+
+  /* Homepage only: desktop badges are 2x the 1.875rem ink size.
+     They sit in the centered row so the larger artwork stays beside the slogan. */
+  .headerWithStores {
+    min-height: 5.85rem;
+  }
+
+  .headerWithStores .headerInner {
+    min-height: 5.85rem;
+  }
+
+  .headerWithStores .headerSlogan {
+    left: 0.75rem;
+    right: 12rem;
+    width: auto;
+    max-width: none;
+    translate: 0 -50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+  }
+
+  .headerWithStores .headerSloganMotion {
+    flex: 0 0 auto;
+  }
+
+  .headerWithStores .headerStoreBadges {
+    position: static;
+    transform: none;
+  }
+
+  .headerWithStores .headerStoreRow {
+    --store-ink: 3.75rem;
+  }
+
+  .headerWithStores .headerStoreLink img[src$="app-store-badge-he.svg"] {
+    height: calc(var(--store-ink) * 30 / 29);
+  }
+
+  .headerWithStores .headerStoreLink img[src$="google-play-badge-en.png"] {
+    height: calc(var(--store-ink) * 250 / 168 * 0.968 * 60 / 59);
+  }
+}
+
+@media (min-width: 64rem) and (max-width: 73.99rem) {
+  .headerWithStores,
+  .headerWithStores .headerInner {
+    min-height: 9.25rem;
+  }
+
+  .headerWithStores .headerSlogan {
+    flex-wrap: wrap;
+    align-content: center;
+  }
+
+  .headerWithStores .headerStoreBadges {
+    order: -1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
