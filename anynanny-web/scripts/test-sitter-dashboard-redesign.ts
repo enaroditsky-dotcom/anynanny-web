@@ -35,6 +35,7 @@ assert.match(header, /ParentProfileCardHelp/);
 assert.match(header, /sitterDashboardSerialLabel/);
 assert.match(header, /dir="ltr"/);
 assert.doesNotMatch(header, /href=|IdentityStatusIndicator|חוות דעת ודירוג|הזמינות שלי/);
+assert.doesNotMatch(header, /absolute bottom-0/);
 
 assert.match(avatar, /rounded-full/);
 assert.match(avatar, /ParentDashboardVerifiedBadge/);
