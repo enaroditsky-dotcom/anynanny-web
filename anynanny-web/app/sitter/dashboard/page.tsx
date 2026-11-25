@@ -10,6 +10,9 @@ import { SitterManualPaymentConfirmPanel } from "@/components/session/sitter-man
 import { ReleaseStuckShiftModal } from "@/components/parent/release-stuck-shift-modal";
 import { SitterOnboardingWizard } from "@/components/sitter/sitter-onboarding-wizard";
 import { SitterDashboardHeader } from "@/components/sitter/sitter-dashboard-header";
+import { SitterOwnProfilePreview } from "@/components/sitter/sitter-own-profile-preview";
+import { SitterProfileBoostBanner } from "@/components/sitter/sitter-profile-boost-banner";
+import { SitterWorkCenter } from "@/components/sitter/sitter-work-center";
 import { SitterVerifiedParentsPreference } from "@/components/sitter/sitter-verified-parents-preference";
 import { useSitterBroadcastPause } from "@/components/sitter/SitterBroadcastAlertHost";
 import { APP_CONTENT_MAX_W } from "@/lib/ui/app-shell";
@@ -70,6 +73,7 @@ import {
   sitterHasRatedSession
 } from "@/lib/ratings/sitter-session-rated";
 import { useSitterPendingBookingCount } from "@/lib/bookings/use-sitter-pending-booking-count";
+import { useSitterUpcomingWeekShiftCount } from "@/lib/bookings/use-sitter-upcoming-week-shift-count";
 import { useCancellationAttention } from "@/lib/bookings/use-cancellation-attention";
 import { CancellationAttentionDot } from "@/components/bookings/cancellation-attention-dot";
 import { CancellationAttentionModals } from "@/components/bookings/cancellation-attention-modals";
@@ -194,6 +198,7 @@ export default function SitterDashboardPage() {
   const [sitterAvatarUrl, setSitterAvatarUrl] = useState<string | null>(null);
   const [dashboardStatsRefreshKey, setDashboardStatsRefreshKey] = useState(0);
   const [sitterPublicDisplayId, setSitterPublicDisplayId] = useState<string | null>(null);
+  const [ownProfileOpen, setOwnProfileOpen] = useState(false);
   const [sitterSerialLoaded, setSitterSerialLoaded] = useState(false);
   const [pendingApprovalBooking, setPendingApprovalBooking] = useState<TodaysLinkedBookingView | null>(null);
   const [stuckShiftReviewNotice, setStuckShiftReviewNotice] = useState(false);
@@ -1113,6 +1118,7 @@ export default function SitterDashboardPage() {
 
   const onboardingPending = false;
   const pendingBookingCount = useSitterPendingBookingCount(sitterId, !onboardingPending);
+  const upcomingWeekShiftCount = useSitterUpcomingWeekShiftCount(sitterId, !onboardingPending);
   const cancellationAttention = useCancellationAttention(sitterId, "sitter", Boolean(sitterId));
 
   const handleOnboardingSaved = useCallback(async () => {
@@ -1433,21 +1439,49 @@ export default function SitterDashboardPage() {
   );
 
   return (
-    <main className={`relative mx-auto w-full min-w-0 ${APP_CONTENT_MAX_W} space-y-1.5`} dir="rtl">
-      <div className="space-y-1.5">
-        <div className="shrink-0">
-          <SitterDashboardHeader
-            firstName={firstName}
-            nameLoading={greetingNameLoading}
-            sitterId={sitterId}
-            refreshKey={dashboardStatsRefreshKey}
-            showPublicId={sitterSerialLoaded}
-            publicDisplayId={sitterPublicDisplayId}
-            publicIdLoaded={sitterSerialLoaded}
-            avatarUrl={sitterAvatarUrl}
-          />
+    <main
+      className={`relative mx-auto min-h-full w-full min-w-0 overflow-x-hidden ${APP_CONTENT_MAX_W} ${
+        ownProfileOpen ? "" : "space-y-2.5 bg-[#F4F8FF] px-1 py-1"
+      }`}
+      dir="rtl"
+    >
+      {ownProfileOpen && sitterId ? (
+        <SitterOwnProfilePreview
+          open
+          sitterId={sitterId}
+          onClose={() => setOwnProfileOpen(false)}
+        />
+      ) : (
+      <div className="space-y-3" data-tour="sitter-home">
+        <div className="relative isolate rounded-[1.85rem] border border-[#B7E4C7] bg-[linear-gradient(165deg,#F4FBFF_0%,#E7F6FF_46%,#E9F8F0_100%)] p-2.5 shadow-[0_16px_34px_-24px_rgba(14,90,60,0.45)]">
+          <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[1.85rem]">
+            <div className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-[#C9F3DC] blur-2xl" />
+            <div className="absolute -left-10 top-20 h-24 w-24 rounded-full bg-[#D4ECFF] blur-2xl" />
+            <div className="absolute bottom-2 left-4 h-14 w-36 rounded-full bg-[#DFF6EA] blur-xl" />
+          </div>
+          <div className="relative z-[1] space-y-1.5">
+            <SitterDashboardHeader
+              firstName={firstName}
+              nameLoading={greetingNameLoading}
+              sitterId={sitterId}
+              refreshKey={dashboardStatsRefreshKey}
+              showPublicId={sitterSerialLoaded}
+              publicDisplayId={sitterPublicDisplayId}
+              publicIdLoaded={sitterSerialLoaded}
+              avatarUrl={sitterAvatarUrl}
+              showBusinessCard={!shouldHideDashboardActions}
+              onOpenBusinessCard={() => setOwnProfileOpen(true)}
+              footer={sitterId ? <SitterVerifiedParentsPreference /> : null}
+            />
+            {!shouldHideDashboardActions ? <SitterProfileBoostBanner /> : null}
+          </div>
         </div>
-        {sitterId ? <SitterVerifiedParentsPreference /> : null}
+        {!shouldHideDashboardActions ? (
+          <SitterWorkCenter
+            pendingCount={pendingBookingCount}
+            upcomingWeekCount={upcomingWeekShiftCount}
+          />
+        ) : null}
           {stuckShiftReviewNotice ? (
             <div
               role="status"
@@ -1509,7 +1543,6 @@ export default function SitterDashboardPage() {
           ) : null}
           <div className={`relative flex flex-col ${onboardingPending ? "min-h-[16rem]" : ""}`}>
             <div
-              data-tour="sitter-home"
               className={`flex flex-col ${onboardingPending ? "pointer-events-none select-none blur-[3px] opacity-50" : ""}`}
               aria-hidden={onboardingPending}
             >
@@ -1598,6 +1631,7 @@ export default function SitterDashboardPage() {
             }}
           />
         </div>
+      )}
       </main>
   );
 }

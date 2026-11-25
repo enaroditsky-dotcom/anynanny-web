@@ -309,6 +309,11 @@ export function parentDashboardSerialLabel(raw: string | null | undefined): stri
   return normalizeParentSerial(raw);
 }
 
+/** Label for the Sitter dashboard ID badge, or null to hide it. Never a UUID. */
+export function sitterDashboardSerialLabel(raw: string | null | undefined): string | null {
+  return normalizeSitterSerial(raw);
+}
+
 export function readCachedParentDisplayId(userId?: string | null): string | null {
   if (typeof window === "undefined") return null;
   const uid = typeof userId === "string" ? userId.trim() : "";

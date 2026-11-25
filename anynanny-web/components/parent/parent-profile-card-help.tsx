@@ -4,8 +4,11 @@ import { useId, useRef, useState } from "react";
 
 export const PARENT_PROFILE_CARD_HELP_TEXT = "כך אחרים רואים את הפרופיל שלך ב־AnyNanny";
 
+const PARENT_HELP_BUTTON_CLASS =
+  "relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#001F3F]/25 bg-white text-[12px] font-bold leading-none text-[#001F3F]/55 transition hover:border-[#001F3F]/45 hover:text-[#001F3F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001F3F]/30";
+
 /** Circular help control. The explanation is shown only while the icon is open or focused. */
-export function ParentProfileCardHelp() {
+export function ParentProfileCardHelp({ buttonClassName }: { buttonClassName?: string } = {}) {
   const tooltipId = useId();
   const [open, setOpen] = useState(false);
   const fromPointer = useRef(false);
@@ -14,7 +17,7 @@ export function ParentProfileCardHelp() {
     <span className="relative inline-flex shrink-0">
       <button
         type="button"
-        className="relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#001F3F]/25 bg-white text-[12px] font-bold leading-none text-[#001F3F]/55 transition hover:border-[#001F3F]/45 hover:text-[#001F3F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001F3F]/30"
+        className={buttonClassName ?? PARENT_HELP_BUTTON_CLASS}
         aria-label="מידע נוסף"
         aria-expanded={open}
         aria-controls={tooltipId}
