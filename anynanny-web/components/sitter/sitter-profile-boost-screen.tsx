@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronDown, ChevronLeft, Menu } from "lucide-react";
 import { PageBackLink, PageBackRow } from "@/components/navigation/page-back-link";
 import { resolveBrowserAuth } from "@/lib/supabase/browser-auth";
 import {
@@ -49,7 +50,7 @@ const RECOMMENDATIONS: { title: string; paragraphs: ReactNode[] }[] = [
     ]
   },
   {
-    title: "🤝 תגרמי למשפחה שאת כבר עובדת אצלה להשתמש ב־AnyNanny!",
+    title: "🤝 תמליצי למשפחה שאת כבר עובדת אצלה להשתמש ב־AnyNanny!",
     paragraphs: [
       <>
         את כבר עושה בייביסיטר למשפחה שמכירה אותך, סומכת עלייך ומזמינה אותך באופן קבוע? מעולה! <strong>זה בדיוק היתרון שאת יכולה לנצל כדי לקדם את עצמך.</strong>
@@ -68,6 +69,14 @@ const RECOMMENDATIONS: { title: string; paragraphs: ReactNode[] }[] = [
       "היא יכולה לספר על היחס שלך לילדים, האחריות, הסבלנות, המקצועיות או פשוט על כמה שהילדים נהנו בחברתך.",
       "משפחות אחרות יוכלו לקרוא את חוות הדעת האלה ולהתרשם ממך דרך הניסיון האמיתי של הורים שכבר נעזרו בשירותייך.",
       "לפעמים המלצה חמה ממשפחה אחת היא בדיוק מה שגורם למשפחה אחרת לבחור בך!"
+    ]
+  },
+  {
+    title: "🔔 הפעילי התראות — כדי שלא תפספסי פניות חדשות!",
+    paragraphs: [
+      "גם כשהפרופיל שלך מושלם, חשוב שתדעי בזמן כשמשפחה פונה אלייך.",
+      "אשרי קבלת התראות מ־AnyNanny במכשיר שלך, כדי שתוכלי לקבל עדכונים על פניות חדשות ולהגיב אליהן במהירות.",
+      "הפעלת ההתראות עשויה להגדיל את הסיכוי שלא תפספסי פנייה ממשפחה שמחפשת בייביסיטרית בדיוק כמוך!"
     ]
   },
   {
@@ -167,6 +176,45 @@ function progressSummary(status: string, progress: SitterBoostProgress): string 
   return `${progress.completed} מתוך ${progress.total} הושלמו`;
 }
 
+function PersonalAreaGuide() {
+  return (
+    <section className="space-y-2 rounded-2xl border border-[#D7EBE0] bg-white px-2.5 py-2" aria-label="איך מגיעים לאזור האישי">
+      <p className="text-right text-[13px] font-bold leading-snug text-[#001F3F]">
+        את יכולה להשלים את הפרופיל ולבצע בו שינויים באזור האישי.
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5 rounded-xl border border-[#001F3F]/15 bg-[#F7FBFA] py-1 pe-2 ps-1">
+          <span
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#001F3F]/10 bg-white text-[#001F3F]"
+            aria-hidden
+          >
+            <Menu className="h-5 w-5" />
+          </span>
+          <span className="text-[12px] font-bold leading-none text-[#001F3F]">תפריט</span>
+        </span>
+        <ChevronLeft className="h-4 w-4 shrink-0 text-[#0E9F6E]" aria-hidden />
+        <Link
+          href="/sitter/profile"
+          className="inline-flex min-h-8 items-center rounded-xl border border-[#B7E4C7] bg-[#E8F8EF] px-2.5 text-[12px] font-extrabold leading-none text-[#0E7A52] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0E9F6E]"
+        >
+          אזור אישי
+        </Link>
+      </div>
+      <ol className="flex flex-wrap items-center gap-x-1 gap-y-1 text-[11px] font-medium leading-snug text-[#243044]">
+        <li className="inline-flex items-center gap-1">
+          1. פתחי תפריט
+          <span aria-hidden className="text-[#0E9F6E]">←</span>
+        </li>
+        <li className="inline-flex items-center gap-1">
+          2. בחרי ״אזור אישי״
+          <span aria-hidden className="text-[#0E9F6E]">←</span>
+        </li>
+        <li>3. עדכני את הפרופיל</li>
+      </ol>
+    </section>
+  );
+}
+
 function checkpointLabel(state: SitterBoostCheckpointState): string {
   if (state === "complete") return "הושלם";
   if (state === "unknown") return "לא ניתן לאמת כרגע";
@@ -198,6 +246,7 @@ export function SitterProfileBoostScreen() {
           הכנו בשבילך כמה המלצות שיעזרו לך להבליט את הפרופיל שלך, לבנות אמון עם הורים ולהגדיל את הסיכוי לקבל יותר פניות.
         </p>
       </header>
+      <PersonalAreaGuide />
       <Disclosure
         title="💡 המלצות לבוסט"
         className="overflow-hidden rounded-2xl border border-[#B7E4C7] bg-white shadow-[0_10px_22px_-18px_rgba(14,90,60,0.35)]"

@@ -163,9 +163,9 @@ export function SitterDashboardHeader({
   const reviewsCount = stats.rating_count || 0;
 
   return (
-    <section className="relative isolate w-full min-w-0 overflow-visible rounded-[1.35rem] border border-[#C9E8D4] bg-white px-2.5 pb-2.5 pt-2.5 shadow-[0_10px_24px_-18px_rgba(14,90,60,0.35)]">
-      <div className="relative flex min-w-0 items-start justify-between gap-2" dir="ltr">
-        <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-right" dir="rtl">
+    <section className="relative isolate w-full min-w-0 overflow-visible rounded-[1.35rem] border border-[#C9E8D4] bg-white px-2.5 pb-3 pt-2.5 shadow-[0_10px_24px_-18px_rgba(14,90,60,0.35)]">
+      <div className="flex min-w-0 items-start justify-between gap-2" dir="ltr">
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-2.5 text-right" dir="rtl">
           <h1
             className={`w-full break-words text-right text-base font-bold leading-tight text-[#001F3F] min-[360px]:text-lg ${
               nameLoading ? "animate-pulse" : ""
@@ -193,6 +193,19 @@ export function SitterDashboardHeader({
               <span className="text-[13px] text-slate-400">({reviewsCount} חוות דעת)</span>
             </div>
           ) : null}
+          {showBusinessCard ? (
+            <div className="flex max-w-full min-w-0 items-center gap-1 pt-1">
+              <button
+                type="button"
+                onClick={onOpenBusinessCard}
+                className="inline-flex h-7 min-h-7 max-w-full items-center justify-center gap-1 rounded-full border border-[#001F3F] bg-[#FFFDF8] px-2.5 text-[12px] font-bold leading-none text-[#001F3F] shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001F3F] focus-visible:ring-offset-2"
+              >
+                <IdCard className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="whitespace-nowrap">כרטיס הביקור שלי</span>
+              </button>
+              <ParentProfileCardHelp buttonClassName={SITTER_HELP_ICON_CLASS} />
+            </div>
+          ) : null}
         </div>
         <SitterDashboardAvatar
           src={avatarUrl}
@@ -201,19 +214,6 @@ export function SitterDashboardHeader({
           completed={boost.progress.completed}
           ready={boost.status === "ready"}
         />
-        {showBusinessCard ? (
-          <div className="absolute bottom-0 left-0 flex max-w-[calc(100%-6.75rem)] min-w-0 items-center gap-1" dir="rtl">
-            <button
-              type="button"
-              onClick={onOpenBusinessCard}
-              className="inline-flex h-7 min-h-7 items-center justify-center gap-1 rounded-full border border-[#001F3F] bg-[#FFFDF8] px-2.5 text-[12px] font-bold leading-none text-[#001F3F] shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001F3F] focus-visible:ring-offset-2"
-            >
-              <IdCard className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span className="whitespace-nowrap">כרטיס הביקור שלי</span>
-            </button>
-            <ParentProfileCardHelp buttonClassName={SITTER_HELP_ICON_CLASS} />
-          </div>
-        ) : null}
       </div>
       {footer ? <div className="mt-1.5">{footer}</div> : null}
     </section>
