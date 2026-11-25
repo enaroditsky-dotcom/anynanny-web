@@ -13,6 +13,10 @@ import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 
 import { BookingCalendarPanel } from "@/components/bookings/booking-calendar-panel";
+import {
+  sitterCalendarRangeFromParam,
+  sitterShiftsBoardViewFromParam
+} from "@/lib/bookings/sitter-dashboard-destinations";
 
 import type {
   CalendarShift
@@ -475,6 +479,8 @@ export default function SitterShiftsPage() {
   const focusBookingId = parseFocusBookingId(
     searchParams.get("bookingId")
   );
+  const shiftsViewParam = searchParams.get("view");
+  const shiftsRangeParam = searchParams.get("range");
   const {
     user,
     isLoading:
@@ -486,8 +492,12 @@ export default function SitterShiftsPage() {
     setViewType
   ] =
     useState<ViewType>(
-      "calendar"
+      sitterShiftsBoardViewFromParam(shiftsViewParam)
     );
+
+  useEffect(() => {
+    setViewType(sitterShiftsBoardViewFromParam(shiftsViewParam));
+  }, [shiftsViewParam]);
 
   const [
     shifts,
@@ -1771,6 +1781,11 @@ export default function SitterShiftsPage() {
                 authLoading
               }
               viewModeSelectId="sitter-shifts-calendar-view-mode"
+              initialViewMode={
+                viewType === "calendar"
+                  ? sitterCalendarRangeFromParam(shiftsRangeParam) ?? undefined
+                  : undefined
+              }
               profileLinkLabel={CANCELLATION_COPY.parentProfile}
               contactHref={
                 calendarContactHref

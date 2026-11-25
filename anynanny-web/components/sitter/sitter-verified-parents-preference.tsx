@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SITTER_HELP_ICON_CLASS } from "@/components/sitter/sitter-help-icon";
 import {
   SITTER_ONLY_VERIFIED_PARENTS_COLUMN,
   SITTER_VERIFIED_PARENTS_ONLY_HELP,
@@ -73,45 +74,44 @@ export function SitterVerifiedParentsPreference() {
   };
 
   return (
-    <section
-      dir="rtl"
-      className="w-full min-w-0 shrink-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3"
-    >
-      <div className="flex min-h-11 items-center gap-2">
+    <section dir="rtl" className="w-full min-w-0 shrink-0">
+      <div className="flex h-11 min-h-11 items-center gap-1.5 rounded-xl border border-[#9ED9B5] bg-[#E8F8EF] px-1.5">
         <input
           type="checkbox"
           checked={checked}
           disabled={!ready || saving}
           onChange={(event) => void onToggle(event.target.checked)}
-          className="h-5 w-5 shrink-0 rounded border-slate-300 accent-[#00A86B] disabled:opacity-60"
+          className="h-[18px] w-[18px] shrink-0 rounded border-[#7DCAA0] accent-[#00A86B] disabled:opacity-60"
           aria-describedby={helpOpen ? HELP_ID : undefined}
         />
-        <span className="min-w-0 flex-1 text-right text-[14px] font-medium leading-snug text-[#001F3F]">
+        <span className="min-w-0 flex-1 whitespace-nowrap text-right text-[11px] font-medium leading-none tracking-tight text-[#001F3F] min-[390px]:text-xs">
           {SITTER_VERIFIED_PARENTS_ONLY_LABEL}
         </span>
-        <button
-          type="button"
-          aria-label="מידע נוסף"
-          aria-expanded={helpOpen}
-          aria-controls={HELP_ID}
-          onClick={() => setHelpOpen((open) => !open)}
-          className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-300/80 bg-white text-[11px] font-semibold leading-none text-slate-400 transition hover:border-slate-400 hover:text-slate-600"
-        >
-          <span className="absolute -inset-2" aria-hidden />
-          ?
-        </button>
+        <span className="relative inline-flex shrink-0">
+          <button
+            type="button"
+            aria-label="מידע נוסף"
+            aria-expanded={helpOpen}
+            aria-controls={HELP_ID}
+            onClick={() => setHelpOpen((open) => !open)}
+            className={SITTER_HELP_ICON_CLASS}
+          >
+            <span className="absolute -inset-2" aria-hidden />
+            ?
+          </button>
+          {helpOpen ? (
+            <p
+              id={HELP_ID}
+              role="note"
+              className="absolute left-0 top-[calc(100%+0.4rem)] z-20 w-max max-w-[min(16rem,calc(100vw-2.5rem))] rounded-xl bg-[#001F3F] px-3 py-2 text-right text-[13px] font-normal leading-relaxed text-white shadow-lg"
+            >
+              {SITTER_VERIFIED_PARENTS_ONLY_HELP}
+            </p>
+          ) : null}
+        </span>
       </div>
-      {helpOpen ? (
-        <p
-          id={HELP_ID}
-          role="note"
-          className="mb-1 mt-1 break-words text-right text-[13px] font-normal leading-relaxed text-slate-600"
-        >
-          {SITTER_VERIFIED_PARENTS_ONLY_HELP}
-        </p>
-      ) : null}
       {error ? (
-        <p role="alert" className="pb-1 text-right text-xs font-medium text-red-600">
+        <p role="alert" className="px-1 pt-1 text-right text-xs font-medium text-red-600">
           {error}
         </p>
       ) : null}

@@ -5,15 +5,22 @@ import { ShieldCheck } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fetchIdentityVerification,
-  isIdentityVerified
+  isIdentityVerified,
+  type IdentityVerificationRole
 } from "@/lib/identity/identity-verification";
 import { VERIFIED_IDENTITY_LABEL } from "@/components/identity/verified-user-badge";
 
 /**
- * Green overlay for a verified parent only.
+ * Green overlay for a verified account only.
  * Pending, consent, and failed statuses stay hidden — same rule as isIdentityVerified.
  */
-export function ParentDashboardVerifiedBadge({ userId }: { userId: string | null }) {
+export function ParentDashboardVerifiedBadge({
+  userId,
+  role = "parent"
+}: {
+  userId: string | null;
+  role?: IdentityVerificationRole;
+}) {
   const [verified, setVerified] = useState(false);
 
   useEffect(() => {
@@ -25,7 +32,7 @@ export function ParentDashboardVerifiedBadge({ userId }: { userId: string | null
     if (!supabase) return;
     let cancelled = false;
     const load = async () => {
-      const result = await fetchIdentityVerification(supabase, userId, { role: "parent" });
+      const result = await fetchIdentityVerification(supabase, userId, { role });
       if (!cancelled) setVerified(isIdentityVerified(result.record.status));
     };
     void load();
@@ -37,7 +44,7 @@ export function ParentDashboardVerifiedBadge({ userId }: { userId: string | null
       cancelled = true;
       window.removeEventListener("pageshow", onPageShow);
     };
-  }, [userId]);
+  }, [role, userId]);
 
   if (!verified) return null;
 

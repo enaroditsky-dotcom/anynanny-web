@@ -124,9 +124,10 @@ assert.match(detailsModal, /PARENT_FULL_ADDRESS_DISCLOSURE/);
 assert.match(detailsModal, /הכתובת המלאה תוצג לאחר אישור המשמרת\./);
 assert.doesNotMatch(detailsModal, /מיקום העבודה|עיר מגורים|כרטיס הביקור שלי|הכרטיס שלי|סגירת הכרטיס/);
 assert.doesNotMatch(detailsModal, /#F5F8FF|#E5EEFF|#D6E5FF/);
-assert.match(sitterHeader, /DashboardProfileHero/);
-assert.doesNotMatch(sitterHeader, /PARENT_DASHBOARD_CARD_CLASS|כרטיס הביקור שלי|הצג את הפרטים שלי|ParentOwnProfilePreview|ערוך את הכרטיס/);
-assert.doesNotMatch(sitterPage, /PARENT_DASHBOARD_CARD_CLASS|כרטיס הביקור שלי|הצג את הפרטים שלי|ParentOwnProfilePreview|ערוך את הכרטיס/);
+assert.match(sitterHeader, /SitterDashboardAvatar/);
+assert.match(sitterHeader, /כרטיס הביקור שלי/);
+assert.doesNotMatch(sitterHeader, /PARENT_DASHBOARD_CARD_CLASS|הצג את הפרטים שלי|ParentOwnProfilePreview|ערוך את הכרטיס/);
+assert.doesNotMatch(sitterPage, /PARENT_DASHBOARD_CARD_CLASS|הצג את הפרטים שלי|ParentOwnProfilePreview|ערוך את הכרטיס/);
 assert.doesNotMatch(detailsModal, /ערוך את הכרטיס/);
 
 const card = projectOwnParentProfileCard({

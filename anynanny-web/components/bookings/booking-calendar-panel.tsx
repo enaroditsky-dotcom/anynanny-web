@@ -23,6 +23,8 @@ type BookingCalendarPanelProps = CalendarShiftActionContext & {
   className?: string;
   viewOptions?: { value: CalendarViewMode; label: string }[];
   focusBookingId?: string | null;
+  /** Opens an existing calendar filter. Ignored when it is not one of viewOptions. */
+  initialViewMode?: CalendarViewMode;
   /** Sitter shift board: pin controls and scroll only the schedule frame. */
   layout?: "default" | "board";
   /** When false, the schedule frame grows and the page scroller is used. */
@@ -47,10 +49,15 @@ export function BookingCalendarPanel({
   className = "",
   viewOptions = CALENDAR_VIEW_OPTIONS,
   focusBookingId = null,
+  initialViewMode,
   layout = "default",
   containScroll = true
 }: BookingCalendarPanelProps) {
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("today");
+  const startingView =
+    initialViewMode && viewOptions.some((option) => option.value === initialViewMode)
+      ? initialViewMode
+      : "today";
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(startingView);
   const initialPeriod = new Date();
   const [currentMonth, setCurrentMonth] = useState(initialPeriod.getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(initialPeriod.getFullYear());
