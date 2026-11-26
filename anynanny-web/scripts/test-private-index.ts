@@ -27,6 +27,7 @@ const publicPaths = [
   "/story",
   "/marketing/meet",
   "/jobs/students",
+  "/download",
   "/privacy",
   "/terms",
   "/delete-account"

@@ -39,6 +39,7 @@ const CHROMELESS_PREFIXES = [
   "/babysitter",
   "/app",
   "/parents",
+  "/download",
   "/story",
   "/welcome",
   "/charter",
@@ -87,6 +88,8 @@ const StableBottomNav = memo(BottomNav);
 
 export function isMarketingPortalPath(pathname: string, hostRole: SiteHostRole): boolean {
   if (hostRole === "app" || hostRole === "apex") return false;
+  // /download stays on the marketing host, without the marketing sidebar or header.
+  if (pathname === "/download" || pathname.startsWith("/download/")) return false;
   const kind = classifySitePath(pathname);
   if (kind === "marketing") return true;
   return kind === "entry" && hostRole === "www";
