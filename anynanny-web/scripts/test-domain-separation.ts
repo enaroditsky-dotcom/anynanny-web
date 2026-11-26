@@ -48,6 +48,9 @@ assert.equal(classifySitePath("/parents/"), "marketing");
 assert.equal(classifySitePath("/babysitter"), "marketing");
 assert.equal(classifySitePath("/jobs/students"), "marketing");
 assert.equal(classifySitePath("/app"), "marketing");
+assert.equal(classifySitePath("/download"), "marketing");
+assert.equal(classifySitePath("/download/"), "marketing");
+assert.equal(classifySitePath("/downloads"), "other");
 assert.equal(classifySitePath("/privacy"), "marketing");
 assert.equal(classifySitePath("/terms"), "marketing");
 assert.equal(classifySitePath("/delete-account"), "marketing");
@@ -183,6 +186,31 @@ assert.equal(wwwParents.pathKind, "marketing");
 assert.equal(wwwParents.authCallback, false);
 assert.deepEqual(wwwParents.serving, { mode: "marketing" });
 assert.equal(wwwParents.search, "?utm_source=ig&utm_campaign=parents");
+
+const wwwDownload = enabled(
+  "www.anynanny.org",
+  "/download",
+  "?utm_source=facebook&utm_medium=cpc&utm_campaign=parents"
+);
+assert.equal(wwwDownload.pathKind, "marketing");
+assert.equal(wwwDownload.authCallback, false);
+assert.deepEqual(wwwDownload.serving, { mode: "marketing" });
+assert.equal(domainSeparationRedirectTarget({
+  host: "www.anynanny.org",
+  pathname: "/download",
+  search: "?utm_source=facebook&utm_medium=cpc&utm_campaign=parents",
+  domainSeparationEnabled: true
+}), null);
+
+const appDownload = enabled(
+  "app.anynanny.org",
+  "/download",
+  "?utm_source=facebook&utm_medium=cpc&utm_campaign=parents"
+);
+assert.deepEqual(appDownload.serving, {
+  mode: "redirect-to-www",
+  location: "https://www.anynanny.org/download?utm_source=facebook&utm_medium=cpc&utm_campaign=parents"
+});
 
 const wwwRecovery = enabled("www.anynanny.org", "/", "?type=recovery");
 assert.equal(wwwRecovery.authCallback, true);

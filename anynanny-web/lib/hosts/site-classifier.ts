@@ -72,6 +72,7 @@ const MARKETING_EXACT_PATHS = new Set([
   "/babysitter",
   "/jobs/students",
   "/app",
+  "/download",
   "/privacy",
   "/terms",
   "/delete-account",
